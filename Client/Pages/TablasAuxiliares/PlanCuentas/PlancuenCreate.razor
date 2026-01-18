@@ -1,0 +1,37 @@
+@inject IRepository repository
+@inject NavigationManager navigationManager
+@inject SweetAlertService sweetAlertService
+@inject IModalService Modal
+
+<div class="modal-body">
+    <h3>Crear Cuenta</h3>
+
+    <PlancuenForm @ref="plancuenForm" Cuenta="cuenta" OnValidSubmit="Create" ReturnAction="Return" IsEdit="false" />
+</div>
+
+@code {
+    private Plancuen cuenta = new();
+    private PlancuenForm? plancuenForm;
+    [CascadingParameter]
+    BlazoredModalInstance BlazoredModal { get; set; } = default!;
+
+    private async Task Create()
+    {
+        var responseHttp = await repository.Post("/api/plancuen", cuenta);
+        if (responseHttp.Error)
+        {
+            var mensajeError = await responseHttp.GetErrorMessageAsync();
+            await sweetAlertService.FireAsync("Error", mensajeError, SweetAlertIcon.Error);
+            return;
+        }
+
+        await BlazoredModal.CloseAsync(ModalResult.Ok());
+        Return();
+    }
+
+    private void Return()
+    {
+        plancuenForm!.FormPostedSuccessfully = true;
+        navigationManager.NavigateTo("/TablasAuxiliares/PlanCuentas/Plancuen");
+    }
+}

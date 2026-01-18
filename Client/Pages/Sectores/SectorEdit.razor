@@ -1,0 +1,60 @@
+﻿@page "/sectores/edit/{SectorId:int}"
+@inject IRepository repository
+@inject NavigationManager navigationManager
+@inject SweetAlertService sweetAlertService
+<h3>Editar Sector</h3>
+
+@if (sector is null)
+{
+    <div class="spinner" />
+}
+else
+{
+    <SectorForm @ref="sectorForm" sector="sector" OnValidSubmit="EditAsync" ReturnAction="Return" />
+}
+
+@code {
+    private Sector? sector;
+    private SectorForm? sectorForm;
+
+    [Parameter]
+    public int SectorId { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        var responseHttp = await repository.Get<Sector>($"/api/sectores/{SectorId}");
+        if (responseHttp.Error)
+        {
+            if (responseHttp.HttpResponseMessage.StatusCode == HttpStatusCode.NotFound)
+            {
+                navigationManager.NavigateTo("/empresas");
+                return;
+            }
+
+            var message = await responseHttp.GetErrorMessageAsync();
+            await sweetAlertService.FireAsync("Error", message, SweetAlertIcon.Error);
+            return;
+        }
+
+        sector = responseHttp.Response;
+    }
+
+    private async Task EditAsync()
+    {
+        var responseHttp = await repository.Put("/api/sectores", sector);
+        if (responseHttp.Error)
+        {
+            var message = await responseHttp.GetErrorMessageAsync();
+            await sweetAlertService.FireAsync("Error", message, SweetAlertIcon.Error);
+            return;
+        }
+
+        Return();
+    }
+
+    private void Return()
+    {
+        sectorForm!.FormPostedSuccessfully = true;
+        navigationManager.NavigateTo($"/dependencias/detalles/{sector!.DependenciaId}");
+    }
+}

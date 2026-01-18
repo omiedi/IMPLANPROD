@@ -1,0 +1,455 @@
+@page "/remitos/anular"
+<PageTitle>Anulación de Remitos</PageTitle>
+@using IMPLANPROD.Shared.Entities
+@using IMPLANPROD.Shared.DTOs
+@using IMPLANPROD.Client.Repositories
+@using IMPLANPROD.Client.Shared.Components
+@using IMPLANPROD.Client.Pages.Reportes
+@inject IRepository repository
+@inject SweetAlertService sweetAlertService
+@inject NavigationManager navigationManager
+
+<div class="container-fluid">
+    <div class="row mb-3">
+        <div class="col-12">
+            <div class="card shadow">
+                <div class="card-header bg-danger text-white">
+                    <h4 class="mb-0">
+                        <i class="fas fa-ban me-2"></i>Anulación de Remitos
+                    </h4>
+                </div>
+                <div class="card-body">
+                    <!-- Selector de Mes y Año -->
+                    <div class="row mb-4">
+                        <div class="col-md-2">
+                            <label class="form-label fw-bold">Mes:</label>
+                            <select class="form-select" @bind="mesSeleccionado">
+                                <option value="1">Enero</option>
+                                <option value="2">Febrero</option>
+                                <option value="3">Marzo</option>
+                                <option value="4">Abril</option>
+                                <option value="5">Mayo</option>
+                                <option value="6">Junio</option>
+                                <option value="7">Julio</option>
+                                <option value="8">Agosto</option>
+                                <option value="9">Septiembre</option>
+                                <option value="10">Octubre</option>
+                                <option value="11">Noviembre</option>
+                                <option value="12">Diciembre</option>
+                            </select>
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label fw-bold">Año:</label>
+                            <input type="number" class="form-control" @bind="anioSeleccionado" min="2000" max="2099" />
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label fw-bold">Cliente (Opcional):</label>
+                            <div class="input-group">
+                                <input type="text" 
+                                       class="form-control" 
+                                       @bind="clienteSeleccionado" 
+                                       readonly 
+                                       placeholder="Todos los clientes" />
+                                @if (!string.IsNullOrEmpty(clienteSeleccionado))
+                                {
+                                    <button type="button" class="btn btn-outline-secondary" @onclick="LimpiarCliente" title="Limpiar Cliente">
+                                        <i class="fas fa-times"></i>
+                                    </button>
+                                }
+                                <button type="button" class="btn btn-outline-primary" @onclick="AbrirSelectorClientes" title="Seleccionar Cliente">
+                                    <i class="fas fa-users"></i>
+                                </button>
+                            </div>
+                        </div>
+                        <div class="col-md-2 d-flex align-items-end">
+                            <button class="btn btn-primary w-100" @onclick="CargarRemitos" disabled="@cargandoRemitos">
+                                @if (cargandoRemitos)
+                                {
+                                    <span class="spinner-border spinner-border-sm me-2"></span>
+                                }
+                                <i class="fas fa-search me-2"></i>Buscar
+                            </button>
+                        </div>
+                        <div class="col-md-2 d-flex align-items-end">
+                            <button class="btn btn-secondary w-100" @onclick="Volver">
+                                <i class="fas fa-arrow-left me-2"></i>Volver
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Información del período seleccionado -->
+                    @if (remitos.Any())
+                    {
+                        <div class="alert alert-info">
+                            <i class="fas fa-info-circle me-2"></i>
+                            <strong>Período:</strong> @ObtenerNombreMes(mesSeleccionado) de @anioSeleccionado
+                            <span class="ms-3">
+                                <strong>Remitos encontrados:</strong> @remitos.Count
+                            </span>
+                        </div>
+                    }
+
+                    <!-- Lista de Remitos -->
+                    @if (cargandoRemitos)
+                    {
+                        <div class="text-center py-5">
+                            <div class="spinner-border text-primary" role="status">
+                                <span class="visually-hidden">Cargando remitos...</span>
+                            </div>
+                            <p class="mt-3">Cargando remitos del período seleccionado...</p>
+                        </div>
+                    }
+                    else if (remitos.Any())
+                    {
+                        <div class="d-flex justify-content-end mb-3">
+                            <button class="btn btn-outline-success" @onclick="ConfirmarImpresionAsync" disabled="@isPrinting">
+                                <i class="oi oi-print"></i> Imprimir/Exp.Excel
+                            </button>
+                            @if (isPrinting)
+                            {
+                                <div class="ms-2 d-flex align-items-center">
+                                    <div class="spinner-border text-success" role="status">
+                                        <span class="visually-hidden">Preparando impresión...</span>
+                                    </div>
+                                </div>
+                            }
+                        </div>
+
+                        <div class="table-responsive">
+                            <table class="table table-hover table-striped">
+                                <thead class="table-dark">
+                                    <tr>
+                                        <th>Remito</th>
+                                        <th>Cliente</th>
+                                        <th>Razón Social</th>
+                                        <th>Fecha</th>
+                                        <th class="text-center">Acciones</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var remito in remitos)
+                                    {
+                                        <tr>
+                                            <td>
+                                                <strong>@remito.DoPriCor</strong>
+                                            </td>
+                                            <td>@remito.NumeClie</td>
+                                            <td>@remito.RazonSocial</td>
+                                            <td>@remito.FechMov.ToString("dd/MM/yyyy")</td>
+                                            <td class="text-center">
+                                                <button class="btn btn-sm btn-danger" @onclick="() => SeleccionarRemitoParaAnular(remito)">
+                                                    <i class="fas fa-ban me-1"></i>Anular
+                                                </button>
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    }
+                    else if (!cargandoRemitos && mesSeleccionado > 0 && anioSeleccionado > 0)
+                    {
+                        <div class="alert alert-warning text-center">
+                            <i class="fas fa-exclamation-triangle me-2"></i>
+                            No se encontraron remitos para el período seleccionado.
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="alert alert-secondary text-center">
+                            <i class="fas fa-info-circle me-2"></i>
+                            Seleccione un mes y año, luego haga clic en "Buscar Remitos" para ver los remitos disponibles.
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Selector de Clientes -->
+<SelectorClientes @ref="selectorClientes" OnClienteSeleccionado="OnClienteSeleccionado" />
+
+@if (remitos.Any())
+{
+    <ImpresionLista TItem="RemitoAnularDTO"
+                    Datos="remitos"
+                    Titulo="Listado de Remitos para Anulación"
+                    UrlExportarExcel="api/excel/exportar-remitos"
+                    Encabezados="encabezadosRemitos"
+                    ModoDirecto="false"
+                    MostrarModal="mostrarModalImpresion"
+                    OnCerrar="ResetearImpresion" />
+}
+
+@code {
+    // Componentes
+    private SelectorClientes selectorClientes = null!;
+
+    // Variables de filtros
+    private int mesSeleccionado = DateTime.Now.Month;
+    private int anioSeleccionado = DateTime.Now.Year;
+    private bool cargandoRemitos = false;
+    private List<RemitoAnularDTO> remitos = new();
+    
+    // Variables de cliente
+    private int? numeroClienteSeleccionado = null;
+    private string clienteSeleccionado = string.Empty;
+    private bool isPrinting = false;
+    private bool mostrarModalImpresion = false;
+
+    private Dictionary<string, string> encabezadosRemitos = new()
+    {
+        { "DoPriCor", "Remito" },
+        { "NumeClie", "Cliente" },
+        { "RazonSocial", "Razón Social" },
+        { "FechMov", "Fecha" },
+        { "ReferCor", "Referencia" }
+    };
+
+    /// <summary>
+    /// Carga los remitos del mes y año seleccionados, con filtro opcional de cliente
+    /// </summary>
+    private async Task CargarRemitos()
+    {
+        try
+        {
+            cargandoRemitos = true;
+            StateHasChanged();
+
+            Console.WriteLine($"[AnulaRemito] Cargando remitos para {mesSeleccionado}/{anioSeleccionado}, Cliente: {numeroClienteSeleccionado?.ToString() ?? "Todos"}");
+
+            // Construir URL con filtro opcional de cliente
+            string url = $"api/movistock/remitos-mes/{anioSeleccionado}/{mesSeleccionado}";
+            if (numeroClienteSeleccionado.HasValue)
+            {
+                url += $"?numeroCliente={numeroClienteSeleccionado.Value}";
+            }
+
+            // Llamar al endpoint para obtener los remitos
+            var response = await repository.Get<List<RemitoAnularDTO>>(url);
+
+            if (!response.Error && response.Response != null)
+            {
+                remitos = response.Response;
+                Console.WriteLine($"[AnulaRemito] Remitos cargados: {remitos.Count}");
+            }
+            else
+            {
+                var errorMsg = await response.GetErrorMessageAsync();
+                Console.WriteLine($"[AnulaRemito] Error al cargar remitos: {errorMsg}");
+                await sweetAlertService.FireAsync("Error", $"Error al cargar remitos: {errorMsg}", SweetAlertIcon.Error);
+                remitos = new List<RemitoAnularDTO>();
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[AnulaRemito] Excepción al cargar remitos: {ex.Message}");
+            await sweetAlertService.FireAsync("Error", $"Error al cargar remitos: {ex.Message}", SweetAlertIcon.Error);
+            remitos = new List<RemitoAnularDTO>();
+        }
+        finally
+        {
+            cargandoRemitos = false;
+            StateHasChanged();
+        }
+    }
+
+    /// <summary>
+    /// Abre el modal de selección de clientes
+    /// </summary>
+    private async Task AbrirSelectorClientes()
+    {
+        await selectorClientes.AbrirModal();
+    }
+
+    /// <summary>
+    /// Maneja la selección de un cliente
+    /// </summary>
+    private void OnClienteSeleccionado(SelectorClientes.ClienteSeleccionado cliente)
+    {
+        numeroClienteSeleccionado = cliente.NumeCli;
+        clienteSeleccionado = $"{cliente.NumeCli} - {cliente.RazonSocial}";
+        Console.WriteLine($"[AnulaRemito] Cliente seleccionado: {clienteSeleccionado}");
+        StateHasChanged();
+    }
+
+    /// <summary>
+    /// Limpia la selección del cliente
+    /// </summary>
+    private void LimpiarCliente()
+    {
+        numeroClienteSeleccionado = null;
+        clienteSeleccionado = string.Empty;
+        Console.WriteLine("[AnulaRemito] Cliente limpiado");
+        StateHasChanged();
+    }
+
+    /// <summary>
+    /// Selecciona un remito para anular
+    /// </summary>
+    private async Task SeleccionarRemitoParaAnular(RemitoAnularDTO remito)
+    {
+        var result = await sweetAlertService.FireAsync(new SweetAlertOptions
+        {
+            Title = "Confirmar Anulación",
+            Text = $"¿Está seguro de anular el remito {remito.DoPriCor}?\n\nCliente: {remito.NumeClie} - {remito.RazonSocial}\nFecha: {remito.FechMov:dd/MM/yyyy}",
+            Icon = SweetAlertIcon.Warning,
+            ShowCancelButton = true,
+            ConfirmButtonText = "Sí, anular",
+            CancelButtonText = "Cancelar",
+            ConfirmButtonColor = "#d33"
+        });
+
+        if (result.IsConfirmed)
+        {
+            await AnularRemito(remito);
+        }
+    }
+
+    /// <summary>
+    /// Anula el remito seleccionado
+    /// Llama al endpoint del servidor que replica la lógica VB6
+    /// </summary>
+    private async Task AnularRemito(RemitoAnularDTO remito)
+    {
+        try
+        {
+            Console.WriteLine($"[AnulaRemito] Anulando remito: {remito.DoPriCor}");
+
+            // Preparar request para anulación
+            var request = new AnularRemitoRequest
+            {
+                NumeroRemito = remito.DoPriCor ?? "",
+                NumeroCliente = remito.NumeClie,
+                FechaMovimiento = remito.FechMov
+            };
+
+            // Llamar al endpoint de anulación
+            var response = await repository.Post<AnularRemitoRequest, AnularRemitoResponse>(
+                "api/movistock/anular-remito", 
+                request);
+
+            if (!response.Error && response.Response != null)
+            {
+                var resultado = response.Response;
+
+                if (resultado.Exitoso)
+                {
+                    // Mostrar mensaje de éxito con detalles
+                    await sweetAlertService.FireAsync(new SweetAlertOptions
+                    {
+                        Title = "Remito Anulado",
+                        Html = $"<div style='text-align: left;'>" +
+                               $"<p><strong>Remito:</strong> {remito.DoPriCor}</p>" +
+                               $"<p><strong>Cliente:</strong> {remito.NumeClie} - {remito.RazonSocial}</p>" +
+                               $"<p><strong>Tabla utilizada:</strong> {resultado.TablaUtilizada}</p>" +
+                               $"<p><strong>Registros afectados:</strong> {resultado.RegistrosMovimientosAfectados}</p>" +
+                               $"<p><strong>Pedidos actualizados:</strong> {resultado.PedidosActualizados}</p>" +
+                               $"</div>",
+                        Icon = SweetAlertIcon.Success
+                    });
+
+                    Console.WriteLine($"[AnulaRemito] Anulación exitosa: {resultado.Mensaje}");
+
+                    // Recargar la lista de remitos
+                    await CargarRemitos();
+                }
+                else
+                {
+                    await sweetAlertService.FireAsync("Error", resultado.Mensaje, SweetAlertIcon.Error);
+                    Console.WriteLine($"[AnulaRemito] Error en anulación: {resultado.Mensaje}");
+                }
+            }
+            else
+            {
+                var errorMsg = await response.GetErrorMessageAsync();
+                Console.WriteLine($"[AnulaRemito] Error al anular remito: {errorMsg}");
+                await sweetAlertService.FireAsync("Error", $"Error al anular remito: {errorMsg}", SweetAlertIcon.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[AnulaRemito] Excepción al anular remito: {ex.Message}");
+            await sweetAlertService.FireAsync("Error", $"Error al anular remito: {ex.Message}", SweetAlertIcon.Error);
+        }
+    }
+
+    /// <summary>
+    /// Obtiene el nombre del mes
+    /// </summary>
+    private string ObtenerNombreMes(int mes)
+    {
+        return mes switch
+        {
+            1 => "Enero",
+            2 => "Febrero",
+            3 => "Marzo",
+            4 => "Abril",
+            5 => "Mayo",
+            6 => "Junio",
+            7 => "Julio",
+            8 => "Agosto",
+            9 => "Septiembre",
+            10 => "Octubre",
+            11 => "Noviembre",
+            12 => "Diciembre",
+            _ => ""
+        };
+    }
+
+    /// <summary>
+    /// Vuelve a la página anterior
+    /// </summary>
+    private void Volver()
+    {
+        navigationManager.NavigateTo("/remitos/cliente");
+    }
+
+    private async Task ConfirmarImpresionAsync()
+    {
+        if (remitos == null || !remitos.Any())
+        {
+            await sweetAlertService.FireAsync("Información", "No hay remitos para imprimir.", SweetAlertIcon.Info);
+            return;
+        }
+
+        isPrinting = true;
+        StateHasChanged();
+
+        try
+        {
+            var cantidadTotal = remitos.Count;
+
+            var result = await sweetAlertService.FireAsync(new SweetAlertOptions
+            {
+                Title = "Confirmar impresión",
+                Text = $"Se van a imprimir/exportar {cantidadTotal} remitos del período actual.\n¿Desea continuar?",
+                Icon = SweetAlertIcon.Warning,
+                ShowCancelButton = true,
+                ConfirmButtonText = "Sí, continuar",
+                CancelButtonText = "Cancelar"
+            });
+
+            if (result.IsConfirmed)
+            {
+                mostrarModalImpresion = true;
+            }
+        }
+        catch (Exception ex)
+        {
+            await sweetAlertService.FireAsync("Error", ex.Message, SweetAlertIcon.Error);
+        }
+        finally
+        {
+            isPrinting = false;
+            StateHasChanged();
+        }
+    }
+
+    private void ResetearImpresion()
+    {
+        mostrarModalImpresion = false;
+        StateHasChanged();
+    }
+}

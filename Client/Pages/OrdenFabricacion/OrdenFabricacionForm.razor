@@ -1,0 +1,887 @@
+@inject IRepository repository
+@inject SweetAlertService sweetAlertService
+@using IMPLANPROD.Client.Shared.Components
+@using IMPLANPROD.Client.Pages.Stock
+@using IMPLANPROD.Shared.DTOs
+@using IMPLANPROD.Shared.Entities
+
+
+<EditForm Model="ordenFabricacion" OnValidSubmit="OnValidSubmit">
+    <DataAnnotationsValidator />
+
+    <div class="card mb-3">
+        <div class="card-header bg-light">
+            @if (IsEdit && ordenFabricacion.NumeOrFa.HasValue)
+            {
+                <h4>Orden de Fabricación #@ordenFabricacion.NumeOrFa.Value</h4>
+            }
+            else
+            {
+                <h4>Nueva Orden de Fabricación</h4>
+            }
+        </div>
+        <div class="card-body">
+            <div class="row mb-3">
+                <div class="col-md-6">
+                    <div class="mb-3">
+                        <label>Código de Producto:</label>
+                        @if (IsEdit)
+                        {
+                            <div class="input-group">
+                                <input type="text" class="form-control" value="@ordenFabricacion.Cod_Exte" readonly />
+                                <span class="input-group-text">@ordenFabricacion.Cod_Inte</span>
+                            </div>
+                        }
+                        else
+                        {
+                            <div>
+                                <MasterSearchModal 
+                                IsVisible="@showModal" 
+                                OnRepuestoSelected="HandleSelection" 
+                                OnCloseRequested="@(() => showModal = false)" />
+
+                                <div class="d-flex align-items-center">
+                                    <button class="btn btn-sm btn-info me-2" type="button" @onclick="() => showModal = true">
+                                        Buscar producto
+                                    </button>
+                                    @if (selectedMaster != null)
+                                    {
+                                        <div class="input-group" style="max-width: 300px;">
+                                            <input class="form-control" type="text" value="@selectedMaster.Codigo" readonly />
+                                            <span class="input-group-text">@selectedMaster.Codint</span>
+                                        </div>
+                                    }
+                                </div>
+                            </div>
+                        }
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="mb-3">
+                        <label>Descripción:</label>
+                        <input type="text" class="form-control" value="@(IsEdit ? ordenFabricacion.Descrip : selectedMaster?.Descripcion)" readonly />
+                    </div>
+                </div>
+            </div>
+
+            <div class="row mb-3">
+                <div class="col-md-4">
+                    <div class="mb-3">
+                        <label>Sección Productiva:</label>
+                        <div class="input-group">
+                            <select class="form-select" @bind="seccionProductivaSeleccionada" @bind:after="ActualizarSeccionProductiva">
+                                @if (seccionesProd != null)
+                                {
+                                    @foreach (var seccion in seccionesProd)
+                                    {
+                                        <option value="@seccion.CodigoSecProd">@seccion.CodigoSecProd - @seccion.Descripcion</option>
+                                    }
+                                }
+                            </select>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="mb-3">
+                        <label>Tipo de Material:</label>
+                        <input type="text" class="form-control" value="@descripcionTipoMaterial" readonly />
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="mb-3">
+                        <label>Unidad de Medida:</label>
+                        <input type="text" class="form-control" value="@selectedMaster?.Umedida" readonly />
+                    </div>
+                </div>
+            </div>
+
+            <div class="row mb-3">
+                <div class="col-md-4">
+                    <div class="mb-3">
+                        <label>Destino:</label>
+                        <select class="form-select" @bind="ordenFabricacion.Destino">
+                            <option value="STOCK">STOCK</option>
+                            <option value="SEMIELA">SEMIELA</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="mb-3">
+                        <label>Stock Máximo:</label>
+                        <input type="text" class="form-control" value=" @LoteMaximo" readonly />
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="mb-3">
+                        <label>Cantidad a Fabricar:</label>
+                        <InputNumber class="form-control"
+                                     @bind-Value="ordenFabricacion.CanProy"
+                                     @bind-Value:after="OnCantidadChanged" />
+                    </div>
+                </div>
+            </div>
+
+            <div class="row mb-3">
+                <div class="col-md-4">
+                    <div class="mb-3">
+                        <label>Prioridad:</label>
+                        <InputNumber class="form-control" @bind-Value="ordenFabricacion.Priorid" />
+                    </div>
+                </div>
+                @if (IsEdit)
+                {
+                    <div class="col-md-4">
+                        <div class="mb-3">
+                            <label>Número de Orden:</label>
+                            <InputNumber class="form-control" @bind-Value="ordenFabricacion.NumeOrFa" disabled readonly />
+                        </div>
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
+
+    <div class="mb-3">
+        <button type="submit" class="btn btn-primary me-2">Guardar Orden Fabricación</button>
+        @if (IsEdit && reservasEdicion != null && reservasEdicion.Any())
+        {
+            <button type="button" class="btn btn-success me-2" @onclick="GrabarReservas">Grabar Reservas</button>
+        }
+        <button type="button" class="btn btn-secondary" @onclick="ReturnAction">Volver</button>
+    </div>
+
+    @* Mostrar componentes de fórmula para crear nueva orden *@
+    @if (!IsEdit && componentesFormula != null && componentesFormula.Any())
+    {
+        <div class="card mt-4">
+            <div class="card-header bg-light">
+                <h5>Componentes de la Fórmula</h5>
+            </div>
+            <div class="card-body">
+                @if (cargandoFormula)
+                {
+                    <div class="d-flex justify-content-center">
+                        <div class="spinner-border text-primary" role="status">
+                            <span class="visually-hidden">Cargando...</span>
+                        </div>
+                    </div>
+                }
+                else
+                {
+                    <div class="table-responsive" style="max-height: 400px; overflow-y: auto;">
+                        <table class="table table-striped table-hover">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Código</th>
+                                    <th>Descripción</th>
+                                    <th class="text-center">Uso X Unid.</th>
+                                    <th class="text-center">Necesidad Total</th>
+@*                                     <th class="text-center">Cantidad a Utilizar</th>
+ *@                                    <th class="text-center">Acciones</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var componente in componentesFormula)
+                                {
+                                    <tr>
+                                        <td>@componente.CodXElem</td>
+                                        <td>
+                                            @if (componente.EsRepetido)
+                                            {<span><strong>*</strong> @componente.Descripcion</span>}
+                                            else
+                                            {@componente.Descripcion}
+                                        </td>
+                                        <td class="text-center">@componente.UsoBruto.ToString("N4")</td>
+                                        <td class="text-center">@componente.NecesidadTotal.ToString("N2")</td>
+                                        @* <td>
+                                            <input type="number" class="form-control form-control-sm" 
+                                                   value="@componente.CantidadAUtilizar" 
+                                                   @onchange="@(e => componente.CantidadAUtilizar = Convert.ToDecimal(e.Value))" />
+                                        </td> *@
+                                        <td class="text-center">
+                                            <button type="button" class="btn btn-sm btn-primary" @onclick="() => AbrirHistorico(componente)">
+                                                <i class="oi oi-clock"></i> Histórico
+                                            </button>
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                    <div class="mt-2">
+                        <small class="text-muted"><strong>*</strong> Indica componente con código repetido en la fórmula</small>
+                    </div>
+                }
+            </div>
+        </div>
+    }
+    
+    @* Mostrar reservas para editar orden existente *@
+    @if (IsEdit)
+    {
+        <div class="card mt-4">
+            <div class="card-header bg-light">
+                <h5>Reservas de la Orden de Fabricación</h5>
+            </div>
+            <div class="card-body">
+                @if (cargandoReservas)
+                {
+                    <div class="d-flex justify-content-center">
+                        <div class="spinner-border text-primary" role="status">
+                            <span class="visually-hidden">Cargando reservas...</span>
+                        </div>
+                    </div>
+                }
+                else if (reservasEdicion != null && reservasEdicion.Any())
+                {
+                    <div class="table-responsive" style="max-height: 400px; overflow-y: auto;">
+                        <table class="table table-striped table-hover">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Código</th>
+                                    <th>Descripción</th>
+                                    <th class="text-center">Uso X Unid.</th>
+                                    <th class="text-center">Necesidad Total</th>
+                                    <th class="text-center">Editar Necesidad Total</th>
+                                    <th class="text-center">Acciones</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var reserva in reservasEdicion)
+                                {
+                                    <tr>
+                                        <td>@reserva.Cod_Exte</td>
+                                        <td>@reserva.Descrip</td>
+                                        <td class="text-center">@(reserva.UsoUnit?.ToString("N4") ?? "0.0000")</td>
+                                        <td class="text-center">@(reserva.CantRes?.ToString("N2") ?? "0.00")</td>
+                                        <td class="text-center">
+                                            <input type="number" 
+                                                   class="form-control form-control-sm" 
+                                                   style="width: 120px; margin: 0 auto;"
+                                                   step="0.01"
+                                                   min="0"
+                                                   value="@(reserva.CantRes?.ToString("F2") ?? "0.00")"
+                                                   title="Ingrese la cantidad que desea modificar. Este valor actualizará la Necesidad Total del componente en la reserva."
+                                                   data-bs-toggle="tooltip"
+                                                   data-bs-placement="top"
+                                                   @onchange="@((ChangeEventArgs e) => ActualizarCantidadReservada(reserva, e))" />
+                                        </td>
+                                        <td class="text-center">
+                                            <button type="button" class="btn btn-sm btn-primary" @onclick="() => AbrirHistoricoReserva(reserva)">
+                                                <i class="oi oi-clock"></i> Histórico
+                                            </button>
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                }
+                else
+                {
+                    <div class="alert alert-info">
+                        <i class="oi oi-info"></i> No se encontraron reservas para esta orden de fabricación.
+                    </div>
+                }
+            </div>
+        </div>
+    }
+</EditForm>
+
+@if (mostrarModalHistorico)
+{
+    <div class="modal fade show" style="display: block" tabindex="-1">
+        <div class="modal-dialog modal-xl">
+            <div class="modal-content">
+                <div class="modal-header bg-secondary text-white">
+                    <h5 class="modal-title">Histórico de Movimientos</h5>
+                    <button type="button" class="btn-close btn-close-white" @onclick="CerrarHistorico"></button>
+                </div>
+                <div class="modal-body p-0">
+                    <HistoricoMovimientosComponent Repuesto="componenteSeleccionado"
+                    ShowInModal="true"
+                    HeaderClass="bg-secondary"
+                    HeaderStyle="margin: -1px;" />
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="modal-backdrop fade show"></div>
+}
+
+@code {
+
+        [Parameter]
+        public OrdeFabr ordenFabricacion { get; set; } = new();
+
+        [Parameter]
+        public bool IsEdit { get; set; } = false;
+
+        [Parameter]
+        public EventCallback OnValidSubmit { get; set; }
+
+        [Parameter]
+        public EventCallback ReturnAction { get; set; }
+
+    public bool FormPostedSuccessfully { get; set; } = false;
+
+    private Master? selectedMaster;
+    private List<SecProd>? seccionesProd;
+    private List<Tatimat>? tiposMaterial;
+    private MasterFuncionesDTO? masterFunciones;
+    private string descripcionTipoMaterial = "No especificado";
+    private bool showModal = false;
+    private int seccionProductivaSeleccionada;
+    private decimal? LoteMaximo = 1;
+    
+    // Lista de componentes de la fórmula
+    private List<FormulaComponenteDTO>? componentesFormula;
+    // Indica si se está cargando la fórmula
+    private bool cargandoFormula = false;
+    
+    // Lista de reservas para modo edición
+    private List<Reserva>? reservasEdicion;
+    // Indica si se están cargando las reservas
+    private bool cargandoReservas = false;
+
+
+    /// <summary>
+    /// Método que se ejecuta cuando se inicializa el componente
+    /// </summary>
+    protected override async Task OnInitializedAsync()
+    {
+        await CargarCombos();
+
+        if (IsEdit)
+        {
+            // Si estamos en modo edición, cargamos los datos del Master asociado
+            await LoadMasterData();
+            
+            // Inicializamos la variable seccionProductivaSeleccionada con el valor actual de SecciPro
+            // SecciPro contiene el CodigoSecProd, no el Id
+            if (ordenFabricacion.SecciPro.HasValue)
+            {
+                // Convertimos el valor decimal de SecciPro a int para el combo
+                seccionProductivaSeleccionada = Convert.ToInt32(ordenFabricacion.SecciPro.Value);
+            }
+            
+            // Cargar datos del producto si estamos en modo edición
+            if (ordenFabricacion.Cod_Inte.HasValue)
+            {
+                await CargarDatosProducto();
+            }
+            
+            // Cargar reservas si estamos en modo edición y tenemos IdSubOr
+            if (!string.IsNullOrEmpty(ordenFabricacion.IdSubOr))
+            {
+                await CargarReservasEdicion(ordenFabricacion.IdSubOr);
+            }
+        }
+        else
+        {
+            // Si es una nueva orden, establecemos algunos valores por defecto
+            ordenFabricacion.Destino = "STOCK";
+            ordenFabricacion.StatuOrf = 0;
+            ordenFabricacion.FechGen = DateTime.Now;
+            
+            // Inicializamos la descripción del tipo de material
+            descripcionTipoMaterial = "No especificado";
+        }
+    }
+
+    /// <summary>
+    /// Carga todos los combos necesarios para el formulario
+    /// </summary>
+    private async Task CargarCombos()
+    {
+        // Cargar secciones productivas
+        var responseSecProd = await repository.Get<List<SecProd>>("api/secprod/comboList");
+        if (responseSecProd.Error)
+        {
+            var errorMessage = await responseSecProd.GetErrorMessageAsync();
+            await sweetAlertService.FireAsync("Error", $"Error al cargar secciones productivas: {errorMessage}", SweetAlertIcon.Error);
+        }
+        else
+        {
+            seccionesProd = responseSecProd.Response;
+        }
+
+        // Cargar tipos de material
+        var responseTipos = await repository.Get<List<Tatimat>>("/api/tipomaterial/combo");
+        if (responseTipos.Error)
+        {
+            var errorMessage = await responseTipos.GetErrorMessageAsync();
+            await sweetAlertService.FireAsync("Error", $"Error al cargar tipos de material: {errorMessage}", SweetAlertIcon.Error);
+        }
+        else
+        {
+            tiposMaterial = responseTipos.Response ?? new();
+        }
+    }
+
+    /// <summary>
+    /// Carga los datos del Master asociado a la orden de fabricación
+    /// </summary>
+    private async Task LoadMasterData()
+    {
+        if (ordenFabricacion.Cod_Inte.HasValue)
+        {
+            var response = await repository.Get<Master>($"api/master/xCodint{ordenFabricacion.Id}");
+            if (!response.Error)
+            {
+                selectedMaster = response.Response;
+                
+                // Actualizar la descripción del tipo de material
+                if (selectedMaster != null && selectedMaster.Timate.HasValue)
+                {
+                    descripcionTipoMaterial = await ObtenerDescripcionTipoMaterial(selectedMaster.Timate);
+                }
+                else
+                {
+                    descripcionTipoMaterial = "No especificado";
+                }
+            }
+            await ObtenerStomax(ordenFabricacion.Cod_Inte.Value);
+        }
+    }
+    /// <summary>
+    /// Método que se ejecuta cuando se selecciona un producto del buscador
+    /// </summary>
+    /// <param name="master">Producto seleccionado</param>
+    private async Task OnMasterSelected(Master master)
+    {
+        if (master == null || string.IsNullOrEmpty(master.Codigo) || master.Codint <= 0) return;
+
+        ordenFabricacion.Cod_Inte = master.Codint;
+        ordenFabricacion.Cod_Exte = master.Codigo;
+        ordenFabricacion.Descrip = master.Descripcion;
+        ordenFabricacion.Unidad = master.Umedida;
+        LoteMaximo = master.Stomax;
+        if (master.Stomax.HasValue)
+        {
+            ordenFabricacion.CanProy = master.Stomax.Value;
+        }
+        
+        // Actualizar la descripción del tipo de material
+        if (master.Timate.HasValue)
+        {
+            descripcionTipoMaterial = await ObtenerDescripcionTipoMaterial(master.Timate);
+        }
+        else
+        {
+            descripcionTipoMaterial = "No especificado";
+        }
+        
+        StateHasChanged();
+    }
+
+    /// <summary>
+    /// Obtiene la descripción del tipo de material según su código, utilizando la lista cargada desde la API
+    /// Si los tipos de material no están cargados, los carga bajo demanda
+    /// </summary>
+    /// <param name="tipoMaterial">Código del tipo de material</param>
+    /// <returns>Descripción del tipo de material</returns>
+    private async Task<string> ObtenerDescripcionTipoMaterial(short? tipoMaterial)
+    {
+        if (!tipoMaterial.HasValue)
+            return "No especificado";
+            
+        // Si los tipos de material no están cargados, los cargamos bajo demanda
+        if (tiposMaterial == null || !tiposMaterial.Any())
+        {
+            // Cargar tipos de material
+            var responseTipos = await repository.Get<List<Tatimat>>("/api/tipomaterial/combo");
+            if (responseTipos.Error)
+            {
+                var errorMessage = await responseTipos.GetErrorMessageAsync();
+                await sweetAlertService.FireAsync("Error", $"Error al cargar tipos de material: {errorMessage}", SweetAlertIcon.Error);
+                return "Error al cargar";
+            }
+            else
+            {
+                tiposMaterial = responseTipos.Response ?? new();
+            }
+        }
+
+        var tipo = tiposMaterial.FirstOrDefault(t => t.CodigoTatimat == tipoMaterial.Value);
+        return tipo?.Descripcion ?? "Tipo no encontrado";
+    }
+
+    /// <summary>
+    /// Carga los datos del producto cuando se está en modo edición
+    /// Este método se encarga de obtener la información completa del producto a partir del código interno
+    /// y actualizar los campos de descripción y tipo de material
+    /// </summary>
+    private async Task CargarDatosProducto()
+    {
+        // Verificar que tengamos un código interno válido
+        if (!ordenFabricacion.Cod_Inte.HasValue || ordenFabricacion.Cod_Inte.Value <= 0)
+        {
+            return; // No hay código interno válido, no podemos cargar datos del producto
+        }
+        
+        // Obtener información del producto a partir del código interno
+        var responseMaster = await repository.Get<Master>($"api/master/xCodint{ordenFabricacion.Cod_Inte.Value}");
+        if (!responseMaster.Error && responseMaster.Response != null)
+        {
+            // Actualizar selectedMaster con la información completa del producto
+            selectedMaster = responseMaster.Response;
+            
+            // Actualizar la descripción del tipo de material
+            if (selectedMaster.Timate.HasValue)
+            {
+                descripcionTipoMaterial = await ObtenerDescripcionTipoMaterial(selectedMaster.Timate);
+            }
+            else
+            {
+                descripcionTipoMaterial = "No especificado";
+            }
+            
+            // Obtener el stock máximo
+            await ObtenerStomax(ordenFabricacion.Cod_Inte.Value);
+        }
+    }
+    
+    private async Task HandleSelection(Master master)
+    {
+        selectedMaster = master;
+        if (master == null || string.IsNullOrEmpty(master.Codigo) || master.Codint <= 0) return;
+
+        ordenFabricacion.Cod_Inte = master.Codint;
+        ordenFabricacion.Cod_Exte = master.Codigo;
+        ordenFabricacion.Descrip = master.Descripcion;
+        ordenFabricacion.Unidad = master.Umedida;
+        
+        // Obtener información adicional del producto seleccionado
+        var responseMaster = await repository.Get<Master>($"api/master/xCodint{master.Codint}");
+        if (!responseMaster.Error && responseMaster.Response != null)
+        {
+            // Actualizar selectedMaster con la información completa del producto
+            selectedMaster = responseMaster.Response;
+            
+            // Actualizar la descripción del tipo de material
+            if (selectedMaster.Timate.HasValue)
+            {
+                descripcionTipoMaterial = await ObtenerDescripcionTipoMaterial(selectedMaster.Timate);
+            }
+            else
+            {
+                descripcionTipoMaterial = "No especificado";
+            }
+        }
+        
+        await ObtenerStomax(master.Codint);
+        
+        // Si no estamos en modo edición, cargar la fórmula de componentes
+        if (!IsEdit)
+        {
+            await CargarComponentesFormula(master.Codint);
+        }
+
+        StateHasChanged();
+
+        showModal = false;
+    }
+
+    /// <summary>
+    /// Carga los componentes de la fórmula del producto seleccionado
+    /// </summary>
+    /// <param name="codigoInternoProducto">Código interno del producto a fabricar</param>
+    private async Task CargarComponentesFormula(int codigoInternoProducto)
+    {
+        try
+        {
+            cargandoFormula = true;
+            StateHasChanged();
+            
+            // Obtener los componentes de la fórmula desde el endpoint
+            var response = await repository.Get<List<FormulaComponenteDTO>>($"api/formulas/componentes/{codigoInternoProducto}");
+            
+            if (response.Error)
+            {
+                var errorMessage = await response.GetErrorMessageAsync();
+                await sweetAlertService.FireAsync("Error", errorMessage, SweetAlertIcon.Error);
+                componentesFormula = null;
+            }
+            else
+            {
+                componentesFormula = response.Response;
+                
+                // Calcular la necesidad total para cada componente
+                if (componentesFormula != null && componentesFormula.Any() && ordenFabricacion.CanProy.HasValue)
+                {
+                    foreach (var componente in componentesFormula)
+                    {
+                        componente.NecesidadTotal = componente.UsoBruto * ordenFabricacion.CanProy.Value;
+                        componente.CantidadAUtilizar = componente.NecesidadTotal; // Por defecto igual a la necesidad total
+                    }
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            await sweetAlertService.FireAsync("Error", ex.Message, SweetAlertIcon.Error);
+            componentesFormula = null;
+        }
+        finally
+        {
+            cargandoFormula = false;
+            StateHasChanged();
+        }
+    }
+    
+    /// <summary>
+    /// Carga las reservas asociadas a una orden de fabricación para modo edición
+    /// </summary>
+    /// <param name="idSubOr">Identificador de la orden de fabricación</param>
+    private async Task CargarReservasEdicion(string idSubOr)
+    {
+        if (string.IsNullOrEmpty(idSubOr))
+        {
+            return;
+        }
+        
+        cargandoReservas = true;
+        StateHasChanged();
+        
+        try
+        {
+            var response = await repository.Get<List<Reserva>>($"api/reservas/por-of/{idSubOr}");
+            
+            if (response.Error)
+            {
+                // Solo mostrar error si es un error real del servidor, no cuando simplemente no hay reservas
+                var errorMessage = await response.GetErrorMessageAsync();
+                
+                // Si el error es 404 (Not Found), significa que no hay reservas, no es un error real
+                if (errorMessage.Contains("404") || errorMessage.ToLower().Contains("not found") || errorMessage.ToLower().Contains("no se encontraron"))
+                {
+                    // No hay reservas, esto es normal
+                    reservasEdicion = new List<Reserva>();
+                }
+                else
+                {
+                    // Error real del servidor
+                    await sweetAlertService.FireAsync("Error", $"Error al cargar reservas: {errorMessage}", SweetAlertIcon.Error);
+                    reservasEdicion = null;
+                }
+            }
+            else
+            {
+                reservasEdicion = response.Response ?? new List<Reserva>();
+            }
+        }
+        catch (Exception ex)
+        {
+            await sweetAlertService.FireAsync("Error", $"Error inesperado al cargar reservas: {ex.Message}", SweetAlertIcon.Error);
+            reservasEdicion = null;
+        }
+        finally
+        {
+            cargandoReservas = false;
+            StateHasChanged();
+        }
+    }
+    
+    /// <summary>
+    /// Actualiza las necesidades totales cuando cambia la cantidad a fabricar
+    /// </summary>
+    private void ActualizarNecesidadesTotales()
+    {
+        if (componentesFormula != null && componentesFormula.Any() && ordenFabricacion.CanProy.HasValue)
+        {
+            foreach (var componente in componentesFormula)
+            {
+                componente.NecesidadTotal = componente.UsoBruto * ordenFabricacion.CanProy.Value;
+                // Solo actualizamos la cantidad a utilizar si no ha sido modificada manualmente
+                if (componente.CantidadAUtilizar == 0 || componente.CantidadAUtilizar == componente.NecesidadTotal / ordenFabricacion.CanProy.Value * (ordenFabricacion.CanProy.Value - 1))
+                {
+                    componente.CantidadAUtilizar = componente.NecesidadTotal;
+                }
+            }
+        }
+    }
+    
+    /// <summary>
+    /// Obtiene el stock máximo (Stomax) del producto seleccionado y lo asigna a la cantidad a fabricar si es una nueva orden
+    /// </summary>
+    /// <param name="codint">Código interno del producto</param>
+    private async Task ObtenerStomax(int codint)
+    {
+        if (ordenFabricacion.Cod_Inte.HasValue)
+        {
+            var response = await repository.Get<MasterFuncionesDTO>(
+                $"api/masterfunciones/funcionesAtributos/{ordenFabricacion.Cod_Inte.Value}");
+
+            if (!response.Error && response.Response != null)
+            {
+                masterFunciones = response.Response;
+                LoteMaximo = masterFunciones!.Stomax;
+                
+                // Si no es una edición, asignar el valor de LoteMaximo a CanProy
+                if (!IsEdit && LoteMaximo.HasValue)
+                {
+                    ordenFabricacion.CanProy = LoteMaximo.Value;
+                }
+            }
+        }
+    }
+    //para qeu si rebota por validaciones en create vuelva a formularioForm
+    public void ReiniciarFormulario()
+    {
+        // Por ejemplo:
+        ordenFabricacion = new OrdeFabr(); // si se usa dentro del form
+        StateHasChanged(); // fuerza el render
+    }
+    
+    /// <summary>
+    /// Actualiza el valor de SecciPro en la orden de fabricación cuando se cambia la selección en el combo
+    /// </summary>
+    private void ActualizarSeccionProductiva()
+    {
+        // Asignar el CodigoSecProd seleccionado al campo SecciPro
+        // El valor ya es un entero (CodigoSecProd), solo lo convertimos a decimal
+        ordenFabricacion.SecciPro = Convert.ToDecimal(seccionProductivaSeleccionada);
+    }
+    
+    /// <summary>
+    /// Método que se ejecuta cuando cambia la cantidad a fabricar
+    /// </summary>
+    private void OnCantidadChanged()
+    {
+        ActualizarNecesidadesTotales();
+    }
+
+    /// <summary>
+    /// Indica si se debe mostrar el modal de histórico
+    /// </summary>
+    private bool mostrarModalHistorico = false;
+
+    /// <summary>
+    /// Componente seleccionado para mostrar su histórico
+    /// </summary>
+    private ProductoConSaldoDTO? componenteSeleccionado;
+
+    /// <summary>
+    /// Abre el modal de histórico para el componente seleccionado
+    /// </summary>
+    /// <param name="componente">Componente de la fórmula seleccionado</param>
+    private void AbrirHistorico(FormulaComponenteDTO componente)
+    {
+        // Convertir el componente de fórmula a ProductoConSaldoDTO para usar con el componente HistoricoMovimientosComponent
+        componenteSeleccionado = new ProductoConSaldoDTO
+        {
+            Cod_inte = componente.CodIElem,
+            Codigo = componente.CodXElem,
+            Descripcion = componente.Descripcion
+        };
+
+        mostrarModalHistorico = true;
+    }
+
+    /// <summary>
+    /// Cierra el modal de histórico
+    /// </summary>
+    private void CerrarHistorico()
+    {
+        mostrarModalHistorico = false;
+        componenteSeleccionado = null;
+    }
+    
+
+    /// <summary>
+    /// Método para grabar las reservas modificadas
+    /// </summary>
+    private async Task GrabarReservas()
+    {
+        if (reservasEdicion == null || !reservasEdicion.Any())
+        {
+            await sweetAlertService.FireAsync("Advertencia", "No hay reservas para actualizar.", SweetAlertIcon.Warning);
+            return;
+        }
+        
+        // Mostrar confirmación antes de grabar
+        var confirmResult = await sweetAlertService.FireAsync(new SweetAlertOptions
+        {
+            Title = "Confirmar actualización",
+            Text = "Se van a actualizar las reservas. ¿Desea continuar?",
+            Icon = SweetAlertIcon.Question,
+            ShowCancelButton = true,
+            ConfirmButtonText = "Sí, actualizar",
+            CancelButtonText = "Cancelar"
+        });
+        
+        if (!confirmResult.IsConfirmed)
+        {
+            return;
+        }
+        
+        try
+        {
+            // Usar el nuevo endpoint que actualiza múltiples reservas de una vez
+            var response = await repository.Put("api/reservas/multiples", reservasEdicion);
+            
+            if (response.Error)
+            {
+                var errorMessage = await response.GetErrorMessageAsync();
+                await sweetAlertService.FireAsync("Error", $"Error al actualizar las reservas: {errorMessage}", SweetAlertIcon.Error);
+            }
+            else
+            {
+                // El endpoint devuelve información detallada sobre el resultado
+                var resultado = response.Response;
+                
+                if (resultado != null)
+                {
+                    // Mostrar mensaje de éxito con detalles
+                    await sweetAlertService.FireAsync("Éxito", $"Reservas actualizadas exitosamente.", SweetAlertIcon.Success);
+                }
+                else
+                {
+                    await sweetAlertService.FireAsync("Éxito", "Reservas actualizadas exitosamente.", SweetAlertIcon.Success);
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            await sweetAlertService.FireAsync("Error", $"Error inesperado al actualizar reservas: {ex.Message}", SweetAlertIcon.Error);
+        }
+    }
+    
+    /// <summary>
+    /// Actualiza la cantidad reservada cuando el usuario modifica el input
+    /// </summary>
+    /// <param name="reserva">Reserva a actualizar</param>
+    /// <param name="e">Evento de cambio</param>
+    private void ActualizarCantidadReservada(Reserva reserva, ChangeEventArgs e)
+    {
+        if (decimal.TryParse(e.Value?.ToString(), out decimal nuevaCantidad))
+        {
+            reserva.CantRes = nuevaCantidad;
+        }
+        else
+        {
+            // Si no se puede parsear, mantener el valor anterior o poner 0
+            reserva.CantRes = 0;
+        }
+        
+        StateHasChanged();
+    }
+    
+    /// <summary>
+    /// Abre el modal de histórico para una reserva seleccionada
+    /// </summary>
+    /// <param name="reserva">Reserva seleccionada</param>
+    private void AbrirHistoricoReserva(Reserva reserva)
+    {
+        // Convertir la reserva a ProductoConSaldoDTO para usar con el componente HistoricoMovimientosComponent
+        componenteSeleccionado = new ProductoConSaldoDTO
+        {
+            Cod_inte = reserva.Cod_Inte,
+            Codigo = reserva.Cod_Exte ?? "",
+            Descripcion = reserva.Descrip ?? ""
+        };
+        
+        mostrarModalHistorico = true;
+    }
+}

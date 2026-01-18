@@ -1,0 +1,82 @@
+@page "/ordenes-compra/crear"
+@using IMPLANPROD.Shared.Entities
+@using IMPLANPROD.Client.Repositories
+@inject IRepository repository
+@inject NavigationManager navigationManager
+@inject SweetAlertService sweetAlertService
+
+<PageTitle>Nueva Orden de Compra</PageTitle>
+
+<OrdenesCompraForm ordenCompra="ordenCompra"
+                   OnValidSubmit="CrearAsync"
+                   OnCancel="Regresar"
+                   IsEdit="false" />
+
+@code {
+    private Ocomenca ordenCompra = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        // Obtener el siguiente número de orden
+        try
+        {
+            var responseHttp = await repository.Get<int>("api/ocomenca/siguiente-numero");
+            if (!responseHttp.Error)
+            {
+                ordenCompra.NumeOcom = responseHttp.Response;
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error al obtener siguiente número: {ex.Message}");
+            ordenCompra.NumeOcom = 1; // Valor por defecto
+        }
+
+        // Establecer valores por defecto
+        ordenCompra.FemiOcom = DateTime.Now;
+        ordenCompra.StatOcom = 0; // Estado activo
+        ordenCompra.CodiEmpr = 0; // Empresa por defecto
+        // ordenCompra.MoneEmis = 1; // Moneda por defecto (pesos)
+        // ordenCompra.TcamOcom = 1; // Tipo de cambio por defecto
+    }
+
+    private async Task CrearAsync()
+    {
+        try
+        {
+            var responseHttp = await repository.Post<Ocomenca, Ocomenca>("api/ocomenca", ordenCompra);
+            if (responseHttp.Error)
+            {
+                var message = await responseHttp.GetErrorMessageAsync();
+                await sweetAlertService.FireAsync("Error", $"Error al crear la orden de compra: {message}", SweetAlertIcon.Error);
+                return;
+            }
+
+            var ordenCreada = responseHttp.Response;
+            
+            // Validar que la orden se creó correctamente
+            if (ordenCreada == null || ordenCreada.OCOMENCA_ID <= 0)
+            {
+                await sweetAlertService.FireAsync("Error", 
+                    "La orden se creó pero no se pudo obtener el ID. Verifique en la lista de órdenes.", 
+                    SweetAlertIcon.Warning);
+                navigationManager.NavigateTo("/ordenes-compra");
+                return;
+            }
+
+            await sweetAlertService.FireAsync("Éxito", "Orden de compra creada exitosamente", SweetAlertIcon.Success);
+            
+            // Navegar a la edición de la orden recién creada para poder agregar items
+            navigationManager.NavigateTo($"/ordenes-compra/editar/{ordenCreada.OCOMENCA_ID}");
+        }
+        catch (Exception ex)
+        {
+            await sweetAlertService.FireAsync("Error", $"Error inesperado: {ex.Message}", SweetAlertIcon.Error);
+        }
+    }
+
+    private void Regresar()
+    {
+        navigationManager.NavigateTo("/ordenes-compra");
+    }
+}

@@ -1,0 +1,47 @@
+@typeparam Titem
+@* que puede recibir cualquier cosa *@
+
+@if (MyList is null)
+{
+    @if (Loading is null)
+    {
+@*         <div class="spinner" />
+ *@     <div class="d-flex justify-content-center align-items-center" style="height: 200px;">
+            <div class="spinner-border text-primary" role="status" style="width: 3rem; height: 3rem;">
+                <span class="sr-only">Cargando...</span>
+            </div>
+        </div>
+    }
+    else
+    {
+        @Loading
+    }
+}
+else if (MyList.Count == 0)
+{
+    @if (NoRecords is null)
+    {
+        <div class="d-flex justify-content-center align-items-center" style="height: 200px;">
+            <div class="alert alert-info text-center">
+                <i class="fas fa-info-circle me-2"></i>
+                No hay registros para mostrar.
+            </div>
+        </div>
+    }
+    else
+    {
+        @NoRecords
+    }
+}
+else
+{
+    @Body
+}
+@code {
+    [Parameter] public RenderFragment? Loading { get; set; }
+    [Parameter] public RenderFragment? NoRecords { get; set; }
+    [Parameter][EditorRequired] public RenderFragment Body { get; set; } = null!;
+    [Parameter][EditorRequired] public List<Titem> MyList { get; set; } = null!;
+
+
+}

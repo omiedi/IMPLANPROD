@@ -1,0 +1,1745 @@
+@page "/remitos/cliente"
+@using IMPLANPROD.Shared.Entities
+@using IMPLANPROD.Shared.DTOs
+@using IMPLANPROD.Client.Repositories
+@using IMPLANPROD.Client.Shared.Components
+@using IMPLANPROD.Client.Services
+@using IMPLANPROD.Client.Helpers
+@using Blazored.Modal
+@using Blazored.Modal.Services
+@using static IMPLANPROD.Client.Pages.Remitos.PedidosPendientesModal
+@inject IRepository repository
+@inject NavigationManager NavigationManager
+@inject SweetAlertService sweetAlertService
+@inject RemitosConfigService remitosConfigService
+@inject IModalService modalService
+
+<PageTitle>Remitos de Cliente</PageTitle>
+
+<div class="container-fluid">
+    <!-- Barra de botones superior -->
+    <div class="d-flex justify-content-end gap-2 mb-3">
+        <button type="button" class="btn btn-info" @onclick="AbrirGraficos">
+            <i class="fas fa-chart-bar"></i> Gráficos
+        </button>
+        
+        <div class="btn-group">
+            <button type="button" class="btn btn-secondary dropdown-toggle" 
+                    data-bs-toggle="dropdown" aria-expanded="false">
+                <i class="fas fa-cog"></i> Opciones
+            </button>
+            <ul class="dropdown-menu dropdown-menu-end">
+                <li>
+                    <a class="dropdown-item" href="#" @onclick="AbrirReportes" @onclick:preventDefault>
+                        <i class="fas fa-file-alt"></i> Consultas Remitos
+                    </a>
+                </li>
+                <li>
+                    <a class="dropdown-item" href="#" @onclick="AbrirConfiguracion" @onclick:preventDefault>
+                        <i class="fas fa-cog"></i> Configuración
+                    </a>
+                </li>
+            </ul>
+        </div>
+    </div>
+
+    <EditForm Model="remito" OnValidSubmit="HandleValidSubmit">
+        <DataAnnotationsValidator />
+
+        <!-- Encabezado del remito -->
+        <div class="card mb-3">
+            <div class="card-header text-white" style="background: linear-gradient(135deg, #28a745 0%, #5cb85c 100%); box-shadow: 0 2px 8px rgba(40, 167, 69, 0.3);">
+                <h5 class="mb-0">
+                    <i class="fas fa-truck"></i> 
+                    Nuevo Remito de Cliente
+                </h5>
+            </div>
+            <div class="card-body" style="background-color: #e9ecef; box-shadow: inset 0 2px 4px rgba(0,0,0,0.1);">
+                <div class="row">
+                    <!-- Información del Cliente -->
+                    <div class="col-md-6">
+                        <div class="card h-100">
+                            <div class="card-header bg-light">
+                                <h6 class="mb-0"><i class="fas fa-user"></i> Cliente</h6>
+                            </div>
+                            <div class="card-body">
+                                <div class="row mb-2">
+                                    <div class="col-md-4">
+                                        <label class="form-label">Cliente:</label>
+                                        <div class="input-group">
+                                            <input type="text" class="form-control" @bind="clienteSeleccionado" placeholder="Cliente seleccionado..." readonly />
+                                            <button type="button" class="btn btn-outline-secondary" @onclick="LimpiarCliente" title="Limpiar Cliente">
+                                                <i class="fas fa-times"></i>
+                                            </button>
+                                            <button type="button" class="btn btn-outline-primary" @onclick="AbrirSelectorClientes" title="Seleccionar Cliente">
+                                                <i class="fas fa-users"></i>
+                                            </button>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-8">
+                                        <label class="form-label">Razón Social:</label>
+                                        <input type="text" class="form-control" @bind="razonSocial" placeholder="Razón social del cliente" readonly />
+                                    </div>
+                                </div>
+                                <div class="row mb-2">
+                                    <div class="col-md-6">
+                                        <label class="form-label">Domicilio:</label>
+                                        <input type="text" class="form-control" readonly @bind="domicilioCliente" placeholder="Domicilio del cliente" />
+                                    </div>
+                                    <div class="col-md-6">
+                                        <label class="form-label">Localidad:</label>
+                                        <input type="text" class="form-control" readonly @bind="localidadCliente" placeholder="Localidad del cliente" />
+                                    </div>
+                                </div>
+                                <div class="row mb-2">
+                                    <div class="col-md-6">
+                                        <label class="form-label">Código Postal:</label>
+                                        <input type="text" class="form-control" readonly @bind="codigoPostalCliente" placeholder="Código postal" />
+                                    </div>
+                                    <div class="col-md-6">
+                                        <label class="form-label">CUIT:</label>
+                                        <input type="text" class="form-control" readonly @bind="cuitCliente" placeholder="CUIT del cliente" />
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Información del Remito -->
+                    <div class="col-md-6">
+                        <div class="card h-100">
+                            <div class="card-header bg-light">
+                                <h6 class="mb-0"><i class="fas fa-file-alt"></i> Datos del Remito</h6>
+                            </div>
+                            <div class="card-body">
+                                <div class="row mb-2">
+                                    <div class="col-md-3">
+                                        <label class="form-label">Prefijo:</label>
+                                        <div class="input-group">
+                                            <input type="number" 
+                                                   class="form-control" 
+                                                   @bind="prefijoRemito"
+                                                   @bind:event="oninput"
+                                                   @onchange="ActualizarPrefijoFormateado"
+                                                   min="0"
+                                                   max="9999"
+                                                   placeholder="0000" />
+                                            <span class="input-group-text bg-light">
+                                                <strong>@ObtenerPrefijoFormateado()</strong>
+                                            </span>
+                                        </div>
+                                        <small class="text-muted">4 dígitos</small>
+                                    </div>
+                                    <div class="col-md-3">
+                                        <label class="form-label">N° Remito:</label>
+                                        <div class="input-group">
+                                            <input type="number" 
+                                                   class="form-control" 
+                                                   @bind="numeroRemito"
+                                                   @bind:event="oninput"
+                                                   @onchange="ActualizarNumeroFormateado"
+                                                   min="0"
+                                                   max="99999999"
+                                                   placeholder="00000000" />
+                                            <span class="input-group-text bg-light">
+                                                <strong>@ObtenerNumeroFormateado()</strong>
+                                            </span>
+                                        </div>
+                                        <small class="text-muted">8 dígitos</small>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <label class="form-label">Remito Completo:</label>
+                                        <div class="alert alert-info mb-0 py-2">
+                                            <strong class="fs-5">@ObtenerRemitoCompleto()</strong>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="row mb-2">
+                                    <div class="col-md-4">
+                                        <label class="form-label">Fecha:</label>
+                                        <input type="date" class="form-control" @bind="fechaRemito" />
+                                    </div>
+                                    <div class="col-md-4">
+                                        <label class="form-label">Orden de Compra:</label>
+                                        <input type="text" class="form-control" @bind="ordenCompra" placeholder="N° OC del cliente" />
+                                    </div>
+                                    <div class="col-md-4">
+                                        <label class="form-label">Depósito:</label>
+                                        <select class="form-select" @bind="depositoSeleccionado">
+                                            <option value="0">Seleccione un depósito...</option>
+                                            @foreach (var deposito in depositos)
+                                            {
+                                                <option value="@deposito.Id">@deposito.Descripcion</option>
+                                            }
+                                        </select>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Detalle del Remito -->
+        <div class="card mb-3">
+            <div class="card-header text-white" style="background: linear-gradient(135deg, #28a745 0%, #5cb85c 100%); box-shadow: 0 2px 8px rgba(40, 167, 69, 0.3);">
+                <h5 class="mb-0"><i class="fas fa-list"></i> Detalle del Remito</h5>
+            </div>
+            <div class="card-body" style="background: linear-gradient(135deg, #e8f5e9 0%, #f1f8f1 100%); box-shadow: inset 0 2px 4px rgba(40, 167, 69, 0.1);">
+                <div class="d-flex justify-content-between mb-3">
+                    <div>
+                        <button type="button" class="btn btn-primary btn-sm" @onclick="AbrirBuscadorProductos">
+                            <i class="oi oi-plus"></i> Agregar Producto
+                        </button>
+                    </div>
+                    <div>
+                        <span class="text-muted">Items: @productosRemito.Count</span>
+                    </div>
+                </div>
+
+                <div class="table-responsive" style="height: 400px; overflow-y: auto; border: 1px solid #dee2e6;">
+                    <table class="table table-sm table-striped align-middle mb-0">
+                        <thead class="table-dark sticky-top" style="z-index: 1;">
+                            <tr>
+                                <th style="width: 90px;">Cód.Int.</th>
+                                <th style="width: 140px;">Código</th>
+                                <th>Descripción</th>
+                                <th style="width: 90px;">Pedido</th>
+                                <th style="width: 70px;">Orden</th>
+                                <th style="width: 100px;" class="text-center">Trazable</th>
+                                <th style="width: 140px;" class="text-end">Cantidad</th>
+                                <th style="width: 90px;">U.M.</th>
+                                <th style="width: 90px;">Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @if (productosRemito.Count == 0)
+                            {
+                                <tr>
+                                    <td colspan="9" class="text-center text-muted">No hay productos para mostrar.</td>
+                                </tr>
+                            }
+                            else
+                            {
+                                @foreach (var det in productosRemito)
+                                {
+                                    <tr>
+                                        <td>@det.CodInt</td>
+                                        <td>@det.Codigo</td>
+                                        <td>@det.Descripcion</td>
+                                        <td>
+                                            @if (det.NroPedido.HasValue)
+                                            {
+                                                <span class="badge bg-info">@det.NroPedido</span>
+                                            }
+                                            else
+                                            {
+                                                <span class="text-muted">-</span>
+                                            }
+                                        </td>
+                                        <td class="text-center">
+                                            @if (det.NuOrItemPedido.HasValue)
+                                            {
+                                                <span class="badge bg-success">@det.NuOrItemPedido</span>
+                                            }
+                                            else
+                                            {
+                                                <span class="text-muted">-</span>
+                                            }
+                                        </td>
+                                        <td class="text-center">
+                                            @if (det.Trazable == 1)
+                                            {
+                                                <span class="badge bg-warning text-dark" title="Producto Trazable">
+                                                    <i class="fas fa-barcode"></i> Trazable
+                                                </span>
+                                            }
+                                            else
+                                            {
+                                                <span class="badge bg-secondary" title="Producto No Trazable">
+                                                    <i class="fas fa-box"></i> No Trazable
+                                                </span>
+                                            }
+                                        </td>
+                                        <td>
+                                            <input class="form-control form-control-sm text-end" type="number" step="0.0001" @bind-value="det.Cantidad" />
+                                        </td>
+                                        <td>
+                                            <input class="form-control form-control-sm" @bind="det.Unidad" readonly />
+                                        </td>
+                                        <td>
+                                            <button type="button" class="btn btn-danger btn-sm" title="Quitar" @onclick="(() => QuitarProducto(det))">
+                                                <i class="oi oi-trash"></i>
+                                            </button>
+                                        </td>
+                                    </tr>
+                                }
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- Información Adicional del Remito -->
+        <div class="card mb-3">
+            <div class="card-header bg-secondary text-white">
+                <h6 class="mb-0">
+                    <i class="fas fa-info-circle"></i> Información Adicional
+                </h6>
+            </div>
+            <div class="card-body">
+                <div class="row g-3">
+                    <!-- Columna 1 -->
+                    <div class="col-md-4">
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">ORDEN DE COMPRA</label>
+                            <InputText class="form-control" @bind-Value="ordenCompra" />
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">NUMERO DE BULTOS</label>
+                            <InputText class="form-control" @bind-Value="numeroBultos" />
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">CONDUCTOR</label>
+                            <InputText class="form-control" @bind-Value="conductor" />
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">DNI</label>
+                            <InputText class="form-control" @bind-Value="dniConductor" />
+                        </div>
+                    </div>
+
+                    <!-- Columna 2 -->
+                    <div class="col-md-4">
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">TRANSPORTISTA</label>
+                            <div class="input-group">
+                                <InputSelect class="form-select" @bind-Value="transportistaId" @bind-Value:after="OnTransportistaSeleccionado">
+                                    <option value="0">-- Seleccione --</option>
+                                    @foreach (var t in transportistas)
+                                    {
+                                        <option value="@t.Codi_Tra">@t.Deno_Tra</option>
+                                    }
+                                </InputSelect>
+                                <button type="button" class="btn btn-outline-secondary" @onclick="CargarTransportistas" title="Actualizar transportistas">
+                                    <i class="fas fa-sync-alt"></i>
+                                </button>
+                            </div>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">C.U.I.T.</label>
+                            <InputText class="form-control" @bind-Value="cuitTransportista" disabled />
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">DOMICILIO</label>
+                            <InputText class="form-control" @bind-Value="domicilioTransportista" disabled />
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">Cod Postal</label>
+                            <InputText class="form-control" @bind-Value="codPostalTransportista" disabled />
+                        </div>
+                    </div>
+
+                    <!-- Columna 3 -->
+                    <div class="col-md-4">
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">ORDEN DE SUMINISTRO (INTERNO)</label>
+                            <InputText class="form-control" @bind-Value="ordenSuministro" />
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">PATENTE</label>
+                            <InputText class="form-control" @bind-Value="patente" />
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">ITEMS</label>
+                            <input type="number" class="form-control" value="@cantidadItems" disabled />
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">VALOR DECLARADO</label>
+                            <InputText class="form-control" @bind-Value="valorDeclarado" />
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">IMPORTE NETO</label>
+                            <InputText class="form-control" @bind-Value="importeNeto" disabled />
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">OBSERVACIONES</label>
+                            <InputTextArea class="form-control" rows="3" @bind-Value="observaciones" />
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Botones de acción -->
+        <div class="d-flex justify-content-end gap-2 mb-3">
+            <button type="button" class="btn btn-secondary" @onclick="Cancelar">
+                <i class="fas fa-times"></i> Cancelar
+            </button>
+            <button type="submit" class="btn btn-success">
+                <i class="fas fa-save"></i> Guardar Remito
+            </button>
+        </div>
+    </EditForm>
+</div>
+
+<!-- Selector de Clientes -->
+<SelectorClientes @ref="selectorClientes" OnClienteSeleccionado="OnClienteSeleccionado" />
+
+<!-- Selector de Productos -->
+<SelectorProductos @ref="selectorProductos"
+                   PermitirCantidad="true"
+                   PermitirPrecio="false"
+                   CantidadDefault="1"
+                   OnProductoSeleccionadoCantidad="OnProductoSeleccionadoCantidad"
+                   OnClose="TerminarCicloSeleccionProductos" />
+
+<!-- Modal de Configuración -->
+<RemitosConfigModal IsVisible="@mostrarModalConfiguracion"
+                    OnCloseRequested="CerrarModalConfiguracion"
+                    OnConfigurationSaved="OnConfiguracionGuardada" />
+
+<!-- Componente de Impresión de Remito -->
+<ImpresionRemito @ref="impresionRemito"
+                 NCI="@nciImpresion"
+                 NumeroRemito="@numeroRemitoImpresion"
+                 Fecha="@fechaImpresion"
+                 RazonSocial="@razonSocialImpresion"
+                 Domicilio="@domicilioImpresion"
+                 CUIT="@cuitImpresion"
+                 CondicionIVA="@condicionIVAImpresion"
+                 Localidad="@localidadImpresion"
+                 OrdenCompra="@ordenCompraImpresion"
+                 OrdenVenta="@ordenVentaImpresion"
+                 Items="@itemsImpresion"
+                 Observaciones="@observacionesImpresion"
+                 ValorDeclarado="@valorDeclaradoImpresion"
+                 Bultos="@bultosImpresion" />
+
+<!-- Modal de Selección de Lotes -->
+<SeleccionLotesModal IsVisible="@mostrarModalLotes"
+                     ProductoCodInt="@ObtenerCodIntProductoTrazable()"
+                     ProductoCodigo="@ObtenerCodigoProductoTrazable()"
+                     ProductoDescripcion="@ObtenerDescripcionProductoTrazable()"
+                     DepositoId="@depositoSeleccionado"
+                     DepositoNombre="@ObtenerNombreDeposito()"
+                     CantidadSolicitada="@cantidadSolicitadaTrazable"
+                     OnClose="CerrarModalLotes"
+                     OnLotesConfirmados="OnLotesConfirmados" />
+
+@code {
+    // Componentes
+    private SelectorClientes selectorClientes = null!;
+    private SelectorProductos selectorProductos = null!;
+    private ImpresionRemito impresionRemito = null!;
+
+    // Control de ciclo de selección de productos
+    private bool cicloSeleccionProductos = false;
+
+    // Control del modal de configuración
+    private bool mostrarModalConfiguracion = false;
+
+    // Variables para impresión del remito
+    private string nciImpresion = "";
+    private string numeroRemitoImpresion = "";
+    private string fechaImpresion = "";
+    private string razonSocialImpresion = "";
+    private string domicilioImpresion = "";
+    private string cuitImpresion = "";
+    private string condicionIVAImpresion = "";
+    private string localidadImpresion = "";
+    private string ordenCompraImpresion = "";
+    private string ordenVentaImpresion = "";
+    private List<ImpresionRemito.ItemRemito> itemsImpresion = new();
+    private string observacionesImpresion = "";
+    private string valorDeclaradoImpresion = "";
+    private int bultosImpresion = 1;
+
+    // Control del modal de selección de lotes
+    private bool mostrarModalLotes = false;
+    private Master? productoTrazableSeleccionado = null;
+    private decimal cantidadSolicitadaTrazable = 0;
+
+    // Objeto remito (por ahora usamos un objeto dinámico, luego crearemos la entidad)
+    private object remito = new();
+
+    // Variables del cliente
+    private string clienteSeleccionado = string.Empty;
+    private int? numeroClienteSeleccionado = null;
+    private string razonSocial = string.Empty;
+    private string domicilioCliente = string.Empty;
+    private string localidadCliente = string.Empty;
+    private string codigoPostalCliente = string.Empty;
+    private string cuitCliente = string.Empty;
+
+    // Variables del remito
+    private DateTime fechaRemito = DateTime.Now;
+    private string ordenCompra = string.Empty;
+    private int depositoSeleccionado = 0;
+    private List<Tadeposi> depositos = new();
+    
+    // Variables de numeración del remito
+    private int prefijoRemito = 0;
+    private int numeroRemito = 0;
+
+    // Variables de información adicional del remito
+    private string numeroBultos = string.Empty;
+    private string conductor = string.Empty;
+    private string dniConductor = string.Empty;
+    private int transportistaId = 0;
+    private string cuitTransportista = string.Empty;
+    private string domicilioTransportista = string.Empty;
+    private string codPostalTransportista = string.Empty;
+    private string ordenSuministro = string.Empty;
+    private List<Transporte> transportistas = new();
+    private string patente = string.Empty;
+    private string valorDeclarado = string.Empty;
+    private string importeNeto = string.Empty;
+    private string observaciones = string.Empty;
+
+    // Lista de productos del remito
+    private List<ProductoRemito> productosRemito = new();
+
+    // Propiedad calculada para la cantidad de items
+    private int cantidadItems => productosRemito.Count;
+
+    // Clase para representar un item del remito
+    public class ProductoRemito
+    {
+        public int CodInt { get; set; }
+        public string Codigo { get; set; } = string.Empty;
+        public string Descripcion { get; set; } = string.Empty;
+        public short Trazable { get; set; } = 0;
+        public decimal Cantidad { get; set; }
+        public string Unidad { get; set; } = string.Empty;
+        public List<LoteSeleccionado> Lotes { get; set; } = new();
+        public int? NroPedido { get; set; }
+        public short? NuOrItemPedido { get; set; } // Número de orden del item en el pedido (PEDDETA.NuOrItem)
+    }
+
+    // Clase para representar un lote seleccionado
+    public class LoteSeleccionado
+    {
+        public string Lote { get; set; } = string.Empty;
+        public decimal Cantidad { get; set; }
+        public decimal SaldoDisponible { get; set; }
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        Console.WriteLine("[RemitoCliente] Componente inicializado");
+        await CargarDepositos();
+        await CargarPrefijoDefecto();
+        await CargarDepositoExpedicionDefecto();
+    }
+
+    /// <summary>
+    /// Carga el prefijo por defecto desde la configuración
+    /// </summary>
+    private async Task CargarPrefijoDefecto()
+    {
+        try
+        {
+            prefijoRemito = await remitosConfigService.ObtenerPrefijoRemitosNumericoAsync();
+            Console.WriteLine($"[RemitoCliente] Prefijo por defecto cargado: {prefijoRemito}");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[RemitoCliente] Error al cargar prefijo por defecto: {ex.Message}");
+            prefijoRemito = 0; // Valor por defecto en caso de error
+        }
+    }
+
+    /// <summary>
+    /// Carga la lista de depósitos activos
+    /// </summary>
+    private async Task CargarDepositos()
+    {
+        try
+        {
+            var response = await repository.Get<List<Tadeposi>>("api/tadeposi/activos");
+            if (!response.Error && response.Response != null)
+            {
+                depositos = response.Response;
+                Console.WriteLine($"[RemitoCliente] Depósitos cargados: {depositos.Count}");
+            }
+            else
+            {
+                Console.WriteLine("[RemitoCliente] Error al cargar depósitos");
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[RemitoCliente] Error al cargar depósitos: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// Carga el depósito de expedición por defecto desde la configuración FLEXCRL
+    /// </summary>
+    private async Task CargarDepositoExpedicionDefecto()
+    {
+        try
+        {
+            // Cargar configuración desde FLEXCRL (CLABUS="", PROBUS="DEPOEXPE")
+            string probusParam = "DEPOEXPE";
+            string clabusParam = "empty"; // Usar "empty" como placeholder cuando CLABUS está vacío
+            
+            var response = await repository.Get<FLEXCRL>($"api/flexcrl/{clabusParam}/{probusParam}");
+            
+            if (!response.Error && response.Response != null)
+            {
+                var config = response.Response;
+                if (int.TryParse(config.VALCONTROL, out var depositoConfig) && depositoConfig > 0)
+                {
+                    // Verificar que el depósito existe en la lista de depósitos activos
+                    var depositoExiste = depositos.Any(d => d.CodigoDepo == depositoConfig);
+                    if (depositoExiste)
+                    {
+                        depositoSeleccionado = depositoConfig;
+                        Console.WriteLine($"[RemitoCliente] Depósito de expedición por defecto cargado: {depositoSeleccionado}");
+                    }
+                    else
+                    {
+                        Console.WriteLine($"[RemitoCliente] Depósito configurado ({depositoConfig}) no existe en depósitos activos");
+                        depositoSeleccionado = 0;
+                    }
+                }
+                else
+                {
+                    Console.WriteLine("[RemitoCliente] No hay depósito de expedición configurado o valor inválido");
+                    depositoSeleccionado = 0;
+                }
+            }
+            else
+            {
+                Console.WriteLine("[RemitoCliente] No se encontró configuración de depósito de expedición");
+                depositoSeleccionado = 0;
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[RemitoCliente] Error al cargar depósito de expedición: {ex.Message}");
+            depositoSeleccionado = 0; // Valor por defecto en caso de error
+        }
+    }
+
+    /// <summary>
+    /// Abre el modal de selección de clientes
+    /// </summary>
+    private async Task AbrirSelectorClientes()
+    {
+        await selectorClientes.AbrirModal();
+    }
+
+    /// <summary>
+    /// Maneja la selección de un cliente
+    /// </summary>
+    private async Task OnClienteSeleccionado(SelectorClientes.ClienteSeleccionado cliente)
+    {
+        try
+        {
+            Console.WriteLine($"[RemitoCliente] Cliente seleccionado: {cliente.NumeCli} - {cliente.RazonSocial}");
+
+            // Cerrar explícitamente el modal del selector de clientes
+            selectorClientes.CerrarModal();
+            
+            numeroClienteSeleccionado = cliente.NumeCli;
+            clienteSeleccionado = $"{cliente.NumeCli} - {cliente.RazonSocial}";
+            razonSocial = cliente.RazonSocial ?? "";
+
+            // Obtener datos completos del cliente desde Deudor12
+            var responseHttp = await repository.Get<Deudor12>($"api/deudor12/numero/{cliente.NumeCli}");
+
+            if (!responseHttp.Error && responseHttp.Response != null)
+            {
+                var clienteCompleto = responseHttp.Response;
+                
+                domicilioCliente = clienteCompleto.Domi_Cli ?? "";
+                localidadCliente = clienteCompleto.Loca_Cli ?? "";
+                codigoPostalCliente = clienteCompleto.Cpos_Cli ?? "";
+                cuitCliente = clienteCompleto.Cuit_Cli ?? "";
+
+                Console.WriteLine($"[RemitoCliente] Datos del cliente cargados - CUIT: {cuitCliente}");
+            }
+            else
+            {
+                await sweetAlertService.FireAsync("Advertencia", "No se pudieron cargar todos los datos del cliente", SweetAlertIcon.Warning);
+            }
+
+            // Verificar si el cliente tiene pedidos pendientes
+            await VerificarPedidosPendientes(cliente.NumeCli);
+
+            StateHasChanged();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[RemitoCliente] Error al cargar datos del cliente: {ex.Message}");
+            await sweetAlertService.FireAsync("Error", $"Error al cargar datos del cliente: {ex.Message}", SweetAlertIcon.Error);
+        }
+    }
+
+    /// <summary>
+    /// Verifica si el cliente tiene pedidos pendientes y muestra el modal
+    /// </summary>
+    private async Task VerificarPedidosPendientes(int numeroCliente)
+    {
+        try
+        {
+            Console.WriteLine($"[RemitoCliente] Verificando pedidos pendientes para cliente {numeroCliente}");
+
+            // Consultar pedidos pendientes del cliente
+            var response = await repository.Get<List<Peddeta>>($"api/peddeta/pendientes/{numeroCliente}");
+
+            if (response.Error)
+            {
+                Console.WriteLine($"[RemitoCliente] Error al consultar pedidos pendientes: {response.Error}");
+                return;
+            }
+
+            var pedidosPendientes = response.Response ?? new List<Peddeta>();
+
+            if (pedidosPendientes.Any())
+            {
+                Console.WriteLine($"[RemitoCliente] Se encontraron {pedidosPendientes.Count} items pendientes");
+
+                // Convertir a PeddetaConCantidad
+                var pedidosConCantidad = pedidosPendientes
+                    .Select(p => new PeddetaConCantidad
+                    {
+                        PeddetaId = p.PeddetaId,
+                        NroPed = p.NroPed,
+                        FeSolEnt = p.FeSolEnt,
+                        CodiInt = p.CodiInt,
+                        CodiExt = p.CodiExt,
+                        Descrip = p.Descrip,
+                        CanSaldo = p.CanSaldo,
+                        CanPed = p.CanPed,
+                        CantEnt = p.CantEnt,
+                        NroClie = p.NroClie,
+                        TipoPed = p.TipoPed,
+                        NroOcom = p.NroOcom,
+                        NuOrItem = p.NuOrItem,
+                        CantidadARemitir = 0
+                    })
+                    .ToList();
+
+                // Mostrar modal con pedidos pendientes
+                var parameters = new ModalParameters();
+                parameters.Add(nameof(PedidosPendientesModal.pedidosPendientes), pedidosConCantidad);
+
+                var modal = modalService.Show<PedidosPendientesModal>("Pedidos Pendientes", parameters, new ModalOptions
+                {
+                    Size = ModalSize.ExtraLarge,
+                    DisableBackgroundCancel = true,
+                    HideCloseButton = false
+                });
+
+                var result = await modal.Result;
+
+                if (!result.Cancelled && result.Data != null)
+                {
+                    var itemsSeleccionados = (List<PeddetaConCantidad>)result.Data;
+                    Console.WriteLine($"[RemitoCliente] Items seleccionados: {itemsSeleccionados.Count}");
+
+                    // Agregar los items seleccionados al remito
+                    await AgregarItemsDesdePedidos(itemsSeleccionados);
+                }
+            }
+            else
+            {
+                Console.WriteLine($"[RemitoCliente] No se encontraron pedidos pendientes");
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[RemitoCliente] Error al verificar pedidos pendientes: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// Agrega items al remito desde los pedidos seleccionados
+    /// </summary>
+    private async Task AgregarItemsDesdePedidos(List<PeddetaConCantidad> items)
+    {
+        try
+        {
+            foreach (var item in items)
+            {
+                if (item.CodiInt.HasValue && item.CantidadARemitir > 0)
+                {
+                    // Buscar el producto en Master
+                    var responseProducto = await repository.Get<Master>($"api/master/xCodint{item.CodiInt.Value}");
+
+                    if (!responseProducto.Error && responseProducto.Response != null)
+                    {
+                        var producto = responseProducto.Response;
+
+                        // Verificar si el producto ya está en el remito con el mismo pedido y mismo NuOrItem
+                        var productoExistente = productosRemito.FirstOrDefault(p => 
+                            p.CodInt == producto.Codint && 
+                            p.NroPedido == item.NroPed &&
+                            p.NuOrItemPedido == item.NuOrItem);
+
+                        if (productoExistente != null)
+                        {
+                            // Sumar la cantidad
+                            productoExistente.Cantidad += item.CantidadARemitir;
+                        }
+                        else
+                        {
+                            // Agregar nuevo producto
+                            var nuevoProducto = new ProductoRemito
+                            {
+                                CodInt = producto.Codint,
+                                Codigo = producto.Codigo ?? "",
+                                Descripcion = producto.Descripcion ?? "",
+                                Trazable = producto.Trazable ?? 0,
+                                Cantidad = item.CantidadARemitir,
+                                Unidad = producto.Umedida ?? "",
+                                NroPedido = item.NroPed,
+                                NuOrItemPedido = item.NuOrItem
+                            };
+
+                            productosRemito.Add(nuevoProducto);
+                        }
+
+                        Console.WriteLine($"[RemitoCliente] Producto agregado desde pedido {item.NroPed}, NuOrItem: {item.NuOrItem}: {producto.Codigo} - Cantidad: {item.CantidadARemitir}");
+                    }
+                }
+            }
+
+            StateHasChanged();
+            await sweetAlertService.FireAsync("Éxito", $"Se agregaron {items.Count} productos desde pedidos pendientes", SweetAlertIcon.Success);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[RemitoCliente] Error al agregar items desde pedidos: {ex.Message}");
+            await sweetAlertService.FireAsync("Error", $"Error al agregar productos: {ex.Message}", SweetAlertIcon.Error);
+        }
+    }
+
+    /// <summary>
+    /// Limpia la selección del cliente
+    /// </summary>
+    private void LimpiarCliente()
+    {
+        numeroClienteSeleccionado = null;
+        clienteSeleccionado = string.Empty;
+        razonSocial = string.Empty;
+        domicilioCliente = string.Empty;
+        localidadCliente = string.Empty;
+        codigoPostalCliente = string.Empty;
+        cuitCliente = string.Empty;
+        
+        Console.WriteLine("[RemitoCliente] Cliente limpiado");
+        StateHasChanged();
+    }
+
+    /// <summary>
+    /// Maneja el envío del formulario
+    /// </summary>
+    private async Task HandleValidSubmit()
+    {
+        try
+        {
+            // Validación 1: Cliente seleccionado
+            if (!numeroClienteSeleccionado.HasValue)
+            {
+                await sweetAlertService.FireAsync("Advertencia", "Debe seleccionar un cliente", SweetAlertIcon.Warning);
+                return;
+            }
+
+            // Validación 2: Debe haber detalle
+            if (productosRemito.Count == 0)
+            {
+                await sweetAlertService.FireAsync("Advertencia", "Debe agregar al menos un producto al remito", SweetAlertIcon.Warning);
+                return;
+            }
+
+            // Validación 3: Todos los productos deben tener cantidad > 0
+            var productosSinCantidad = productosRemito.Where(p => p.Cantidad <= 0).ToList();
+            if (productosSinCantidad.Any())
+            {
+                await sweetAlertService.FireAsync("Advertencia", "Todos los productos deben tener cantidad mayor a 0", SweetAlertIcon.Warning);
+                return;
+            }
+
+            // Validación 4: Productos trazables deben tener lotes asignados
+            var productosTrazablesSinLotes = productosRemito.Where(p => p.Trazable == 1 && !p.Lotes.Any()).ToList();
+            if (productosTrazablesSinLotes.Any())
+            {
+                var productos = string.Join(", ", productosTrazablesSinLotes.Select(p => p.Codigo));
+                await sweetAlertService.FireAsync("Advertencia", 
+                    $"Los siguientes productos trazables deben tener lotes asignados: {productos}", 
+                    SweetAlertIcon.Warning);
+                return;
+            }
+
+            // Obtener el tipo de numeración configurado
+            var tipoNumeracion = await remitosConfigService.ObtenerTipoNumeracionRemitosAsync();
+            Console.WriteLine($"[RemitoCliente] Tipo de numeración: {tipoNumeracion}");
+
+            // Si es AUTONUME, mostrar confirmación del número que se va a usar
+            if (tipoNumeracion == "AUTONUME")
+            {
+                // Obtener la fecha de nueva numeración configurada
+                var fechaNuevaNumeracion = await remitosConfigService.ObtenerFechaNuevaNumeracionAsync();
+                
+                // Obtener el siguiente número disponible
+                var ultimoNumero = await remitosConfigService.ObtenerUltimoNumeroRemitoAsync();
+                var siguienteNumero = ultimoNumero + 1;
+                
+                // Obtener código de movimiento configurado
+                var codigoMovimiento = await remitosConfigService.ObtenerCodigoMovimientoAsync();
+                
+                // Verificar si es la primera ejecución después de la fecha de nueva numeración
+                // Esto ocurre cuando:
+                // 1. La fecha configurada NO es la fecha por defecto (01/01/1980)
+                // 2. La fecha configurada es >= hoy (fecha reciente)
+                // 3. No hay remitos desde esa fecha (ultimoNumero == 0)
+                bool esFechaDefecto = fechaNuevaNumeracion.Date == new DateTime(1980, 1, 1).Date;
+                bool esFechaReciente = fechaNuevaNumeracion.Date >= DateTime.Now.Date;
+                bool noHayRemitosDesdeEsaFecha = ultimoNumero == 0;
+                
+                bool esPrimeraEjecucionPostFecha = !esFechaDefecto && esFechaReciente && noHayRemitosDesdeEsaFecha;
+                
+                Console.WriteLine($"[RemitoCliente] Verificación primera ejecución: FechaConfig={fechaNuevaNumeracion:dd/MM/yyyy}, EsDefecto={esFechaDefecto}, EsReciente={esFechaReciente}, NoHayRemitos={noHayRemitosDesdeEsaFecha}, EsPrimera={esPrimeraEjecucionPostFecha}");
+                
+                if (esPrimeraEjecucionPostFecha)
+                {
+                    // Primera ejecución post-fecha: permitir ingreso manual del número
+                    Console.WriteLine($"[RemitoCliente] Primera ejecución post-fecha {fechaNuevaNumeracion:dd/MM/yyyy}. Solicitando número de remito al usuario.");
+                    
+                    var remitoSugerido = $"{codigoMovimiento}-X-{ObtenerPrefijoFormateado()}-{siguienteNumero.ToString("D8")}";
+                    
+                    var result = await sweetAlertService.FireAsync(new SweetAlertOptions
+                    {
+                        Title = "Iniciar Nueva Numeración",
+                        Html = $"Se ha configurado una nueva fecha de numeración: <strong>{fechaNuevaNumeracion:dd/MM/yyyy}</strong><br><br>" +
+                               $"Número de remito sugerido:<br><strong style='font-size: 1.2em; color: #28a745;'>{remitoSugerido}</strong><br><br>" +
+                               $"Ingrese el número de remito para iniciar la numeración:",
+                        Icon = SweetAlertIcon.Question,
+                        Input = SweetAlertInputType.Number,
+                        InputValue = siguienteNumero.ToString(),
+                        ShowCancelButton = true,
+                        ConfirmButtonText = "Confirmar",
+                        CancelButtonText = "Cancelar",
+                        ConfirmButtonColor = "#28a745",
+                        CancelButtonColor = "#dc3545"
+                    });
+
+                    if (!result.IsConfirmed || string.IsNullOrEmpty(result.Value))
+                    {
+                        Console.WriteLine("[RemitoCliente] Generación de remito cancelada por el usuario");
+                        return;
+                    }
+
+                    // Validar y usar el número ingresado por el usuario
+                    if (int.TryParse(result.Value, out int numeroIngresado) && numeroIngresado > 0)
+                    {
+                        numeroRemito = numeroIngresado;
+                        Console.WriteLine($"[RemitoCliente] Usuario ingresó número de remito: {numeroRemito}");
+                    }
+                    else
+                    {
+                        await sweetAlertService.FireAsync("Error", "Debe ingresar un número válido mayor a 0", SweetAlertIcon.Error);
+                        return;
+                    }
+                }
+                else
+                {
+                    // Ejecución normal: mostrar confirmación estándar
+                    var remitoCompleto = $"{codigoMovimiento}-X-{ObtenerPrefijoFormateado()}-{siguienteNumero.ToString("D8")}";
+                    
+                    Console.WriteLine($"[RemitoCliente] Mostrando confirmación para remito: {remitoCompleto}");
+                    
+                    var result = await sweetAlertService.FireAsync(new SweetAlertOptions
+                    {
+                        Title = "Confirmar Generación de Remito",
+                        Html = $"Se va a generar el remito número:<br><br><strong style='font-size: 1.2em; color: #28a745;'>{remitoCompleto}</strong><br><br>¿Desea continuar?",
+                        Icon = SweetAlertIcon.Question,
+                        ShowCancelButton = true,
+                        ConfirmButtonText = "Sí, continuar",
+                        CancelButtonText = "Cancelar",
+                        ConfirmButtonColor = "#28a745",
+                        CancelButtonColor = "#dc3545"
+                    });
+
+                    if (!result.IsConfirmed)
+                    {
+                        Console.WriteLine("[RemitoCliente] Generación de remito cancelada por el usuario");
+                        return;
+                    }
+                    
+                    // Usar el siguiente número automático
+                    numeroRemito = siguienteNumero;
+                }
+            }
+
+            Console.WriteLine($"[RemitoCliente] Guardando remito para cliente {numeroClienteSeleccionado}");
+            
+            // Guardar el remito (incluye validación de duplicados)
+            await GuardarRemito();
+            
+            await sweetAlertService.FireAsync("Éxito", "Remito guardado correctamente", SweetAlertIcon.Success);
+            
+            // Preparar e imprimir el remito
+            await PrepararEImprimirRemito();
+            
+            // Limpiar formulario o navegar
+            LimpiarFormulario();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[RemitoCliente] Error al guardar: {ex.Message}");
+            await sweetAlertService.FireAsync("Error", $"Error al guardar el remito: {ex.Message}", SweetAlertIcon.Error);
+        }
+    }
+
+    /// <summary>
+    /// Abre el modal para seleccionar productos
+    /// </summary>
+    private async Task AbrirBuscadorProductos()
+    {
+        cicloSeleccionProductos = true;
+        if (selectorProductos != null)
+        {
+            await selectorProductos.AbrirModal();
+        }
+    }
+
+    /// <summary>
+    /// Evento que recibe un producto con cantidad desde el SelectorProductos y lo agrega al detalle
+    /// </summary>
+    private async void OnProductoSeleccionadoCantidad(SelectorProductos.SeleccionProducto sel)
+    {
+        var p = sel.Producto;
+        var cantidad = sel.Cantidad <= 0 ? 1 : sel.Cantidad;
+
+        // Validar que se haya seleccionado un depósito
+        if (depositoSeleccionado <= 0)
+        {
+            await sweetAlertService.FireAsync("Depósito requerido", "Debe seleccionar un depósito antes de agregar productos.", SweetAlertIcon.Warning);
+            return;
+        }
+
+        // Verificar si el producto es trazable
+        Console.WriteLine($"[RemitoCliente] Producto seleccionado: {p.Codigo}, Trazable: {p.Trazable}");
+        
+        if (p.Trazable == 1)
+        {
+            Console.WriteLine($"[RemitoCliente] Producto trazable detectado: {p.Codigo}");
+            
+            // Guardar el producto y cantidad para el modal de lotes
+            productoTrazableSeleccionado = p;
+            cantidadSolicitadaTrazable = cantidad;
+            
+            // Abrir modal de selección de lotes
+            mostrarModalLotes = true;
+            StateHasChanged();
+        }
+        else
+        {
+            // Producto no trazable, agregar directamente
+            Console.WriteLine($"[RemitoCliente] Producto no trazable: {p.Codigo}");
+            
+            productosRemito.Add(new ProductoRemito
+            {
+                CodInt = p.Codint,
+                Codigo = p.Codigo ?? string.Empty,
+                Descripcion = p.Descripcion ?? string.Empty,
+                Trazable = p.Trazable ?? 0,
+                Unidad = p.Umedida ?? string.Empty,
+                Cantidad = cantidad
+            });
+
+            StateHasChanged();
+
+            // Si el ciclo sigue activo, reabrimos el modal para permitir agregar otro producto
+            if (cicloSeleccionProductos && selectorProductos != null)
+            {
+                await Task.Delay(100);
+                await selectorProductos.AbrirModal();
+            }
+        }
+    }
+
+    /// <summary>
+    /// Finaliza el ciclo de selección múltiple cuando el usuario cierra manualmente el modal
+    /// </summary>
+    private void TerminarCicloSeleccionProductos()
+    {
+        cicloSeleccionProductos = false;
+    }
+
+    /// <summary>
+    /// Quita un producto del detalle del remito
+    /// </summary>
+    private void QuitarProducto(ProductoRemito det)
+    {
+        productosRemito.Remove(det);
+        StateHasChanged();
+    }
+
+    /// <summary>
+    /// Navega a la página de gráficos de remitos
+    /// </summary>
+    private void AbrirGraficos()
+    {
+        NavigationManager.NavigateTo("/remitos/graficos");
+    }
+
+    /// <summary>
+    /// Navega a la página de consultas de remitos
+    /// </summary>
+    private void AbrirReportes()
+    {
+        NavigationManager.NavigateTo("/remitos");
+    }
+
+    /// <summary>
+    /// Abre el modal de configuración de remitos
+    /// </summary>
+    private void AbrirConfiguracion()
+    {
+        Console.WriteLine("[RemitoCliente] Abriendo modal de configuración");
+        mostrarModalConfiguracion = true;
+        StateHasChanged();
+    }
+
+    /// <summary>
+    /// Cierra el modal de configuración
+    /// </summary>
+    private void CerrarModalConfiguracion()
+    {
+        Console.WriteLine("[RemitoCliente] Cerrando modal de configuración");
+        mostrarModalConfiguracion = false;
+        StateHasChanged();
+    }
+
+    /// <summary>
+    /// Se ejecuta cuando se guarda la configuración
+    /// </summary>
+    private void OnConfiguracionGuardada()
+    {
+        Console.WriteLine("[RemitoCliente] Configuración guardada exitosamente");
+        // Aquí se puede recargar datos si es necesario
+    }
+
+    /// <summary>
+    /// Cierra el modal de selección de lotes
+    /// </summary>
+    private void CerrarModalLotes()
+    {
+        Console.WriteLine("[RemitoCliente] Cerrando modal de lotes");
+        mostrarModalLotes = false;
+        productoTrazableSeleccionado = null;
+        cantidadSolicitadaTrazable = 0;
+        StateHasChanged();
+    }
+
+    /// <summary>
+    /// Se ejecuta cuando se confirman los lotes seleccionados
+    /// </summary>
+    private async void OnLotesConfirmados(List<SeleccionLotesModal.LoteSeleccionado> lotes)
+    {
+        if (productoTrazableSeleccionado == null)
+        {
+            Console.WriteLine("[RemitoCliente] Error: No hay producto trazable seleccionado");
+            return;
+        }
+
+        Console.WriteLine($"[RemitoCliente] Lotes confirmados: {lotes.Count} lotes para {productoTrazableSeleccionado.Codigo}");
+
+        // Crear el item del remito con los lotes seleccionados
+        var nuevoItem = new ProductoRemito
+        {
+            CodInt = productoTrazableSeleccionado.Codint,
+            Codigo = productoTrazableSeleccionado.Codigo ?? string.Empty,
+            Descripcion = productoTrazableSeleccionado.Descripcion ?? string.Empty,
+            Trazable = productoTrazableSeleccionado.Trazable ?? 0,
+            Unidad = productoTrazableSeleccionado.Umedida ?? string.Empty,
+            Cantidad = lotes.Sum(l => l.Cantidad),
+            Lotes = lotes.Select(l => new LoteSeleccionado
+            {
+                Lote = l.Lote,
+                Cantidad = l.Cantidad,
+                SaldoDisponible = l.SaldoDisponible
+            }).ToList()
+        };
+
+        productosRemito.Add(nuevoItem);
+        StateHasChanged();
+
+        // Si el ciclo sigue activo, reabrimos el modal de productos
+        if (cicloSeleccionProductos && selectorProductos != null)
+        {
+            await Task.Delay(100);
+            await selectorProductos.AbrirModal();
+        }
+    }
+
+    /// <summary>
+    /// Métodos auxiliares para evitar expresiones complejas en atributos de componentes
+    /// </summary>
+    private int ObtenerCodIntProductoTrazable() => productoTrazableSeleccionado?.Codint ?? 0;
+    private string ObtenerCodigoProductoTrazable() => productoTrazableSeleccionado?.Codigo ?? string.Empty;
+    private string ObtenerDescripcionProductoTrazable() => productoTrazableSeleccionado?.Descripcion ?? string.Empty;
+    private string ObtenerNombreDeposito() => depositos.FirstOrDefault(d => d.Id == depositoSeleccionado)?.Descripcion ?? string.Empty;
+
+    /// <summary>
+    /// Obtiene el prefijo formateado con 4 dígitos completados con ceros a la izquierda
+    /// </summary>
+    private string ObtenerPrefijoFormateado()
+    {
+        return prefijoRemito.ToString("D4");
+    }
+
+    /// <summary>
+    /// Obtiene el número de remito formateado con 8 dígitos completados con ceros a la izquierda
+    /// </summary>
+    private string ObtenerNumeroFormateado()
+    {
+        return numeroRemito.ToString("D8");
+    }
+
+    /// <summary>
+    /// Obtiene el número de remito completo (prefijo + número)
+    /// </summary>
+    private string ObtenerRemitoCompleto()
+    {
+        return $"{ObtenerPrefijoFormateado()}-{ObtenerNumeroFormateado()}";
+    }
+
+    /// <summary>
+    /// Actualiza la vista cuando cambia el prefijo
+    /// </summary>
+    private void ActualizarPrefijoFormateado()
+    {
+        // Validar rango
+        if (prefijoRemito < 0) prefijoRemito = 0;
+        if (prefijoRemito > 9999) prefijoRemito = 9999;
+        
+        StateHasChanged();
+    }
+
+    /// <summary>
+    /// Actualiza la vista cuando cambia el número de remito
+    /// </summary>
+    private void ActualizarNumeroFormateado()
+    {
+        // Validar rango
+        if (numeroRemito < 0) numeroRemito = 0;
+        if (numeroRemito > 99999999) numeroRemito = 99999999;
+        
+        StateHasChanged();
+    }
+
+    /// <summary>
+    /// Guarda el remito registrando los movimientos de stock
+    /// Replica la lógica de VB6 para generar remitos de cliente
+    /// </summary>
+    private async Task GuardarRemito()
+    {
+        try
+        {
+            Console.WriteLine("[RemitoCliente] Iniciando guardado de remito...");
+
+            // Obtener el tipo de numeración configurado
+            var tipoNumeracion = await remitosConfigService.ObtenerTipoNumeracionRemitosAsync();
+            Console.WriteLine($"[RemitoCliente] Tipo de numeración: {tipoNumeracion}");
+
+            // Variable para controlar reintentos
+            int intentos = 0;
+            const int maxIntentos = 5;
+            bool numeroAsignado = false;
+
+            // Si es AUTONUME, obtener el siguiente número automáticamente con validación
+            if (tipoNumeracion == "AUTONUME")
+            {
+                while (!numeroAsignado && intentos < maxIntentos)
+                {
+                    intentos++;
+                    
+                    // Obtener el siguiente número disponible
+                    var ultimoNumero = await remitosConfigService.ObtenerUltimoNumeroRemitoAsync();
+                    numeroRemito = ultimoNumero + 1;
+                    Console.WriteLine($"[RemitoCliente] Intento {intentos}: Número de remito propuesto: {numeroRemito}");
+
+                    // Validar que el número no esté ocupado antes de grabar
+                    var responseValidacion = await repository.Get<bool>($"api/movistock/validar-remito/{prefijoRemito}/{numeroRemito}");
+                    
+                    if (!responseValidacion.Error && responseValidacion.Response)
+                    {
+                        // El número ya fue ocupado por otro usuario/proceso
+                        Console.WriteLine($"[RemitoCliente] Número {numeroRemito} ya ocupado, reintentando...");
+                        
+                        if (intentos >= maxIntentos)
+                        {
+                            // Mostrar advertencia al usuario
+                            var codigoMovimiento = await remitosConfigService.ObtenerCodigoMovimientoAsync();
+                            var remitoCompleto = $"{codigoMovimiento}-X-{ObtenerPrefijoFormateado()}-{numeroRemito.ToString("D8")}";
+                            
+                            var result = await sweetAlertService.FireAsync(new SweetAlertOptions
+                            {
+                                Title = "Número de Remito Ocupado",
+                                Html = $"El número de remito <strong>{remitoCompleto}</strong> fue ocupado por otro usuario.<br><br>" +
+                                       $"Se han realizado {maxIntentos} intentos.<br><br>¿Desea reintentar con el siguiente número disponible?",
+                                Icon = SweetAlertIcon.Warning,
+                                ShowCancelButton = true,
+                                ConfirmButtonText = "Sí, reintentar",
+                                CancelButtonText = "Cancelar",
+                                ConfirmButtonColor = "#28a745",
+                                CancelButtonColor = "#dc3545"
+                            });
+
+                            if (result.IsConfirmed)
+                            {
+                                intentos = 0; // Reiniciar contador de intentos
+                                continue;
+                            }
+                            else
+                            {
+                                Console.WriteLine("[RemitoCliente] Guardado cancelado por el usuario después de múltiples intentos");
+                                return;
+                            }
+                        }
+                        
+                        // Esperar un momento antes de reintentar
+                        await Task.Delay(100);
+                        continue;
+                    }
+                    
+                    // Número disponible, continuar con el guardado
+                    numeroAsignado = true;
+                    Console.WriteLine($"[RemitoCliente] Número de remito {numeroRemito} validado y disponible");
+                }
+            }
+            // Si es PREIMPRE, validar que se haya ingresado un número
+            else if (tipoNumeracion == "PREIMPRE")
+            {
+                if (numeroRemito <= 0)
+                {
+                    // Obtener el último número para proponer
+                    var ultimoNumero = await remitosConfigService.ObtenerUltimoNumeroRemitoAsync();
+                    var siguienteNumero = ultimoNumero + 1;
+
+                    // Mostrar mensaje con opción de asignar el siguiente número
+                    var result = await sweetAlertService.FireAsync(new SweetAlertOptions
+                    {
+                        Title = "Número de Remito Requerido",
+                        Html = $"Debe ingresar un número de remito manualmente.<br><br>¿Desea asignar el siguiente número disponible?<br><strong>Número sugerido: {siguienteNumero}</strong>",
+                        Icon = SweetAlertIcon.Warning,
+                        ShowCancelButton = true,
+                        ConfirmButtonText = "Sí, asignar",
+                        CancelButtonText = "No, cancelar",
+                        ConfirmButtonColor = "#28a745",
+                        CancelButtonColor = "#dc3545"
+                    });
+
+                    if (result.IsConfirmed)
+                    {
+                        numeroRemito = siguienteNumero;
+                        Console.WriteLine($"[RemitoCliente] Número de remito asignado: {numeroRemito}");
+                    }
+                    else
+                    {
+                        Console.WriteLine("[RemitoCliente] Guardado cancelado por el usuario");
+                        return;
+                    }
+                }
+                
+                // Validar que el número no esté duplicado antes de grabar
+                Console.WriteLine($"[RemitoCliente] Validando si el remito {prefijoRemito}-{numeroRemito} ya existe...");
+                var responseValidacion = await repository.Get<bool>($"api/movistock/validar-remito/{prefijoRemito}/{numeroRemito}");
+                
+                if (!responseValidacion.Error && responseValidacion.Response)
+                {
+                    // El remito ya existe
+                    var codigoMovimiento = await remitosConfigService.ObtenerCodigoMovimientoAsync();
+                    var remitoCompleto = $"{codigoMovimiento}-X-{ObtenerPrefijoFormateado()}-{numeroRemito.ToString("D8")}";
+                    
+                    await sweetAlertService.FireAsync(new SweetAlertOptions
+                    {
+                        Title = "Remito Duplicado",
+                        Html = $"El número de remito <strong>{remitoCompleto}</strong> ya existe en el sistema.<br><br>Por favor, ingrese un número diferente.",
+                        Icon = SweetAlertIcon.Error,
+                        ConfirmButtonText = "Entendido",
+                        ConfirmButtonColor = "#dc3545"
+                    });
+                    
+                    Console.WriteLine($"[RemitoCliente] Remito duplicado detectado: {prefijoRemito}-{numeroRemito}");
+                    return;
+                }
+                
+                Console.WriteLine($"[RemitoCliente] Número de remito validado: {numeroRemito}");
+            }
+
+            // Construir el remito completo formateado: RT-X-PPPP-NNNNNNNN
+            // Donde X es un separador, PPPP es el prefijo de 4 dígitos, NNNNNNNN es el número de 8 dígitos
+            string remitoCorto = $"RT.{numeroRemito}"; // RT.6449
+            string remitoLargo = $"RT-X-{ObtenerPrefijoFormateado()}-{ObtenerNumeroFormateado()}"; // RT-X-0001-00006449
+
+            int nuorItem = 0; // Contador de items
+
+            // Recorrer cada producto del detalle
+            foreach (var producto in productosRemito)
+            {
+                // Si el producto es trazable, recorrer sus lotes
+                if (producto.Trazable == 1 && producto.Lotes.Any())
+                {
+                    foreach (var lote in producto.Lotes)
+                    {
+                        if (lote.Cantidad > 0.005m)
+                        {
+                            nuorItem++;
+                            await RegistrarMovimientoProducto(
+                                producto, 
+                                lote.Cantidad, 
+                                lote.Lote, 
+                                nuorItem, 
+                                remitoCorto, 
+                                remitoLargo);
+                        }
+                    }
+                }
+                else
+                {
+                    // Producto no trazable o sin lotes
+                    if (producto.Cantidad > 0.005m)
+                    {
+                        nuorItem++;
+                        await RegistrarMovimientoProducto(
+                            producto, 
+                            producto.Cantidad, 
+                            "", // Sin lote
+                            nuorItem, 
+                            remitoCorto, 
+                            remitoLargo);
+                    }
+                }
+            }
+
+            Console.WriteLine($"[RemitoCliente] Remito guardado exitosamente. Total items: {nuorItem}");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[RemitoCliente] Error en GuardarRemito: {ex.Message}");
+            throw;
+        }
+    }
+
+    /// <summary>
+    /// Registra un movimiento de stock para un producto del remito
+    /// </summary>
+    private async Task RegistrarMovimientoProducto(
+        ProductoRemito producto, 
+        decimal cantidad, 
+        string lote, 
+        int nuorItem, 
+        string remitoCorto, 
+        string remitoLargo)
+    {
+        try
+        {
+            // Construir el DTO para el movimiento de stock
+            // Si el producto viene de un pedido, usar el número de pedido en DocumentoSecundario
+            // Si no, usar la orden de compra del cliente
+            string docSecundario = producto.NroPedido.HasValue && producto.NroPedido.Value > 0 
+                ? $"PC.{producto.NroPedido.Value}" 
+                : $"PC.{ordenCompra}";
+            
+            string docSecundarioLargo = producto.NroPedido.HasValue && producto.NroPedido.Value > 0
+                ? $"P/F - Pedido {producto.NroPedido.Value}"
+                : $"P/F - PC.{ordenCompra}";
+
+            var movimiento = new MoviStockDTO
+            {
+                Fecha = fechaRemito,
+                CodigoInterno = producto.CodInt,
+                Lote = lote,
+                CodigoMovimiento = "RT", // Remito de cliente
+                DocumentoPrimarioCorto = remitoCorto, // RT.6449
+                DocumentoPrimarioLargo = remitoLargo, // RT-X-0001-00006449
+                DocumentoSecundarioLargo = docSecundarioLargo, // "P/F - Pedido 256" o "P/F - PC.123"
+                DocumentoSecundarioCorto = docSecundario, // "PC.256" (nro pedido) o "PC.123" (orden compra)
+                Referencia = razonSocial, // REFEMO$ = Razón social del cliente
+                NumeroOrdenItem = nuorItem,
+                NumeroPedidoCliente = producto.NroPedido ?? 0, // Número de pedido si proviene de uno
+                NumeroOrdenPedido = producto.NuOrItemPedido ?? 0, // Número de orden del item en el pedido (PEDDETA.NuOrItem)
+                Moneda = 1, // Moneda por defecto
+                NumeroCliente = numeroClienteSeleccionado.Value,
+                Deposito = depositoSeleccionado,
+                Cantidad = -1 * cantidad, // Negativo porque es una salida de stock
+                ValorUnitario = 0, // No se maneja precio en remitos
+                OrdenCompraRetornoAbierto = ordenCompra,
+                NumeroRemito = numeroRemito, // Campo numérico para MOVISTO.DOPRINUM (últimos 8 dígitos)
+                PrefijoRemito = (short)prefijoRemito // Campo numérico para MOVISTO.NUMPVTA (primeros 4 dígitos)
+            };
+
+            Console.WriteLine($"[RemitoCliente] Registrando movimiento: Producto {producto.Codigo}, Cantidad {cantidad}, Lote '{lote}', NroPedido: {producto.NroPedido}, NuOrItem: {producto.NuOrItemPedido}");
+
+            // Llamar al servicio para registrar el movimiento
+            var response = await repository.Post("api/movistock/registrar", movimiento);
+
+            if (response.Error)
+            {
+                var errorMsg = await response.GetErrorMessageAsync();
+                throw new Exception($"Error al registrar movimiento para producto {producto.Codigo}: {errorMsg}");
+            }
+
+            Console.WriteLine($"[RemitoCliente] Movimiento registrado exitosamente para producto {producto.Codigo}");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[RemitoCliente] Error en RegistrarMovimientoProducto: {ex.Message}");
+            throw;
+        }
+    }
+
+    /// <summary>
+    /// Carga la lista de transportistas desde la base de datos
+    /// </summary>
+    private async Task CargarTransportistas()
+    {
+        try
+        {
+            if (numeroClienteSeleccionado == null || numeroClienteSeleccionado <= 0)
+            {
+                await sweetAlertService.FireAsync("Cliente requerido", "Debe seleccionar un cliente antes de cargar transportistas.", SweetAlertIcon.Warning);
+                return;
+            }
+
+            var httpResponse = await repository.Get<List<Transporte>>("api/transportes/combo");
+            
+            if (httpResponse.Error)
+            {
+                await sweetAlertService.FireAsync("Error", "No se pudieron cargar los transportistas.", SweetAlertIcon.Error);
+                return;
+            }
+
+            transportistas = httpResponse.Response ?? new List<Transporte>();
+            
+            StateHasChanged();
+            
+            Console.WriteLine($"[RemitoCliente] Transportistas cargados: {transportistas.Count}");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[RemitoCliente] Error al cargar transportistas: {ex.Message}");
+            await sweetAlertService.FireAsync("Error", $"Error al cargar transportistas: {ex.Message}", SweetAlertIcon.Error);
+        }
+    }
+
+    /// <summary>
+    /// Maneja la selección de un transportista y completa los campos relacionados
+    /// </summary>
+    private void OnTransportistaSeleccionado()
+    {
+        if (transportistaId > 0)
+        {
+            var transportista = transportistas.FirstOrDefault(t => t.Codi_Tra == transportistaId);
+            if (transportista != null)
+            {
+                cuitTransportista = transportista.Cuit_Tra ?? string.Empty;
+                domicilioTransportista = transportista.Domi_Tra ?? string.Empty;
+                codPostalTransportista = transportista.CodPostal_Tra ?? string.Empty;
+                
+                Console.WriteLine($"[RemitoCliente] Transportista seleccionado: {transportista.Deno_Tra} (Codi_Tra: {transportistaId})");
+                Console.WriteLine($"[RemitoCliente] CUIT: {cuitTransportista}, Domicilio: {domicilioTransportista}, Cod Postal: {codPostalTransportista}");
+            }
+            else
+            {
+                Console.WriteLine($"[RemitoCliente] No se encontró transportista con Codi_Tra: {transportistaId}");
+            }
+        }
+        else
+        {
+            // Limpiar campos si no hay selección
+            cuitTransportista = string.Empty;
+            domicilioTransportista = string.Empty;
+            codPostalTransportista = string.Empty;
+        }
+    }
+
+    /// <summary>
+    /// Prepara los datos e imprime el remito
+    /// </summary>
+    private async Task PrepararEImprimirRemito()
+    {
+        try
+        {
+            Console.WriteLine("[RemitoCliente] Preparando impresión del remito...");
+
+            // IMPORTANTE: Limpiar todas las variables antes de preparar la impresión
+            LimpiarVariablesImpresion();
+
+            // Obtener código de movimiento
+            var codigoMovimiento = await remitosConfigService.ObtenerCodigoMovimientoAsync();
+
+            // Preparar número de remito completo
+            numeroRemitoImpresion = $"{codigoMovimiento}-X-{ObtenerPrefijoFormateado()}-{numeroRemito.ToString("D8")}";
+            
+            // Preparar fecha
+            fechaImpresion = fechaRemito.ToString("dd/MM/yy");
+            
+            // Preparar datos del cliente
+            razonSocialImpresion = razonSocial;
+            domicilioImpresion = domicilioCliente;
+            
+            // Formatear CUIT con guiones (XX-XXXXXXXX-X)
+            cuitImpresion = FormatearCUIT(cuitCliente);
+            
+            localidadImpresion = localidadCliente;
+            
+            // Obtener condición de IVA del cliente desde TipoIvaEnum
+            if (numeroClienteSeleccionado.HasValue)
+            {
+                var responseCliente = await repository.Get<Deudor12>($"api/Deudor12/numero/{numeroClienteSeleccionado.Value}");
+                if (!responseCliente.Error && responseCliente.Response != null)
+                {
+                    var cliente = responseCliente.Response;
+                    
+                    // Obtener la descripción de IVA desde TipoIvaEnum usando Piva_Cli
+                    condicionIVAImpresion = TipoIvaHelper.ObtenerDescripcionIvaPorCodigo(cliente.Piva_Cli);
+                    Console.WriteLine($"[RemitoCliente] Condición IVA: Código={cliente.Piva_Cli}, Descripción={condicionIVAImpresion}");
+                }
+            }
+            
+            // Preparar orden de compra y orden de venta
+            ordenCompraImpresion = ordenCompra;
+            
+            // Obtener orden de venta del primer producto que tenga pedido
+            var primerProductoConPedido = productosRemito.FirstOrDefault(p => p.NroPedido.HasValue);
+            if (primerProductoConPedido != null)
+            {
+                ordenVentaImpresion = primerProductoConPedido.NroPedido.ToString() ?? "";
+            }
+            else
+            {
+                ordenVentaImpresion = "";
+            }
+            
+            // Preparar items del remito
+            itemsImpresion = productosRemito.Select(p => new ImpresionRemito.ItemRemito
+            {
+                Cantidad = p.Cantidad,
+                Codigo = p.Codigo,
+                Descripcion = p.Descripcion
+            }).ToList();
+            
+            // Preparar observaciones (incluir destino si existe)
+            observacionesImpresion = observaciones;
+            
+            // Preparar valor declarado
+            valorDeclaradoImpresion = string.IsNullOrWhiteSpace(valorDeclarado) ? "" : $"U$S.{valorDeclarado}";
+            
+            // Preparar bultos
+            if (int.TryParse(numeroBultos, out int bultos))
+            {
+                bultosImpresion = bultos;
+            }
+            else
+            {
+                bultosImpresion = 1;
+            }
+            
+            // NCI vacío (no se usa según la imagen 2)
+            nciImpresion = "";
+            
+            Console.WriteLine($"[RemitoCliente] Datos preparados para impresión: {numeroRemitoImpresion}");
+            
+            // Forzar actualización del componente
+            StateHasChanged();
+            
+            // Esperar un momento para que se actualice el DOM
+            await Task.Delay(100);
+            
+            // Imprimir
+            await impresionRemito.Imprimir();
+            
+            Console.WriteLine("[RemitoCliente] Impresión iniciada");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[RemitoCliente] Error al preparar impresión: {ex.Message}");
+            // No mostramos error al usuario para no interrumpir el flujo
+        }
+    }
+
+    /// <summary>
+    /// Limpia el formulario después de guardar
+    /// </summary>
+    private void LimpiarFormulario()
+    {
+        // Limpiar cliente
+        LimpiarCliente();
+
+        // Limpiar productos
+        productosRemito.Clear();
+
+        // Limpiar datos del remito
+        fechaRemito = DateTime.Now;
+        ordenCompra = string.Empty;
+        numeroRemito = 0;
+
+        // Recargar prefijo por defecto
+        _ = CargarPrefijoDefecto();
+
+        Console.WriteLine("[RemitoCliente] Formulario limpiado");
+        StateHasChanged();
+    }
+
+    /// <summary>
+    /// Limpia todas las variables de impresión para evitar que se mezclen datos entre remitos
+    /// </summary>
+    private void LimpiarVariablesImpresion()
+    {
+        nciImpresion = "";
+        numeroRemitoImpresion = "";
+        fechaImpresion = "";
+        razonSocialImpresion = "";
+        domicilioImpresion = "";
+        cuitImpresion = "";
+        condicionIVAImpresion = "";
+        localidadImpresion = "";
+        ordenCompraImpresion = "";
+        ordenVentaImpresion = "";
+        itemsImpresion = new List<ImpresionRemito.ItemRemito>();
+        observacionesImpresion = "";
+        valorDeclaradoImpresion = "";
+        bultosImpresion = 1;
+        
+        Console.WriteLine("[RemitoCliente] Variables de impresión limpiadas");
+    }
+
+    /// <summary>
+    /// Formatea el CUIT con guiones (XX-XXXXXXXX-X)
+    /// </summary>
+    private string FormatearCUIT(string cuit)
+    {
+        if (string.IsNullOrWhiteSpace(cuit))
+            return "";
+
+        // Remover cualquier guión existente y espacios
+        string cuitLimpio = cuit.Replace("-", "").Replace(" ", "").Trim();
+
+        // Si ya tiene el formato correcto o no tiene 11 dígitos, devolver como está
+        if (cuitLimpio.Length != 11 || !cuitLimpio.All(char.IsDigit))
+            return cuit;
+
+        // Formatear: XX-XXXXXXXX-X
+        return $"{cuitLimpio.Substring(0, 2)}-{cuitLimpio.Substring(2, 8)}-{cuitLimpio.Substring(10, 1)}";
+    }
+
+    /// <summary>
+    /// Cancela y vuelve a la página anterior
+    /// </summary>
+    private void Cancelar()
+    {
+        NavigationManager.NavigateTo("/");
+    }
+}

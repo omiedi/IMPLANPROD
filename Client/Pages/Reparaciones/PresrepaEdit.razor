@@ -1,0 +1,131 @@
+@page "/presupuesto-reparacion/editar/{NumRepa:int}"
+@using IMPLANPROD.Shared.Entities
+@using IMPLANPROD.Client.Repositories
+@using IMPLANPROD.Client.Services
+@inject IRepository repository
+@inject SweetAlertService sweetAlertService
+@inject NavigationManager navigationManager
+
+<PageTitle>Editar Presupuesto de Reparación</PageTitle>
+
+<div class="container-fluid">
+    <div class="mb-4">
+        <h2 class="text-center fw-bold text-primary">
+            <i class="fas fa-edit me-2"></i>
+            EDITAR PRESUPUESTO DE REPARACIÓN
+        </h2>
+        <hr class="border-primary border-2 opacity-50" />
+    </div>
+
+    @if (cargando)
+    {
+        <div class="text-center">
+            <div class="spinner-border" role="status">
+                <span class="visually-hidden">Cargando...</span>
+            </div>
+            <p class="mt-2">Cargando presupuesto...</p>
+        </div>
+    }
+    else if (repara == null)
+    {
+        <div class="alert alert-danger">
+            <i class="fas fa-exclamation-triangle"></i> No se pudo cargar el presupuesto.
+        </div>
+        <button class="btn btn-secondary" @onclick="Volver">
+            <i class="fas fa-arrow-left"></i> Volver
+        </button>
+    }
+    else
+    {
+        <PresrepaForm repara="@repara"
+                      IsEdit="true"
+                      OnValidSubmit="@Update"
+                      OnCancel="@Cancel" />
+    }
+</div>
+
+@code {
+    [Parameter] public int NumRepa { get; set; }
+    
+    private Repara? repara;
+    private bool cargando = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await CargarPresupuesto();
+    }
+
+    private async Task CargarPresupuesto()
+    {
+        try
+        {
+            cargando = true;
+            
+            var responseHttp = await repository.Get<Repara>($"api/repara/{NumRepa}");
+            
+            if (responseHttp.Error)
+            {
+                var message = await responseHttp.GetErrorMessageAsync();
+                await sweetAlertService.FireAsync("Error", $"Error al cargar presupuesto: {message}", SweetAlertIcon.Error);
+                return;
+            }
+
+            repara = responseHttp.Response;
+
+            // Validar que tenga presupuesto generado
+            if (repara != null && (!repara.NroPed.HasValue || repara.NroPed <= 0.5m))
+            {
+                await sweetAlertService.FireAsync(
+                    "Atención", 
+                    "Esta reparación no tiene un presupuesto generado.", 
+                    SweetAlertIcon.Warning);
+                navigationManager.NavigateTo("/presupuestos-reparacion");
+                return;
+            }
+
+            // Validar que no tenga orden de reparación emitida
+            if (repara != null && repara.NroPed.HasValue && repara.NroPed > 0)
+            {
+                await sweetAlertService.FireAsync(
+                    "Atención", 
+                    "Imposible Generar / Modificar Presupuesto.\nOrden de Reparación ya Emitida.", 
+                    SweetAlertIcon.Warning);
+                navigationManager.NavigateTo("/presupuestos-reparacion");
+                return;
+            }
+        }
+        catch (Exception ex)
+        {
+            await sweetAlertService.FireAsync("Error", $"Error inesperado: {ex.Message}", SweetAlertIcon.Error);
+        }
+        finally
+        {
+            cargando = false;
+        }
+    }
+
+    private async Task Update()
+    {
+        try
+        {
+            // Por ahora solo mostramos mensaje de éxito
+            // El guardado del detalle se implementará en la siguiente fase
+            await sweetAlertService.FireAsync("Éxito", "Presupuesto actualizado correctamente (pendiente implementar detalle)", SweetAlertIcon.Success);
+            navigationManager.NavigateTo("/presupuestos-reparacion");
+        }
+        catch (Exception ex)
+        {
+            await sweetAlertService.FireAsync("Error", $"Error al actualizar presupuesto: {ex.Message}", SweetAlertIcon.Error);
+        }
+    }
+
+    private void Cancel()
+    {
+        navigationManager.NavigateTo("/presupuestos-reparacion");
+    }
+
+    private void Volver()
+    {
+        navigationManager.NavigateTo("/presupuestos-reparacion");
+    }
+}

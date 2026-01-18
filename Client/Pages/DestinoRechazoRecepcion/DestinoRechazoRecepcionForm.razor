@@ -1,0 +1,77 @@
+@inject SweetAlertService sweetAlertService
+@inject IRepository repository
+
+<EditForm Model="destino" OnValidSubmit="OnValidSubmit">
+    <DataAnnotationsValidator />
+
+    <div class="mb-3">
+        <label>Código Destino:</label>
+        <div>
+            <InputNumber class="form-control" @bind-Value="@destino.CodigoDestino" disabled="@IsEdit" />
+            <ValidationMessage For="@(() => destino.CodigoDestino)" />
+        </div>
+    </div>
+    <div class="mb-3">
+        <label>Descripción:</label>
+        <div>
+            <InputText class="form-control" @bind-Value="@destino.Descripcion" />
+            <ValidationMessage For="@(() => destino.Descripcion)" />
+        </div>
+    </div>
+
+    <div class="mb-3">
+        <label>Depósito:</label>
+        <div>
+            <InputSelect class="form-control" @bind-Value="@destino.Deposito">
+                <option value="">Seleccione un depósito...</option>
+                @if (depositos != null)
+                {
+                    @foreach (var deposito in depositos)
+                    {
+                        <option value="@deposito.Key">@deposito.Value</option>
+                    }
+                }
+            </InputSelect>
+            <ValidationMessage For="@(() => destino.Deposito)" />
+            <small class="form-text text-muted">Opcional: Seleccione un depósito si este destino requiere uno específico</small>
+        </div>
+    </div>
+
+
+
+    <button class="btn btn-primary" type="submit">Guardar Cambios</button>
+    <button class="btn btn-success" @onclick="ReturnAction">Regresar</button>
+
+</EditForm>
+
+@code {
+    [EditorRequired]
+    [Parameter]
+    public DestinoRechazoRecepcion destino { get; set; } = null!;
+
+    [EditorRequired]
+    [Parameter]
+    public EventCallback OnValidSubmit { get; set; }
+
+    [EditorRequired]
+    [Parameter]
+    public EventCallback ReturnAction { get; set; }
+
+    [Parameter]
+    public bool IsEdit { get; set; }
+
+    public bool FormPostedSuccessfully { get; set; }
+
+    private Dictionary<int, string> depositos;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var response = await repository.Get<Dictionary<int, string>>("api/tadeposi/combo");
+        if (response.Error)
+        {
+            await sweetAlertService.FireAsync("Error", response.HttpResponseMessage.ReasonPhrase, SweetAlertIcon.Error);
+            return;
+        }
+        depositos = response.Response;
+    }
+}

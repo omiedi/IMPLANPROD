@@ -1,0 +1,158 @@
+@page "/ejemplo-deposito-selector"
+@using IMPLANPROD.Client.Shared.Components
+@using IMPLANPROD.Shared.DTOs
+
+<PageTitle>Ejemplo - Selector de Depósito</PageTitle>
+
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h4><i class="fas fa-warehouse me-2"></i>Ejemplo de Uso - Selector de Depósito</h4>
+                </div>
+                <div class="card-body">
+                    
+                    <!-- Botón para abrir el modal -->
+                    <div class="mb-4">
+                        <button class="btn btn-primary" @onclick="AbrirModalDeposito">
+                            <i class="fas fa-warehouse me-2"></i>
+                            Seleccionar Depósito
+                        </button>
+                    </div>
+
+                    <!-- Mostrar información del depósito seleccionado -->
+                    @if (depositoSeleccionado != null)
+                    {
+                        <div class="alert alert-success" role="alert">
+                            <h5><i class="fas fa-check-circle me-2"></i>Depósito Seleccionado:</h5>
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <strong>Código:</strong> @depositoSeleccionado.CodigoDepo
+                                </div>
+                                <div class="col-md-6">
+                                    <strong>Descripción:</strong> @depositoSeleccionado.Descripcion
+                                </div>
+                                @if (!string.IsNullOrEmpty(depositoSeleccionado.DescripcionAbreviada))
+                                {
+                                    <div class="col-md-6">
+                                        <strong>Descripción Abreviada:</strong> @depositoSeleccionado.DescripcionAbreviada
+                                    </div>
+                                }
+                                @if (depositoSeleccionado.CodPlanta.HasValue)
+                                {
+                                    <div class="col-md-6">
+                                        <strong>Código Planta:</strong> @depositoSeleccionado.CodPlanta
+                                    </div>
+                                }
+                            </div>
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="alert alert-info" role="alert">
+                            <i class="fas fa-info-circle me-2"></i>
+                            No se ha seleccionado ningún depósito aún.
+                        </div>
+                    }
+
+                    <!-- Código de ejemplo -->
+                    <div class="mt-4">
+                        <h5>Código de Implementación:</h5>
+                        <pre class="bg-light p-3 rounded"><code>@@using IMPLANPROD.Client.Shared.Components
+
+&lt;!-- Botón para abrir el modal --&gt;
+&lt;button class="btn btn-primary" @@onclick="AbrirModalDeposito"&gt;
+    Seleccionar Depósito
+&lt;/button&gt;
+
+&lt;!-- Componente modal --&gt;
+&lt;DepositoSelectorModal IsVisible="mostrarModalDeposito"
+                       OnDepositoSeleccionado="OnDepositoSeleccionado"
+                       OnModalClosed="OnModalCerrado" /&gt;
+
+@@code {
+    private bool mostrarModalDeposito = false;
+    private DepositoSeleccionadoDTO? depositoSeleccionado;
+
+    private async Task AbrirModalDeposito()
+    {
+        mostrarModalDeposito = true;
+        StateHasChanged();
+    }
+
+    private async Task OnDepositoSeleccionado(DepositoSeleccionadoDTO deposito)
+    {
+        depositoSeleccionado = deposito;
+        mostrarModalDeposito = false;
+        StateHasChanged();
+        
+        // Aquí puedes agregar tu lógica personalizada
+        // Por ejemplo: guardar en base de datos, actualizar otros campos, etc.
+    }
+
+    private async Task OnModalCerrado()
+    {
+        mostrarModalDeposito = false;
+        StateHasChanged();
+    }
+}</code></pre>
+                    </div>
+
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Componente modal de selección de depósito -->
+<DepositoSelectorModal IsVisible="mostrarModalDeposito"
+                       OnDepositoSeleccionado="OnDepositoSeleccionado"
+                       OnModalClosed="OnModalCerrado" />
+
+@code {
+    // Variables para el manejo del modal
+    private bool mostrarModalDeposito = false;
+    private DepositoSeleccionadoDTO? depositoSeleccionado;
+
+    /// <summary>
+    /// Abre el modal de selección de depósito
+    /// </summary>
+    private async Task AbrirModalDeposito()
+    {
+        mostrarModalDeposito = true;
+        StateHasChanged();
+    }
+
+    /// <summary>
+    /// Se ejecuta cuando el usuario selecciona un depósito en el modal
+    /// </summary>
+    /// <param name="deposito">Datos del depósito seleccionado</param>
+    private async Task OnDepositoSeleccionado(DepositoSeleccionadoDTO deposito)
+    {
+        // Guardar la selección
+        depositoSeleccionado = deposito;
+        
+        // Cerrar el modal
+        mostrarModalDeposito = false;
+        StateHasChanged();
+        
+        // Aquí puedes agregar tu lógica personalizada
+        // Por ejemplo:
+        // - Guardar en base de datos
+        // - Actualizar otros campos del formulario
+        // - Mostrar mensajes de confirmación
+        // - Etc.
+        
+        Console.WriteLine($"Depósito seleccionado: {deposito.CodigoDepo} - {deposito.Descripcion}");
+    }
+
+    /// <summary>
+    /// Se ejecuta cuando se cierra el modal sin seleccionar
+    /// </summary>
+    private async Task OnModalCerrado()
+    {
+        mostrarModalDeposito = false;
+        StateHasChanged();
+    }
+}

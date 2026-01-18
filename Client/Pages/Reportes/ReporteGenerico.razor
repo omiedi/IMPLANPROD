@@ -1,0 +1,28 @@
+﻿@typeparam TItem
+@using System.Reflection
+
+<table class="table">
+    <thead>
+        <tr>
+            @foreach (var prop in typeof(TItem).GetProperties())
+            {
+                <th>@prop.Name</th>
+            }
+        </tr>
+    </thead>
+    <tbody>
+        @foreach (var item in Datos)
+        {
+            <tr>
+                @foreach (var prop in typeof(TItem).GetProperties())
+                {
+                    <td>@prop.GetValue(item)</td>
+                }
+            </tr>
+        }
+    </tbody>
+</table>
+
+@code {
+    [Parameter] public List<TItem> Datos { get; set; } = new();
+}

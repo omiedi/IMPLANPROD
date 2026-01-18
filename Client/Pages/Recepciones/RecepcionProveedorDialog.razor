@@ -1,0 +1,1327 @@
+@page "/recepcion/selproveedor"
+
+@using IMPLANPROD.Shared.DTOs
+@using IMPLANPROD.Shared.Entities
+@using Microsoft.AspNetCore.Components.Web
+@using Blazored.Modal
+@using Blazored.Modal.Services
+@using IMPLANPROD.Client.Pages.OrdenesCompra
+@using IMPLANPROD.Client.Shared.Components
+
+@inject IRepository repository
+@inject IModalService modalService
+@inject SweetAlertService sweetAlertService
+@inject IJSRuntime JSRuntime
+
+<PageTitle>Recepción de Proveedores</PageTitle>
+
+<div class="container">
+    <!-- Título de la página -->
+    <div class="mb-4">
+        <h2 class="text-center fw-bold text-primary">
+            <i class="fas fa-box-open me-2"></i>
+            RECEPCIÓN DE PROVEEDORES
+        </h2>
+        <hr class="border-primary border-2 opacity-50" />
+    </div>
+
+    <div class="d-flex gap-2 mb-4">
+        <button class="btn @(activeTab == "busqueda" ? "btn-primary" : "btn-outline-primary") flex-fill py-3 rounded-3 shadow-sm" 
+                @onclick='() => CambiarABusqueda()'
+                style="transition: all 0.3s ease;">
+            <i class="oi oi-magnifying-glass me-2"></i>
+            <strong>Búsqueda de Proveedor</strong>
+        </button>
+        <button class="btn @(activeTab == "pendientes" ? "btn-primary" : "btn-outline-primary") flex-fill py-3 rounded-3 shadow-sm" 
+                @onclick='() => CambiarAPendientes()'
+                style="transition: all 0.3s ease;">
+            <i class="oi oi-task me-2"></i>
+            <strong>Recepciones Pendientes de Aprobación</strong>
+        </button>
+        <button class="btn @(activeTab == "reportes" ? "btn-primary" : "btn-outline-primary") flex-fill py-3 rounded-3 shadow-sm" 
+                @onclick='() => CambiarAReportes()'
+                style="transition: all 0.3s ease;">
+            <i class="oi oi-bar-chart me-2"></i>
+            <strong>Reportes</strong>
+        </button>
+    </div>
+
+    @if (activeTab == "busqueda")
+    {
+        <div class="row mb-3">
+            <div class="col">
+                <div class="form-group">
+                    <label class="mb-2">Razón Social:</label>
+                    <div class="input-group">
+                        <input type="text" 
+                               class="form-control" 
+                               @bind-value="terminoBusquedaProveedor" 
+                               @bind-value:event="oninput" 
+                               @onkeyup="async (KeyboardEventArgs e) => await OnKeyPress(e)"
+                               data-autofocus
+                               placeholder="Buscar proveedor..." />
+                        <button class="btn btn-primary" type="button" @onclick="BuscarProveedorPorRazonSocial">
+                            <i class="oi oi-magnifying-glass"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        @if (proveedoresEncontrados.Any())
+        {
+            <div class="table-responsive" style="max-height: 300px; overflow-y: auto;">
+                <table class="table table-sm table-hover">
+                    <thead>
+                        <tr>
+                            <th>Número</th>
+                            <th>Nº Proveedor</th>
+                            <th>Razón Social</th>
+                            <th>CUIT</th>
+                            <th>Nombre Fantasía</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var proveedor in proveedoresEncontrados)
+                        {
+                            <tr>
+                                <td>@proveedor.Id</td>
+                                <td>@proveedor.NumeCli</td>
+                                <td>@proveedor.RazonSocial</td>
+                                <td>@proveedor.Cuit</td>
+                                <td>@proveedor.Email</td>
+                                <td>
+                                    <button class="btn btn-sm btn-primary" @onclick="() => SeleccionarProveedor(proveedor)">
+                                        Seleccionar
+                                    </button>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    }
+    else if (activeTab == "pendientes")
+    {
+        @if (recepcionesPendientes == null)
+        {
+            <div class="text-center">
+                <div class="spinner-border text-primary" role="status">
+                    <span class="visually-hidden">Cargando...</span>
+                </div>
+            </div>
+        }
+        else if (!recepcionesPendientes.Any())
+        {
+            <div class="alert alert-info">
+                No hay recepciones pendientes de aprobación.
+            </div>
+        }
+        else
+        {
+            <div class="table-responsive">
+                <table class="table table-sm table-hover">
+                    <thead>
+                        <tr class="bg-primary text-white">
+                            <th class="text-center" style="border-right: 1px solid #dee2e6;">
+                                <strong>Nro. Recepción</strong>
+                            </th>
+                            <th class="text-center" style="border-right: 1px solid #dee2e6;">
+                                <strong>Fecha</strong>
+                            </th>
+                            <th class="text-center" style="border-right: 1px solid #dee2e6;">
+                                <strong>Nro. OC</strong>
+                            </th>
+                            <th class="text-center" style="border-right: 1px solid #dee2e6;">
+                                <strong>Remito</strong>
+                            </th>
+                            <th class="text-center" style="border-right: 1px solid #dee2e6;">
+                                <strong>N. Proveedor</strong>
+                            </th>
+                            <th class="text-center" style="border-right: 1px solid #dee2e6;">
+                                <strong>R. Social</strong>
+                            </th>
+                            <th class="text-center">
+                                <strong>Acciones</strong>
+                            </th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var recepcion in recepcionesPendientes)
+                        {
+                            <tr>
+                                <td class="text-center" style="border-right: 1px solid #dee2e6;">@recepcion.NumeroRecepcion</td>
+                                <td class="text-center" style="border-right: 1px solid #dee2e6;">@recepcion.FechaRecepcion.ToString("dd/MM/yyyy HH:mm")</td>
+                                <td class="text-center" style="border-right: 1px solid #dee2e6;">@(recepcion.NumeroOrdenCompra == 0 ? "-" : recepcion.NumeroOrdenCompra.ToString())</td>
+                                <td style="border-right: 1px solid #dee2e6;">@recepcion.NumeroRemito</td>
+                                <td class="text-center" style="border-right: 1px solid #dee2e6;">@recepcion.NumeroProveedor</td>
+                                <td style="border-right: 1px solid #dee2e6;">@recepcion.RazonSocial</td>
+                                <td class="text-center">
+                                    <div class="btn-group">
+                                        <button class="btn btn-sm btn-primary" @onclick="() => VerDetalleRecepcion(recepcion.NumeroRecepcion)">
+                                            <i class="oi oi-list"></i> Detalle
+                                        </button>
+                                        <button class="btn btn-sm btn-danger ms-1" @onclick="() => ConfirmarBorrarRecepcion(recepcion.NumeroRecepcion)">
+                                            <i class="oi oi-trash"></i> Borrar
+                                        </button>
+                                    </div>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    }
+    else if (activeTab == "reportes")
+    {
+        <!-- Encabezado con logo de la empresa -->
+        <div class="row mb-4">
+            <div class="col-12">
+                <div class="card shadow-sm">
+                    <div class="card-body text-center py-4">
+                        <img src="/Images/logoempresa.png" alt="Logo Empresa" style="max-height: 80px; margin-bottom: 15px;" />
+                        <h4 class="mb-2">Reportes de Recepciones</h4>
+                        <p class="text-muted mb-0">Seleccione el tipo de reporte que desea generar</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Botón de Gráficos -->
+        <div class="row mb-3">
+            <div class="col-12">
+                <div class="card border-success">
+                    <div class="card-body text-center py-4">
+                        <h5 class="text-success mb-3">
+                            <i class="fas fa-chart-line me-2"></i>
+                            Análisis Gráfico de Recepciones
+                        </h5>
+                        <p class="text-muted mb-3">
+                            Visualice gráficos interactivos de recepciones, calificación de proveedores por puntualidad y rechazos, 
+                            y análisis de tendencias mensuales.
+                        </p>
+                        <a href="/graficos-recepciones" class="btn btn-success btn-lg">
+                            <i class="fas fa-chart-bar me-2"></i>
+                            Ver Gráficos y Análisis
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Aquí se pueden agregar filtros y opciones de reportes -->
+        <div class="row mb-3">
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-header bg-primary text-white">
+                        <i class="fas fa-shopping-cart me-2"></i>
+                        <strong>O.Compra Pendientes</strong>
+                    </div>
+                    <div class="card-body">
+                        <p class="text-muted">Visualizar órdenes de compra pendientes con opciones de filtrado por proveedor.</p>
+                        <button class="btn btn-sm btn-outline-primary" @onclick="AbrirModalOrdenesPendientes">
+                            <i class="oi oi-eye me-1"></i> Ver Órdenes Pendientes
+                        </button>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-header text-white" style="background-color: #dc3545;">
+                        <i class="fas fa-exclamation-triangle me-2"></i>
+                        <strong>Recepciones con Rechazos</strong>
+                    </div>
+                    <div class="card-body">
+                        <p class="text-muted">Reporte de recepciones que tienen cantidades rechazadas.</p>
+                        <button class="btn btn-sm btn-outline-danger" @onclick="AbrirModalRecepcionesRechazos">
+                            <i class="oi oi-document me-1"></i> Generar Reporte
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="row">
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-header bg-warning text-dark">
+                        <i class="fas fa-calendar-alt me-2"></i>
+                        <strong>Recepciones por Rango de Fechas</strong>
+                    </div>
+                    <div class="card-body">
+                        <p class="text-muted">Reporte de recepciones filtradas por rango de fechas y códigos de productos.</p>
+                        <button class="btn btn-sm btn-outline-warning" @onclick="AbrirModalRecepcionesRango">
+                            <i class="oi oi-document me-1"></i> Generar Reporte
+                        </button>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-header text-white" style="background-color: #17a2b8;">
+                        <i class="fas fa-file-invoice me-2"></i>
+                        <strong>Recepciones sin Orden de Compra</strong>
+                    </div>
+                    <div class="card-body">
+                        <p class="text-muted">Reporte de recepciones que no tienen orden de compra asociada.</p>
+                        <button class="btn btn-sm btn-outline-info" @onclick="AbrirModalRecepcionesSinOC">
+                            <i class="oi oi-document me-1"></i> Generar Reporte
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+
+    @if (proveedorSeleccionado != null && mostrarBotonesRecepcion)
+    {
+        <div class="row mt-3">
+            <div class="col text-center">
+                @if (tieneOrdenesPendientes)
+                {
+                    <button class="btn btn-success me-2" @onclick="RecepcionarPorOrdenCompra">
+                        Recepción Provisoria por O/C
+                    </button>
+                }
+                <button class="btn btn-primary" @onclick="RecepcionLibre">
+                    Recepción Provisoria Libre
+                </button>
+            </div>
+        </div>
+    }
+</div>
+
+@* Modal de Items de Recepción *@
+<div class="modal fade @(mostrarModalItems ? "show" : "")" style="display: @(mostrarModalItems ? "block" : "none")" tabindex="-1">
+    <div class="modal-dialog modal-xl">
+        <div class="modal-content">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title">Items de Recepción #@numeroRecepcionSeleccionada</h5>
+                <button type="button" class="btn-close btn-close-white" @onclick="CerrarModalItems"></button>
+            </div>
+            <div class="modal-body">
+                <div class="d-flex justify-content-end mb-3">
+                    @if (numeroRecepcionSeleccionada == 0)
+                    {
+                        <button type="button" class="btn btn-success" @onclick="AgregarMasRepuestos">
+                            <i class="oi oi-plus"></i> Agregar Repuesto
+                        </button>
+                    }
+                </div>
+                <div class="table-responsive">
+                    <table class="table table-sm table-hover">
+                        <thead>
+                            <tr class="bg-light">
+                                <th>Código Interno</th>
+                                <th>Código Externo</th>
+                                <th>Descripción</th>
+                                <th class="text-center">Cant. Nominal</th>
+                                <th>Unidad</th>
+                                <th class="text-center">Cant. Aprobada</th>
+                                <th class="text-center">Cant. Rechazada</th>
+                                <th class="text-center">Cant. Faltante</th>
+                                <th class="text-center">Estado</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @if (itemsRecepcion != null)
+                            {
+                                @foreach (var item in itemsRecepcion)
+                                {
+                                    var diferencia = item.CantidadNominal - (item.CanToApro ?? 0) - (item.CantidadRechazada ?? 0) - (item.CantidadFaltante ?? 0);
+                                    var esValido = Math.Abs(diferencia) < 0.0001m; // Tolerancia para decimales
+                                    
+                                    <tr class="@(esValido ? "" : "table-warning")">
+                                        <td>@item.CodigoInterno</td>
+                                        <td>@item.CodigoExterno</td>
+                                        <td>@item.DescripcionItem</td>
+                                        <td class="text-center"><strong>@item.CantidadNominal</strong></td>
+                                        <td>@item.Unidad</td>
+                                        <td>
+                                            <input type="number" 
+                                                   class="form-control form-control-sm" 
+                                                   @bind-value="item.CanToApro"
+                                                   @bind-value:event="oninput"
+                                                   @onchange="() => ValidarCantidades(item)"
+                                                   step="0.01"
+                                                   min="0" />
+                                        </td>
+                                        <td>
+                                            <input type="number" 
+                                                   class="form-control form-control-sm" 
+                                                   @bind-value="item.CantidadRechazada"
+                                                   @bind-value:event="oninput"
+                                                   @onchange="() => ValidarCantidades(item)"
+                                                   step="0.01"
+                                                   min="0" />
+                                        </td>
+                                        <td>
+                                            <input type="number" 
+                                                   class="form-control form-control-sm" 
+                                                   @bind-value="item.CantidadFaltante"
+                                                   @bind-value:event="oninput"
+                                                   @onchange="() => ValidarCantidades(item)"
+                                                   step="0.01"
+                                                   min="0" />
+                                        </td>
+                                        <td class="text-center">
+                                            @if (esValido)
+                                            {
+                                                <span class="badge bg-success">✓ OK</span>
+                                            }
+                                            else
+                                            {
+                                                <span class="badge bg-warning text-dark" title="La suma debe ser igual a la cantidad nominal">
+                                                    ⚠ Diferencia: @diferencia.ToString("0.##")
+                                                </span>
+                                            }
+                                        </td>
+                                    </tr>
+                                }
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="modal-footer">
+                @if (numeroRecepcionSeleccionada == 0)
+                {
+                    <button type="button" class="btn btn-success" @onclick="AgregarMasRepuestos">
+                        <i class="oi oi-plus"></i> Agregar Repuesto
+                    </button>
+                }
+                <button type="button" class="btn btn-secondary" @onclick="CerrarModalItems">Cerrar</button>
+                <button type="button" class="btn btn-primary" @onclick="AprobarRecepcionPendiente">Aprobar Recepción</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+@if (mostrarModalItems)
+{
+    <div class="modal-backdrop fade show"></div>
+}
+
+@* Modal de Órdenes de Compra Pendientes *@
+<div class="modal fade @(mostrarModalOrdenesPendientes ? "show" : "")" style="display: @(mostrarModalOrdenesPendientes ? "block" : "none")" tabindex="-1">
+    <div class="modal-dialog modal-xl">
+        <div class="modal-content">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title">
+                    <i class="fas fa-shopping-cart me-2"></i>
+                    Órdenes de Compra Pendientes
+                </h5>
+                <button type="button" class="btn-close btn-close-white" @onclick="CerrarModalOrdenesPendientes"></button>
+            </div>
+            <div class="modal-body">
+                <!-- Encabezado con logo para impresión -->
+                <div class="text-center mb-3 reporte-header">
+                    <img src="/Images/logoempresa.png" alt="Logo Empresa" style="max-height: 60px; margin-bottom: 10px;" />
+                    <h5 class="mb-1">Reporte de Órdenes de Compra Pendientes</h5>
+                    @if (!string.IsNullOrEmpty(proveedorFiltroOrdenes))
+                    {
+                        <p class="mb-1"><strong>Proveedor:</strong> @proveedorFiltroOrdenes</p>
+                    }
+                    <p class="text-muted small mb-3">Fecha: @DateTime.Now.ToString("dd/MM/yyyy HH:mm")</p>
+                </div>
+                <!-- Filtro por proveedor -->
+                <div class="row mb-3 no-print">
+                    <div class="col-md-4">
+                        <label class="form-label"><strong class="text-danger">*</strong> Seleccionar Proveedor:</label>
+                        <div class="input-group">
+                            <input type="text" class="form-control" @bind="proveedorFiltroOrdenes" readonly placeholder="Debe seleccionar un proveedor..." />
+                            <button class="btn btn-outline-secondary" @onclick="LimpiarFiltroProveedorOrdenes" disabled="@(string.IsNullOrEmpty(proveedorFiltroOrdenes))">
+                                <i class="fas fa-times"></i>
+                            </button>
+                            <button class="btn btn-outline-primary" @onclick="AbrirSelectorProveedorOrdenes" title="Seleccionar Proveedor">
+                                <i class="fas fa-truck"></i>
+                            </button>
+                        </div>
+                        <small class="text-muted">Seleccione un proveedor para ver sus órdenes pendientes</small>
+                    </div>
+                    <div class="col-md-8 d-flex align-items-end justify-content-end gap-2">
+                        <button class="btn btn-primary" @onclick="FiltrarOrdenesPendientes" disabled="@(!numeroProveedorFiltroOrdenes.HasValue)">
+                            <i class="fas fa-filter"></i> Buscar Órdenes
+                        </button>
+                        <button class="btn btn-success" @onclick="ImprimirReporteOrdenesPendientes" disabled="@(ordenesPendientes == null || !ordenesPendientes.Any())">
+                            <i class="fas fa-print"></i> Imprimir Reporte
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Tabla de órdenes pendientes -->
+                @if (!numeroProveedorFiltroOrdenes.HasValue)
+                {
+                    <div class="alert alert-warning text-center">
+                        <i class="fas fa-info-circle me-2"></i>
+                        <strong>Seleccione un proveedor</strong>
+                        <p class="mb-0 mt-2">Debe seleccionar un proveedor para visualizar sus órdenes de compra pendientes.</p>
+                    </div>
+                }
+                else if (cargandoOrdenesPendientes)
+                {
+                    <div class="text-center">
+                        <div class="spinner-border text-primary" role="status">
+                            <span class="visually-hidden">Cargando...</span>
+                        </div>
+                        <p class="mt-2 text-muted">Buscando órdenes pendientes...</p>
+                    </div>
+                }
+                else if (ordenesPendientes == null)
+                {
+                    <div class="alert alert-info text-center">
+                        <i class="fas fa-search me-2"></i>
+                        <strong>Proveedor seleccionado</strong>
+                        <p class="mb-0 mt-2">Haga clic en "Buscar Órdenes" para ver las órdenes pendientes de este proveedor.</p>
+                    </div>
+                }
+                else if (!ordenesPendientes.Any())
+                {
+                    <div class="alert alert-info">
+                        <i class="fas fa-info-circle"></i> No se encontraron órdenes de compra pendientes.
+                    </div>
+                }
+                else
+                {
+                    <div class="table-responsive" style="max-height: 500px; overflow-y: auto;">
+                        <table class="table table-sm table-hover">
+                            <thead class="table-dark sticky-top">
+                                <tr>
+                                    <th>N° Orden</th>
+                                    <th>Fecha Emisión</th>
+                                    <th>Proveedor</th>
+                                    <th>Razón Social</th>
+                                    <th>Referencia</th>
+                                    <th>Total</th>
+                                    <th>Acciones</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var orden in ordenesPendientes)
+                                {
+                                    <tr>
+                                        <td><strong>@orden.NumeOcom</strong></td>
+                                        <td>@orden.FemiOcom?.ToString("dd/MM/yyyy")</td>
+                                        <td>@orden.NproOcom</td>
+                                        <td>@orden.RaSoProv</td>
+                                        <td>@orden.RefeOcom</td>
+                                        <td>@orden.TotalOcom?.ToString("C2")</td>
+                                        <td>
+                                            <div class="btn-group" role="group">
+                                                <button class="btn btn-sm btn-outline-info" @onclick="(() => VerDetalleOrden(orden.OCOMENCA_ID))" title="Ver Detalle">
+                                                    <i class="fas fa-eye"></i>
+                                                </button>
+                                                <button class="btn btn-sm btn-outline-success" @onclick="(() => ImprimirOrdenPendiente(orden.NumeOcom ?? 0))" title="Imprimir">
+                                                    <i class="fas fa-print"></i>
+                                                </button>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                }
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" @onclick="CerrarModalOrdenesPendientes">Cerrar</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+@if (mostrarModalOrdenesPendientes)
+{
+    <div class="modal-backdrop fade show"></div>
+}
+
+@* Modal de detalle de orden de compra *@
+<OrdenCompraDetalleModal IsVisible="@mostrarModalDetalleOrden"
+                        OrdenId="@ordenIdSeleccionadaDetalle"
+                        OnCerrar="@CerrarModalDetalleOrden" />
+
+@* Modal de impresión de orden de compra *@
+<ImpresionOrdenCompra MostrarModal="@mostrarModalImpresionOrdenPendiente"
+                     OrdenCompra="@ordenParaImprimirPendiente"
+                     DetalleItems="@detalleParaImprimirPendiente"
+                     OnCerrar="@CerrarModalImpresionOrdenPendiente" />
+
+@* Modal de recepciones por rango de fechas *@
+@if (mostrarModalRecepcionesRango)
+{
+    <RecepcionesRangoFechasModal OnCerrar="@CerrarModalRecepcionesRango" />
+}
+
+@* Modal de recepciones con rechazos *@
+@if (mostrarModalRecepcionesRechazos)
+{
+    <RecepcionesConRechazosModal OnCerrar="@CerrarModalRecepcionesRechazos" />
+}
+
+@* Modal de recepciones sin orden de compra *@
+@if (mostrarModalRecepcionesSinOC)
+{
+    <RecepcionesSinOCModal OnCerrar="@CerrarModalRecepcionesSinOC" />
+}
+
+<!-- Componente selector de proveedores para filtro de órdenes -->
+<SelectorProveedores @ref="selectorProveedoresOrdenes" OnProveedorSeleccionado="OnProveedorSeleccionadoOrdenes" />
+
+@code {
+    [CascadingParameter] BlazoredModalInstance BlazoredModal { get; set; }
+    [CascadingParameter] IModalService Modal { get; set; } = default!;
+
+    private string activeTab = "busqueda";
+    private string terminoBusquedaProveedor = "";
+    private List<ProveedorDTO> proveedoresEncontrados = new();
+    private ProveedorDTO? proveedorSeleccionado;
+    private bool tieneOrdenesPendientes;
+    private bool mostrarBotonesRecepcion;
+    private List<RecepcionPendienteAprobacionDTO> recepcionesPendientes;
+
+    private bool mostrarModalItems = false;
+    private int numeroRecepcionSeleccionada;
+    private List<RecepcionItemDTO> itemsRecepcion;
+
+    private List<dynamic> depositos;
+
+    private List<RecepcionItemDTO> itemsRecepcionLibre = new();
+
+    // Variables para órdenes de compra pendientes
+    private bool mostrarModalOrdenesPendientes = false;
+    private List<Ocomenca>? ordenesPendientes;
+    private string proveedorFiltroOrdenes = string.Empty;
+    private int? numeroProveedorFiltroOrdenes;
+    private SelectorProveedores selectorProveedoresOrdenes = null!;
+    private bool cargandoOrdenesPendientes = false;
+    
+    // Variables para detalle de orden
+    private bool mostrarModalDetalleOrden = false;
+    private int ordenIdSeleccionadaDetalle = 0;
+    
+    // Variables para impresión de orden pendiente
+    private bool mostrarModalImpresionOrdenPendiente = false;
+    private Ocomenca? ordenParaImprimirPendiente;
+    private List<Ocomdeta>? detalleParaImprimirPendiente;
+
+    // Variables para modal de recepciones por rango de fechas
+    private bool mostrarModalRecepcionesRango = false;
+
+    // Variables para modal de recepciones con rechazos
+    private bool mostrarModalRecepcionesRechazos = false;
+
+    // Variables para modal de recepciones sin orden de compra
+    private bool mostrarModalRecepcionesSinOC = false;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await base.OnInitializedAsync();
+        await CargarDepositos();
+    }
+
+    private async Task CargarDepositos()
+    {
+        var response = await repository.Get<List<dynamic>>("api/bolrecep/depositos");
+        if (!response.Error)
+        {
+            depositos = response.Response;
+        }
+    }
+
+    private async Task OnCantidadRechazadaChanged(RecepcionItemDTO item, decimal? valor)
+    {
+        item.CantidadRechazada = valor;
+        if (valor.HasValue && valor > 0 && item.CodigoDepositoRechazo <= 0)
+        {
+            await SeleccionarDepositoRechazo(item);
+        }
+        else if (!valor.HasValue || valor <= 0)
+        {
+            item.CodigoDepositoRechazo = 0;
+            item.NombreDepositoRechazo = null;
+        }
+        StateHasChanged();
+    }
+
+    private async Task SeleccionarDepositoRechazo(RecepcionItemDTO item)
+    {
+        var parameters = new ModalParameters()
+            .Add(nameof(SeleccionarDepositoDialog.CodigoSeleccionado), item.CodigoDepositoRechazo);
+        
+        var modal = modalService.Show<SeleccionarDepositoDialog>("Seleccionar Depósito para Rechazo", parameters);
+        var result = await modal.Result;
+
+        if (!result.Cancelled)
+        {
+            var deposito = (DepositoDTO)result.Data;
+            item.CodigoDepositoRechazo = deposito.Id;
+            item.NombreDepositoRechazo = deposito.Nombre;
+        }
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            await JSRuntime.InvokeVoidAsync("eval", $"document.querySelector('[data-autofocus]').focus()");
+        }
+    }
+
+    private async Task OnKeyPress(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+        {
+            await BuscarProveedorPorRazonSocial();
+        }
+    }
+
+    private async Task BuscarProveedorPorRazonSocial()
+    {
+        if (string.IsNullOrWhiteSpace(terminoBusquedaProveedor)) return;
+
+        var terminoEncoded = Uri.EscapeDataString(terminoBusquedaProveedor);
+        var responseHttp = await repository.Get<List<ProveedorDTO>>($"api/Proved12/buscar?termino={terminoEncoded}");
+        if (responseHttp.Error)
+        {
+            var mensaje = await responseHttp.GetErrorMessageAsync();
+            await sweetAlertService.FireAsync("Error", mensaje, SweetAlertIcon.Error);
+            return;
+        }
+
+        proveedoresEncontrados = responseHttp.Response;
+        if (!proveedoresEncontrados.Any())
+        {
+            await sweetAlertService.FireAsync("", "No se encontraron proveedores", SweetAlertIcon.Info);
+        }
+    }
+
+    private async Task SeleccionarProveedor(ProveedorDTO proveedor)
+    {
+        proveedorSeleccionado = proveedor;
+        mostrarBotonesRecepcion = false;
+
+        // Verificar si tiene órdenes pendientes
+        var response = await repository.Get<bool>($"api/Ocomdeta/pendientes/proveedor/{proveedor.NumeCli}");
+        if (response.Error)
+        {
+            var mensaje = await response.GetErrorMessageAsync();
+            await sweetAlertService.FireAsync("Error", mensaje, SweetAlertIcon.Error);
+            return;
+        }
+
+        tieneOrdenesPendientes = response.Response;
+        mostrarBotonesRecepcion = true;
+        StateHasChanged();
+    }
+
+    private async Task RecepcionarPorOrdenCompra()
+    {
+        var parameters = new ModalParameters()
+            .Add(nameof(RecepcionOrdenCompraDialog.NumeroProveedor), proveedorSeleccionado.NumeCli)
+            .Add(nameof(RecepcionOrdenCompraDialog.RazonSocial), proveedorSeleccionado.RazonSocial);
+
+        var modal = modalService.Show<RecepcionOrdenCompraDialog>("Recepción por Orden de Compra", parameters);
+        var result = await modal.Result;
+
+        if (!result.Cancelled)
+        {
+            // Después de recibir materiales, recargar las recepciones pendientes
+            await CargarRecepcionesPendientes();
+            
+            // Resetear el estado para permitir seleccionar otro proveedor
+            mostrarBotonesRecepcion = false;
+            proveedorSeleccionado = null;
+            
+            StateHasChanged();
+        }
+    }
+
+    private async Task RecepcionLibre()
+    {
+        try
+        {
+            var recepcionLibre = new RecepcionLibreDTO
+            {
+                NumeroProveedor = proveedorSeleccionado.NumeCli ?? proveedorSeleccionado.Id,
+                RazonSocialProveedor = proveedorSeleccionado.RazonSocial
+            };
+
+            var parameters = new ModalParameters()
+                .Add(nameof(RecepcionLibreDialog.RecepcionLibre), recepcionLibre)
+                .Add(nameof(RecepcionLibreDialog.Items), new List<RecepcionLibreDTO>());
+
+            var modal = modalService.Show<RecepcionLibreDialog>("Recepción Libre", parameters);
+            var result = await modal.Result;
+
+            if (!result.Cancelled)
+            {
+                var items = (List<RecepcionLibreDTO>)result.Data;
+                var response = await repository.Post("api/BolRecep/recibir-libre", items);
+
+                if (response.Error)
+                {
+                    var mensajeError = await response.GetErrorMessageAsync();
+                    await sweetAlertService.FireAsync("Error", mensajeError, SweetAlertIcon.Error);
+                    return;
+                }
+
+                await sweetAlertService.FireAsync("Éxito", "Recepción registrada correctamente", SweetAlertIcon.Success);
+                await CambiarAPendientes();
+                
+                // Resetear el estado para permitir seleccionar otro proveedor
+                mostrarBotonesRecepcion = false;
+                proveedorSeleccionado = null;
+            }
+        }
+        catch (Exception ex)
+        {
+            await sweetAlertService.FireAsync("Error", ex.Message, SweetAlertIcon.Error);
+        }
+    }
+
+    private void CambiarABusqueda()
+    {
+        activeTab = "busqueda";
+        // Resetear estado al volver a búsqueda
+        mostrarBotonesRecepcion = false;
+        proveedorSeleccionado = null;
+        StateHasChanged();
+    }
+
+    private async Task CambiarAPendientes()
+    {
+        activeTab = "pendientes";
+        // Ocultar botones de recepción al cambiar a pendientes
+        mostrarBotonesRecepcion = false;
+        proveedorSeleccionado = null;
+        await CargarRecepcionesPendientes();
+    }
+
+    private void CambiarAReportes()
+    {
+        activeTab = "reportes";
+        // Ocultar botones de recepción al cambiar a reportes
+        mostrarBotonesRecepcion = false;
+        proveedorSeleccionado = null;
+        StateHasChanged();
+    }
+
+    private async Task CargarRecepcionesPendientes()
+    {
+        var responseHttp = await repository.Get<List<RecepcionPendienteAprobacionDTO>>("api/bolrecep/pendientes-aprobacion");
+        if (responseHttp.Error)
+        {
+            var mensaje = await responseHttp.GetErrorMessageAsync();
+            await sweetAlertService.FireAsync("Error", mensaje, SweetAlertIcon.Error);
+            return;
+        }
+
+        recepcionesPendientes = responseHttp.Response;
+    }
+
+    private async Task VerDetalleRecepcion(int numeroRecepcion)
+    {
+        try
+        {
+            numeroRecepcionSeleccionada = numeroRecepcion;
+            var response = await repository.Get<List<RecepcionItemDTO>>($"api/bolrecep/items/{numeroRecepcion}");
+            if (response.Error)
+            {
+                await sweetAlertService.FireAsync("Error", response.HttpResponseMessage.ToString(), SweetAlertIcon.Error);
+                return;
+            }
+
+            itemsRecepcion = response.Response;
+            
+            // Inicializar CanToApro con CantidadNominal para cada item
+            foreach (var item in itemsRecepcion)
+            {
+                item.CanToApro = item.CantidadNominal;
+            }
+            
+            mostrarModalItems = true;
+        }
+        catch (Exception ex)
+        {
+            await sweetAlertService.FireAsync("Error", ex.Message, SweetAlertIcon.Error);
+        }
+    }
+
+    private void CerrarModalItems()
+    {
+        mostrarModalItems = false;
+    }
+
+    private void ValidarCantidades(RecepcionItemDTO item)
+    {
+        // Forzar actualización visual
+        StateHasChanged();
+    }
+
+    private async Task AprobarRecepcionPendiente()
+    {
+        try
+        {
+            // Filtrar solo los items de la recepción seleccionada
+            var itemsAEnviar = itemsRecepcion
+                .Where(item => item.NumeBore == numeroRecepcionSeleccionada)
+                .ToList();
+
+            if (!itemsAEnviar.Any())
+            {
+                await sweetAlertService.FireAsync("Error", "No hay items para aprobar en esta recepción.", SweetAlertIcon.Warning);
+                return;
+            }
+
+            // Validar coherencia de cantidades
+            var itemsInvalidos = new List<string>();
+            foreach (var item in itemsAEnviar)
+            {
+                var suma = (item.CanToApro ?? 0) + (item.CantidadRechazada ?? 0) + (item.CantidadFaltante ?? 0);
+                var diferencia = Math.Abs(item.CantidadNominal - suma);
+                
+                if (diferencia >= 0.0001m)
+                {
+                    itemsInvalidos.Add($"Código {item.CodigoInterno}: Nominal={item.CantidadNominal}, Suma={suma}, Diferencia={diferencia:0.##}");
+                }
+            }
+
+            if (itemsInvalidos.Any())
+            {
+                var mensaje = "Las siguientes líneas tienen cantidades incoherentes:\n\n" + 
+                              string.Join("\n", itemsInvalidos) + 
+                              "\n\nLa suma de Aprobada + Rechazada + Faltante debe ser igual a la Cantidad Nominal.";
+                await sweetAlertService.FireAsync("Error de Validación", mensaje, SweetAlertIcon.Error);
+                return;
+            }
+
+            // Procesar items con rechazo
+            var itemsConRechazo = itemsAEnviar.Where(item => (item.CantidadRechazada ?? 0) > 0).ToList();
+            
+            if (itemsConRechazo.Any())
+            {
+                // Cerrar el modal de items primero
+                CerrarModalItems();
+                
+                // Pequeña pausa para que el DOM se actualice
+                await Task.Delay(100);
+                
+                // Mostrar modales de rechazo uno por uno
+                foreach (var item in itemsConRechazo)
+                {
+                    var modalParameters = new ModalParameters();
+                    modalParameters.Add(nameof(RechazoRecepcionModal.Item), item);
+                    
+                    var modalOptions = new ModalOptions
+                    {
+                        DisableBackgroundCancel = true,
+                        HideCloseButton = false
+                    };
+                    
+                    var modalReference = Modal.Show<RechazoRecepcionModal>("Información de Rechazo", modalParameters, modalOptions);
+                    var result = await modalReference.Result;
+                    
+                    if (result.Cancelled)
+                    {
+                        await sweetAlertService.FireAsync("Cancelado", "Debe completar la información de rechazo para todos los items", SweetAlertIcon.Info);
+                        return;
+                    }
+                }
+            }
+
+            // Asignar Status = 1 a los items filtrados
+            itemsAEnviar.ForEach(item => {
+                item.Status = 1;
+            });
+
+            Console.WriteLine($"[RecepcionProveedorDialog] Aprobando recepción {numeroRecepcionSeleccionada} con {itemsAEnviar.Count} items");
+
+            var response = await repository.Post($"api/BolrecepMovisto/aprobarRecepcionEingresoMovisto/{numeroRecepcionSeleccionada}", itemsAEnviar);
+            if (response.Error)
+            {
+                var errorMsg = await response.GetErrorMessageAsync();
+                Console.WriteLine($"[RecepcionProveedorDialog] Error al aprobar: {errorMsg}");
+                await sweetAlertService.FireAsync("Error", $"Error al aprobar la recepción: {errorMsg}", SweetAlertIcon.Error);
+                return;
+            }
+
+            await sweetAlertService.FireAsync("Éxito", "La recepción se aprobó correctamente", SweetAlertIcon.Success);
+            await CargarRecepcionesPendientes();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[RecepcionProveedorDialog] Excepción al aprobar: {ex.Message}");
+            await sweetAlertService.FireAsync("Error", ex.Message, SweetAlertIcon.Error);
+        }
+    }
+
+    private async Task AprobarRecepcion(int numeroRecepcion)
+    {
+        var confirmacion = await sweetAlertService.FireAsync(new SweetAlertOptions
+        {
+            Title = "Confirmación",
+            Text = "¿Está seguro que desea aprobar esta recepción?",
+            Icon = SweetAlertIcon.Question,
+            ShowCancelButton = true,
+            ConfirmButtonText = "Sí, aprobar",
+            CancelButtonText = "No"
+        });
+
+        if (!confirmacion.IsConfirmed) return;
+
+        var responseHttp = await repository.Put($"api/bolrecep/aprobar/{numeroRecepcion}", recepcionesPendientes);
+        if (responseHttp.Error)
+        {
+            var mensaje = await responseHttp.GetErrorMessageAsync();
+            await sweetAlertService.FireAsync("Error", mensaje, SweetAlertIcon.Error);
+            return;
+        }
+
+        await sweetAlertService.FireAsync("Éxito", "Recepción aprobada correctamente", SweetAlertIcon.Success);
+        await CargarRecepcionesPendientes();
+    }
+
+    private async Task ConfirmarBorrarRecepcion(int numeroRecepcion)
+    {
+        var confirmacion = await sweetAlertService.FireAsync(new SweetAlertOptions
+        {
+            Title = "¿Está seguro?",
+            Text = $"¿Desea borrar la recepción #{numeroRecepcion}? Esta acción no se puede deshacer.",
+            Icon = SweetAlertIcon.Warning,
+            ShowCancelButton = true,
+            ConfirmButtonText = "Sí, borrar",
+            CancelButtonText = "Cancelar",
+            ConfirmButtonColor = "#dc3545"
+        });
+
+        if (confirmacion.IsConfirmed)
+        {
+            await BorrarRecepcion(numeroRecepcion);
+        }
+    }
+
+    private async Task BorrarRecepcion(int numeroRecepcion)
+    {
+        try
+        {
+            var response = await repository.Delete($"api/bolrecep/{numeroRecepcion}");
+            if (response.Error)
+            {
+                await sweetAlertService.FireAsync("Error", response.HttpResponseMessage.ToString(), SweetAlertIcon.Error);
+                return;
+            }
+
+            await sweetAlertService.FireAsync("Éxito", "La recepción ha sido borrada", SweetAlertIcon.Success);
+            await CargarRecepcionesPendientes();
+        }
+        catch (Exception ex)
+        {
+            await sweetAlertService.FireAsync("Error", ex.Message, SweetAlertIcon.Error);
+        }
+    }
+
+    private async Task AgregarMasRepuestos()
+    {
+        try 
+        {
+            // Ocultar temporalmente el modal de items
+            mostrarModalItems = false;
+            await Task.Delay(100); // Pequeña pausa para asegurar que el modal se oculte
+
+            var parameters = new ModalParameters()
+                .Add(nameof(RecepcionDetalleDialog.Detalle), new RecepcionItemDTO())
+                .Add(nameof(RecepcionDetalleDialog.Title), "Agregar Repuesto a Recepción");
+
+            var options = new ModalOptions()
+            {
+                DisableBackgroundCancel = true,
+                HideHeader = false
+            };
+
+            var modal = modalService.Show<RecepcionDetalleDialog>("Agregar Repuesto", parameters, options);
+            var result = await modal.Result;
+
+            if (!result.Cancelled)
+            {
+                var nuevoItem = (RecepcionItemDTO)result.Data;
+                if (itemsRecepcion == null)
+                {
+                    itemsRecepcion = new List<RecepcionItemDTO>();
+                }
+                itemsRecepcion.Add(nuevoItem);
+            }
+
+            // Volver a mostrar el modal de items
+            mostrarModalItems = true;
+            StateHasChanged();
+        }
+        catch (Exception ex)
+        {
+            await sweetAlertService.FireAsync("Error", ex.Message, SweetAlertIcon.Error);
+            // Asegurar que el modal de items se vuelva a mostrar incluso si hay error
+            mostrarModalItems = true;
+            StateHasChanged();
+        }
+    }
+
+    // ============================================
+    // MÉTODOS PARA ÓRDENES DE COMPRA PENDIENTES
+    // ============================================
+
+    private void AbrirModalOrdenesPendientes()
+    {
+        mostrarModalOrdenesPendientes = true;
+        // No cargar automáticamente, esperar a que el usuario seleccione un proveedor
+    }
+
+    private void CerrarModalOrdenesPendientes()
+    {
+        mostrarModalOrdenesPendientes = false;
+        ordenesPendientes = null;
+        proveedorFiltroOrdenes = string.Empty;
+        numeroProveedorFiltroOrdenes = null;
+    }
+
+    private async Task CargarOrdenesPendientes()
+    {
+        cargandoOrdenesPendientes = true;
+        StateHasChanged();
+        
+        try
+        {
+            // Validar que haya un proveedor seleccionado
+            if (!numeroProveedorFiltroOrdenes.HasValue || numeroProveedorFiltroOrdenes <= 0)
+            {
+                ordenesPendientes = new List<Ocomenca>();
+                return;
+            }
+
+            // Usar endpoint optimizado que devuelve directamente los encabezados
+            var url = $"api/ocomenca/pendientes-recepcion/{numeroProveedorFiltroOrdenes}";
+            var responseHttp = await repository.Get<List<Ocomenca>>(url);
+            
+            if (responseHttp.Error)
+            {
+                var message = await responseHttp.GetErrorMessageAsync();
+                await sweetAlertService.FireAsync("Error", $"Error al cargar órdenes pendientes: {message}", SweetAlertIcon.Error);
+                ordenesPendientes = new List<Ocomenca>();
+                return;
+            }
+
+            ordenesPendientes = responseHttp.Response ?? new List<Ocomenca>();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error al cargar órdenes pendientes: {ex.Message}");
+            await sweetAlertService.FireAsync("Error", "Error al cargar órdenes pendientes", SweetAlertIcon.Error);
+            ordenesPendientes = new List<Ocomenca>();
+        }
+        finally
+        {
+            cargandoOrdenesPendientes = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task AbrirSelectorProveedorOrdenes()
+    {
+        await selectorProveedoresOrdenes.AbrirModal();
+    }
+
+    private void OnProveedorSeleccionadoOrdenes(SelectorProveedores.ProveedorSeleccionado proveedor)
+    {
+        proveedorFiltroOrdenes = $"{proveedor.NumeCli} - {proveedor.RazonSocial}";
+        numeroProveedorFiltroOrdenes = proveedor.NumeCli;
+        StateHasChanged();
+    }
+
+    private void LimpiarFiltroProveedorOrdenes()
+    {
+        proveedorFiltroOrdenes = string.Empty;
+        numeroProveedorFiltroOrdenes = null;
+        ordenesPendientes = null; // Limpiar resultados
+        StateHasChanged();
+    }
+
+    private async Task FiltrarOrdenesPendientes()
+    {
+        await CargarOrdenesPendientes();
+    }
+
+    // Método para ver detalle de orden (reutiliza el modal existente)
+    private void VerDetalleOrden(int id)
+    {
+        ordenIdSeleccionadaDetalle = id;
+        mostrarModalDetalleOrden = true;
+    }
+
+    private void CerrarModalDetalleOrden()
+    {
+        mostrarModalDetalleOrden = false;
+        ordenIdSeleccionadaDetalle = 0;
+    }
+
+    // Método para imprimir orden (similar al de OrdenesCompraIndex)
+    private async Task ImprimirOrdenPendiente(int numeroOrden)
+    {
+        try
+        {
+            // Buscar la orden en la lista actual
+            ordenParaImprimirPendiente = ordenesPendientes?.FirstOrDefault(o => o.NumeOcom == numeroOrden);
+            
+            if (ordenParaImprimirPendiente == null)
+            {
+                await sweetAlertService.FireAsync("Error", "No se encontró la orden de compra.", SweetAlertIcon.Error);
+                return;
+            }
+
+            // Cargar el detalle de la orden
+            var responseDetalle = await repository.Get<List<Ocomdeta>>($"api/ocomdeta/orden/{ordenParaImprimirPendiente.OCOMENCA_ID}");
+            if (responseDetalle.Error)
+            {
+                var message = await responseDetalle.GetErrorMessageAsync();
+                await sweetAlertService.FireAsync("Error", $"Error al cargar detalle de la orden: {message}", SweetAlertIcon.Error);
+                return;
+            }
+
+            detalleParaImprimirPendiente = responseDetalle.Response ?? new List<Ocomdeta>();
+            mostrarModalImpresionOrdenPendiente = true;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error al preparar impresión: {ex.Message}");
+            await sweetAlertService.FireAsync("Error", "Error al preparar la impresión.", SweetAlertIcon.Error);
+        }
+    }
+
+    private void CerrarModalImpresionOrdenPendiente()
+    {
+        mostrarModalImpresionOrdenPendiente = false;
+        ordenParaImprimirPendiente = null;
+        detalleParaImprimirPendiente = null;
+        StateHasChanged();
+    }
+
+    private void AbrirModalRecepcionesRango()
+    {
+        mostrarModalRecepcionesRango = true;
+        StateHasChanged();
+    }
+
+    private void CerrarModalRecepcionesRango()
+    {
+        mostrarModalRecepcionesRango = false;
+        StateHasChanged();
+    }
+
+    private void AbrirModalRecepcionesRechazos()
+    {
+        mostrarModalRecepcionesRechazos = true;
+        StateHasChanged();
+    }
+
+    private void CerrarModalRecepcionesRechazos()
+    {
+        mostrarModalRecepcionesRechazos = false;
+        StateHasChanged();
+    }
+
+    private void AbrirModalRecepcionesSinOC()
+    {
+        mostrarModalRecepcionesSinOC = true;
+        StateHasChanged();
+    }
+
+    private void CerrarModalRecepcionesSinOC()
+    {
+        mostrarModalRecepcionesSinOC = false;
+        StateHasChanged();
+    }
+
+    private async Task ImprimirReporteOrdenesPendientes()
+    {
+        try
+        {
+            await JSRuntime.InvokeVoidAsync("window.print");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error al imprimir reporte: {ex.Message}");
+            await sweetAlertService.FireAsync("Error", "Error al imprimir el reporte", SweetAlertIcon.Error);
+        }
+    }
+}
+
+<style>
+    /* Estilos para las solapas mejoradas */
+    .btn-outline-primary:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15) !important;
+    }
+
+    .btn-primary {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(13, 110, 253, 0.3) !important;
+    }
+
+    .btn-primary:hover {
+        box-shadow: 0 6px 16px rgba(13, 110, 253, 0.4) !important;
+    }
+
+    /* Estilos para el logo en reportes */
+    .reporte-header img {
+        filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.1));
+    }
+
+    /* Estilos para impresión */
+    @@media print {
+        .modal-header,
+        .modal-footer,
+        .btn,
+        .no-print {
+            display: none !important;
+        }
+
+        .reporte-header {
+            display: block !important;
+            page-break-after: avoid;
+            margin-bottom: 20px !important;
+        }
+
+        .reporte-header img {
+            max-height: 80px !important;
+        }
+
+        .reporte-header h5 {
+            font-size: 16pt;
+            font-weight: bold;
+        }
+
+        .table {
+            font-size: 9pt;
+            width: 100%;
+        }
+
+        .table thead {
+            background-color: #f0f0f0 !important;
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
+        }
+
+        .modal-body {
+            padding: 20px !important;
+        }
+
+        .modal-backdrop {
+            display: none !important;
+        }
+
+        body {
+            margin: 0;
+            padding: 0;
+        }
+    }
+</style>

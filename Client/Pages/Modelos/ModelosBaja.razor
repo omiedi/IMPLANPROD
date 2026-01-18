@@ -1,0 +1,257 @@
+@page "/modelos-baja"
+@using IMPLANPROD.Shared.Entities
+@using Microsoft.AspNetCore.Components.Web
+@inject IRepository repository
+@inject NavigationManager NavigationManager
+@inject SweetAlertService sweetAlertService
+
+<PageTitle>Modelos Dados de Baja</PageTitle>
+
+<!--
+Componente: ModelosBaja.razor
+Descripción: Listado de modelos dados de baja (Status = -1) con opción de reactivación
+Autor: Sistema IMPLANPROD
+Fecha: 2026-01-08
+-->
+
+<div class="bg-danger bg-opacity-10 p-3 rounded-3 mb-3">
+    <h3 class="m-0 text-danger">
+        <i class="fas fa-trash-restore me-2"></i>
+        Modelos Dados de Baja
+    </h3>
+</div>
+
+<div class="row mb-3">
+    <div class="col">
+        <button class="btn btn-primary" @onclick="VolverAlListado">
+            <i class="fas fa-arrow-left"></i> Volver al Listado
+        </button>
+    </div>
+</div>
+
+<div class="row mb-3">
+    <div class="col-md-6">
+        <div class="input-group">
+            <input type="text" 
+                   class="form-control" 
+                   placeholder="Buscar por código o descripción..." 
+                   @bind-value="Filter" 
+                   @onkeyup="HandleKeyPress" />
+            <button class="btn btn-outline-secondary" type="button" @onclick="ApplyFilterAsync">
+                <i class="oi oi-magnifying-glass"></i> Buscar
+            </button>
+            <button type="button" class="btn btn-outline-danger" @onclick="CleanFilterAsync">
+                Limpiar
+            </button>
+        </div>
+    </div>
+</div>
+
+@if (Modelos is null)
+{
+    <div class="spinner-border text-danger" role="status">
+        <span class="sr-only">Cargando...</span>
+    </div>
+}
+else
+{
+    <Pagination CurrentPage="currentPage"
+                TotalPages="totalPages"
+                SelectedPage="SelectedPageAsync" />
+
+    <GenericList MyList="Modelos">
+        <Body>
+            <table class="table table-striped table-hover">
+                <thead class="table-danger">
+                    <tr>
+                        <th>Código</th>
+                        <th>Descripción</th>
+                        <th>Ubicación</th>
+                        <th>Material</th>
+                        <th>Cant.Piezas</th>
+                        <th>Fecha Baja</th>
+                        <th>Acciones</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var modelo in Modelos!)
+                    {
+                        <tr>
+                            <td>@modelo.Cod_Mod</td>
+                            <td>@modelo.Descripcion</td>
+                            <td>@modelo.Ubic</td>
+                            <td>@modelo.Desc_Mat</td>
+                            <td class="text-end">@modelo.CantPiezas?.ToString("N2")</td>
+                            <td>@modelo.LastUpdate?.ToString("dd/MM/yyyy")</td>
+                            <td>
+                                <button class="btn btn-sm btn-outline-success" 
+                                        @onclick="() => ConfirmarReactivacionAsync(modelo)"
+                                        title="Reactivar">
+                                    <i class="fas fa-undo"></i> Reactivar
+                                </button>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </Body>
+    </GenericList>
+
+    <Pagination CurrentPage="currentPage"
+                TotalPages="totalPages"
+                SelectedPage="SelectedPageAsync" />
+}
+
+@code {
+    private List<Badamode>? Modelos;
+    private bool isLoading = true;
+
+    [Parameter]
+    [SupplyParameterFromQuery]
+    public string Page { get; set; } = string.Empty;
+
+    [Parameter]
+    [SupplyParameterFromQuery]
+    public string Filter { get; set; } = string.Empty;
+
+    private int currentPage = 1;
+    private int totalPages;
+
+    /// <summary>
+    /// Maneja la tecla Enter para buscar
+    /// </summary>
+    private async Task HandleKeyPress(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+        {
+            await ApplyFilterAsync();
+        }
+    }
+
+    /// <summary>
+    /// Inicialización del componente
+    /// </summary>
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadAsync();
+    }
+
+    /// <summary>
+    /// Carga la lista de modelos dados de baja con paginación
+    /// </summary>
+    private async Task LoadAsync(int page = 1)
+    {
+        try
+        {
+            isLoading = true;
+
+            if (!string.IsNullOrWhiteSpace(Page))
+            {
+                page = Convert.ToInt32(Page);
+            }
+
+            currentPage = page;
+            string url1 = string.Empty;
+            string url2 = string.Empty;
+
+            if (string.IsNullOrEmpty(Filter))
+            {
+                url1 = $"api/badamode/baja?page={page}";
+                url2 = $"api/badamode/baja/totalPages";
+            }
+            else
+            {
+                url1 = $"api/badamode/baja?page={page}&filter={Filter}";
+                url2 = $"api/badamode/baja/totalPages?filter={Filter}";
+            }
+
+            var responseHttp = await repository.Get<List<Badamode>>(url1);
+            var responseHttp2 = await repository.Get<int>(url2);
+
+            if (responseHttp.Error)
+            {
+                await sweetAlertService.FireAsync("Error", await responseHttp.GetErrorMessageAsync(), SweetAlertIcon.Error);
+            }
+            else
+            {
+                Modelos = responseHttp.Response!;
+                totalPages = responseHttp2.Response!;
+            }
+        }
+        catch (Exception ex)
+        {
+            await sweetAlertService.FireAsync("Error", ex.Message, SweetAlertIcon.Error);
+        }
+        finally
+        {
+            isLoading = false;
+            StateHasChanged();
+        }
+    }
+
+    /// <summary>
+    /// Limpia el filtro de búsqueda
+    /// </summary>
+    private async Task CleanFilterAsync()
+    {
+        Filter = string.Empty;
+        await ApplyFilterAsync();
+    }
+
+    /// <summary>
+    /// Vuelve al listado principal de modelos
+    /// </summary>
+    private void VolverAlListado()
+    {
+        NavigationManager.NavigateTo("/modelos");
+    }
+
+    /// <summary>
+    /// Aplica el filtro de búsqueda
+    /// </summary>
+    private async Task ApplyFilterAsync()
+    {
+        currentPage = 1;
+        await LoadAsync(currentPage);
+    }
+
+    /// <summary>
+    /// Cambia de página
+    /// </summary>
+    private async Task SelectedPageAsync(int page)
+    {
+        currentPage = page;
+        await LoadAsync(page);
+    }
+
+    /// <summary>
+    /// Confirma y ejecuta la reactivación de un modelo
+    /// </summary>
+    private async Task ConfirmarReactivacionAsync(Badamode modelo)
+    {
+        var result = await sweetAlertService.FireAsync(new SweetAlertOptions
+        {
+            Title = "Confirmar reactivación",
+            Text = $"¿Está seguro de reactivar el modelo {modelo.Cod_Mod}?",
+            Icon = SweetAlertIcon.Question,
+            ShowCancelButton = true,
+            ConfirmButtonText = "Sí, reactivar",
+            CancelButtonText = "Cancelar"
+        });
+
+        if (result.IsConfirmed)
+        {
+            var responseHttp = await repository.Put<object>($"api/badamode/reactivar/{modelo.Id}", new { });
+
+            if (responseHttp.Error)
+            {
+                await sweetAlertService.FireAsync("Error", await responseHttp.GetErrorMessageAsync(), SweetAlertIcon.Error);
+            }
+            else
+            {
+                await sweetAlertService.FireAsync("Éxito", "Modelo reactivado correctamente", SweetAlertIcon.Success);
+                await LoadAsync(currentPage);
+            }
+        }
+    }
+}

@@ -1,0 +1,455 @@
+@using IMPLANPROD.Shared.DTOs
+@inject IRepository repository
+
+<style>
+    .sortable-header {
+        user-select: none;
+        transition: background-color 0.2s ease;
+    }
+    
+    .sortable-header:hover {
+        background-color: rgba(255, 255, 255, 0.1) !important;
+    }
+    
+    .sortable-header i {
+        font-size: 0.8em;
+        margin-left: 5px;
+    }
+    
+    .text-muted {
+        opacity: 0.5;
+    }
+</style>
+
+<div class="card">
+    <div class="card-header">
+        <h5 class="mb-0">
+            <i class="fas fa-history"></i>
+            Auditoría de Detalle - Pedido #@NroPedido
+        </h5>
+    </div>
+    <div class="card-body">
+        @if (cargando)
+        {
+            <div class="text-center">
+                <div class="spinner-border" role="status">
+                    <span class="visually-hidden">Cargando...</span>
+                </div>
+                <p class="mt-2">Cargando auditoría...</p>
+            </div>
+        }
+        else if (registrosAuditoria?.Any() == true)
+        {
+            <div class="row mb-3">
+                <div class="col-md-8">
+                    <div class="alert alert-info">
+                        <strong>Total de registros:</strong> @registrosAuditoria.Count |
+                        <strong>Última modificación:</strong> @(registrosAuditoria.Max(r => r.FechaCambio).ToString("dd/MM/yyyy HH:mm:ss"))
+                    </div>
+                </div>
+                <div class="col-md-4 text-end">
+                    <button class="btn btn-outline-secondary btn-sm" @onclick="RestaurarOrdenOriginal" title="Restaurar ordenamiento original por fecha">
+                        <i class="fas fa-undo"></i> Orden Original
+                    </button>
+                </div>
+            </div>
+
+            <div class="table-responsive">
+                <table class="table table-striped table-hover table-sm">
+                    <thead class="table-dark">
+                        <tr>
+                            <th class="sortable-header" @onclick='() => CambiarOrdenamiento("IdAuditoria")' style="cursor: pointer;">
+                                ID <i class='@ObtenerIconoOrdenamiento("IdAuditoria")'></i>
+                            </th>
+                            <th class="sortable-header" @onclick='() => CambiarOrdenamiento("FechaCambio")' style="cursor: pointer;">
+                                Fecha/Hora <i class='@ObtenerIconoOrdenamiento("FechaCambio")'></i>
+                            </th>
+                            <th class="sortable-header" @onclick='() => CambiarOrdenamiento("NumUsuario")' style="cursor: pointer;">
+                                Usuario <i class='@ObtenerIconoOrdenamiento("NumUsuario")'></i>
+                            </th>
+                            <th class="text-end sortable-header" @onclick='() => CambiarOrdenamiento("NuOrItem")' style="cursor: pointer;">
+                                Orden <i class='@ObtenerIconoOrdenamiento("NuOrItem")'></i>
+                            </th>
+                            <th class="text-end sortable-header" @onclick='() => CambiarOrdenamiento("CodiInt")' style="cursor: pointer;">
+                                Cód.Int. <i class='@ObtenerIconoOrdenamiento("CodiInt")'></i>
+                            </th>
+                            <th class="sortable-header" @onclick='() => CambiarOrdenamiento("CodiExt")' style="cursor: pointer;">
+                                Cód.Ext. <i class='@ObtenerIconoOrdenamiento("CodiExt")'></i>
+                            </th>
+                            <th class="sortable-header" @onclick='() => CambiarOrdenamiento("Descrip")' style="cursor: pointer;">
+                                Descripción <i class='@ObtenerIconoOrdenamiento("Descrip")'></i>
+                            </th>
+                            <th class="text-end sortable-header" @onclick='() => CambiarOrdenamiento("CanPed")' style="cursor: pointer;">
+                                Cantidad <i class='@ObtenerIconoOrdenamiento("CanPed")'></i>
+                            </th>
+                            <th class="text-end sortable-header" @onclick='() => CambiarOrdenamiento("PreUnid")' style="cursor: pointer;">
+                                Precio Unit. <i class='@ObtenerIconoOrdenamiento("PreUnid")'></i>
+                            </th>
+                            <th class="text-end sortable-header" @onclick='() => CambiarOrdenamiento("CantEnt")' style="cursor: pointer;">
+                                Cant.Ent. <i class='@ObtenerIconoOrdenamiento("CantEnt")'></i>
+                            </th>
+                            <th class="text-center sortable-header" @onclick='() => CambiarOrdenamiento("MoneEmis")' style="cursor: pointer;">
+                                Moneda <i class='@ObtenerIconoOrdenamiento("MoneEmis")'></i>
+                            </th>
+                            <th class="text-end sortable-header" @onclick='() => CambiarOrdenamiento("TipoCam")' style="cursor: pointer;">
+                                Tipo Cambio <i class='@ObtenerIconoOrdenamiento("TipoCam")'></i>
+                            </th>
+                            <th class="text-center sortable-header" @onclick='() => CambiarOrdenamiento("Vended")' style="cursor: pointer;">
+                                Vendedor <i class='@ObtenerIconoOrdenamiento("Vended")'></i>
+                            </th>
+                            <th class="sortable-header" @onclick='() => CambiarOrdenamiento("NroOcom")' style="cursor: pointer;">
+                                O.Compra <i class='@ObtenerIconoOrdenamiento("NroOcom")'></i>
+                            </th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var registro in registrosAuditoria)
+                        {
+                            <tr>
+                                <td>@registro.IdAuditoria</td>
+                                <td>
+                                    <small>
+                                        @registro.FechaCambio.ToString("dd/MM/yyyy")<br/>
+                                        @registro.FechaCambio.ToString("HH:mm:ss")
+                                    </small>
+                                </td>
+                                <td>
+                                    @if (registro.NumUsuario.HasValue)
+                                    {
+                                        <span class="badge bg-primary">@registro.NumUsuario</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="text-muted">N/A</span>
+                                    }
+                                </td>
+                                <td class="text-end">
+                                    @if (registro.NuOrItem.HasValue)
+                                    {
+                                        <span class="badge bg-secondary">@registro.NuOrItem</span>
+                                    }
+                                </td>
+                                <td class="text-end">
+                                    @if (registro.CodiInt.HasValue)
+                                    {
+                                        <strong>@registro.CodiInt</strong>
+                                    }
+                                </td>
+                                <td>
+                                    <small>@registro.CodiExt</small>
+                                </td>
+                                <td>
+                                    <small title="@registro.Descrip">
+                                        @(registro.Descrip?.Length > 20 ? registro.Descrip.Substring(0, 20) + "..." : registro.Descrip)
+                                    </small>
+                                </td>
+                                <td class="text-end">
+                                    @if (registro.CanPed.HasValue)
+                                    {
+                                        <strong>@FormatearNumero(registro.CanPed)</strong>
+                                    }
+                                </td>
+                                <td class="text-end">
+                                    @if (registro.PreUnid.HasValue)
+                                    {
+                                        <span class="text-success">@FormatearNumero(registro.PreUnid)</span>
+                                    }
+                                </td>
+                                <td class="text-end">
+                                    @if (registro.CantEnt.HasValue)
+                                    {
+                                        <span class="@(registro.CantEnt > 0 ? "text-warning" : "text-muted")">
+                                            @FormatearNumero(registro.CantEnt)
+                                        </span>
+                                    }
+                                </td>
+                                <td class="text-center">
+                                    @if (registro.MoneEmis.HasValue)
+                                    {
+                                        <span class="badge @(registro.MoneEmis == 1 ? "bg-info" : "bg-success")">
+                                            @registro.MoneEmis.Value
+                                        </span>
+                                    }
+                                </td>
+                                <td class="text-end">
+                                    @if (registro.TipoCam.HasValue && registro.TipoCam != 1)
+                                    {
+                                        <small>@FormatearNumero(registro.TipoCam)</small>
+                                    }
+                                </td>
+                                <td class="text-center">
+                                    @if (registro.Vended.HasValue)
+                                    {
+                                        <span class="badge bg-warning text-dark">@registro.Vended</span>
+                                    }
+                                </td>
+                                <td>
+                                    <small>@registro.NroOcom</small>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+
+            @if (registrosAuditoria.Count > 10)
+            {
+                <div class="alert alert-warning">
+                    <i class="fas fa-info-circle"></i>
+                    Se muestran todos los @registrosAuditoria.Count registros de auditoría para este pedido.
+                </div>
+            }
+        }
+        else if (!cargando)
+        {
+            <div class="alert alert-warning">
+                <i class="fas fa-exclamation-triangle"></i>
+                No se encontraron registros de auditoría para el pedido #@NroPedido
+            </div>
+        }
+
+        @if (!string.IsNullOrEmpty(mensajeError))
+        {
+            <div class="alert alert-danger">
+                <i class="fas fa-exclamation-circle"></i>
+                @mensajeError
+            </div>
+        }
+    </div>
+</div>
+
+@code {
+    [Parameter] public int NroPedido { get; set; }
+
+    private List<PeddetaAuditoriaDTO>? registrosAuditoria;
+    private List<PeddetaAuditoriaDTO>? registrosAuditoriaOriginal; // Copia del orden original
+    private bool cargando = true;
+    private string mensajeError = string.Empty;
+
+    // Variables para control de ordenamiento
+    private string campoOrdenamiento = "FechaCambio";
+    private bool ordenAscendente = false;
+
+    // Enum para definir los campos ordenables
+    private enum CampoOrden
+    {
+        IdAuditoria,
+        FechaCambio,
+        NumUsuario,
+        NuOrItem,
+        CodiInt,
+        CodiExt,
+        Descrip,
+        CanPed,
+        PreUnid,
+        CantEnt,
+        MoneEmis,
+        TipoCam,
+        Vended,
+        NroOcom
+    }
+
+    /// <summary>
+    /// Formatea un número decimal para mostrar en la interfaz
+    /// </summary>
+    private string FormatearNumero(decimal? valor)
+    {
+        if (!valor.HasValue) return "";
+        
+        // Mostrar el valor exactamente como está, sin formateo adicional
+        // Solo reemplazar punto por coma para formato regional
+        return valor.Value.ToString().Replace(".", ",");
+    }
+
+    /// <summary>
+    /// Cambia el ordenamiento de la tabla por el campo especificado
+    /// Si ya está ordenado por ese campo, invierte la dirección
+    /// </summary>
+    private void CambiarOrdenamiento(string campo)
+    {
+        if (campoOrdenamiento == campo)
+        {
+            // Si ya está ordenado por este campo, cambiar dirección
+            ordenAscendente = !ordenAscendente;
+        }
+        else
+        {
+            // Nuevo campo, empezar con orden ascendente
+            campoOrdenamiento = campo;
+            ordenAscendente = true;
+        }
+
+        // Aplicar el ordenamiento
+        AplicarOrdenamiento();
+        StateHasChanged();
+    }
+
+    /// <summary>
+    /// Aplica el ordenamiento actual a la lista de registros
+    /// </summary>
+    private void AplicarOrdenamiento()
+    {
+        if (registrosAuditoria == null || !registrosAuditoria.Any())
+            return;
+
+        // Aplicar ordenamiento según el campo seleccionado
+        registrosAuditoria = campoOrdenamiento switch
+        {
+            "IdAuditoria" => ordenAscendente 
+                ? registrosAuditoria.OrderBy(r => r.IdAuditoria).ToList()
+                : registrosAuditoria.OrderByDescending(r => r.IdAuditoria).ToList(),
+            
+            "FechaCambio" => ordenAscendente 
+                ? registrosAuditoria.OrderBy(r => r.FechaCambio).ToList()
+                : registrosAuditoria.OrderByDescending(r => r.FechaCambio).ToList(),
+            
+            "NumUsuario" => ordenAscendente 
+                ? registrosAuditoria.OrderBy(r => r.NumUsuario ?? 0).ToList()
+                : registrosAuditoria.OrderByDescending(r => r.NumUsuario ?? 0).ToList(),
+            
+            "NuOrItem" => ordenAscendente 
+                ? registrosAuditoria.OrderBy(r => r.NuOrItem ?? 0).ToList()
+                : registrosAuditoria.OrderByDescending(r => r.NuOrItem ?? 0).ToList(),
+            
+            "CodiInt" => ordenAscendente 
+                ? registrosAuditoria.OrderBy(r => r.CodiInt ?? 0).ToList()
+                : registrosAuditoria.OrderByDescending(r => r.CodiInt ?? 0).ToList(),
+            
+            "CodiExt" => ordenAscendente 
+                ? registrosAuditoria.OrderBy(r => r.CodiExt ?? "").ToList()
+                : registrosAuditoria.OrderByDescending(r => r.CodiExt ?? "").ToList(),
+            
+            "Descrip" => ordenAscendente 
+                ? registrosAuditoria.OrderBy(r => r.Descrip ?? "").ToList()
+                : registrosAuditoria.OrderByDescending(r => r.Descrip ?? "").ToList(),
+            
+            "CanPed" => ordenAscendente 
+                ? registrosAuditoria.OrderBy(r => r.CanPed ?? 0).ToList()
+                : registrosAuditoria.OrderByDescending(r => r.CanPed ?? 0).ToList(),
+            
+            "PreUnid" => ordenAscendente 
+                ? registrosAuditoria.OrderBy(r => r.PreUnid ?? 0).ToList()
+                : registrosAuditoria.OrderByDescending(r => r.PreUnid ?? 0).ToList(),
+            
+            "CantEnt" => ordenAscendente 
+                ? registrosAuditoria.OrderBy(r => r.CantEnt ?? 0).ToList()
+                : registrosAuditoria.OrderByDescending(r => r.CantEnt ?? 0).ToList(),
+            
+            "MoneEmis" => ordenAscendente 
+                ? registrosAuditoria.OrderBy(r => r.MoneEmis ?? 0).ToList()
+                : registrosAuditoria.OrderByDescending(r => r.MoneEmis ?? 0).ToList(),
+            
+            "TipoCam" => ordenAscendente 
+                ? registrosAuditoria.OrderBy(r => r.TipoCam ?? 0).ToList()
+                : registrosAuditoria.OrderByDescending(r => r.TipoCam ?? 0).ToList(),
+            
+            "Vended" => ordenAscendente 
+                ? registrosAuditoria.OrderBy(r => r.Vended ?? 0).ToList()
+                : registrosAuditoria.OrderByDescending(r => r.Vended ?? 0).ToList(),
+            
+            "NroOcom" => ordenAscendente 
+                ? registrosAuditoria.OrderBy(r => r.NroOcom ?? "").ToList()
+                : registrosAuditoria.OrderByDescending(r => r.NroOcom ?? "").ToList(),
+            
+            _ => registrosAuditoria.OrderByDescending(r => r.FechaCambio).ToList()
+        };
+    }
+
+    /// <summary>
+    /// Obtiene el icono de ordenamiento para mostrar en el encabezado de la columna
+    /// </summary>
+    private string ObtenerIconoOrdenamiento(string campo)
+    {
+        if (campoOrdenamiento != campo)
+            return "fas fa-sort text-muted"; // Sin ordenamiento
+
+        return ordenAscendente 
+            ? "fas fa-sort-up text-primary" 
+            : "fas fa-sort-down text-primary";
+    }
+
+    /// <summary>
+    /// Restaura el ordenamiento original de cuando se abrió la página (por fecha descendente)
+    /// </summary>
+    private void RestaurarOrdenOriginal()
+    {
+        if (registrosAuditoriaOriginal != null)
+        {
+            // Restaurar el orden original
+            registrosAuditoria = new List<PeddetaAuditoriaDTO>(registrosAuditoriaOriginal);
+            
+            // Resetear las variables de ordenamiento al estado inicial
+            campoOrdenamiento = "FechaCambio";
+            ordenAscendente = false;
+            
+            Console.WriteLine("Ordenamiento restaurado al original (FechaCambio descendente)");
+            StateHasChanged();
+        }
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        await CargarAuditoria();
+    }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (NroPedido > 0)
+        {
+            await CargarAuditoria();
+        }
+    }
+
+    private async Task CargarAuditoria()
+    {
+        try
+        {
+            cargando = true;
+            mensajeError = string.Empty;
+            StateHasChanged();
+
+            Console.WriteLine($"Cargando auditoría para pedido: {NroPedido}");
+
+            var response = await repository.Get<List<PeddetaAuditoriaDTO>>($"api/peddeta/auditoria/{NroPedido}");
+            
+            if (!response.Error && response.Response != null)
+            {
+                registrosAuditoria = response.Response;
+                Console.WriteLine($"Se cargaron {registrosAuditoria.Count} registros de auditoría");
+                
+                // Guardar una copia del orden original (por fecha descendente)
+                registrosAuditoriaOriginal = registrosAuditoria
+                    .OrderByDescending(r => r.FechaCambio)
+                    .ThenBy(r => r.NuOrItem)
+                    .ToList();
+                
+                // Aplicar ordenamiento inicial después de cargar los datos
+                AplicarOrdenamiento();
+            }
+            else
+            {
+                mensajeError = await response.GetErrorMessageAsync();
+                if (string.IsNullOrEmpty(mensajeError))
+                {
+                    mensajeError = "Error al cargar los datos de auditoría";
+                }
+                Console.WriteLine($"Error al cargar auditoría: {mensajeError}");
+            }
+        }
+        catch (Exception ex)
+        {
+            mensajeError = $"Error al cargar auditoría: {ex.Message}";
+            Console.WriteLine($"Excepción al cargar auditoría: {ex.Message}");
+        }
+        finally
+        {
+            cargando = false;
+            StateHasChanged();
+        }
+    }
+
+    public async Task ActualizarAuditoria()
+    {
+        await CargarAuditoria();
+    }
+}

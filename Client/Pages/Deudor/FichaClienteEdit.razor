@@ -1,0 +1,41 @@
+@page "/ficha-cliente-edit/{Id:int}"
+@using IMPLANPROD.Shared.Entities
+@inject IRepository repository
+@inject NavigationManager NavigationManager
+
+<!--
+    Componente: FichaClienteEdit.razor
+    Descripción: Edición de un cliente existente usando el formulario reutilizable FichaClienteForm.razor
+    Autor: IA Cascade (solicitud de Omar)
+    Fecha: 22/04/2025
+    
+    Este componente sigue el estándar de páginas ABM definido en el proyecto.
+-->
+
+<h3>Editar Cliente</h3>
+@if (isLoading)
+{
+    <p>Cargando datos del cliente...</p>
+}
+else if (cliente != null)
+{
+    <FichaClienteForm Id="@Id" />
+}
+else
+{
+    <div class="alert alert-danger">No se encontró el cliente solicitado.</div>
+}
+
+@code {
+    [Parameter]
+    public int Id { get; set; }
+    private Deudor12? cliente;
+    private bool isLoading = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var response = await repository.Get<Deudor12>($"/api/deudor12/{Id}");
+        cliente = response.Response;
+        isLoading = false;
+    }
+}

@@ -1,0 +1,46 @@
+@inject SweetAlertService sweetAlertService
+
+@using CurrieTechnologies.Razor.SweetAlert2
+
+<!-- Formulario para crear/editar una condición de pago -->
+<EditForm Model="CondPag" OnValidSubmit="OnValidSubmit">
+    <DataAnnotationsValidator />
+
+    <div class="mb-3">
+        <label>Número:</label>
+        <div>
+            <InputNumber class="form-control" @bind-Value="@CondPag.NumCondPag" disabled="@IsEdit" />
+            <ValidationMessage For="@(() => CondPag.NumCondPag)" />
+        </div>
+    </div>
+    <div class="mb-3">
+        <label>Descripción:</label>
+        <div>
+            <InputText class="form-control" @bind-Value="@CondPag.DescCondPag" />
+            <ValidationMessage For="@(() => CondPag.DescCondPag)" />
+        </div>
+    </div>
+
+    <button class="btn btn-primary" type="submit">Guardar Cambios</button>
+    <button class="btn btn-success" type="button" @onclick="ReturnAction">Regresar</button>
+
+</EditForm>
+
+@code {
+    [EditorRequired]
+    [Parameter]
+    public CondPag CondPag { get; set; } = null!;
+
+    [EditorRequired]
+    [Parameter]
+    public EventCallback OnValidSubmit { get; set; }
+
+    [EditorRequired]
+    [Parameter]
+    public EventCallback ReturnAction { get; set; }
+
+    [Parameter]
+    public bool IsEdit { get; set; }
+
+    public bool FormPostedSuccessfully { get; set; }
+}

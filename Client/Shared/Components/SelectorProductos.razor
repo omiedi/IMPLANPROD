@@ -1,0 +1,419 @@
+@* =============================================================
+   Componente: SelectorProductos
+   Descripción:
+   - Modal reutilizable para buscar y seleccionar productos (entidad Master).
+   - Permite buscar por código o descripción y seleccionar un ítem.
+   - Opcionalmente permite ingresar una cantidad antes de seleccionar.
+
+   Uso recomendado (ejemplo en un formulario padre .razor):
+
+   1) Declaración del componente (al final del EditForm, junto a otros modales):
+      <SelectorProductos @ref="selectorProductosRef"
+                         PermitirCantidad="true"
+                         CantidadDefault="1"
+                         OnProductoSeleccionadoCantidad="OnProductoSeleccionadoCantidad"
+                         OnClose="OnCloseSelectorProductos" />
+
+   2) Abrir el modal desde un botón:
+      private SelectorProductos? selectorProductosRef;
+      private async Task AbrirSelectorProductos() => await selectorProductosRef!.AbrirModal();
+
+   3) Recibir la selección con cantidad:
+      private void OnProductoSeleccionadoCantidad(SelectorProductos.SeleccionProducto sel)
+      {
+          // sel.Producto  -> Entidad Master seleccionada
+          // sel.Cantidad  -> Cantidad ingresada en el modal
+          // Aquí mapear al detalle local o a su DTO
+      }
+
+   4) Cierre manual del modal:
+      private void OnCloseSelectorProductos() { /* finalizar ciclo o limpiar flags */ }
+
+   Notas:
+   - Si no se necesita cantidad, puede usarse OnProductoSeleccionado(Master) (callback "legacy").
+   - La búsqueda consume api/master/search?filter=... vía IRepository, ajustar endpoint si fuese necesario.
+   - El alto de filas y estilos siguen el criterio de SelectorClientes / MasterSearch.
+   ============================================================= *@
+@using IMPLANPROD.Client.Repositories
+@using IMPLANPROD.Shared.Entities
+@using Microsoft.AspNetCore.Components.Web
+@inject IRepository repository
+@inject SweetAlertService sweetAlertService
+
+<style>
+    /* Estilos locales del componente para mejorar usabilidad en tablas anchas */
+    .selector-prod-container {
+        max-height: 400px;
+        overflow: auto; /* Permite scroll vertical y horizontal */
+    }
+    /* Primera columna fija (celdas de datos) */
+    .sticky-col {
+        position: sticky;
+        left: 0;
+        background: #ffffff; /* Fondo para tapar contenido debajo */
+        z-index: 2;
+    }
+    /* Encabezado de la primera columna fijo */
+    .sticky-col-header {
+        position: sticky;
+        left: 0;
+        z-index: 5; /* Por encima de celdas */
+        background: #212529; /* mismo color que .table-dark */
+        color: #fff;
+    }
+    /* Aumentar ancho mínimo de columnas para favorecer scroll horizontal cuando sea necesario */
+    .col-codigo { min-width: 180px; }
+    .col-descripcion { min-width: 320px; }
+    .col-um { min-width: 100px; }
+    .col-codint { min-width: 120px; }
+    .col-accion { min-width: 150px; }
+</style>
+<!-- Modal para seleccionar producto -->
+<div class="modal fade @(mostrarModal ? "show" : "")" style="display: @(mostrarModal ? "block" : "none")" tabindex="-1" role="dialog"
+     @onkeydown="OnKeyDown">
+    <div class="modal-dialog modal-xl" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="fas fa-box"></i> Seleccionar Producto
+                </h5>
+                <button type="button" class="btn-close" @onclick="CerrarModalManual"></button>
+            </div>
+            <div class="modal-body">
+                <!-- Filtro de búsqueda -->
+                <div class="row mb-3">
+                    <div class="col-md-8">
+                        <div class="input-group">
+                            <input type="text" class="form-control" value="@filtro" @ref="inputBusquedaRef" tabindex="1"
+                                   @oninput="OnFiltroInput"
+                                   @onkeypress="@(async (KeyboardEventArgs e) => { if (e.Key == "Enter") await Buscar(); })"
+                                   placeholder="Buscar por código o descripción..." />
+                            <button class="btn btn-outline-secondary" @onclick="LimpiarFiltro" tabindex="2">
+                                <i class="fas fa-times"></i>
+                            </button>
+                        </div>
+                        <div class="mt-1">
+                            <small class="text-muted">@productos.Count producto(s) encontrado(s)</small>
+                        </div>
+                    </div>
+                    <div class="col-md-4 d-flex align-items-center justify-content-between">
+                        @if (PermitirCantidad)
+                        {
+                            <div class="input-group input-group-sm me-2" style="width: 3cm; min-width: 3cm;">
+                                <span class="input-group-text" style="min-width: 1.2cm; justify-content:center;">Cant.</span>
+                                <input type="number" class="form-control text-end" step="0.0001" @bind="cantidadSeleccion" tabindex="3" />
+                            </div>
+                        }
+                        @if (PermitirPrecio)
+                        {
+                            <!-- Aumentar el ancho del header (etiqueta) y del input de Precio -->
+                            <div class="input-group input-group-sm me-2" style="width: 5cm; min-width: 5cm;">
+                                <span class="input-group-text" style="min-width: 1.5cm; justify-content:center;">Precio</span>
+                                <input type="number" class="form-control text-end" step="0.0001" @bind="precioSeleccion" tabindex="4" />
+                            </div>
+                        }
+                    </div>
+                </div>
+                <div class="row mb-2">
+                    <div class="col text-muted" style="font-size: .85rem;">
+                        <!-- Tip de usabilidad para navegación con teclado -->
+                        Sugerencia: usá TAB para moverte entre búsqueda, cantidad, precio y las filas; hacé clic en "Seleccionar" para agregar.
+                    </div>
+                </div>
+
+                <!-- Lista de productos -->
+                @if (cargando)
+                {
+                    <div class="text-center">
+                        <div class="spinner-border" role="status">
+                            <span class="visually-hidden">Cargando productos...</span>
+                        </div>
+                    </div>
+                }
+                else if (!productos.Any())
+                {
+                    <div class="alert alert-info text-center">
+                        <i class="fas fa-info-circle"></i> No se encontraron productos.
+                    </div>
+                }
+                else
+                {
+                    <!-- Contenedor responsive con scroll vertical y horizontal -->
+                    <div class="table-responsive selector-prod-container">
+                        <table class="table table-striped table-hover">
+                            <!-- Para modificar columnas visibles u orden, editar este thead/tbody -->
+                            <thead class="table-dark sticky-top">
+                                <tr>
+                                    <th class="sticky-col-header col-codigo">Código</th>
+                                    <th class="col-descripcion">Descripción</th>
+                                    <th class="col-um">U.M.</th>
+                                    <th class="col-codint">Códint</th>
+                                    <th class="col-accion">Acción</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @for (int i = 0; i < productos.Count; i++)
+                                {
+                                    var p = productos[i];
+                                    <!-- Cada fila es focusable; selección solo por botón clic -->
+                                    <tr tabindex="0">
+                                        <td class="sticky-col col-codigo"><strong>@p.Codigo</strong></td>
+                                        <td class="col-descripcion">@p.Descripcion</td>
+                                        <td class="col-um">@(string.IsNullOrEmpty(p.Umedida) ? "-" : p.Umedida)</td>
+                                        <td class="col-codint"><span class="badge bg-secondary">@p.Codint</span></td>
+                                        <td class="col-accion">
+                                            <button class="btn btn-sm btn-primary" @onclick="(() => Seleccionar(p))" @onclick:stopPropagation="true" tabindex="5">
+                                                <i class="fas fa-check"></i> Seleccionar
+                                            </button>
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                }
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" @onclick="CerrarModalManual">
+                    <i class="fas fa-times"></i> Cancelar
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+@if (mostrarModal)
+{
+    <div class="modal-backdrop fade show"></div>
+}
+
+@code {
+    /// <summary>
+    /// Evento que se dispara cuando se selecciona un producto (entidad Master)
+    /// </summary>
+    [Parameter] public EventCallback<Master> OnProductoSeleccionado { get; set; }
+    /// <summary>
+    /// Evento alternativo que incluye la cantidad seleccionada
+    /// </summary>
+    [Parameter] public EventCallback<SeleccionProducto> OnProductoSeleccionadoCantidad { get; set; }
+    /// <summary>
+    /// Evento que se dispara cuando el usuario cierra el modal manualmente
+    /// </summary>
+    [Parameter] public EventCallback OnClose { get; set; }
+
+    // Estado y configuración del modal
+    private bool mostrarModal = false;
+    /// <summary>
+    /// Si es true, muestra un input de cantidad y habilita el callback OnProductoSeleccionadoCantidad.
+    /// </summary>
+    [Parameter] public bool PermitirCantidad { get; set; } = true; // Poner en false para ocultar el input y usar el callback legacy
+    /// <summary>
+    /// Si es true, muestra un input de precio (4 decimales)
+    /// </summary>
+    [Parameter] public bool PermitirPrecio { get; set; } = false;
+    /// <summary>
+    /// Valor por defecto de la cantidad al abrir el modal.
+    /// </summary>
+    [Parameter] public decimal CantidadDefault { get; set; } = 1m; // Cambiar este valor para predefinir la cantidad al abrir
+    /// <summary>
+    /// Valor por defecto del precio al abrir el modal.
+    /// </summary>
+    [Parameter] public decimal PrecioDefault { get; set; } = 0m;
+    /// <summary>
+    /// Tiempo de espera (ms) antes de disparar la búsqueda automática mientras se escribe
+    /// </summary>
+    [Parameter] public int DebounceMs { get; set; } = 200;
+
+    // Datos
+    private List<Master> productos = new();
+    private string filtro = string.Empty;
+    private bool cargando = false;
+    private decimal cantidadSeleccion = 1m;
+    private decimal precioSeleccion = 0m;
+    private ElementReference inputBusquedaRef;
+    private int focusedRowIndex = -1; // Índice de la fila actualmente "activa" para navegación
+    private CancellationTokenSource? buscarCts; // Para debounced search
+
+    /// <summary>
+    /// Método público para abrir el modal desde el padre
+    /// </summary>
+    public async Task AbrirModal()
+    {
+        mostrarModal = true;
+        cantidadSeleccion = CantidadDefault;
+        precioSeleccion = PrecioDefault;
+        // Ejecuta la búsqueda solo si hay un filtro ingresado
+        if (!string.IsNullOrWhiteSpace(filtro))
+        {
+            await Buscar();
+        }
+        StateHasChanged();
+        // Dar tiempo al render del input y luego enfocar automáticamente
+        await Task.Delay(50);
+        await inputBusquedaRef.FocusAsync();
+    }
+
+    /// <summary>
+    /// Maneja cambios en el input de búsqueda y dispara un debounce para actualizar resultados
+    /// </summary>
+    private async Task OnFiltroInput(ChangeEventArgs e)
+    {
+        var texto = e.Value?.ToString() ?? string.Empty;
+        filtro = texto;
+        // Cancelar búsquedas pendientes
+        buscarCts?.Cancel();
+        buscarCts = new CancellationTokenSource();
+        var token = buscarCts.Token;
+        try
+        {
+            await Task.Delay(DebounceMs, token); // espera parametrizable
+        }
+        catch (TaskCanceledException)
+        {
+            return; // Se tipeó algo más, abortar
+        }
+
+        if (string.IsNullOrWhiteSpace(filtro) || filtro.Length < 3)
+        {
+            // Menos de 3 caracteres: limpiar resultados
+            productos.Clear();
+            StateHasChanged();
+            return;
+        }
+
+        await Buscar();
+    }
+
+    /// <summary>
+    /// Manejo de teclado en filas: ENTER selecciona el producto enfocado
+    /// </summary>
+    private async Task OnRowKeyDown(KeyboardEventArgs e, Master producto, int rowIndex)
+    {
+        switch (e.Key)
+        {
+            case "Enter":
+                await Seleccionar(producto);
+                break;
+            case "ArrowDown":
+                await MoverFocoFila(rowIndex + 1);
+                break;
+            case "ArrowUp":
+                await MoverFocoFila(rowIndex - 1);
+                break;
+        }
+    }
+
+    /// <summary>
+    /// Mueve el índice de fila "activa". Nota: sin JS interop no forzamos el foco real.
+    /// </summary>
+    private async Task MoverFocoFila(int targetIndex)
+    {
+        if (productos.Count == 0) return;
+        if (targetIndex < 0) targetIndex = 0;
+        if (targetIndex >= productos.Count) targetIndex = productos.Count - 1;
+        focusedRowIndex = targetIndex;
+        await Task.Yield();
+    }
+
+    // Cierre manual (usuario). Dispara OnClose.
+    private async void CerrarModalManual()
+    {
+        mostrarModal = false;
+        filtro = string.Empty;
+        productos.Clear();
+        StateHasChanged();
+        if (OnClose.HasDelegate)
+        {
+            await OnClose.InvokeAsync();
+        }
+    }
+
+    // Cierre interno (programático). No dispara OnClose.
+    private void CerrarModalInterno()
+    {
+        mostrarModal = false;
+        StateHasChanged();
+    }
+
+    /// <summary>
+    /// Maneja las teclas presionadas en el modal
+    /// </summary>
+    private void OnKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Escape")
+        {
+            CerrarModalManual();
+        }
+    }
+
+    /// <summary>
+    /// Realiza la búsqueda contra el backend usando IRepository (misma API que MasterSearchModal)
+    /// </summary>
+    private async Task Buscar()
+    {
+        try
+        {
+            cargando = true;
+            StateHasChanged();
+
+            if (string.IsNullOrWhiteSpace(filtro)) // Si desea listar todo por defecto, quitar este return y crear endpoint paginado
+            {
+                productos.Clear();
+                return;
+            }
+
+            // Endpoint de búsqueda: ajustar ruta/parametros según API
+            var response = await repository.Get<List<Master>>($"api/master/search?filter={Uri.EscapeDataString(filtro)}");
+            if (response.Error)
+            {
+                var msg = await response.GetErrorMessageAsync();
+                await sweetAlertService.FireAsync("Error", msg, SweetAlertIcon.Error);
+                productos.Clear();
+                return;
+            }
+
+            productos = response.Response ?? new List<Master>();
+        }
+        catch (Exception ex)
+        {
+            await sweetAlertService.FireAsync("Error", $"Error al buscar productos: {ex.Message}", SweetAlertIcon.Error);
+        }
+        finally
+        {
+            cargando = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task LimpiarFiltro()
+    {
+        filtro = string.Empty;
+        await Buscar();
+    }
+
+    private async Task Seleccionar(Master producto)
+    {
+        // Cerrar internamente (sin notificar OnClose) para permitir el ciclo de selección múltiple
+        CerrarModalInterno();
+        if (OnProductoSeleccionadoCantidad.HasDelegate)
+        {
+            var sel = new SeleccionProducto { Producto = producto, Cantidad = cantidadSeleccion <= 0 ? 1m : cantidadSeleccion, Precio = Math.Round(precioSeleccion, 4) };
+            await OnProductoSeleccionadoCantidad.InvokeAsync(sel);
+        }
+        else
+        {
+            await OnProductoSeleccionado.InvokeAsync(producto);
+        }
+        // Nota: si se requiere que el componente se reabra automáticamente, el padre debe volver a llamar a AbrirModal()
+    }
+
+    /// <summary>
+    /// Modelo de salida cuando se requiere devolver cantidad junto con el producto
+    /// </summary>
+    public class SeleccionProducto
+    {
+        public Master Producto { get; set; } = new Master();
+        public decimal Cantidad { get; set; } = 1m;
+        public decimal Precio { get; set; } = 0m;
+    }
+}

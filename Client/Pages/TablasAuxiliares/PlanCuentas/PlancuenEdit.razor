@@ -1,0 +1,70 @@
+@inject IRepository repository
+@inject NavigationManager navigationManager
+@inject SweetAlertService sweetAlertService
+@inject IModalService Modal
+
+<div class="modal-body">
+    <h3>Editar Cuenta</h3>
+
+    @if (cuenta is null)
+    {
+        <p>Cargando...</p>
+    }
+    else
+    {
+        <PlancuenForm @ref="plancuenForm" Cuenta="cuenta" OnValidSubmit="Edit" ReturnAction="Return" IsEdit="true" />
+    }
+</div>
+
+@code {
+    private Plancuen? cuenta;
+    private PlancuenForm? plancuenForm;
+
+    [Parameter]
+    public int Id { get; set; }
+
+    [CascadingParameter]
+    BlazoredModalInstance BlazoredModal { get; set; } = default!;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var responseHTTP = await repository.Get<Plancuen>($"api/plancuen/{Id}");
+        if (responseHTTP.Error)
+        {
+            if (responseHTTP.HttpResponseMessage.StatusCode == System.Net.HttpStatusCode.NotFound)
+            {
+                Return();
+            }
+            else
+            {
+                var mensajeError = await responseHTTP.GetErrorMessageAsync();
+                await sweetAlertService.FireAsync("Error", mensajeError, SweetAlertIcon.Error);
+            }
+        }
+        else
+        {
+            cuenta = responseHTTP.Response;
+        }
+    }
+
+    private async Task Edit()
+    {
+        var responseHttp = await repository.Put("/api/plancuen", cuenta);
+        if (responseHttp.Error)
+        {
+            var mensajeError = await responseHttp.GetErrorMessageAsync();
+            await sweetAlertService.FireAsync("Error", mensajeError, SweetAlertIcon.Error);
+        }
+        else
+        {
+            await BlazoredModal.CloseAsync(ModalResult.Ok());
+            Return();
+        }
+    }
+
+    private void Return()
+    {
+        plancuenForm!.FormPostedSuccessfully = true;
+        navigationManager.NavigateTo("/TablasAuxiliares/PlanCuentas/Plancuen");
+    }
+}

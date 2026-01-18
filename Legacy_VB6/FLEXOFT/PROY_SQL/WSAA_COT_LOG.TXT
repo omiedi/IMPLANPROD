@@ -1,0 +1,19 @@
+***Servicio a acceder: arba_remito_elec
+***URL del WSAA: https://hml.agip.gob.ar/claveciudad/webservice/LoginWS?wsdl
+***Ruta del certificado: c:\flexoft\cot\micertificadocot.pfx
+***Modo verbose: True
+ 
+***Accediendo a https://hml.agip.gob.ar/claveciudad/webservice/LoginWS?wsdl
+ 
+***Genero el Login Ticket Request
+***Generado el Login Ticket Request
+ 
+***Firmo el Login Ticket Request
+***Firmado el Login Ticket Request
+ 
+***Invoco al WSAA para obtener el Login Ticket Response
+***Obtencion Satisfactoria del Login Ticket
+ 
+***Analizo el Login Ticket Response recibido del WSAA
+***Lectura Satisfactoria del Login Ticket recibido del WSAA
+ 

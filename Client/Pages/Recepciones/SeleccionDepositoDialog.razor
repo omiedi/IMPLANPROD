@@ -1,0 +1,81 @@
+@using IMPLANPROD.Shared.DTOs
+@inject IRepository repository
+@inject SweetAlertService sweetAlertService
+
+<div class="modal fade show" style="display:block; background-color: rgba(0,0,0,0.5)">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header" style="background-color: #1F7246; color: white;">
+                <h5 class="modal-title">Selección de Depósito</h5>
+                <button type="button" class="btn-close btn-close-white" @onclick="Cancelar"></button>
+            </div>
+            
+            <div class="modal-body">
+                <div class="form-group mb-3">
+                    <label>Depósito:</label>
+                    <select class="form-select" @bind="depositoSeleccionado">
+                        <option value="0">Seleccione un depósito...</option>
+                        @foreach (var deposito in depositos)
+                        {
+                            <option value="@deposito.Id">@deposito.Descripcion</option>
+                        }
+                    </select>
+                </div>
+                <div class="form-group mb-3">
+                    <label>Número de Remito:</label>
+                    <input type="text" class="form-control" @bind="numeroRemito" />
+                </div>
+            </div>
+
+            <div class="modal-footer">
+                <button type="button" class="btn btn-primary" @onclick="Aceptar">Aceptar</button>
+                <button type="button" class="btn btn-secondary" @onclick="Cancelar">Cancelar</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    [CascadingParameter] BlazoredModalInstance Modal { get; set; }
+    [Parameter] public int NumeroProveedor { get; set; }
+
+    private List<Tadeposi> depositos = new();
+    private int depositoSeleccionado;
+    private string numeroRemito = "";
+
+    protected override async Task OnInitializedAsync()
+    {
+        await CargarDepositos();
+    }
+
+    private async Task CargarDepositos()
+    {
+        var response = await repository.Get<List<Tadeposi>>("api/tadeposi/activos");
+        if (!response.Error)
+        {
+            depositos = response.Response;
+        }
+    }
+
+    private async Task Aceptar()
+    {
+        if (depositoSeleccionado == 0)
+        {
+            await sweetAlertService.FireAsync("", "Debe seleccionar un depósito", SweetAlertIcon.Warning);
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(numeroRemito))
+        {
+            await sweetAlertService.FireAsync("", "Debe ingresar un número de remito", SweetAlertIcon.Warning);
+            return;
+        }
+
+        await Modal.CloseAsync(ModalResult.Ok(new { Deposito = depositoSeleccionado, NumeroRemito = numeroRemito }));
+    }
+
+    private async Task Cancelar()
+    {
+        await Modal.CancelAsync();
+    }
+}

@@ -1,0 +1,2371 @@
+@page "/ficha-reparacion"
+@page "/ficha-reparacion/{NumRepa:int}"
+@using IMPLANPROD.Shared.Entities
+@using IMPLANPROD.Shared.DTOs
+@using IMPLANPROD.Client.Shared.Components
+@using System.Globalization
+@inject IRepository repository
+@inject SweetAlertService sweetAlertService
+@inject NavigationManager navigationManager
+@inject IJSRuntime jsRuntime
+
+<PageTitle>Ficha de Reparación</PageTitle>
+
+@code {
+    [Parameter] public int? NumRepa { get; set; }
+}
+
+<div class="container-fluid">
+    <h3><i class="fas fa-file-medical"></i> Ficha de Reparación</h3>
+
+    <!-- INSTRUCTIVO DESPLEGABLE -->
+    <InstructivoPanel Titulo="📖 Instructivo - Ficha de Reparación" MostrarPorDefecto="false">
+        <div class="row">
+            <div class="col-md-12">
+                <h5 class="text-info"><i class="fas fa-clipboard-check"></i> ¿Qué es la Ficha de Reparación?</h5>
+                <p>La <strong>Ficha de Reparación</strong> es el documento central donde se registra todo el diagnóstico, trabajo realizado, repuestos utilizados y materiales del cliente. Es el paso 2 del proceso de reparaciones.</p>
+                <hr />
+            </div>
+        </div>
+
+        <div class="row">
+            <div class="col-md-6">
+                <div class="card border-info h-100">
+                    <div class="card-header bg-info text-white">
+                        <strong>📋 Funcionalidades Principales</strong>
+                    </div>
+                    <div class="card-body">
+                        <ul class="small">
+                            <li><strong>📸 Galería de Imágenes:</strong> Suba fotos del equipo antes, durante y después de la reparación</li>
+                            <li><strong>📎 Archivos Adjuntos:</strong> Adjunte documentos técnicos, manuales, planos, etc.</li>
+                            <li><strong>📋 Inspección/Reparación:</strong> Registre el diagnóstico y detalles del trabajo realizado</li>
+                            <li><strong>🔧 Repuestos (ORIGEN=0):</strong> Liste los repuestos necesarios para la reparación</li>
+                            <li><strong>📦 Material del Cliente:</strong> Registre materiales suministrados por el cliente (BR, CF, DV, AJ)</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-md-6">
+                <div class="card border-success h-100">
+                    <div class="card-header bg-success text-white">
+                        <strong>🔄 Flujo de Trabajo</strong>
+                    </div>
+                    <div class="card-body">
+                        <ol class="small">
+                            <li><strong>Seleccionar Talón:</strong> Busque la recepción por N° o referencia</li>
+                            <li><strong>Documentar con Imágenes:</strong> Suba fotos del estado del equipo</li>
+                            <li><strong>Adjuntar Documentos:</strong> Agregue archivos técnicos si es necesario</li>
+                            <li><strong>Agregar Repuestos:</strong> Indique qué repuestos se necesitan (ORIGEN=0)</li>
+                            <li><strong>Registrar Material Cliente:</strong> Si el cliente suministró materiales, regístrelos</li>
+                            <li><strong>Generar Presupuesto:</strong> Una vez completada la ficha, genere el presupuesto</li>
+                        </ol>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="row mt-3">
+            <div class="col-md-12">
+                <div class="alert alert-warning">
+                    <h6><i class="fas fa-lightbulb"></i> Consejos Importantes:</h6>
+                    <ul class="mb-0 small">
+                        <li><strong>Repuestos ORIGEN=0:</strong> Los repuestos agregados aquí son para la reparación actual (no para stock)</li>
+                        <li><strong>Material del Cliente:</strong> Use BR (bruto), CF (consumo final), DV (devolución), AJ (ajuste) para control de inventario</li>
+                        <li><strong>Imágenes:</strong> Las fotos son muy útiles para documentar el estado del equipo y justificar el presupuesto</li>
+                        <li><strong>Guardado Independiente:</strong> Cada solapa (Imágenes, Documentos, Repuestos, Materiales) se guarda por separado</li>
+                        <li><strong>O.F. Limpieza:</strong> Puede generar una Orden de Fabricación para limpieza del equipo desde esta pantalla</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </InstructivoPanel>
+
+    <!-- Selector de nota de reparación. -->
+    <div class="card mb-3">
+        <div class="card-header bg-primary text-white">
+            <h5 class="mb-0"><i class="fas fa-file-invoice"></i> Seleccionar nota de reparación.</h5>
+        </div>
+        <div class="card-body">
+            <div class="row">
+                <div class="col-md-8">
+                    <label class="form-label">Talón N°:</label>
+                    <div class="input-group">
+                        <button type="button" class="btn btn-outline-primary" @onclick="AbrirSelectorReparaciones">
+                            <i class="fas fa-search"></i>
+                        </button>
+                        <input type="text" class="form-control" value="@textoReparacionSeleccionada" readonly />
+                        @if (numRepaSeleccionado > 0)
+                        {
+                            <button type="button" class="btn btn-outline-secondary" @onclick="LimpiarSeleccionReparacion">
+                                <i class="fas fa-times"></i>
+                            </button>
+                        }
+                    </div>
+                    <small class="text-muted">Buscar por N° o referencia</small>
+                </div>
+                <div class="col-md-4 d-flex align-items-end justify-content-end mt-2 mt-md-0">
+                    <button type="button" class="btn btn-outline-success" @onclick="AbrirOrdenFabricacion">
+                        Lista O.Fabricación
+                    </button>
+                    <button type="button" class="btn btn-outline-primary ms-2" @onclick="AbrirModalOFLimpieza" disabled="@(numRepaSeleccionado <= 0)">
+                        GENERAR O.F. LIMPIEZA
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    @if (reparacionSeleccionada != null)
+    {
+        <!-- Datos del Cliente -->
+        <div class="card mb-3">
+            <div class="card-header bg-info text-white">
+                <h5 class="mb-0"><i class="fas fa-user"></i> Datos del Cliente</h5>
+            </div>
+            <div class="card-body">
+                @if (clienteActual != null)
+                {
+                    <div class="row">
+                        <div class="col-md-4">
+                            <p><strong>Razón Social:</strong> @clienteActual.Raso_Cli</p>
+                            <p><strong>N° Cuenta:</strong> @clienteActual.Nume_Cli</p>
+                        </div>
+                        <div class="col-md-4">
+                            <p><strong>Teléfono:</strong> @clienteActual.Tele_Cli</p>
+                            <p><strong>Fax:</strong> @clienteActual.Faxi_Cli</p>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="row">
+                                <div class="col-8">
+                                    <p><strong>Domicilio:</strong> @clienteActual.Domi_Cli</p>
+                                </div>
+                                <div class="col-4">
+                                    <p><strong>CP:</strong> @clienteActual.Cpos_Cli</p>
+                                </div>
+                            </div>
+                            <div class="row">
+                                <div class="col-8">
+                                    <p><strong>Localidad:</strong> @clienteActual.Loca_Cli</p>
+                                </div>
+                                <div class="col-4">
+                                    <p><strong>Fecha:</strong> @reparacionSeleccionada.FechRecep?.ToString("dd/MM/yyyy")</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                }
+                else
+                {
+                    <div class="alert alert-warning">
+                        <i class="fas fa-exclamation-triangle"></i> No se pudieron cargar los datos del cliente.
+                    </div>
+                }
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-body">
+                <div class="d-flex gap-2 mb-4 flex-wrap">
+                    <button class="btn @(solapaActiva == "imagenes" ? "btn-primary" : "btn-outline-primary") flex-fill py-3 rounded-3 shadow-sm"
+                            @onclick='@(() => CambiarSolapaAsync("imagenes"))'
+                            style="transition: all 0.3s ease; min-width: 260px;">
+                        <i class="fas fa-images me-2"></i>
+                        <strong>Galería de Imágenes</strong>
+                    </button>
+                    <button class="btn @(solapaActiva == "documentos" ? "btn-primary" : "btn-outline-primary") flex-fill py-3 rounded-3 shadow-sm"
+                            @onclick='@(() => CambiarSolapaAsync("documentos"))'
+                            style="transition: all 0.3s ease; min-width: 260px;">
+                        <i class="fas fa-paperclip me-2"></i>
+                        <strong>Archivos Adjuntos</strong>
+                    </button>
+                    <button class="btn @(solapaActiva == "detalle" ? "btn-primary" : "btn-outline-primary") flex-fill py-3 rounded-3 shadow-sm"
+                            @onclick='@(() => CambiarSolapaAsync("detalle"))'
+                            style="transition: all 0.3s ease; min-width: 260px;">
+                        <i class="fas fa-clipboard-list me-2"></i>
+                        <strong>Inspección / Reparación</strong>
+                    </button>
+                    <button class="btn @(solapaActiva == "repuestos" ? "btn-primary" : "btn-outline-primary") flex-fill py-3 rounded-3 shadow-sm"
+                            @onclick='@(() => CambiarSolapaAsync("repuestos"))'
+                            style="transition: all 0.3s ease; min-width: 260px;">
+                        <i class="fas fa-cogs me-2"></i>
+                        <strong>Repuestos</strong>
+                    </button>
+                    <button class="btn @(solapaActiva == "materiales" ? "btn-primary" : "btn-outline-primary") flex-fill py-3 rounded-3 shadow-sm"
+                            @onclick='@(() => CambiarSolapaAsync("materiales"))'
+                            style="transition: all 0.3s ease; min-width: 260px;">
+                        <i class="fas fa-boxes-stacked me-2"></i>
+                        <strong>Material suministrado por el cliente</strong>
+                    </button>
+                </div>
+
+                @if (solapaActiva == "imagenes")
+                {
+                    <div class="mb-3">
+                        <label for="fileUpload" class="btn btn-primary">
+                            <i class="fas fa-upload"></i> Subir Imagen
+                        </label>
+                        <InputFile id="fileUpload" OnChange="SubirImagen" accept="image/*" style="display: none;" />
+                    </div>
+
+                    @if (cargandoImagenes)
+                    {
+                        <div class="text-center">
+                            <div class="spinner-border" role="status">
+                                <span class="visually-hidden">Cargando...</span>
+                            </div>
+                        </div>
+                    }
+                    else if (imagenes == null || !imagenes.Any())
+                    {
+                        <div class="alert alert-info">
+                            <i class="fas fa-info-circle"></i> No hay imágenes cargadas para esta reparación.
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="row">
+                            @foreach (var imagen in imagenes)
+                            {
+                                <div class="col-md-6 mb-4">
+                                    <div class="card h-100">
+                                        <div class="card-header d-flex justify-content-between align-items-center">
+                                            <span><strong>Imagen @imagen.Norit_Imag</strong></span>
+                                            <button class="btn btn-sm btn-danger" @onclick="() => EliminarImagen(imagen.Id)">
+                                                <i class="fas fa-trash"></i>
+                                            </button>
+                                        </div>
+                                        <div class="card-body">
+                                            <div class="row">
+                                                <div class="col-md-6">
+                                                    <img src="@imagen.RutaImagen" class="img-fluid rounded" alt="Imagen @imagen.Norit_Imag" style="max-height: 300px; object-fit: contain;" />
+                                                </div>
+                                                <div class="col-md-6">
+                                                    <label class="form-label fw-bold">Observaciones:</label>
+                                                    <textarea class="form-control" 
+                                                              rows="8" 
+                                                              @bind="imagen.Descripcion"
+                                                              @bind:after="() => ActualizarDescripcion(imagen)"
+                                                              placeholder="Ingrese observaciones...">
+                                                    </textarea>
+                                                    <small class="text-muted">Guardado automático.</small>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            }
+                        </div>
+                    }
+                }
+                else if (solapaActiva == "documentos")
+                {
+                    <div class="mb-3">
+                        <label for="docUpload" class="btn btn-primary" disabled="@(numRepaSeleccionado <= 0)">
+                            <i class="fas fa-upload"></i> Subir Documento
+                        </label>
+                        <InputFile id="docUpload" OnChange="SubirDocumento" style="display: none;" />
+                        <small class="text-muted d-block mt-1">Se admiten .pdf, .doc, .docx, .txt, .xls, .xlsx, .csv, .png, .jpg</small>
+                    </div>
+
+                    @if (cargandoDocumentos)
+                    {
+                        <div class="text-center">
+                            <div class="spinner-border" role="status">
+                                <span class="visually-hidden">Cargando...</span>
+                            </div>
+                        </div>
+                    }
+                    else if (documentos == null || !documentos.Any())
+                    {
+                        <div class="alert alert-info">
+                            <i class="fas fa-info-circle"></i> No hay documentos adjuntos para esta reparación.
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="table-responsive">
+                            <table class="table table-striped table-hover">
+                                <thead class="table-dark">
+                                    <tr>
+                                        <th>Archivo</th>
+                                        <th class="text-end">Tamaño</th>
+                                        <th class="text-center">Fecha</th>
+                                        <th class="text-end">Acciones</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var doc in documentos)
+                                    {
+                                        <tr>
+                                            <td>@(doc.NomOriginal ?? doc.NomAsignado)</td>
+                                            <td class="text-end">@FormatoTamano(doc.TamanoBytes)</td>
+                                            <td class="text-center">@(doc.AddRecord?.ToString("dd/MM/yyyy HH:mm") ?? "")</td>
+                                            <td class="text-end">
+                                                <a class="btn btn-sm btn-outline-secondary me-2" href="@($"api/docanre/view/{doc.Id}")" target="_blank" title="Ver">
+                                                    <i class="fas fa-eye"></i>
+                                                </a>
+                                                <a class="btn btn-sm btn-outline-primary me-2" href="@($"api/docanre/download/{doc.Id}")" target="_blank" title="Descargar">
+                                                    <i class="fas fa-download"></i>
+                                                </a>
+                                                <button class="btn btn-sm btn-outline-danger" @onclick="() => EliminarDocumento(doc.Id)" title="Eliminar">
+                                                    <i class="fas fa-trash"></i>
+                                                </button>
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    }
+                }
+                else if (solapaActiva == "repuestos")
+                {
+                    <!--
+                        Solapa REPUESTOS
+                        - Muestra items de REPUREPA filtrando por NUMREPA (reparación activa) y ORIGEN=0 (según VB6)
+                        - Guardado independiente: cada acción (agregar, editar cantidad, borrar) llama a su endpoint
+                        - Permite agregar repuestos desde MASTER usando el componente reutilizable SelectorProductos
+                    -->
+
+                    <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+                        <div>
+                            <h5 class="mb-0"><i class="fas fa-cogs"></i> Repuestos</h5>
+                            <small class="text-muted">Reparación activa: <strong>@numRepaSeleccionado</strong> (Origen=0)</small>
+                        </div>
+                        <div class="d-flex gap-2">
+                            <button class="btn btn-primary" @onclick="GuardarRepuestos" disabled="@(numRepaSeleccionado <= 0 || !hayCambiosPendientesRepuestos)">
+                                <i class="fas fa-save"></i> Guardar repuestos
+                            </button>
+                            <button class="btn btn-success" @onclick="AbrirSelectorProductos" disabled="@(numRepaSeleccionado <= 0)">
+                                <i class="fas fa-plus"></i> Agregar repuesto
+                            </button>
+                            <button class="btn btn-outline-secondary" @onclick="CargarRepuestos" disabled="@(numRepaSeleccionado <= 0 || hayCambiosPendientesRepuestos)">
+                                <i class="fas fa-sync"></i> Refrescar
+                            </button>
+                        </div>
+                    </div>
+
+                    @if (numRepaSeleccionado <= 0)
+                    {
+                        <div class="alert alert-warning">
+                            <i class="fas fa-exclamation-triangle"></i> Primero debe seleccionar una nota de reparación.
+                        </div>
+                    }
+                    else if (cargandoRepuestos)
+                    {
+                        <div class="text-center">
+                            <div class="spinner-border" role="status">
+                                <span class="visually-hidden">Cargando...</span>
+                            </div>
+                        </div>
+                    }
+                    else if (repuestos == null || !repuestos.Any())
+                    {
+                        <div class="alert alert-info">
+                            <i class="fas fa-info-circle"></i> No hay repuestos cargados para esta reparación.
+                        </div>
+                    }
+                    else
+                    {
+                        var repuestosOrdenados = repuestos
+                            .OrderBy(x => x.Descripcion ?? string.Empty)
+                            .ThenBy(x => x.Cod_Inte)
+                            .ToList();
+
+                        var estiloScrollRepuestos = repuestosOrdenados.Count > 10
+                            ? "max-height: 520px; overflow-y: auto;"
+                            : string.Empty;
+
+                        <div class="table-responsive" style="@estiloScrollRepuestos">
+                            <table class="table table-striped table-hover">
+                                <thead class="table-dark">
+                                    <tr>
+                                        <th class="text-end" style="width: 120px;">Cód.Int.</th>
+                                        <th style="width: 180px;">Código</th>
+                                        <th>Descripción</th>
+                                        <th style="width: 90px;">U.M.</th>
+                                        <th class="text-end" style="width: 140px;">Cantidad</th>
+                                        <th class="text-end" style="width: 120px;">Acciones</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var item in repuestosOrdenados)
+                                    {
+                                        <tr>
+                                            <td class="text-end">@item.Cod_Inte</td>
+                                            <td>@(string.IsNullOrWhiteSpace(item.CodigoExterno) ? "-" : item.CodigoExterno)</td>
+                                            <td>@(string.IsNullOrWhiteSpace(item.Descripcion) ? "(sin descripción)" : item.Descripcion)</td>
+                                            <td>@(string.IsNullOrWhiteSpace(item.UnidadMedida) ? "-" : item.UnidadMedida)</td>
+                                            <td class="text-end">
+                                                <!--
+                                                    Edición directa de la cantidad:
+                                                    - Guardado independiente del resto
+                                                    - Al cambiar el valor (onchange) NO se persiste automáticamente, queda pendiente
+                                                    - Se muestra con 1 decimal (como VB6), pero se guarda con 4 decimales
+                                                -->
+                                                <input type="number"
+                                                       class="form-control form-control-sm text-end"
+                                                       step="0.0001"
+                                                       @bind-value="item.Cant_Sol"
+                                                       @bind-value:culture="CultureInfo.InvariantCulture"
+                                                       @bind-value:event="onchange"
+                                                       @bind-value:after="() => MarcarRepuestoPendiente(item)" />
+                                            </td>
+                                            <td class="text-end">
+                                                <button class="btn btn-sm btn-outline-danger" @onclick="() => EliminarRepuesto(item)" title="Eliminar">
+                                                    <i class="fas fa-trash"></i>
+                                                </button>
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    }
+                }
+                else if (solapaActiva == "materiales")
+                {
+                    <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+                        <div>
+                            <h5 class="mb-0"><i class="fas fa-boxes-stacked"></i> Material suministrado por el cliente</h5>
+                            <small class="text-muted">Talón: <strong>@numRepaSeleccionado</strong></small>
+                        </div>
+                        <div class="d-flex gap-2">
+                            <button class="btn btn-primary" @onclick="GuardarMateriales" disabled="@(numRepaSeleccionado <= 0 || !hayCambiosPendientesMateriales)">
+                                <i class="fas fa-save"></i> Guardar
+                            </button>
+                            <button class="btn btn-success" @onclick="AbrirSelectorProductosMateriales" disabled="@(numRepaSeleccionado <= 0)">
+                                <i class="fas fa-plus"></i> Agregar item
+                            </button>
+                            <button class="btn btn-outline-secondary" @onclick="CargarMateriales" disabled="@(numRepaSeleccionado <= 0 || hayCambiosPendientesMateriales)">
+                                <i class="fas fa-sync"></i> Refrescar
+                            </button>
+                        </div>
+                    </div>
+
+                    @if (numRepaSeleccionado <= 0)
+                    {
+                        <div class="alert alert-warning">
+                            <i class="fas fa-exclamation-triangle"></i> Primero debe seleccionar un nota de recepción.
+                        </div>
+                    }
+                    else if (cargandoMateriales)
+                    {
+                        <div class="text-center">
+                            <div class="spinner-border" role="status">
+                                <span class="visually-hidden">Cargando...</span>
+                            </div>
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="row">
+                            <div class="col-12 col-xxl-6 mb-3">
+                                <div class="d-flex justify-content-between align-items-center mb-2 flex-wrap gap-2">
+                                    <h6 class="mb-0">Items existentes</h6>
+                                    <div class="d-flex align-items-center gap-2">
+                                        <label class="form-label mb-0">Ordenar por</label>
+                                        <select class="form-select form-select-sm" style="width: 220px;" @bind="ordenMateriales">
+                                            <option value="descripcion">Descripción</option>
+                                            <option value="codigo">Código</option>
+                                            <option value="fecha">Fecha ingreso</option>
+                                        </select>
+                                    </div>
+                                </div>
+
+                                @if (materialesResumen == null || !materialesResumen.Any())
+                                {
+                                    <div class="alert alert-info">
+                                        <i class="fas fa-info-circle"></i> No hay materiales con saldo para este talón.
+                                    </div>
+                                }
+                                else
+                                {
+                                    var materialesOrdenados = OrdenarMateriales(materialesResumen);
+                                    var estiloScrollMateriales = materialesOrdenados.Count > 10
+                                        ? "max-height: 520px; overflow-y: auto;"
+                                        : string.Empty;
+
+                                    <div class="table-responsive" style="@estiloScrollMateriales">
+                                        <table class="table table-striped table-hover table-sm">
+                                            <thead class="table-dark sticky-top">
+                                                <tr>
+                                                    <th style="width: 110px;" class="text-end">Cód.Int.</th>
+                                                    <th style="width: 140px;">Código</th>
+                                                    <th>Descripción</th>
+                                                    <th style="width: 160px;">Fecha ingreso</th>
+                                                    <th style="width: 90px;" class="text-end">BR</th>
+                                                    <th style="width: 90px;" class="text-end">CF</th>
+                                                    <th style="width: 90px;" class="text-end">DV</th>
+                                                    <th style="width: 90px;" class="text-end">AJ</th>
+                                                    <th style="width: 150px;" class="text-end">RESUL</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                @foreach (var item in materialesOrdenados)
+                                                {
+                                                    <tr>
+                                                        <td class="text-end"><strong>@item.Cod_Inte</strong></td>
+                                                        <td>@(string.IsNullOrWhiteSpace(item.Codigo) ? item.Cod_Exte : item.Codigo)</td>
+                                                        <td>@(string.IsNullOrWhiteSpace(item.Descripcion) ? "(sin descripción)" : item.Descripcion)</td>
+                                                        <td>@(item.FechaUltMov.HasValue ? item.FechaUltMov.Value.ToString("dd/MM/yyyy HH:mm") : string.Empty)</td>
+                                                        <td class="text-end">@item.Br.ToString("0.####", CultureInfo.InvariantCulture)</td>
+                                                        <td class="text-end">@item.Cf.ToString("0.####", CultureInfo.InvariantCulture)</td>
+                                                        <td class="text-end">@item.Dv.ToString("0.####", CultureInfo.InvariantCulture)</td>
+                                                        <td class="text-end">@item.Aj.ToString("0.####", CultureInfo.InvariantCulture)</td>
+                                                        <td class="text-end">
+                                                            <input type="number"
+                                                                   class="form-control form-control-sm text-end"
+                                                                   step="0.0001"
+                                                                   @bind-value="item.Resul"
+                                                                   @bind-value:culture="CultureInfo.InvariantCulture"
+                                                                   @bind-value:event="onchange"
+                                                                   @bind-value:after="() => MarcarMaterialPendiente(item)" />
+                                                        </td>
+                                                    </tr>
+                                                }
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                }
+                            </div>
+
+                            <div class="col-12 col-xxl-6 mb-3">
+                                <div class="d-flex justify-content-between align-items-center mb-2 flex-wrap gap-2">
+                                    <h6 class="mb-0">Items agregados</h6>
+                                    <small class="text-muted">Se guardan recién al presionar Guardar</small>
+                                </div>
+
+                                @if (materialesAgregados == null || !materialesAgregados.Any())
+                                {
+                                    <div class="alert alert-secondary">
+                                        No hay items agregados.
+                                    </div>
+                                }
+                                else
+                                {
+                                    var estiloScrollAgregados = materialesAgregados.Count > 10
+                                        ? "max-height: 520px; overflow-y: auto;"
+                                        : string.Empty;
+
+                                    <div class="table-responsive" style="@estiloScrollAgregados">
+                                        <table class="table table-striped table-hover table-sm">
+                                            <thead class="table-dark sticky-top">
+                                                <tr>
+                                                    <th style="width: 110px;" class="text-end">Cód.Int.</th>
+                                                    <th style="width: 140px;">Código</th>
+                                                    <th>Descripción</th>
+                                                    <th style="width: 140px;" class="text-end">Cantidad</th>
+                                                    <th style="width: 70px;"></th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                @foreach (var item in materialesAgregados)
+                                                {
+                                                    <tr>
+                                                        <td class="text-end"><strong>@item.Cod_Inte</strong></td>
+                                                        <td>@(string.IsNullOrWhiteSpace(item.Codigo) ? item.Cod_Exte : item.Codigo)</td>
+                                                        <td>@(string.IsNullOrWhiteSpace(item.Descripcion) ? "(sin descripción)" : item.Descripcion)</td>
+                                                        <td class="text-end">
+                                                            <input type="number"
+                                                                   class="form-control form-control-sm text-end"
+                                                                   step="0.0001"
+                                                                   @bind-value="item.Cantidad"
+                                                                   @bind-value:culture="CultureInfo.InvariantCulture"
+                                                                   @bind-value:event="onchange"
+                                                                   @bind-value:after="() => MarcarAgregadoPendiente(item)" />
+                                                        </td>
+                                                        <td class="text-end">
+                                                            <button class="btn btn-sm btn-outline-danger" @onclick="() => QuitarMaterialAgregado(item)" title="Quitar">
+                                                                <i class="fas fa-trash"></i>
+                                                            </button>
+                                                        </td>
+                                                    </tr>
+                                                }
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                }
+                            </div>
+
+                            <div class="col-12 col-xxl-6 mb-3">
+                                <div class="d-flex justify-content-between align-items-center mb-2 flex-wrap gap-2">
+                                    <h6 class="mb-0">Consumos (CF)</h6>
+                                    <small class="text-muted">Se descuentan del saldo disponible</small>
+                                </div>
+
+                                <div class="card mb-2">
+                                    <div class="card-body p-2">
+                                        <div class="row g-2 align-items-end">
+                                            <div class="col-12 col-lg-7">
+                                                <label class="form-label mb-1">Item</label>
+                                                <select class="form-select form-select-sm" @bind="codInteSeleccionadoConsumo">
+                                                    <option value="0">(seleccionar)</option>
+                                                    @foreach (var it in (materialesResumen ?? new List<DetamasuResumenDTO>()).OrderBy(x => x.Descripcion ?? string.Empty))
+                                                    {
+                                                        <option value="@it.Cod_Inte">@it.Cod_Inte - @(it.Descripcion ?? it.Codigo ?? it.Cod_Exte)</option>
+                                                    }
+                                                </select>
+                                            </div>
+                                            <div class="col-8 col-lg-3">
+                                                <label class="form-label mb-1">Cantidad</label>
+                                                <input type="number" class="form-control form-control-sm text-end" step="0.0001"
+                                                       @bind-value="cantidadConsumo"
+                                                       @bind-value:culture="CultureInfo.InvariantCulture"
+                                                       @bind-value:event="onchange" />
+                                            </div>
+                                            <div class="col-4 col-lg-2 d-grid">
+                                                <button class="btn btn-sm btn-success" @onclick="AgregarConsumo">
+                                                    <i class="fas fa-plus"></i>
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                @if (materialesConsumos == null || !materialesConsumos.Any())
+                                {
+                                    <div class="alert alert-secondary mb-0">No hay consumos informados.</div>
+                                }
+                                else
+                                {
+                                    var estiloScrollConsumos = materialesConsumos.Count > 10
+                                        ? "max-height: 420px; overflow-y: auto;"
+                                        : string.Empty;
+
+                                    <div class="table-responsive" style="@estiloScrollConsumos">
+                                        <table class="table table-striped table-hover table-sm">
+                                            <thead class="table-dark sticky-top">
+                                                <tr>
+                                                    <th style="width: 110px;" class="text-end">Cód.Int.</th>
+                                                    <th>Descripción</th>
+                                                    <th style="width: 140px;" class="text-end">Cantidad</th>
+                                                    <th style="width: 70px;"></th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                @foreach (var item in materialesConsumos)
+                                                {
+                                                    <tr>
+                                                        <td class="text-end"><strong>@item.Cod_Inte</strong></td>
+                                                        <td>@(string.IsNullOrWhiteSpace(item.Descripcion) ? "(sin descripción)" : item.Descripcion)</td>
+                                                        <td class="text-end">
+                                                            <input type="number"
+                                                                   class="form-control form-control-sm text-end"
+                                                                   step="0.0001"
+                                                                   @bind-value="item.Cantidad"
+                                                                   @bind-value:culture="CultureInfo.InvariantCulture"
+                                                                   @bind-value:event="onchange"
+                                                                   @bind-value:after="() => MarcarConsumoPendiente(item)" />
+                                                        </td>
+                                                        <td class="text-end">
+                                                            <button class="btn btn-sm btn-outline-danger" @onclick="() => QuitarConsumo(item)" title="Quitar">
+                                                                <i class="fas fa-trash"></i>
+                                                            </button>
+                                                        </td>
+                                                    </tr>
+                                                }
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                }
+                            </div>
+
+                            <div class="col-12 col-xxl-6 mb-3">
+                                <div class="d-flex justify-content-between align-items-center mb-2 flex-wrap gap-2">
+                                    <h6 class="mb-0">Devoluciones al cliente (DV)</h6>
+                                    <small class="text-muted">Se descuentan del saldo disponible</small>
+                                </div>
+
+                                <div class="card mb-2">
+                                    <div class="card-body p-2">
+                                        <div class="row g-2 align-items-end">
+                                            <div class="col-12 col-lg-7">
+                                                <label class="form-label mb-1">Item</label>
+                                                <select class="form-select form-select-sm" @bind="codInteSeleccionadoDevolucion">
+                                                    <option value="0">(seleccionar)</option>
+                                                    @foreach (var it in (materialesResumen ?? new List<DetamasuResumenDTO>()).OrderBy(x => x.Descripcion ?? string.Empty))
+                                                    {
+                                                        <option value="@it.Cod_Inte">@it.Cod_Inte - @(it.Descripcion ?? it.Codigo ?? it.Cod_Exte)</option>
+                                                    }
+                                                </select>
+                                            </div>
+                                            <div class="col-8 col-lg-3">
+                                                <label class="form-label mb-1">Cantidad</label>
+                                                <input type="number" class="form-control form-control-sm text-end" step="0.0001"
+                                                       @bind-value="cantidadDevolucion"
+                                                       @bind-value:culture="CultureInfo.InvariantCulture"
+                                                       @bind-value:event="onchange" />
+                                            </div>
+                                            <div class="col-4 col-lg-2 d-grid">
+                                                <button class="btn btn-sm btn-success" @onclick="AgregarDevolucion">
+                                                    <i class="fas fa-plus"></i>
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                @if (materialesDevoluciones == null || !materialesDevoluciones.Any())
+                                {
+                                    <div class="alert alert-secondary mb-0">No hay devoluciones informadas.</div>
+                                }
+                                else
+                                {
+                                    var estiloScrollDevoluciones = materialesDevoluciones.Count > 10
+                                        ? "max-height: 420px; overflow-y: auto;"
+                                        : string.Empty;
+
+                                    <div class="table-responsive" style="@estiloScrollDevoluciones">
+                                        <table class="table table-striped table-hover table-sm">
+                                            <thead class="table-dark sticky-top">
+                                                <tr>
+                                                    <th style="width: 110px;" class="text-end">Cód.Int.</th>
+                                                    <th>Descripción</th>
+                                                    <th style="width: 140px;" class="text-end">Cantidad</th>
+                                                    <th style="width: 70px;"></th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                @foreach (var item in materialesDevoluciones)
+                                                {
+                                                    <tr>
+                                                        <td class="text-end"><strong>@item.Cod_Inte</strong></td>
+                                                        <td>@(string.IsNullOrWhiteSpace(item.Descripcion) ? "(sin descripción)" : item.Descripcion)</td>
+                                                        <td class="text-end">
+                                                            <input type="number"
+                                                                   class="form-control form-control-sm text-end"
+                                                                   step="0.0001"
+                                                                   @bind-value="item.Cantidad"
+                                                                   @bind-value:culture="CultureInfo.InvariantCulture"
+                                                                   @bind-value:event="onchange"
+                                                                   @bind-value:after="() => MarcarDevolucionPendiente(item)" />
+                                                        </td>
+                                                        <td class="text-end">
+                                                            <button class="btn btn-sm btn-outline-danger" @onclick="() => QuitarDevolucion(item)" title="Quitar">
+                                                                <i class="fas fa-trash"></i>
+                                                            </button>
+                                                        </td>
+                                                    </tr>
+                                                }
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                }
+                            </div>
+                        </div>
+                    }
+                }
+                else
+                {
+                    <div class="row">
+                        <div class="col-12 col-lg-6 mb-3">
+                            <label class="form-label fw-bold">Detalle de la inspección</label>
+                            <textarea class="form-control"
+                                      rows="10"
+                                      @bind="reparacionSeleccionada!.Inspeccion"
+                                      placeholder="Ingrese el detalle de la inspección..."></textarea>
+                        </div>
+                        <div class="col-12 col-lg-6 mb-3">
+                            <label class="form-label fw-bold">Detalle de la reparación</label>
+                            <textarea class="form-control"
+                                      rows="10"
+                                      @bind="reparacionSeleccionada!.Reparacion"
+                                      placeholder="Ingrese el detalle de la reparación..."></textarea>
+                        </div>
+                    </div>
+
+                    <div class="d-flex justify-content-end">
+                        <button class="btn btn-primary" @onclick="GuardarDetalleInspeccionReparacion">
+                            <i class="fas fa-save me-2"></i> Guardar
+                        </button>
+                    </div>
+                }
+            </div>
+        </div>
+    }
+</div>
+
+@if (mostrarModalOFLimpieza)
+{
+    <div class="modal-backdrop fade show"></div>
+    <div class="modal fade show d-block" tabindex="-1" role="dialog">
+        <div class="modal-dialog modal-lg" role="document">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Generar O.F. Limpieza</h5>
+                    <button type="button" class="btn-close" aria-label="Close" @onclick="CerrarModalOFLimpieza" disabled="@generandoOFLimpieza"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="alert alert-info">
+                        <strong>Nota seleccionada:</strong> @numRepaSeleccionado
+                    </div>
+
+                    <div class="row g-3">
+                        <div class="col-md-4">
+                            <label class="form-label fw-bold">Mano de obra</label>
+                            <input type="number" class="form-control text-end" step="0.0001" @bind-value="manoDeObraOFLimpieza" @bind-value:event="oninput" />
+                        </div>
+
+                        <div class="col-md-8 d-flex align-items-end justify-content-end">
+                            <button class="btn btn-outline-primary" type="button" @onclick="AbrirSelectorProductoOFLimpieza" disabled="@generandoOFLimpieza">
+                                <i class="fas fa-plus"></i> Agregar producto
+                            </button>
+                        </div>
+
+                        <div class="col-12">
+                            <div class="table-responsive">
+                                <table class="table table-sm table-striped align-middle">
+                                    <thead class="table-dark">
+                                        <tr>
+                                            <th style="width: 140px;">Código</th>
+                                            <th>Descripción</th>
+                                            <th class="text-end" style="width: 140px;">Cantidad</th>
+                                            <th class="text-center" style="width: 90px;">Acción</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @if (!itemsOFLimpieza.Any())
+                                        {
+                                            <tr>
+                                                <td colspan="4" class="text-center text-muted">No hay productos agregados</td>
+                                            </tr>
+                                        }
+                                        else
+                                        {
+                                            @foreach (var item in itemsOFLimpieza)
+                                            {
+                                                <tr>
+                                                    <td><strong>@item.Codigo</strong></td>
+                                                    <td>@item.Descripcion</td>
+                                                    <td class="text-end">
+                                                        <input type="number" class="form-control form-control-sm text-end" step="0.0001" @bind-value="item.Cantidad" @bind-value:event="oninput" />
+                                                    </td>
+                                                    <td class="text-center">
+                                                        <button type="button" class="btn btn-sm btn-outline-danger" @onclick="(() => QuitarItemOFLimpieza(item.CodInte))" disabled="@generandoOFLimpieza">
+                                                            <i class="fas fa-trash"></i>
+                                                        </button>
+                                                    </td>
+                                                </tr>
+                                            }
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" @onclick="CerrarModalOFLimpieza" disabled="@generandoOFLimpieza">Cancelar</button>
+                    <button type="button" class="btn btn-primary" @onclick="GenerarOFLimpiezaAsync" disabled="@generandoOFLimpieza">
+                        @if (generandoOFLimpieza)
+                        {
+                            <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
+                            <span class="ms-1">Generando...</span>
+                        }
+                        else
+                        {
+                            <i class="fas fa-magic"></i>
+                            <span class="ms-1">Generar</span>
+                        }
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@* IMPORTANTE (Performance):
+   - No pasamos Items al modal para evitar traer cientos/miles de nota de reparación al iniciar.
+   - SelectorReparaciones ahora pagina contra el backend (api/repara + totalPages) y trae solo la página requerida.
+   - Esto reduce significativamente la demora al abrir el modal.
+*@
+<SelectorReparaciones @ref="selectorReparaciones" OnSeleccionado="OnReparacionSeleccionadaDesdeSelector" />
+
+<!-- Selector reutilizable de productos para agregar repuestos desde MASTER -->
+<SelectorProductos @ref="selectorProductosRef"
+                   PermitirCantidad="true"
+                   PermitirPrecio="false"
+                   CantidadDefault="1"
+                   OnProductoSeleccionadoCantidad="OnProductoSeleccionado"
+                   OnClose="OnCloseSelectorProductos" />
+
+<SelectorProductos @ref="selectorProductosMaterialesRef"
+                   PermitirCantidad="true"
+                   PermitirPrecio="false"
+                   CantidadDefault="1"
+                   OnProductoSeleccionadoCantidad="OnProductoSeleccionadoMateriales"
+                   OnClose="OnCloseSelectorProductos" />
+
+<SelectorProductos @ref="selectorProductosOFLimpiezaRef"
+                  PermitirCantidad="true"
+                  PermitirPrecio="false"
+                  CantidadDefault="1"
+                  OnProductoSeleccionadoCantidad="OnProductoSeleccionadoOFLimpieza"
+                  OnClose="OnCloseSelectorProductosOFLimpieza" />
+
+@code {
+    private List<Repara>? listaReparaciones;
+    private int numRepaSeleccionado = 0;
+    private Repara? reparacionSeleccionada;
+    private Deudor12? clienteActual;
+    private List<GalimRep>? imagenes;
+    private bool cargandoImagenes = false;
+
+    private List<Docanre>? documentos;
+    private bool cargandoDocumentos = false;
+    private string solapaActiva = "imagenes";
+
+    // Repuestos (REPUREPA)
+    // - Se cargan por NUMREPA y ORIGEN=0 (según VB6)
+    // - Se guardan de forma independiente (cada acción pega a su endpoint)
+    private List<IMPLANPROD.Shared.DTOs.RepurepaDTO>? repuestos;
+    private bool cargandoRepuestos = false;
+    private SelectorProductos? selectorProductosRef;
+    private HashSet<int> repuestosConCambios = new HashSet<int>();
+    private int siguienteIdTemporalRepuesto = -1;
+    private bool hayCambiosPendientesRepuestos => repuestosConCambios.Count > 0 || (repuestos?.Any(r => r.Id < 0) ?? false);
+
+    // Materiales suministrados por el cliente (DETAMASU)
+    private List<DetamasuResumenDTO>? materialesResumen;
+    private List<DetamasuResumenDTO>? materialesAgregados;
+    private bool cargandoMateriales = false;
+    private SelectorProductos? selectorProductosMaterialesRef;
+
+    private bool mostrarModalOFLimpieza = false;
+    private bool generandoOFLimpieza = false;
+    private decimal manoDeObraOFLimpieza = 0m;
+    private SelectorProductos? selectorProductosOFLimpiezaRef;
+    private List<ItemOFLimpieza> itemsOFLimpieza = new List<ItemOFLimpieza>();
+    private HashSet<int> materialesConCambios = new HashSet<int>();
+    private HashSet<int> materialesAgregadosConCambios = new HashSet<int>();
+    private List<DetamasuResumenDTO>? materialesConsumos;
+    private List<DetamasuResumenDTO>? materialesDevoluciones;
+    private HashSet<int> materialesConsumosConCambios = new HashSet<int>();
+    private HashSet<int> materialesDevolucionesConCambios = new HashSet<int>();
+    private int codInteSeleccionadoConsumo = 0;
+    private decimal cantidadConsumo = 1m;
+    private int codInteSeleccionadoDevolucion = 0;
+    private decimal cantidadDevolucion = 1m;
+    private bool hayCambiosPendientesMateriales => materialesConCambios.Count > 0
+        || (materialesAgregados?.Any() ?? false)
+        || (materialesConsumos?.Any() ?? false)
+        || (materialesDevoluciones?.Any() ?? false);
+    private string ordenMateriales = "fecha";
+
+    private SelectorReparaciones? selectorReparaciones;
+    private string textoReparacionSeleccionada = string.Empty;
+
+    protected override async Task OnInitializedAsync()
+    {
+        // IMPORTANTE (Performance):
+        // - Ya NO precargamos la lista de nota de reparación. al iniciar (era lento).
+        // - El modal SelectorReparaciones realiza paginado server-side y carga bajo demanda.
+        
+        // Si se recibe NumRepa como parámetro, cargar automáticamente esa reparación
+        if (NumRepa.HasValue && NumRepa.Value > 0)
+        {
+            await CargarReparacionPorNumero(NumRepa.Value);
+        }
+    }
+    
+    private async Task CargarReparacionPorNumero(int numRepa)
+    {
+        try
+        {
+            // Cargar datos de la reparación
+            var responseHttp = await repository.Get<Repara>($"api/repara/{numRepa}");
+            
+            if (!responseHttp.Error && responseHttp.Response != null)
+            {
+                var reparacion = responseHttp.Response;
+                
+                // Asignar la reparación seleccionada
+                numRepaSeleccionado = reparacion.NumRepa;
+                reparacionSeleccionada = reparacion;
+                textoReparacionSeleccionada = $"{reparacion.NumRepa} - {reparacion.Raso_Cli ?? ""}";
+                
+                // Cargar datos del cliente
+                if (reparacion.Nume_Cli.HasValue && reparacion.Nume_Cli.Value > 0)
+                {
+                    await CargarDatosCliente(reparacion.Nume_Cli.Value);
+                }
+                
+                // Cargar datos de la solapa activa
+                await CambiarSolapaAsync(solapaActiva);
+                
+                StateHasChanged();
+            }
+            else
+            {
+                await sweetAlertService.FireAsync("Error", "No se pudo cargar la reparación", SweetAlertIcon.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            await sweetAlertService.FireAsync("Error", $"Error al cargar reparación: {ex.Message}", SweetAlertIcon.Error);
+        }
+    }
+
+    private void AbrirOrdenFabricacion()
+    {
+        navigationManager.NavigateTo("/ofabricacion-limpieza");
+    }
+
+    private async Task AbrirModalOFLimpieza()
+    {
+        if (numRepaSeleccionado <= 0)
+        {
+            await sweetAlertService.FireAsync("Error", "Primero debe seleccionar una nota de reparación.", SweetAlertIcon.Error);
+            return;
+        }
+
+        mostrarModalOFLimpieza = true;
+        generandoOFLimpieza = false;
+        manoDeObraOFLimpieza = 0m;
+        itemsOFLimpieza = new List<ItemOFLimpieza>();
+    }
+
+    private void CerrarModalOFLimpieza()
+    {
+        mostrarModalOFLimpieza = false;
+    }
+
+    private async Task AbrirSelectorProductoOFLimpieza()
+    {
+        if (selectorProductosOFLimpiezaRef == null)
+        {
+            await sweetAlertService.FireAsync("Error", "No se pudo abrir el selector de productos.", SweetAlertIcon.Error);
+            return;
+        }
+
+        await selectorProductosOFLimpiezaRef.AbrirModal();
+    }
+
+    private async Task OnProductoSeleccionadoOFLimpieza(SelectorProductos.SeleccionProducto seleccion)
+    {
+        try
+        {
+            if (seleccion?.Producto == null)
+            {
+                return;
+            }
+
+            if (seleccion.Producto.Codint <= 0)
+            {
+                await sweetAlertService.FireAsync("Error", "Producto inválido (CODINT).", SweetAlertIcon.Error);
+                return;
+            }
+
+            var cantidad = seleccion.Cantidad;
+            if (cantidad <= 0)
+            {
+                cantidad = 1m;
+            }
+
+            var existente = itemsOFLimpieza.FirstOrDefault(x => x.CodInte == seleccion.Producto.Codint);
+            if (existente != null)
+            {
+                existente.Cantidad += cantidad;
+            }
+            else
+            {
+                itemsOFLimpieza.Add(new ItemOFLimpieza
+                {
+                    CodInte = seleccion.Producto.Codint,
+                    Codigo = seleccion.Producto.Codigo ?? string.Empty,
+                    Descripcion = seleccion.Producto.Descripcion ?? string.Empty,
+                    Cantidad = cantidad
+                });
+            }
+        }
+        finally
+        {
+            StateHasChanged();
+        }
+    }
+
+    private void OnCloseSelectorProductosOFLimpieza()
+    {
+    }
+
+    private async Task GenerarOFLimpiezaAsync()
+    {
+        if (numRepaSeleccionado <= 0)
+        {
+            await sweetAlertService.FireAsync("Error", "Primero debe seleccionar una nota de reparación.", SweetAlertIcon.Error);
+            return;
+        }
+
+        if (itemsOFLimpieza == null || !itemsOFLimpieza.Any())
+        {
+            await sweetAlertService.FireAsync("Error", "Debe agregar al menos un producto.", SweetAlertIcon.Error);
+            return;
+        }
+
+        foreach (var it in itemsOFLimpieza)
+        {
+            if (it.CodInte <= 0)
+            {
+                await sweetAlertService.FireAsync("Error", "Hay productos inválidos (CODINT).", SweetAlertIcon.Error);
+                return;
+            }
+
+            if (it.Cantidad <= 0)
+            {
+                it.Cantidad = 1m;
+            }
+        }
+
+        try
+        {
+            generandoOFLimpieza = true;
+            StateHasChanged();
+
+            var request = new GenerarOFLimpiezaRequest
+            {
+                NumeroReparacion = numRepaSeleccionado,
+                ManoDeObra = manoDeObraOFLimpieza,
+                Items = itemsOFLimpieza
+                    .Where(x => x.CodInte > 0)
+                    .Select(x => new GenerarOFLimpiezaItemRequest { CodInte = x.CodInte, Cantidad = x.Cantidad })
+                    .ToList()
+            };
+
+            var responseHttp = await repository.Post<GenerarOFLimpiezaRequest, OrdeFabr>("api/ordefabr/generar-limpieza", request);
+            if (responseHttp.Error)
+            {
+                var message = await responseHttp.GetErrorMessageAsync();
+                await sweetAlertService.FireAsync("Error", message, SweetAlertIcon.Error);
+                return;
+            }
+
+            var orden = responseHttp.Response;
+            await sweetAlertService.FireAsync("Éxito", $"O.F. de Limpieza generada: {orden?.IdSubOr}", SweetAlertIcon.Success);
+            mostrarModalOFLimpieza = false;
+        }
+        catch (Exception ex)
+        {
+            await sweetAlertService.FireAsync("Error", $"Error al generar O.F. de Limpieza: {ex.Message}", SweetAlertIcon.Error);
+        }
+        finally
+        {
+            generandoOFLimpieza = false;
+            StateHasChanged();
+        }
+    }
+
+    private class GenerarOFLimpiezaRequest
+    {
+        public int NumeroReparacion { get; set; }
+        public decimal ManoDeObra { get; set; }
+        public List<GenerarOFLimpiezaItemRequest> Items { get; set; } = new List<GenerarOFLimpiezaItemRequest>();
+    }
+
+    private class GenerarOFLimpiezaItemRequest
+    {
+        public int CodInte { get; set; }
+        public decimal Cantidad { get; set; }
+    }
+
+    private class ItemOFLimpieza
+    {
+        public int CodInte { get; set; }
+        public string Codigo { get; set; } = string.Empty;
+        public string Descripcion { get; set; } = string.Empty;
+        public decimal Cantidad { get; set; } = 1m;
+    }
+
+    private void QuitarItemOFLimpieza(int codInte)
+    {
+        itemsOFLimpieza.RemoveAll(x => x.CodInte == codInte);
+    }
+
+    private async Task GuardarRepuestos()
+    {
+        try
+        {
+            if (numRepaSeleccionado <= 0)
+            {
+                return;
+            }
+
+            if (repuestos == null || (!repuestosConCambios.Any() && !repuestos.Any(r => r.Id < 0)))
+            {
+                return;
+            }
+
+            // 1) Guardar altas pendientes (Id temporal < 0)
+            var nuevos = repuestos.Where(r => r.Id < 0).ToList();
+            foreach (var nuevoDto in nuevos)
+            {
+                var nuevo = new IMPLANPROD.Shared.Entities.Repurepa
+                {
+                    NumRepa = numRepaSeleccionado,
+                    Cod_Inte = nuevoDto.Cod_Inte,
+                    Cant_Sol = (nuevoDto.Cant_Sol <= 0 ? 1 : nuevoDto.Cant_Sol),
+                    Origen = 0,
+                    MarcaItemAgregado = 1,
+                    MarBorra = 0
+                };
+
+                var responseAlta = await repository.Post("api/repurepa", nuevo);
+                if (responseAlta.Error)
+                {
+                    var msg = await responseAlta.GetErrorMessageAsync();
+                    await sweetAlertService.FireAsync("Error", msg, SweetAlertIcon.Error);
+                    return;
+                }
+            }
+
+            // 2) Guardar modificaciones de cantidad (solo ítems ya existentes en BD)
+            foreach (var id in repuestosConCambios.Where(x => x > 0).ToList())
+            {
+                var item = repuestos.FirstOrDefault(r => r.Id == id);
+                if (item == null)
+                {
+                    continue;
+                }
+
+                var response = await repository.Put($"api/repurepa/{item.Id}/cantidad", item.Cant_Sol);
+                if (response.Error)
+                {
+                    var msg = await response.GetErrorMessageAsync();
+                    await sweetAlertService.FireAsync("Error", msg, SweetAlertIcon.Error);
+                    return;
+                }
+            }
+
+            repuestosConCambios.Clear();
+            await sweetAlertService.FireAsync("Éxito", "Repuestos guardados correctamente", SweetAlertIcon.Success);
+            await CargarRepuestos();
+        }
+        catch (Exception ex)
+        {
+            await sweetAlertService.FireAsync("Error", $"Error al guardar repuestos: {ex.Message}", SweetAlertIcon.Error);
+        }
+    }
+
+    private void MarcarRepuestoPendiente(IMPLANPROD.Shared.DTOs.RepurepaDTO item)
+    {
+        if (item == null)
+        {
+            return;
+        }
+
+        item.Cant_Sol = Math.Round(item.Cant_Sol, 4);
+        repuestosConCambios.Add(item.Id);
+    }
+
+    private async Task SubirDocumento(InputFileChangeEventArgs e)
+    {
+        try
+        {
+            if (numRepaSeleccionado <= 0)
+            {
+                await sweetAlertService.FireAsync("Error", "Primero debe seleccionar una nota de reparación.", SweetAlertIcon.Error);
+                return;
+            }
+
+            var archivo = e.File;
+            if (archivo == null)
+            {
+                return;
+            }
+
+            const long maxFileSize = 20 * 1024 * 1024;
+            if (archivo.Size > maxFileSize)
+            {
+                await sweetAlertService.FireAsync("Error", "El archivo es demasiado grande. Tamaño máximo: 20MB", SweetAlertIcon.Error);
+                return;
+            }
+
+            using var content = new MultipartFormDataContent();
+            var fileContent = new StreamContent(archivo.OpenReadStream(maxFileSize));
+            fileContent.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue(archivo.ContentType);
+
+            content.Add(fileContent, "file", archivo.Name);
+            content.Add(new StringContent(numRepaSeleccionado.ToString()), "numRepa");
+
+            var response = await repository.PostFormData<Docanre>("api/docanre/upload", content);
+
+            if (!response.Error)
+            {
+                await sweetAlertService.FireAsync("Éxito", "Documento subido correctamente", SweetAlertIcon.Success);
+                await CargarDocumentos();
+            }
+            else
+            {
+                var message = await response.GetErrorMessageAsync();
+                await sweetAlertService.FireAsync("Error", message, SweetAlertIcon.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            await sweetAlertService.FireAsync("Error", $"Error al subir documento: {ex.Message}", SweetAlertIcon.Error);
+        }
+    }
+
+    private async Task EliminarDocumento(int id)
+    {
+        var result = await sweetAlertService.FireAsync(new SweetAlertOptions
+        {
+            Title = "¿Eliminar documento?",
+            Text = "Esta acción no se puede deshacer",
+            Icon = SweetAlertIcon.Warning,
+            ShowCancelButton = true,
+            ConfirmButtonText = "Sí, eliminar",
+            CancelButtonText = "Cancelar"
+        });
+
+        if (result.IsConfirmed)
+        {
+            try
+            {
+                var responseHttp = await repository.Delete($"api/docanre/{id}");
+                if (!responseHttp.Error)
+                {
+                    await sweetAlertService.FireAsync("Eliminado", "Documento eliminado correctamente", SweetAlertIcon.Success);
+                    await CargarDocumentos();
+                }
+                else
+                {
+                    var message = await responseHttp.GetErrorMessageAsync();
+                    await sweetAlertService.FireAsync("Error", message, SweetAlertIcon.Error);
+                }
+            }
+            catch (Exception ex)
+            {
+                await sweetAlertService.FireAsync("Error", $"Error al eliminar documento: {ex.Message}", SweetAlertIcon.Error);
+            }
+        }
+    }
+
+    private async Task CambiarSolapaAsync(string solapa)
+    {
+        if (solapaActiva == solapa)
+        {
+            return;
+        }
+
+        if (hayCambiosPendientesRepuestos && solapaActiva == "repuestos")
+        {
+            var confirmar = await ConfirmarDescartarCambiosRepuestosAsync();
+            if (!confirmar)
+            {
+                return;
+            }
+        }
+
+        if (hayCambiosPendientesMateriales && solapaActiva == "materiales")
+        {
+            var confirmar = await ConfirmarDescartarCambiosMaterialesAsync();
+            if (!confirmar)
+            {
+                return;
+            }
+        }
+
+        solapaActiva = solapa;
+
+        // Si el usuario entra a la solapa de repuestos, cargamos automáticamente.
+        // Esto replica la idea VB6 de "refrescar lista" cuando se abre el módulo.
+        if (solapaActiva == "repuestos" && numRepaSeleccionado > 0)
+        {
+            _ = CargarRepuestos();
+        }
+
+        if (solapaActiva == "materiales" && numRepaSeleccionado > 0)
+        {
+            _ = CargarMateriales();
+        }
+    }
+
+    private async Task<bool> ConfirmarDescartarCambiosMaterialesAsync()
+    {
+        var result = await sweetAlertService.FireAsync(new SweetAlertOptions
+        {
+            Title = "Hay cambios sin guardar",
+            Text = "Tiene materiales pendientes sin guardar. Si continúa, se perderán estos cambios. ¿Desea descartarlos?",
+            Icon = SweetAlertIcon.Warning,
+            ShowCancelButton = true,
+            ConfirmButtonText = "Sí, descartar",
+            CancelButtonText = "No, volver"
+        });
+
+        if (!result.IsConfirmed)
+        {
+            return false;
+        }
+
+        materialesConCambios.Clear();
+        materialesAgregadosConCambios.Clear();
+        materialesAgregados = new List<DetamasuResumenDTO>();
+        materialesConsumosConCambios.Clear();
+        materialesDevolucionesConCambios.Clear();
+        materialesConsumos = new List<DetamasuResumenDTO>();
+        materialesDevoluciones = new List<DetamasuResumenDTO>();
+        return true;
+    }
+
+    private async Task AbrirSelectorProductosMateriales()
+    {
+        if (numRepaSeleccionado <= 0)
+        {
+            await sweetAlertService.FireAsync("Error", "Primero debe seleccionar una nota de reparación..", SweetAlertIcon.Error);
+            return;
+        }
+
+        if (selectorProductosMaterialesRef != null)
+        {
+            await selectorProductosMaterialesRef.AbrirModal();
+        }
+    }
+
+    private async Task OnProductoSeleccionadoMateriales(SelectorProductos.SeleccionProducto seleccion)
+    {
+        try
+        {
+            if (seleccion?.Producto == null)
+            {
+                return;
+            }
+
+            if (materialesAgregados == null)
+            {
+                materialesAgregados = new List<DetamasuResumenDTO>();
+            }
+
+            var cantidadInicial = (seleccion.Cantidad <= 0 ? 1 : seleccion.Cantidad);
+            cantidadInicial = Math.Round(cantidadInicial, 4);
+
+            var nuevo = new DetamasuResumenDTO
+            {
+                Cod_Inte = seleccion.Producto.Codint,
+                Cod_Exte = seleccion.Producto.Codigo,
+                Codigo = seleccion.Producto.Codigo,
+                Descripcion = seleccion.Producto.Descripcion,
+                Cantidad = cantidadInicial,
+                FechaUltMov = DateTime.Now
+            };
+
+            materialesAgregados.Add(nuevo);
+            materialesAgregadosConCambios.Add(nuevo.Cod_Inte);
+            StateHasChanged();
+        }
+        catch (Exception ex)
+        {
+            await sweetAlertService.FireAsync("Error", $"Error al agregar item: {ex.Message}", SweetAlertIcon.Error);
+        }
+    }
+
+    private void QuitarMaterialAgregado(DetamasuResumenDTO item)
+    {
+        materialesAgregados?.Remove(item);
+        materialesAgregadosConCambios.Remove(item.Cod_Inte);
+    }
+
+    private decimal GetDisponibleActual(int codInte)
+    {
+        var baseItem = materialesResumen?.FirstOrDefault(x => x.Cod_Inte == codInte);
+        var baseDisponible = baseItem?.Cantidad ?? 0m;
+
+        var consumosPend = materialesConsumos?.Where(x => x.Cod_Inte == codInte).Sum(x => x.Cantidad) ?? 0m;
+        var devolPend = materialesDevoluciones?.Where(x => x.Cod_Inte == codInte).Sum(x => x.Cantidad) ?? 0m;
+
+        return Math.Round(baseDisponible - consumosPend - devolPend, 4);
+    }
+
+    private async Task AgregarConsumo()
+    {
+        if (codInteSeleccionadoConsumo <= 0)
+        {
+            await sweetAlertService.FireAsync("Error", "Seleccione un item ingresado.", SweetAlertIcon.Error);
+            return;
+        }
+
+        var cant = Math.Round(cantidadConsumo, 4);
+        if (cant <= 0)
+        {
+            await sweetAlertService.FireAsync("Error", "La cantidad debe ser mayor a 0.", SweetAlertIcon.Error);
+            return;
+        }
+
+        var disponible = GetDisponibleActual(codInteSeleccionadoConsumo);
+        if (cant > disponible)
+        {
+            await sweetAlertService.FireAsync("Error", $"Cantidad inválida. Disponible: {disponible:0.####}", SweetAlertIcon.Error);
+            return;
+        }
+
+        var baseItem = materialesResumen?.FirstOrDefault(x => x.Cod_Inte == codInteSeleccionadoConsumo);
+        if (baseItem == null)
+        {
+            await sweetAlertService.FireAsync("Error", "El item seleccionado no existe en los ingresados.", SweetAlertIcon.Error);
+            return;
+        }
+
+        materialesConsumos ??= new List<DetamasuResumenDTO>();
+        materialesConsumos.Add(new DetamasuResumenDTO
+        {
+            Cod_Inte = baseItem.Cod_Inte,
+            Cod_Exte = baseItem.Cod_Exte,
+            Codigo = baseItem.Codigo,
+            Descripcion = baseItem.Descripcion,
+            Cantidad = cant,
+            FechaUltMov = DateTime.Now
+        });
+
+        materialesConsumosConCambios.Add(baseItem.Cod_Inte);
+        cantidadConsumo = 1m;
+    }
+
+    private async Task AgregarDevolucion()
+    {
+        if (codInteSeleccionadoDevolucion <= 0)
+        {
+            await sweetAlertService.FireAsync("Error", "Seleccione un item ingresado.", SweetAlertIcon.Error);
+            return;
+        }
+
+        var cant = Math.Round(cantidadDevolucion, 4);
+        if (cant <= 0)
+        {
+            await sweetAlertService.FireAsync("Error", "La cantidad debe ser mayor a 0.", SweetAlertIcon.Error);
+            return;
+        }
+
+        var disponible = GetDisponibleActual(codInteSeleccionadoDevolucion);
+        if (cant > disponible)
+        {
+            await sweetAlertService.FireAsync("Error", $"Cantidad inválida. Disponible: {disponible:0.####}", SweetAlertIcon.Error);
+            return;
+        }
+
+        var baseItem = materialesResumen?.FirstOrDefault(x => x.Cod_Inte == codInteSeleccionadoDevolucion);
+        if (baseItem == null)
+        {
+            await sweetAlertService.FireAsync("Error", "El item seleccionado no existe en los ingresados.", SweetAlertIcon.Error);
+            return;
+        }
+
+        materialesDevoluciones ??= new List<DetamasuResumenDTO>();
+        materialesDevoluciones.Add(new DetamasuResumenDTO
+        {
+            Cod_Inte = baseItem.Cod_Inte,
+            Cod_Exte = baseItem.Cod_Exte,
+            Codigo = baseItem.Codigo,
+            Descripcion = baseItem.Descripcion,
+            Cantidad = cant,
+            FechaUltMov = DateTime.Now
+        });
+
+        materialesDevolucionesConCambios.Add(baseItem.Cod_Inte);
+        cantidadDevolucion = 1m;
+    }
+
+    private void QuitarConsumo(DetamasuResumenDTO item)
+    {
+        materialesConsumos?.Remove(item);
+        materialesConsumosConCambios.Remove(item.Cod_Inte);
+    }
+
+    private void QuitarDevolucion(DetamasuResumenDTO item)
+    {
+        materialesDevoluciones?.Remove(item);
+        materialesDevolucionesConCambios.Remove(item.Cod_Inte);
+    }
+
+    private void MarcarConsumoPendiente(DetamasuResumenDTO item)
+    {
+        item.Cantidad = Math.Round(item.Cantidad, 4);
+        materialesConsumosConCambios.Add(item.Cod_Inte);
+    }
+
+    private void MarcarDevolucionPendiente(DetamasuResumenDTO item)
+    {
+        item.Cantidad = Math.Round(item.Cantidad, 4);
+        materialesDevolucionesConCambios.Add(item.Cod_Inte);
+    }
+
+    private void MarcarMaterialPendiente(DetamasuResumenDTO item)
+    {
+        item.Resul = Math.Round(item.Resul, 4);
+        item.Cantidad = item.Resul;
+        materialesConCambios.Add(item.Cod_Inte);
+    }
+
+    private void MarcarAgregadoPendiente(DetamasuResumenDTO item)
+    {
+        item.Cantidad = Math.Round(item.Cantidad, 4);
+        materialesAgregadosConCambios.Add(item.Cod_Inte);
+    }
+
+    private List<DetamasuResumenDTO> OrdenarMateriales(List<DetamasuResumenDTO> lista)
+    {
+        return ordenMateriales switch
+        {
+            "codigo" => lista
+                .OrderBy(x => x.Codigo ?? x.Cod_Exte ?? string.Empty)
+                .ThenBy(x => x.Descripcion ?? string.Empty)
+                .ThenBy(x => x.Cod_Inte)
+                .ToList(),
+            "fecha" => lista
+                .OrderByDescending(x => x.FechaUltMov)
+                .ThenBy(x => x.Descripcion ?? string.Empty)
+                .ThenBy(x => x.Cod_Inte)
+                .ToList(),
+            _ => lista
+                .OrderBy(x => x.Descripcion ?? string.Empty)
+                .ThenBy(x => x.Cod_Inte)
+                .ToList()
+        };
+    }
+
+    private async Task CargarMateriales()
+    {
+        try
+        {
+            if (numRepaSeleccionado <= 0)
+            {
+                materialesResumen = new List<DetamasuResumenDTO>();
+                return;
+            }
+
+            cargandoMateriales = true;
+            StateHasChanged();
+
+            var response = await repository.Get<List<DetamasuResumenDTO>>($"api/detamasu/resumen/{numRepaSeleccionado}");
+            if (!response.Error && response.Response != null)
+            {
+                materialesResumen = response.Response;
+            }
+            else
+            {
+                materialesResumen = new List<DetamasuResumenDTO>();
+                var msg = await response.GetErrorMessageAsync();
+                await sweetAlertService.FireAsync("Error", msg, SweetAlertIcon.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            materialesResumen = new List<DetamasuResumenDTO>();
+            await sweetAlertService.FireAsync("Error", $"Error al cargar materiales: {ex.Message}", SweetAlertIcon.Error);
+        }
+        finally
+        {
+            cargandoMateriales = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task GuardarMateriales()
+    {
+        try
+        {
+            if (numRepaSeleccionado <= 0)
+            {
+                return;
+            }
+
+            var numeClie = reparacionSeleccionada?.Nume_Cli;
+
+            // 1) Guardar agregados (BR)
+            if (materialesAgregados != null && materialesAgregados.Any())
+            {
+                foreach (var item in materialesAgregados)
+                {
+                    var dto = new DetamasuMovimientoCreateDTO
+                    {
+                        CodiMovi = "BR",
+                        Cod_Inte = item.Cod_Inte,
+                        Talon = numRepaSeleccionado,
+                        Nume_Clie = numeClie,
+                        Cantidad = item.Cantidad,
+                        FechMov = DateTime.Now,
+                        Referencia = "Agregado Posterior"
+                    };
+
+                    var resp = await repository.Post("api/detamasu/movimiento", dto);
+                    if (resp.Error)
+                    {
+                        var msg = await resp.GetErrorMessageAsync();
+                        await sweetAlertService.FireAsync("Error", msg, SweetAlertIcon.Error);
+                        return;
+                    }
+                }
+            }
+
+            // 2) Guardar ajustes de cantidad (AJ)
+            if (materialesResumen != null && materialesConCambios.Any())
+            {
+                foreach (var codInte in materialesConCambios.ToList())
+                {
+                    var item = materialesResumen.FirstOrDefault(x => x.Cod_Inte == codInte);
+                    if (item == null)
+                    {
+                        continue;
+                    }
+
+                    var dto = new DetamasuAjusteCantidadDTO
+                    {
+                        CodiMovi = "AJ",
+                        Talon = numRepaSeleccionado,
+                        Cod_Inte = item.Cod_Inte,
+                        Nume_Clie = numeClie,
+                        NuevaCantidad = item.Resul,
+                        Referencia = "Ajuste manual",
+                        FechMov = DateTime.Now
+                    };
+
+                    var resp = await repository.Put("api/detamasu/ajustar-cantidad", dto);
+                    if (resp.Error)
+                    {
+                        var msg = await resp.GetErrorMessageAsync();
+                        await sweetAlertService.FireAsync("Error", msg, SweetAlertIcon.Error);
+                        return;
+                    }
+                }
+            }
+
+            // 3) Guardar consumos (CF)
+            if (materialesConsumos != null && materialesConsumos.Any())
+            {
+                foreach (var item in materialesConsumos)
+                {
+                    var dto = new DetamasuSalidaCreateDTO
+                    {
+                        CodiMovi = "CF",
+                        Talon = numRepaSeleccionado,
+                        Cod_Inte = item.Cod_Inte,
+                        Nume_Clie = numeClie,
+                        Cantidad = item.Cantidad,
+                        FechMov = DateTime.Now,
+                        Referencia = "Consumo"
+                    };
+
+                    var resp = await repository.Post("api/detamasu/salida", dto);
+                    if (resp.Error)
+                    {
+                        var msg = await resp.GetErrorMessageAsync();
+                        await sweetAlertService.FireAsync("Error", msg, SweetAlertIcon.Error);
+                        return;
+                    }
+                }
+            }
+
+            // 4) Guardar devoluciones (DV)
+            if (materialesDevoluciones != null && materialesDevoluciones.Any())
+            {
+                foreach (var item in materialesDevoluciones)
+                {
+                    var dto = new DetamasuSalidaCreateDTO
+                    {
+                        CodiMovi = "DV",
+                        Talon = numRepaSeleccionado,
+                        Cod_Inte = item.Cod_Inte,
+                        Nume_Clie = numeClie,
+                        Cantidad = item.Cantidad,
+                        FechMov = DateTime.Now,
+                        Referencia = "Devolución al cliente"
+                    };
+
+                    var resp = await repository.Post("api/detamasu/salida", dto);
+                    if (resp.Error)
+                    {
+                        var msg = await resp.GetErrorMessageAsync();
+                        await sweetAlertService.FireAsync("Error", msg, SweetAlertIcon.Error);
+                        return;
+                    }
+                }
+            }
+
+            materialesConCambios.Clear();
+            materialesAgregadosConCambios.Clear();
+            materialesAgregados = new List<DetamasuResumenDTO>();
+            materialesConsumosConCambios.Clear();
+            materialesDevolucionesConCambios.Clear();
+            materialesConsumos = new List<DetamasuResumenDTO>();
+            materialesDevoluciones = new List<DetamasuResumenDTO>();
+            await sweetAlertService.FireAsync("Éxito", "Materiales guardados correctamente", SweetAlertIcon.Success);
+            await CargarMateriales();
+        }
+        catch (Exception ex)
+        {
+            await sweetAlertService.FireAsync("Error", $"Error al guardar materiales: {ex.Message}", SweetAlertIcon.Error);
+        }
+    }
+
+    private async Task<bool> ConfirmarDescartarCambiosRepuestosAsync()
+    {
+        var result = await sweetAlertService.FireAsync(new SweetAlertOptions
+        {
+            Title = "Hay cambios sin guardar",
+            Text = "Tiene repuestos pendientes sin guardar. Si continúa, se perderán estos cambios. ¿Desea descartarlos?",
+            Icon = SweetAlertIcon.Warning,
+            ShowCancelButton = true,
+            ConfirmButtonText = "Sí, descartar",
+            CancelButtonText = "No, volver"
+        });
+
+        if (!result.IsConfirmed)
+        {
+            return false;
+        }
+
+        repuestosConCambios.Clear();
+        if (repuestos != null)
+        {
+            repuestos.RemoveAll(r => r.Id < 0);
+        }
+
+        return true;
+    }
+
+    private async Task CargarRepuestos()
+    {
+        try
+        {
+            if (numRepaSeleccionado <= 0)
+            {
+                repuestos = new List<IMPLANPROD.Shared.DTOs.RepurepaDTO>();
+                return;
+            }
+
+            cargandoRepuestos = true;
+            StateHasChanged();
+
+            // VB6: WHERE NUMREPA=... AND ORIGEN=0
+            var responseHttp = await repository.Get<List<IMPLANPROD.Shared.DTOs.RepurepaDTO>>($"api/repurepa/reparacion/{numRepaSeleccionado}?origen=0");
+
+            if (!responseHttp.Error && responseHttp.Response != null)
+            {
+                repuestos = responseHttp.Response;
+            }
+            else
+            {
+                repuestos = new List<IMPLANPROD.Shared.DTOs.RepurepaDTO>();
+            }
+        }
+        catch
+        {
+            // En esta solapa preferimos fallar "silencioso" y dejar lista vacía.
+            // Si es necesario, luego agregamos logging o SweetAlert.
+            repuestos = new List<IMPLANPROD.Shared.DTOs.RepurepaDTO>();
+        }
+        finally
+        {
+            cargandoRepuestos = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task AbrirSelectorProductos()
+    {
+        if (numRepaSeleccionado <= 0)
+        {
+            await sweetAlertService.FireAsync("Error", "Primero debe seleccionar una nota de reparación..", SweetAlertIcon.Error);
+            return;
+        }
+
+        if (selectorProductosRef != null)
+        {
+            await selectorProductosRef.AbrirModal();
+        }
+    }
+
+    private async Task OnProductoSeleccionado(SelectorProductos.SeleccionProducto seleccion)
+    {
+        // Alta en memoria: el ítem se agrega a la grilla pero NO se persiste hasta presionar "Guardar repuestos".
+
+        try
+        {
+            if (seleccion?.Producto == null)
+            {
+                return;
+            }
+
+            if (numRepaSeleccionado <= 0)
+            {
+                await sweetAlertService.FireAsync("Error", "Primero debe seleccionar una nota de reparación..", SweetAlertIcon.Error);
+                return;
+            }
+
+            if (repuestos == null)
+            {
+                repuestos = new List<IMPLANPROD.Shared.DTOs.RepurepaDTO>();
+            }
+
+            var cantidadInicial = (seleccion.Cantidad <= 0 ? 1 : seleccion.Cantidad);
+            cantidadInicial = Math.Round(cantidadInicial, 4);
+
+            var nuevoDto = new IMPLANPROD.Shared.DTOs.RepurepaDTO
+            {
+                Id = siguienteIdTemporalRepuesto,
+                NumRepa = numRepaSeleccionado,
+                Cod_Inte = seleccion.Producto.Codint,
+                Cant_Sol = cantidadInicial,
+                CodigoExterno = seleccion.Producto.Codigo,
+                Descripcion = seleccion.Producto.Descripcion,
+                UnidadMedida = seleccion.Producto.Umedida,
+                Origen = 0
+            };
+
+            siguienteIdTemporalRepuesto--;
+            repuestos.Insert(0, nuevoDto);
+            repuestosConCambios.Add(nuevoDto.Id);
+            StateHasChanged();
+        }
+        catch (Exception ex)
+        {
+            await sweetAlertService.FireAsync("Error", $"Error al agregar repuesto: {ex.Message}", SweetAlertIcon.Error);
+        }
+    }
+
+    private void OnCloseSelectorProductos()
+    {
+        // No hacemos nada en particular.
+        // Este callback queda disponible por si luego querés cerrar ciclos o limpiar estados.
+    }
+
+    private async Task ActualizarCantidadRepuesto(IMPLANPROD.Shared.DTOs.RepurepaDTO item, ChangeEventArgs e)
+    {
+        // Guardado independiente al cambiar el valor.
+        // Nota: el value viene como string en el input, lo parseamos robustamente.
+        try
+        {
+            if (item == null)
+            {
+                return;
+            }
+
+            // Capturar el valor ingresado por el usuario.
+            var valueString = e?.Value?.ToString();
+            if (string.IsNullOrWhiteSpace(valueString))
+            {
+                return;
+            }
+
+            if (!decimal.TryParse(valueString, out var nuevaCantidad))
+            {
+                await sweetAlertService.FireAsync("Error", "Cantidad inválida.", SweetAlertIcon.Error);
+                await CargarRepuestos();
+                return;
+            }
+
+            // Evitar llamadas inútiles
+            if (Math.Abs(nuevaCantidad - item.Cant_Sol) < 0.0001m)
+            {
+                return;
+            }
+
+            var response = await repository.Put($"api/repurepa/{item.Id}/cantidad", nuevaCantidad);
+            if (!response.Error)
+            {
+                // Actualizamos en memoria para que la UI quede consistente sin esperar otro refresh.
+                item.Cant_Sol = Math.Round(nuevaCantidad, 4);
+            }
+            else
+            {
+                var msg = await response.GetErrorMessageAsync();
+                await sweetAlertService.FireAsync("Error", msg, SweetAlertIcon.Error);
+                await CargarRepuestos();
+            }
+        }
+        catch (Exception ex)
+        {
+            await sweetAlertService.FireAsync("Error", $"Error al actualizar cantidad: {ex.Message}", SweetAlertIcon.Error);
+            await CargarRepuestos();
+        }
+    }
+
+    private async Task EliminarRepuesto(IMPLANPROD.Shared.DTOs.RepurepaDTO item)
+    {
+        // Borrado con confirmación (según requerimiento)
+        if (item == null)
+        {
+            return;
+        }
+
+        // Si el ítem todavía está en memoria (Id temporal), se elimina localmente sin llamar a la API.
+        if (item.Id < 0)
+        {
+            repuestos?.Remove(item);
+            repuestosConCambios.Remove(item.Id);
+            StateHasChanged();
+            return;
+        }
+
+        var result = await sweetAlertService.FireAsync(new SweetAlertOptions
+        {
+            Title = "¿Eliminar repuesto?",
+            Text = "Esta acción marcará el ítem como borrado.",
+            Icon = SweetAlertIcon.Warning,
+            ShowCancelButton = true,
+            ConfirmButtonText = "Sí, eliminar",
+            CancelButtonText = "Cancelar"
+        });
+
+        if (!result.IsConfirmed)
+        {
+            return;
+        }
+
+        try
+        {
+            var response = await repository.Delete($"api/repurepa/{item.Id}");
+            if (!response.Error)
+            {
+                repuestosConCambios.Remove(item.Id);
+                await CargarRepuestos();
+            }
+            else
+            {
+                var msg = await response.GetErrorMessageAsync();
+                await sweetAlertService.FireAsync("Error", msg, SweetAlertIcon.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            await sweetAlertService.FireAsync("Error", $"Error al eliminar repuesto: {ex.Message}", SweetAlertIcon.Error);
+        }
+    }
+
+    private async Task GuardarDetalleInspeccionReparacion()
+    {
+        if (reparacionSeleccionada == null)
+        {
+            return;
+        }
+
+        try
+        {
+            var responseHttp = await repository.Put("api/repara", reparacionSeleccionada);
+            if (!responseHttp.Error)
+            {
+                await sweetAlertService.FireAsync("Éxito", "Detalle guardado correctamente", SweetAlertIcon.Success);
+            }
+            else
+            {
+                var message = await responseHttp.GetErrorMessageAsync();
+                await sweetAlertService.FireAsync("Error", message, SweetAlertIcon.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            await sweetAlertService.FireAsync("Error", $"Error al guardar detalle: {ex.Message}", SweetAlertIcon.Error);
+        }
+    }
+
+    private static string FormatoTamano(long? bytes)
+    {
+        if (bytes == null)
+        {
+            return string.Empty;
+        }
+
+        double size = bytes.Value;
+        string[] units = { "B", "KB", "MB", "GB" };
+        int unitIndex = 0;
+
+        while (size >= 1024 && unitIndex < units.Length - 1)
+        {
+            size /= 1024;
+            unitIndex++;
+        }
+
+        return $"{size:0.##} {units[unitIndex]}";
+    }
+
+    private async Task CargarDocumentos()
+    {
+        try
+        {
+            cargandoDocumentos = true;
+            var responseHttp = await repository.Get<List<Docanre>>($"api/docanre/reparacion/{numRepaSeleccionado}");
+
+            if (!responseHttp.Error && responseHttp.Response != null)
+            {
+                documentos = responseHttp.Response;
+            }
+            else
+            {
+                documentos = new List<Docanre>();
+            }
+        }
+        catch
+        {
+            documentos = new List<Docanre>();
+        }
+        finally
+        {
+            cargandoDocumentos = false;
+        }
+    }
+
+    private async Task AbrirSelectorReparaciones()
+    {
+        if (selectorReparaciones != null)
+        {
+            await selectorReparaciones.AbrirModal();
+        }
+    }
+
+    private async Task OnReparacionSeleccionadaDesdeSelector(Repara reparacion)
+    {
+        if (hayCambiosPendientesRepuestos)
+        {
+            var confirmar = await ConfirmarDescartarCambiosRepuestosAsync();
+            if (!confirmar)
+            {
+                return;
+            }
+        }
+
+        if (hayCambiosPendientesMateriales)
+        {
+            var confirmar = await ConfirmarDescartarCambiosMaterialesAsync();
+            if (!confirmar)
+            {
+                return;
+            }
+        }
+
+        numRepaSeleccionado = reparacion.NumRepa;
+        textoReparacionSeleccionada = $"{reparacion.NumRepa} - {reparacion.Referen}";
+        await CargarReparacion();
+    }
+
+    private void LimpiarSeleccionReparacion()
+    {
+        numRepaSeleccionado = 0;
+        textoReparacionSeleccionada = string.Empty;
+        reparacionSeleccionada = null;
+        clienteActual = null;
+        imagenes = null;
+        documentos = null;
+        repuestos = null;
+        repuestosConCambios.Clear();
+        materialesResumen = null;
+        materialesAgregados = null;
+        materialesConCambios.Clear();
+        materialesAgregadosConCambios.Clear();
+        materialesConsumos = null;
+        materialesDevoluciones = null;
+        materialesConsumosConCambios.Clear();
+        materialesDevolucionesConCambios.Clear();
+        StateHasChanged();
+    }
+
+    private async Task CargarReparacion()
+    {
+        if (numRepaSeleccionado <= 0)
+        {
+            reparacionSeleccionada = null;
+            clienteActual = null;
+            imagenes = null;
+            return;
+        }
+
+        try
+        {
+            // Cargar datos de la reparación
+            var responseHttp = await repository.Get<Repara>($"api/repara/{numRepaSeleccionado}");
+            
+            if (!responseHttp.Error && responseHttp.Response != null)
+            {
+                reparacionSeleccionada = responseHttp.Response;
+
+                textoReparacionSeleccionada = $"{reparacionSeleccionada.NumRepa} - {reparacionSeleccionada.Referen}";
+                
+                // Cargar datos del cliente desde Deudor12
+                if (reparacionSeleccionada.Nume_Cli.HasValue && reparacionSeleccionada.Nume_Cli.Value > 0)
+                {
+                    await CargarDatosCliente(reparacionSeleccionada.Nume_Cli.Value);
+                }
+                
+                await CargarImagenes();
+                await CargarDocumentos();
+
+                // Si el usuario ya está parado en "Repuestos", refrescamos esa solapa.
+                if (solapaActiva == "repuestos")
+                {
+                    // Si hay cambios pendientes, no refrescamos para evitar perder lo que está en memoria.
+                    if (!hayCambiosPendientesRepuestos)
+                    {
+                        await CargarRepuestos();
+                    }
+                }
+
+                if (solapaActiva == "materiales")
+                {
+                    if (!hayCambiosPendientesMateriales)
+                    {
+                        await CargarMateriales();
+                    }
+                }
+            }
+            else
+            {
+                await sweetAlertService.FireAsync("Error", "No se pudo cargar la reparación", SweetAlertIcon.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            await sweetAlertService.FireAsync("Error", $"Error al cargar reparación: {ex.Message}", SweetAlertIcon.Error);
+        }
+    }
+
+    private async Task CargarDatosCliente(int numeCliente)
+    {
+        try
+        {
+            var responseHttp = await repository.Get<Deudor12>($"api/deudor12/numero/{numeCliente}");
+
+            if (!responseHttp.Error && responseHttp.Response != null)
+            {
+                clienteActual = responseHttp.Response;
+            }
+            else
+            {
+                clienteActual = null;
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error al cargar datos del cliente: {ex.Message}");
+            clienteActual = null;
+        }
+    }
+
+    private async Task CargarImagenes()
+    {
+        try
+        {
+            cargandoImagenes = true;
+            var responseHttp = await repository.Get<List<GalimRep>>($"api/galimrep/reparacion/{numRepaSeleccionado}");
+            
+            if (!responseHttp.Error && responseHttp.Response != null)
+            {
+                imagenes = responseHttp.Response;
+            }
+            else
+            {
+                imagenes = new List<GalimRep>();
+            }
+        }
+        catch (Exception ex)
+        {
+            await sweetAlertService.FireAsync("Error", $"Error al cargar imágenes: {ex.Message}", SweetAlertIcon.Error);
+            imagenes = new List<GalimRep>();
+        }
+        finally
+        {
+            cargandoImagenes = false;
+        }
+    }
+
+    private async Task SubirImagen(InputFileChangeEventArgs e)
+    {
+        try
+        {
+            var archivo = e.File;
+            
+            if (archivo == null)
+            {
+                return;
+            }
+
+            // Validar tamaño (máximo 5MB)
+            const long maxFileSize = 5 * 1024 * 1024;
+            if (archivo.Size > maxFileSize)
+            {
+                await sweetAlertService.FireAsync("Error", "El archivo es demasiado grande. Tamaño máximo: 5MB", SweetAlertIcon.Error);
+                return;
+            }
+
+            // Crear FormData
+            using var content = new MultipartFormDataContent();
+            
+            var fileContent = new StreamContent(archivo.OpenReadStream(maxFileSize));
+            fileContent.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue(archivo.ContentType);
+            
+            content.Add(fileContent, "file", archivo.Name);
+            content.Add(new StringContent(numRepaSeleccionado.ToString()), "numRepa");
+            content.Add(new StringContent(""), "descripcion");
+
+            // Subir archivo
+            var response = await repository.PostFormData<GalimRep>("api/galimrep/upload", content);
+            
+            if (!response.Error)
+            {
+                await sweetAlertService.FireAsync("Éxito", "Imagen subida correctamente", SweetAlertIcon.Success);
+                await CargarImagenes();
+            }
+            else
+            {
+                var message = await response.GetErrorMessageAsync();
+                await sweetAlertService.FireAsync("Error", message, SweetAlertIcon.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            await sweetAlertService.FireAsync("Error", $"Error al subir imagen: {ex.Message}", SweetAlertIcon.Error);
+        }
+    }
+
+    private async Task ActualizarDescripcion(GalimRep imagen)
+    {
+        try
+        {
+            var responseHttp = await repository.Put($"api/galimrep/{imagen.Id}", imagen.Descripcion ?? "");
+            
+            if (responseHttp.Error)
+            {
+                var message = await responseHttp.GetErrorMessageAsync();
+                await sweetAlertService.FireAsync("Error", message, SweetAlertIcon.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            await sweetAlertService.FireAsync("Error", $"Error al actualizar descripción: {ex.Message}", SweetAlertIcon.Error);
+        }
+    }
+
+    private async Task EliminarImagen(int id)
+    {
+        var result = await sweetAlertService.FireAsync(new SweetAlertOptions
+        {
+            Title = "¿Eliminar imagen?",
+            Text = "Esta acción no se puede deshacer",
+            Icon = SweetAlertIcon.Warning,
+            ShowCancelButton = true,
+            ConfirmButtonText = "Sí, eliminar",
+            CancelButtonText = "Cancelar"
+        });
+
+        if (result.IsConfirmed)
+        {
+            try
+            {
+                var responseHttp = await repository.Delete($"api/galimrep/{id}");
+                
+                if (!responseHttp.Error)
+                {
+                    await sweetAlertService.FireAsync("Eliminado", "Imagen eliminada correctamente", SweetAlertIcon.Success);
+                    await CargarImagenes();
+                }
+                else
+                {
+                    var message = await responseHttp.GetErrorMessageAsync();
+                    await sweetAlertService.FireAsync("Error", message, SweetAlertIcon.Error);
+                }
+            }
+            catch (Exception ex)
+            {
+                await sweetAlertService.FireAsync("Error", $"Error al eliminar imagen: {ex.Message}", SweetAlertIcon.Error);
+            }
+        }
+    }
+}

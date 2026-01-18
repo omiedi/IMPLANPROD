@@ -1,0 +1,561 @@
+@using IMPLANPROD.Shared.Entities
+@inject IRepository repository
+@inject SweetAlertService sweetAlertService
+
+@* Modal de configuración de Órdenes de Compra *@
+@if (IsVisible)
+{
+    <div class="modal fade show" style="display: block" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header bg-primary text-white">
+                    <h5 class="modal-title">
+                        <i class="fas fa-cogs me-2"></i>Configuración de Órdenes de Compra
+                    </h5>
+                    <button type="button" class="btn-close btn-close-white" @onclick="CerrarModal"></button>
+                </div>
+                <div class="modal-body">
+                    @if (cargandoConfiguracion)
+                    {
+                        <div class="d-flex justify-content-center align-items-center" style="min-height: 200px;">
+                            <div class="spinner-border text-primary" role="status">
+                                <span class="visually-hidden">Cargando configuración...</span>
+                            </div>
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="row">
+                            <!-- Modo de Aprobación -->
+                            <div class="col-md-6 mb-3">
+                                <div class="card h-100">
+                                    <div class="card-header bg-info text-white">
+                                        <h6 class="card-title mb-0">
+                                            <i class="fas fa-check-circle me-2"></i>Modo de Aprobación
+                                        </h6>
+                                    </div>
+                                    <div class="card-body">
+                                        <div class="mb-3">
+                                            <label class="form-label fw-bold">Seleccione el modo de aprobación:</label>
+                                            <div class="form-check">
+                                                <input class="form-check-input" 
+                                                       type="radio" 
+                                                       name="modoAprobacion" 
+                                                       id="modoDirecta"
+                                                       value="DIRECTA"
+                                                       @onchange="@((ChangeEventArgs e) => modoAprobacionSeleccionado = e.Value?.ToString() ?? "DIRECTA")"
+                                                       checked="@(modoAprobacionSeleccionado == "DIRECTA")" />
+                                                <label class="form-check-label" for="modoDirecta">
+                                                    <strong>DIRECTA</strong> - Aprobación automática al crear la orden
+                                                </label>
+                                                <div class="form-text">
+                                                    Las órdenes de compra se aprueban automáticamente cuando se crean.
+                                                </div>
+                                            </div>
+                                            <div class="form-check mt-3">
+                                                <input class="form-check-input" 
+                                                       type="radio" 
+                                                       name="modoAprobacion" 
+                                                       id="modoPosterior"
+                                                       value="POSTERIOR"
+                                                       @onchange="@((ChangeEventArgs e) => modoAprobacionSeleccionado = e.Value?.ToString() ?? "DIRECTA")"
+                                                       checked="@(modoAprobacionSeleccionado == "POSTERIOR")" />
+                                                <label class="form-check-label" for="modoPosterior">
+                                                    <strong>POSTERIOR</strong> - Requiere aprobación manual
+                                                </label>
+                                                <div class="form-text">
+                                                    Las órdenes de compra requieren aprobación manual por un supervisor.
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <div class="alert alert-info">
+                                            <i class="fas fa-info-circle me-2"></i>
+                                            <strong>Actual:</strong>
+                                            <span class="badge bg-@(modoAprobacionSeleccionado == "DIRECTA" ? "success" : "warning") ms-2">
+                                                @modoAprobacionSeleccionado
+                                            </span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Enviar a Sucursal -->
+                            <div class="col-md-6 mb-3">
+                                <div class="card h-100">
+                                    <div class="card-header bg-success text-white">
+                                        <h6 class="card-title mb-0">
+                                            <i class="fas fa-share me-2"></i>Enviar a Sucursal
+                                        </h6>
+                                    </div>
+                                    <div class="card-body">
+                                        <div class="mb-3">
+                                            <label class="form-label fw-bold">Envío automático a sucursal:</label>
+                                            <div class="form-check">
+                                                <input class="form-check-input" 
+                                                       type="radio" 
+                                                       name="enviarSucursal" 
+                                                       id="enviarSi"
+                                                       value="SI"
+                                                       @onchange="@((ChangeEventArgs e) => enviarSucursalSeleccionado = e.Value?.ToString() ?? "NO")"
+                                                       checked="@(enviarSucursalSeleccionado == "SI")" />
+                                                <label class="form-check-label" for="enviarSi">
+                                                    <strong>SÍ</strong> - Enviar automáticamente
+                                                </label>
+                                            </div>
+                                            <div class="form-check mt-2">
+                                                <input class="form-check-input" 
+                                                       type="radio" 
+                                                       name="enviarSucursal" 
+                                                       id="enviarNo"
+                                                       value="NO"
+                                                       @onchange="@((ChangeEventArgs e) => enviarSucursalSeleccionado = e.Value?.ToString() ?? "NO")"
+                                                       checked="@(enviarSucursalSeleccionado == "NO")" />
+                                                <label class="form-check-label" for="enviarNo">
+                                                    <strong>NO</strong> - No enviar
+                                                </label>
+                                            </div>
+                                        </div>
+                                        <div class="alert alert-info">
+                                            <i class="fas fa-info-circle me-2"></i>
+                                            <strong>Actual:</strong>
+                                            <span class="badge bg-@(enviarSucursalSeleccionado == "SI" ? "success" : "secondary") ms-2">
+                                                @enviarSucursalSeleccionado
+                                            </span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Actualizar Costo Reposición -->
+                            <div class="col-md-6 mb-3">
+                                <div class="card h-100">
+                                    <div class="card-header bg-warning text-dark">
+                                        <h6 class="card-title mb-0">
+                                            <i class="fas fa-dollar-sign me-2"></i>Actualizar Costo
+                                        </h6>
+                                    </div>
+                                    <div class="card-body">
+                                        <div class="mb-3">
+                                            <label class="form-label fw-bold">Actualizar costo de reposición:</label>
+                                            <div class="form-check">
+                                                <input class="form-check-input" 
+                                                       type="radio" 
+                                                       name="actualizarCosto" 
+                                                       id="costoSiempre"
+                                                       value="SIEMPRE"
+                                                       @onchange="@((ChangeEventArgs e) => actualizarCostoSeleccionado = e.Value?.ToString() ?? "SIEMPRE")"
+                                                       checked="@(actualizarCostoSeleccionado == "SIEMPRE")" />
+                                                <label class="form-check-label" for="costoSiempre">
+                                                    <strong>SIEMPRE</strong> - Actualizar siempre sin importar el proveedor
+                                                </label>
+                                                <div class="form-text">
+                                                    Se actualiza el costo de todos los productos en cada orden de compra.
+                                                </div>
+                                            </div>
+                                            <div class="form-check mt-3">
+                                                <input class="form-check-input" 
+                                                       type="radio" 
+                                                       name="actualizarCosto" 
+                                                       id="costoProhabit"
+                                                       value="PROHABIT"
+                                                       @onchange="@((ChangeEventArgs e) => actualizarCostoSeleccionado = e.Value?.ToString() ?? "SIEMPRE")"
+                                                       checked="@(actualizarCostoSeleccionado == "PROHABIT")" />
+                                                <label class="form-check-label" for="costoProhabit">
+                                                    <strong>PROHABIT</strong> - Solo si es proveedor habitual
+                                                </label>
+                                                <div class="form-text">
+                                                    Se actualiza solo si el proveedor de la O.C. es el proveedor habitual del producto.
+                                                </div>
+                                            </div>
+                                            <div class="form-check mt-3">
+                                                <input class="form-check-input" 
+                                                       type="radio" 
+                                                       name="actualizarCosto" 
+                                                       id="costoNunca"
+                                                       value="NUNCA"
+                                                       @onchange="@((ChangeEventArgs e) => actualizarCostoSeleccionado = e.Value?.ToString() ?? "SIEMPRE")"
+                                                       checked="@(actualizarCostoSeleccionado == "NUNCA")" />
+                                                <label class="form-check-label" for="costoNunca">
+                                                    <strong>NUNCA</strong> - No actualizar nunca
+                                                </label>
+                                                <div class="form-text">
+                                                    No se actualiza el costo de los productos automáticamente.
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div class="alert alert-info">
+                                            <i class="fas fa-info-circle me-2"></i>
+                                            <strong>Actual:</strong>
+                                            <span class="badge bg-@(actualizarCostoSeleccionado == "SIEMPRE" ? "success" : actualizarCostoSeleccionado == "PROHABIT" ? "warning" : "secondary") ms-2">
+                                                @actualizarCostoSeleccionado
+                                            </span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Considerar Descuento -->
+                            <div class="col-md-6 mb-3">
+                                <div class="card h-100">
+                                    <div class="card-header bg-danger text-white">
+                                        <h6 class="card-title mb-0">
+                                            <i class="fas fa-percentage me-2"></i>Considerar Descuento
+                                        </h6>
+                                    </div>
+                                    <div class="card-body">
+                                        <div class="mb-3">
+                                            <label class="form-label fw-bold">Considerar descuento en costo:</label>
+                                            <div class="form-check">
+                                                <input class="form-check-input" 
+                                                       type="radio" 
+                                                       name="considerarDescuento" 
+                                                       id="descuentoSi"
+                                                       value="SI"
+                                                       @onchange="@((ChangeEventArgs e) => considerarDescuentoSeleccionado = e.Value?.ToString() ?? "SI")"
+                                                       checked="@(considerarDescuentoSeleccionado == "SI")" />
+                                                <label class="form-check-label" for="descuentoSi">
+                                                    <strong>SÍ</strong> - Considerar descuento
+                                                </label>
+                                            </div>
+                                            <div class="form-check mt-2">
+                                                <input class="form-check-input" 
+                                                       type="radio" 
+                                                       name="considerarDescuento" 
+                                                       id="descuentoNo"
+                                                       value="NO"
+                                                       @onchange="@((ChangeEventArgs e) => considerarDescuentoSeleccionado = e.Value?.ToString() ?? "SI")"
+                                                       checked="@(considerarDescuentoSeleccionado == "NO")" />
+                                                <label class="form-check-label" for="descuentoNo">
+                                                    <strong>NO</strong> - No considerar descuento
+                                                </label>
+                                            </div>
+                                        </div>
+                                        <div class="alert alert-info">
+                                            <i class="fas fa-info-circle me-2"></i>
+                                            <strong>Actual:</strong>
+                                            <span class="badge bg-@(considerarDescuentoSeleccionado == "SI" ? "success" : "secondary") ms-2">
+                                                @considerarDescuentoSeleccionado
+                                            </span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Moneda Costo por Defecto -->
+                            <div class="col-12 mb-3">
+                                <div class="card">
+                                    <div class="card-header bg-secondary text-white">
+                                        <h6 class="card-title mb-0">
+                                            <i class="fas fa-coins me-2"></i>Moneda Costo por Defecto
+                                        </h6>
+                                    </div>
+                                    <div class="card-body">
+                                        <div class="mb-3">
+                                            <label class="form-label fw-bold">Moneda por defecto para costos:</label>
+                                            <div class="row">
+                                                <div class="col-md-4">
+                                                    <div class="form-check">
+                                                        <input class="form-check-input" 
+                                                               type="radio" 
+                                                               name="monedaCosto" 
+                                                               id="monedaPesos"
+                                                               value="1"
+                                                               @onchange="@((ChangeEventArgs e) => monedaCostoSeleccionada = e.Value?.ToString() ?? "1")"
+                                                               checked="@(monedaCostoSeleccionada == "1")" />
+                                                        <label class="form-check-label" for="monedaPesos">
+                                                            <strong>PESOS</strong> (1)
+                                                        </label>
+                                                    </div>
+                                                </div>
+                                                <div class="col-md-4">
+                                                    <div class="form-check">
+                                                        <input class="form-check-input" 
+                                                               type="radio" 
+                                                               name="monedaCosto" 
+                                                               id="monedaDolares"
+                                                               value="2"
+                                                               @onchange="@((ChangeEventArgs e) => monedaCostoSeleccionada = e.Value?.ToString() ?? "1")"
+                                                               checked="@(monedaCostoSeleccionada == "2")" />
+                                                        <label class="form-check-label" for="monedaDolares">
+                                                            <strong>DÓLARES</strong> (2)
+                                                        </label>
+                                                    </div>
+                                                </div>
+                                                <div class="col-md-4">
+                                                    <div class="form-check">
+                                                        <input class="form-check-input" 
+                                                               type="radio" 
+                                                               name="monedaCosto" 
+                                                               id="monedaEuros"
+                                                               value="3"
+                                                               @onchange="@((ChangeEventArgs e) => monedaCostoSeleccionada = e.Value?.ToString() ?? "1")"
+                                                               checked="@(monedaCostoSeleccionada == "3")" />
+                                                        <label class="form-check-label" for="monedaEuros">
+                                                            <strong>EUROS</strong> (3)
+                                                        </label>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div class="alert alert-info">
+                                            <i class="fas fa-info-circle me-2"></i>
+                                            <strong>Actual:</strong>
+                                            <span class="badge bg-primary ms-2">
+                                                @(monedaCostoSeleccionada == "1" ? "PESOS" : monedaCostoSeleccionada == "2" ? "DÓLARES" : "EUROS")
+                                            </span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    }
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" @onclick="CerrarModal">
+                        <i class="fas fa-times me-1"></i>Cancelar
+                    </button>
+                    <button type="button" 
+                            class="btn btn-primary" 
+                            @onclick="GuardarConfiguracion"
+                            disabled="@(cargandoConfiguracion || guardandoConfiguracion)">
+                        @if (guardandoConfiguracion)
+                        {
+                            <span class="spinner-border spinner-border-sm me-2" role="status"></span>
+                        }
+                        else
+                        {
+                            <i class="fas fa-save me-1"></i>
+                        }
+                        Guardar Configuración
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="modal-backdrop fade show"></div>
+}
+
+@code {
+    /// <summary>
+    /// Parámetros del componente
+    /// </summary>
+    [Parameter] public bool IsVisible { get; set; } = false;
+    [Parameter] public EventCallback OnCloseRequested { get; set; }
+    [Parameter] public EventCallback OnConfigurationSaved { get; set; }
+
+    /// <summary>
+    /// Variables de estado del componente
+    /// </summary>
+    private bool cargandoConfiguracion = false;
+    private bool guardandoConfiguracion = false;
+    private string modoAprobacionSeleccionado = "DIRECTA";
+    private string enviarSucursalSeleccionado = "NO";
+    private string actualizarCostoSeleccionado = "SIEMPRE";
+    private string considerarDescuentoSeleccionado = "SI";
+    private string monedaCostoSeleccionada = "1";
+
+    // Constantes para los parámetros de FLEXCRL según la lógica VB6
+    private const string CLABUS_PARAM = "OCOMPRA";
+    private const string PROBUS_PARAM_MODOAPRO = "MODOAPRO";
+    private const string PROBUS_PARAM_ENVARSUC = "ENVARSUC";
+    private const string PROBUS_PARAM_ACOSREP = "ACOSREP";
+    private const string PROBUS_PARAM_NODESCUE = "NODESCUE";
+    private const string PROBUS_PARAM_MONECOS = "MONECOS";
+
+    /// <summary>
+    /// Se ejecuta cuando el componente se inicializa
+    /// </summary>
+    protected override async Task OnInitializedAsync()
+    {
+        await CargarConfiguracion();
+    }
+    
+    /// <summary>
+    /// Se ejecuta cuando los parámetros cambian
+    /// </summary>
+    protected override async Task OnParametersSetAsync()
+    {
+        // Solo cargar configuración si el modal se hace visible y no se está cargando
+        if (IsVisible && !cargandoConfiguracion)
+        {
+            await CargarConfiguracion();
+        }
+    }
+
+    /// <summary>
+    /// Carga la configuración actual desde FLEXCRL
+    /// Equivalente a: Control("OCOMPRA", "MODOAPRO"), Control("OCOMPRA", "ENVARSUC"), etc.
+    /// </summary>
+    private async Task CargarConfiguracion()
+    {
+        try
+        {
+            cargandoConfiguracion = true;
+            StateHasChanged();
+
+            // Cargar modo de aprobación
+            await CargarConfiguracionIndividual(PROBUS_PARAM_MODOAPRO, "DIRECTA", 
+                valor => modoAprobacionSeleccionado = valor.ToUpper() == "POSTERIOR" ? "POSTERIOR" : "DIRECTA");
+
+            // Cargar enviar a sucursal
+            await CargarConfiguracionIndividual(PROBUS_PARAM_ENVARSUC, "NO", 
+                valor => enviarSucursalSeleccionado = valor.ToUpper() == "SI" ? "SI" : "NO");
+
+            // Cargar actualizar costo reposición (3 opciones: SIEMPRE, PROHABIT, NUNCA)
+            await CargarConfiguracionIndividual(PROBUS_PARAM_ACOSREP, "SIEMPRE", 
+                valor => {
+                    var valorUpper = valor.ToUpper();
+                    actualizarCostoSeleccionado = valorUpper == "NUNCA" ? "NUNCA" : 
+                                                  valorUpper == "PROHABIT" ? "PROHABIT" : "SIEMPRE";
+                });
+
+            // Cargar considerar descuento (NODESCUE = "SI" significa NO considerar descuento)
+            await CargarConfiguracionIndividual(PROBUS_PARAM_NODESCUE, "NO", 
+                valor => considerarDescuentoSeleccionado = valor.ToUpper() == "SI" ? "NO" : "SI");
+
+            // Cargar moneda costo por defecto
+            await CargarConfiguracionIndividual(PROBUS_PARAM_MONECOS, "1", 
+                valor => monedaCostoSeleccionada = string.IsNullOrEmpty(valor) ? "1" : valor);
+        }
+        catch (Exception ex)
+        {
+            await sweetAlertService.FireAsync("Error", $"Error al cargar la configuración: {ex.Message}", SweetAlertIcon.Error);
+            // Valores por defecto en caso de error
+            modoAprobacionSeleccionado = "DIRECTA";
+            enviarSucursalSeleccionado = "NO";
+            actualizarCostoSeleccionado = "SIEMPRE";
+            considerarDescuentoSeleccionado = "SI";
+            monedaCostoSeleccionada = "1";
+        }
+        finally
+        {
+            cargandoConfiguracion = false;
+            StateHasChanged();
+        }
+    }
+
+    /// <summary>
+    /// Carga una configuración individual desde FLEXCRL
+    /// </summary>
+    /// <param name="probus">Parámetro PROBUS</param>
+    /// <param name="valorDefecto">Valor por defecto si no existe</param>
+    /// <param name="asignarValor">Acción para asignar el valor cargado</param>
+    private async Task CargarConfiguracionIndividual(string probus, string valorDefecto, Action<string> asignarValor)
+    {
+        try
+        {
+            var response = await repository.Get<FLEXCRL>($"api/flexcrl/{CLABUS_PARAM}/{probus}");
+            
+            if (response.Error || response.Response == null)
+            {
+                asignarValor(valorDefecto);
+            }
+            else
+            {
+                var valor = response.Response.VALCONTROL ?? valorDefecto;
+                asignarValor(valor);
+            }
+        }
+        catch
+        {
+            asignarValor(valorDefecto);
+        }
+    }
+
+    /// <summary>
+    /// Guarda la configuración usando FLEXCRL
+    /// Equivalente a la lógica VB6: Call GRACONTROL("OCOMPRA", "MODOAPRO", MODO_SELECCIONADO$)
+    /// </summary>
+    private async Task GuardarConfiguracion()
+    {
+        try
+        {
+            guardandoConfiguracion = true;
+            StateHasChanged();
+
+            // Confirmar el cambio con el usuario
+            var result = await sweetAlertService.FireAsync(new SweetAlertOptions
+            {
+                Title = "Confirmar Cambio",
+                Text = $"¿Está seguro de cambiar el modo de aprobación a '{modoAprobacionSeleccionado}'?",
+                Icon = SweetAlertIcon.Question,
+                ShowCancelButton = true,
+                ConfirmButtonText = "Sí, cambiar",
+                CancelButtonText = "Cancelar"
+            });
+
+            if (!result.IsConfirmed)
+            {
+                return;
+            }
+
+            // Guardar todas las configuraciones
+            await GuardarConfiguracionControl(PROBUS_PARAM_MODOAPRO, modoAprobacionSeleccionado);
+            await GuardarConfiguracionControl(PROBUS_PARAM_ENVARSUC, enviarSucursalSeleccionado);
+            await GuardarConfiguracionControl(PROBUS_PARAM_ACOSREP, actualizarCostoSeleccionado);
+            // NODESCUE es inverso: SI = no considerar descuento, NO = considerar descuento
+            await GuardarConfiguracionControl(PROBUS_PARAM_NODESCUE, considerarDescuentoSeleccionado == "SI" ? "NO" : "SI");
+            await GuardarConfiguracionControl(PROBUS_PARAM_MONECOS, monedaCostoSeleccionada);
+            
+            // Si llegamos aquí, la configuración se guardó exitosamente
+            await sweetAlertService.FireAsync("Éxito", "Configuración guardada exitosamente.", SweetAlertIcon.Success);
+            
+            // Notificar que se guardó la configuración
+            await OnConfigurationSaved.InvokeAsync();
+            
+            // Cerrar el modal
+            await CerrarModal();
+        }
+        catch (Exception ex)
+        {
+            await sweetAlertService.FireAsync("Error", $"Error inesperado al guardar la configuración: {ex.Message}", SweetAlertIcon.Error);
+        }
+        finally
+        {
+            guardandoConfiguracion = false;
+            StateHasChanged();
+        }
+    }
+
+    /// <summary>
+    /// Guarda la configuración de un control específico en FLEXCRL
+    /// </summary>
+    /// <param name="probus">Parámetro PROBUS para identificar el tipo de control</param>
+    /// <param name="valor">Valor a guardar</param>
+    private async Task GuardarConfiguracionControl(string probus, string valor)
+    {
+        try
+        {
+            // Crear el objeto para enviar al endpoint
+            var configData = new
+            {
+                clabus = CLABUS_PARAM,
+                probus = probus,
+                valcontrol = valor
+            };
+
+            // Llamar al endpoint para actualizar o crear el control
+            var response = await repository.Put("api/flexcrl", configData);
+
+            if (response.Error)
+            {
+                var errorMessage = await response.GetErrorMessageAsync();
+                throw new Exception($"Error al guardar {probus}: {errorMessage}");
+            }
+        }
+        catch (Exception ex)
+        {
+            await sweetAlertService.FireAsync("Error", ex.Message, SweetAlertIcon.Error);
+            throw; // Re-lanzar la excepción para que el método padre la maneje
+        }
+    }
+
+    /// <summary>
+    /// Cierra el modal y notifica al componente padre
+    /// </summary>
+    private async Task CerrarModal()
+    {
+        await OnCloseRequested.InvokeAsync();
+    }
+}

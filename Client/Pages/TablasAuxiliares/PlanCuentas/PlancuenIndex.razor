@@ -1,0 +1,219 @@
+@page "/TablasAuxiliares/PlanCuentas/Plancuen"
+@inject IRepository repository
+@inject NavigationManager navigationManager
+@inject SweetAlertService sweetAlertService
+@inject IJSRuntime JS
+
+@using System.Net.Http
+@using CurrieTechnologies.Razor.SweetAlert2
+@using Blazored.Modal
+@using Blazored.Modal.Services
+
+<div class="bg-primary text-white text-center p-3 mb-4">
+    <h1>Cuentas - Destino</h1>
+</div>
+
+<div class="d-flex align-items-center justify-content-between mb-3">
+    <div class="d-flex align-items-center">
+        <div class="me-2">
+            <a class="btn btn-sm btn-primary" @onclick=@(() => ShowModal())><i class="oi oi-plus"></i> Nueva Cuenta</a>
+        </div>
+
+        <input style="width: 400px;" type="text" class="form-control me-2" id="titulo" placeholder="Buscar cuenta..." @bind-value="Filter" />
+        <button type="button" class="btn btn-outline-primary me-2" @onclick="ApplyFilterAsync">Filtrar</button>
+        <button type="button" class="btn btn-outline-danger" @onclick="CleanFilterAsync">Limpiar</button>
+    </div>
+    
+    <div>
+        <a href="/TablasAuxiliares/PlanCuentas/PlancuenBaja" class="btn btn-sm btn-warning">
+            <i class="fas fa-trash-restore"></i> Restaurar Cuentas de Baja
+        </a>
+    </div>
+</div>
+
+<Pagination CurrentPage="currentPage"
+            TotalPages="totalPages"
+            SelectedPage="SelectedPageAsync" />
+
+<GenericList MyList="cuentas">
+    <Body>
+        <table class="table table-striped">
+            <thead>
+                <tr>
+                    <th>Id</th>
+                    <th>Código Externo</th>
+                    <th>Código Interno</th>
+                    <th>Denominación</th>
+                    <th>Tipo</th>
+                    <th>Estado</th>
+                    <th>Acciones</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var cuenta in cuentas!)
+                {
+                    <tr>
+                        <td>@cuenta.Id</td>
+                        <td>@cuenta.CodExCue</td>
+                        <td>@cuenta.CodInCue</td>
+                        <td>@cuenta.Denocue</td>
+                        <td>@cuenta.TipoCue</td>
+                        <td>
+                            @if (cuenta.Statcue == 1)
+                            {
+                                <span class="badge bg-success">Activo</span>
+                            }
+                            else
+                            {
+                                <span class="badge bg-danger">Inactivo</span>
+                            }
+                        </td>
+                        <td>
+                            <a @onclick=@(() => ShowModal(@cuenta.Id,true)) class="btn btn-warning btn-sm flex-fill"><i class="oi oi-pencil" /> Editar</a>
+                            <button class="btn btn-danger btn-sm" @onclick=@(() => DeleteAsync(cuenta.Id))>Borrar</button>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </Body>
+</GenericList>
+
+@code {
+    public List<Plancuen>? cuentas { get; set; } = new();
+    
+    [CascadingParameter]
+    IModalService Modal { get; set; } = default!;
+
+    [Parameter]
+    [SupplyParameterFromQuery]
+    public string Page { get; set; } = string.Empty;
+
+    [Parameter]
+    [SupplyParameterFromQuery]
+    public string Filter { get; set; } = string.Empty;
+
+    private int currentPage = 1;
+    private int totalPages;
+
+    protected async override Task OnInitializedAsync()
+    {
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync(int page = 1)
+    {
+        try
+        {
+            if (!string.IsNullOrWhiteSpace(Page))
+            {
+                page = Convert.ToInt32(Page);
+            }
+
+            string url1 = string.Empty;
+            string url2 = string.Empty;
+
+            if (string.IsNullOrEmpty(Filter))
+            {
+                url1 = $"api/plancuen?page={page}";
+                url2 = $"api/plancuen/totalPages";
+            }
+            else
+            {
+                url1 = $"api/plancuen?page={page}&filter={Filter}";
+                url2 = $"api/plancuen/totalPages?filter={Filter}";
+            }
+
+            var responseHppt = await repository.Get<List<Plancuen>>(url1);
+            var responseHppt2 = await repository.Get<int>(url2);
+            
+            // Inicializar la lista aunque esté vacía para evitar el spinner infinito
+            cuentas = responseHppt.Response ?? new List<Plancuen>();
+            totalPages = responseHppt2.Response;
+            
+            Console.WriteLine($"Cuentas cargadas: {cuentas.Count}, Total páginas: {totalPages}");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error al cargar cuentas: {ex.Message}");
+            // Inicializar lista vacía en caso de error
+            cuentas = new List<Plancuen>();
+            totalPages = 0;
+        }
+    }
+
+    private async Task DeleteAsync(int id)
+    {
+        var result = await sweetAlertService.FireAsync(new SweetAlertOptions
+            {
+                Title = "Confirmación",
+                Text = "¿Realmente deseas eliminar el registro?",
+                Icon = SweetAlertIcon.Question,
+                ShowCancelButton = true,
+                CancelButtonText = "No",
+                ConfirmButtonText = "Si"
+            });
+
+        var confirm = string.IsNullOrEmpty(result.Value);
+        if (confirm)
+        {
+            return;
+        }
+
+        var responseHTTP = await repository.Put($"api/plancuen/baja/{id}", new { });
+        if (responseHTTP.Error)
+        {
+            if (responseHTTP.HttpResponseMessage.StatusCode == System.Net.HttpStatusCode.NotFound)
+            {
+                navigationManager.NavigateTo("/");
+            }
+            else
+            {
+                var mensajeError = await responseHTTP.GetErrorMessageAsync();
+                await sweetAlertService.FireAsync("Error", mensajeError, SweetAlertIcon.Error);
+            }
+        }
+        else
+        {
+            await LoadAsync();
+        }
+    }
+
+    private async Task CleanFilterAsync()
+    {
+        Filter = string.Empty;
+        await ApplyFilterAsync();
+    }
+
+    private async Task ApplyFilterAsync()
+    {
+        int page = 1;
+        await LoadAsync(page);
+    }
+
+    private async Task SelectedPageAsync(int page)
+    {
+        currentPage = page;
+        await LoadAsync(page);
+    }
+
+    private async Task ShowModal(int id = 0, bool isEdit = false)
+    {
+        IModalReference modalReference;
+
+        if (isEdit)
+        {
+            modalReference = Modal.Show<PlancuenEdit>(string.Empty, new ModalParameters().Add("Id", id));
+        }
+        else
+        {
+            modalReference = Modal.Show<PlancuenCreate>();
+        }
+
+        var result = await modalReference.Result;
+        if (result.Confirmed)
+        {
+            await LoadAsync();
+        }
+    }
+}

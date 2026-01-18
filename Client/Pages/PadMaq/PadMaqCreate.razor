@@ -1,0 +1,36 @@
+@page "/padmaq/create"
+@inject IRepository repository
+@inject NavigationManager navigationManager
+@inject SweetAlertService sweetAlertService
+@inject IModalService Modal
+
+<h3>Nueva Máquina Productiva</h3>
+
+<PadMaqForm @ref="secprodForm" PADMAQ="padmaq" OnValidSubmit="Create" ReturnAction="Return" IsEdit="false" />
+
+@code {
+    private PADMAQ padmaq = new();
+    private PadMaqForm? secprodForm;
+    [CascadingParameter]
+    BlazoredModalInstance BlazoredModal { get; set; } = default!;
+
+    private async Task Create()
+    {
+        var responseHttp = await repository.Post("/api/padmaq", padmaq);
+        if (responseHttp.Error)
+        {
+            var mensajeError = await responseHttp.GetErrorMessageAsync();
+            await sweetAlertService.FireAsync("Error", mensajeError, SweetAlertIcon.Error);
+            return;
+        }
+
+        await BlazoredModal.CloseAsync(ModalResult.Ok());
+        Return();
+    }
+
+    private void Return()
+    {
+        secprodForm!.FormPostedSuccessfully = true;
+        navigationManager.NavigateTo("/padmaq");
+    }
+}

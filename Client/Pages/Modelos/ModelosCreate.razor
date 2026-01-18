@@ -1,0 +1,74 @@
+@page "/modelos-create"
+@using IMPLANPROD.Shared.Entities
+@inject IRepository repository
+@inject NavigationManager NavigationManager
+@inject SweetAlertService sweetAlertService
+
+<PageTitle>Nuevo Modelo</PageTitle>
+
+<!--
+Componente: ModelosCreate.razor
+Descripción: Página para crear un nuevo modelo (BADAMODE)
+Autor: Sistema IMPLANPROD
+Fecha: 2026-01-08
+-->
+
+<div class="bg-primary bg-opacity-10 p-3 rounded-3 mb-3">
+    <h3 class="m-0 text-primary">
+        <i class="fas fa-plus-circle me-2"></i>
+        Nuevo Modelo
+    </h3>
+</div>
+
+<ModelosForm Modelo="modelo"
+             OnValidSubmit="CreateAsync"
+             OnCancel="Cancel"
+             IsEdit="false" />
+
+@code {
+    private Badamode modelo = new();
+
+    /// <summary>
+    /// Crea un nuevo modelo
+    /// </summary>
+    private async Task CreateAsync()
+    {
+        try
+        {
+            // Validar que el código no esté vacío
+            if (string.IsNullOrWhiteSpace(modelo.Cod_Mod))
+            {
+                await sweetAlertService.FireAsync("Error", "El código del modelo es obligatorio", SweetAlertIcon.Error);
+                return;
+            }
+
+            // Establecer valores por defecto
+            modelo.Status = 1; // Activo
+
+            var responseHttp = await repository.Post("api/badamode", modelo);
+
+            if (responseHttp.Error)
+            {
+                var message = await responseHttp.GetErrorMessageAsync();
+                await sweetAlertService.FireAsync("Error", message, SweetAlertIcon.Error);
+            }
+            else
+            {
+                await sweetAlertService.FireAsync("Éxito", "Modelo creado correctamente", SweetAlertIcon.Success);
+                NavigationManager.NavigateTo("/modelos");
+            }
+        }
+        catch (Exception ex)
+        {
+            await sweetAlertService.FireAsync("Error", ex.Message, SweetAlertIcon.Error);
+        }
+    }
+
+    /// <summary>
+    /// Cancela la creación y vuelve al listado
+    /// </summary>
+    private void Cancel()
+    {
+        NavigationManager.NavigateTo("/modelos");
+    }
+}

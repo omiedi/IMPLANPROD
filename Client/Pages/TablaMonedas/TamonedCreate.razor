@@ -1,0 +1,39 @@
+@inject IRepository repository
+@inject NavigationManager navigationManager
+@inject SweetAlertService sweetAlertService
+@inject IModalService Modal
+
+<div class="modal-body">
+    <h3>Crear Moneda</h3>
+
+    <TamonedForm @ref="tamonedForm" Tamoned="tamoned" OnValidSubmit="Create" ReturnAction="Return" IsEdit="false" />
+</div>
+
+@code {
+    private Tamoned tamoned = new();
+    private TamonedForm? tamonedForm;
+    [CascadingParameter]
+    BlazoredModalInstance BlazoredModal { get; set; } = default!;
+
+    // Método para crear una nueva moneda
+    private async Task Create()
+    {
+        var responseHttp = await repository.Post("/api/tamoneds", tamoned);
+        if (responseHttp.Error)
+        {
+            var mensajeError = await responseHttp.GetErrorMessageAsync();
+            await sweetAlertService.FireAsync("Error", mensajeError, SweetAlertIcon.Error);
+            return;
+        }
+
+        await BlazoredModal.CloseAsync(ModalResult.Ok());
+        Return();
+    }
+
+    // Método para regresar a la página principal
+    private void Return()
+    {
+        tamonedForm!.FormPostedSuccessfully = true;
+        navigationManager.NavigateTo("/TablaMonedas/Tamoned/Index");
+    }
+}

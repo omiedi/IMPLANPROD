@@ -1,0 +1,181 @@
+@page "/ficha-proveedor-index"
+@using IMPLANPROD.Shared.Entities
+@inject IRepository repository
+@inject NavigationManager NavigationManager
+@inject SweetAlertService sweetAlertService
+
+<PageTitle>Ficha de Proveedores</PageTitle>
+
+<!--
+    Componente: FichaProveedorIndex.razor
+    Descripción: Listado paginado de proveedores activos (Stat_Cli >= 0) con opción de editar y dar de baja.
+    Autor: IA Cascade (solicitud de Omar)
+    Fecha: 22/04/2025
+    Sigue el estándar ABM y el patrón repository del proyecto.
+-->
+
+<div class="bg-primary bg-opacity-10 p-3 rounded-3 mb-3">
+    <h3 class="m-0 text-primary">Lista de Proveedores</h3>
+</div>
+<div class="mb-3">
+    <button class="btn btn-primary" @onclick="NuevoProveedor">
+        <i class="fas fa-plus"></i> Nuevo Proveedor
+    </button>
+    <button class="btn btn-secondary ms-2" @onclick="IrABajas">
+        <i class="fas fa-trash-alt"></i> Proveedores dados de baja
+    </button>
+</div>
+
+<div class="row mb-3">
+    <div class="col-md-4">
+        <input class="form-control" placeholder="Buscar por Razón Social..." @bind="Filter" @bind:event="oninput" />
+    </div>
+    <div class="col-md-2">
+        <button class="btn btn-outline-secondary" @onclick="()=>LoadAsync(1)"><i class="fas fa-search"></i> Buscar</button>
+    </div>
+</div>
+
+@if (isLoading)
+{
+    <p>Cargando...</p>
+}
+else
+{
+    <table class="table table-striped">
+        <thead>
+            <tr>
+                <th>Nro Proveedor</th>
+                <th>Razón Social</th>
+                <th>Domicilio</th>
+                <th>Teléfono</th>
+                <th>Mail</th>
+                <th>Acciones</th>
+            </tr>
+        </thead>
+        <tbody>
+            @if (Proveedores != null && Proveedores.Count > 0)
+            {
+                @foreach (var proveedor in Proveedores)
+                {
+                    <tr>
+                        <td>@proveedor.Id</td>
+                        <td>@proveedor.Raso_Cli</td>
+                        <td>@proveedor.Domi_Cli</td>
+                        <td>@proveedor.Tele_Cli</td>
+                        <td>@proveedor.Mail_Cli</td>
+                        <td>
+                            <button class="btn btn-sm btn-outline-primary me-2" @onclick="() => EditarProveedor(proveedor.Id)"><i class="fas fa-edit"></i> Editar</button>
+                            <button class="btn btn-sm btn-outline-danger" @onclick="() => DarDeBajaProveedor(proveedor.Id)"><i class="fas fa-trash-alt"></i> Dar de baja</button>
+                        </td>
+                    </tr>
+                }
+            }
+            else
+            {
+                <tr><td colspan="6">No hay proveedores para mostrar.</td></tr>
+            }
+        </tbody>
+    </table>
+    <div class="d-flex justify-content-between align-items-center">
+        <button class="btn btn-outline-secondary" @onclick="()=>LoadAsync(PaginaActual-1)" disabled="@(PaginaActual == 1)">Anterior</button>
+        <span>Página @PaginaActual de @TotalPaginas</span>
+        <button class="btn btn-outline-secondary" @onclick="()=>LoadAsync(PaginaActual+1)" disabled="@(PaginaActual == TotalPaginas)">Siguiente</button>
+    </div>
+}
+
+@code {
+    /// <summary>
+    /// Lista de proveedores activos
+    /// </summary>
+    private List<Proved12> Proveedores = new();
+    private int PaginaActual = 1;
+    private int TotalPaginas = 1;
+    private int RegistrosPorPagina = 10;
+    private bool isLoading = true;
+    private string? Filter = string.Empty;
+    private string? Page = string.Empty;
+
+    /// <summary>
+    /// Carga los proveedores activos (Stat_Cli >= 0) paginados desde el backend
+    /// </summary>
+    private async Task LoadAsync(int page = 1)
+    {
+        if (!string.IsNullOrWhiteSpace(Page))
+        {
+            page = Convert.ToInt32(Page);
+        }
+        PaginaActual = page;
+        string url1 = string.Empty;
+        string url2 = string.Empty;
+        if (string.IsNullOrEmpty(Filter))
+        {
+            url1 = $"api/proved12?page={page}&recordsNumber={RegistrosPorPagina}&stat_Cli=0";
+            url2 = $"api/proved12/totalPages?recordsNumber={RegistrosPorPagina}&stat_Cli=0";
+        }
+        else
+        {
+            url1 = $"api/proved12?page={page}&recordsNumber={RegistrosPorPagina}&filter={Filter}&stat_Cli=0";
+            url2 = $"api/proved12/totalPages?recordsNumber={RegistrosPorPagina}&filter={Filter}&stat_Cli=0";
+        }
+        try
+        {
+            isLoading = true;
+            var responseHttp = await repository.Get<List<Proved12>>(url1);
+            var responseHttp2 = await repository.Get<int>(url2);
+            Proveedores = responseHttp.Response!;
+            TotalPaginas = responseHttp2.Response!;
+        }
+        catch (Exception ex)
+        {
+            await sweetAlertService.FireAsync("Error", ex.Message, SweetAlertIcon.Error);
+        }
+        isLoading = false;
+        StateHasChanged();
+    }
+
+    /// <summary>
+    /// Inicializa la carga de proveedores activos
+    /// </summary>
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadAsync();
+    }
+
+    /// <summary>
+    /// Navega al formulario de creación de proveedor
+    /// </summary>
+    private void NuevoProveedor()
+    {
+        NavigationManager.NavigateTo("/ficha-proveedor-create");
+    }
+
+    /// <summary>
+    /// Navega al listado de proveedores dados de baja
+    /// </summary>
+    private void IrABajas()
+    {
+        NavigationManager.NavigateTo("/ficha-proveedor-baja");
+    }
+
+    /// <summary>
+    /// Navega al formulario de edición de proveedor
+    /// </summary>
+    private void EditarProveedor(int id)
+    {
+        NavigationManager.NavigateTo($"/ficha-proveedor-edit/{id}");
+    }
+
+    /// <summary>
+    /// Da de baja un proveedor cambiando el status a -1
+    /// </summary>
+    private async Task DarDeBajaProveedor(int id)
+    {
+        var proveedor = await repository.Get<Proved12>($"/api/proved12/{id}");
+        if (proveedor.Response != null)
+        {
+            proveedor.Response.Stat_Cli = -1;
+            await repository.Put("/api/proved12", proveedor.Response);
+            await LoadAsync(PaginaActual);
+        }
+    }
+}

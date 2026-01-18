@@ -1,0 +1,55 @@
+﻿@page "/"
+
+<PageTitle>Sistema de Producción</PageTitle>
+
+<style>
+    .home-container {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        padding: 20px;
+    }
+
+    .logo-container {
+        background-color: #1565C0;
+        padding: 30px;
+        border-radius: 8px;
+        width: 378px;  /* 10cm = 378px */
+        height: 378px; /* 10cm x 10cm */
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin-bottom: 30px;
+    }
+
+    .logo-container img {
+        width: 318px; /* Dejando margen para el padding */
+        height: 318px;
+        object-fit: contain;
+    }
+
+    .title-container {
+        background-color: #E6F3FF;
+        padding: 20px 40px;
+        border-radius: 8px;
+        text-align: center;
+        width: 100%;
+        max-width: 800px;
+    }
+
+    .title-container h1 {
+        margin: 0;
+        color: #2C3E50;
+        font-size: 32px;
+        font-weight: bold;
+    }
+</style>
+
+<div class="home-container">
+    <div class="logo-container">
+        <img src="/images/logo.png" alt="Logo de la empresa" />
+    </div>
+    <div class="title-container">
+        <h1>SISTEMA DE PRODUCCIÓN</h1>
+    </div>
+</div>

@@ -1,0 +1,579 @@
+@page "/Stock-index"
+@attribute [Authorize]
+@using IMPLANPROD.Shared.Services
+@using IMPLANPROD.Shared.Entities
+@using Microsoft.AspNetCore.Authorization
+@using Microsoft.AspNetCore.Components.Authorization
+@using System.Security.Claims
+@using IMPLANPROD.Client.Pages.StockAjustes
+@using IMPLANPROD.Shared.DTOs
+@inject IRepository repository
+@inject NavigationManager NavigationManager
+@inject SweetAlertService sweetAlertService
+@inject AuthenticationStateProvider AuthenticationStateProvider
+@inject HttpClient Http
+
+<PageTitle>Stocks</PageTitle>
+
+<div class="container-fluid">
+    <!-- Título de la página -->
+    <div class="mb-4">
+        <h2 class="text-center fw-bold text-primary">
+            <i class="fas fa-boxes me-2"></i>
+            STOCK DE PRODUCTOS
+        </h2>
+        <hr class="border-primary border-2 opacity-50" />
+    </div>
+
+<div class="bg-primary bg-opacity-10 p-3 rounded-3 mb-3 d-flex justify-content-end align-items-center">
+    <div class="dropdown">
+        <button class="btn btn-sm btn-primary dropdown-toggle" type="button" data-bs-toggle="dropdown">
+            Informes
+        </button>
+        <ul class="dropdown-menu dropdown-menu-end">
+            <li>
+                <NavLink class="dropdown-item" href="/stock/consultaStockComponentes">
+                    Consulta de Stocks de Componentes
+                </NavLink>
+            </li>
+            @* <li>
+                <NavLink class="dropdown-item" href="/ajuste-stock">
+                    Ajuste de Stock
+                </NavLink>
+            </li> *@
+            @* <li>
+                <NavLink class="dropdown-item" href="/movimientos-stock">
+                    Movimientos Históricos
+                </NavLink>
+            </li> *@
+        </ul>
+    </div>
+</div>
+
+<div class="d-flex align-items-center justify-content-between mb-3">
+    <div class="d-flex align-items-center gap-2">
+        <input type="text" class="form-control" style="min-width: 10cm; width: 10cm;" placeholder="Buscar x código y/o descrip..." @bind-value="Filter" @onkeyup="HandleKeyPress" />
+        <button type="button" class="btn btn-outline-primary" @onclick="ApplyFilterAsync">Filtrar</button>
+        <button type="button" class="btn btn-outline-danger" @onclick="CleanFilterAsync">Limpiar</button>
+    </div>
+</div>
+
+<Pagination CurrentPage="currentPage"
+TotalPages="totalPages"
+SelectedPage="SelectedPageAsync" />
+
+@if (isLoading)
+{
+    <div class="spinner-border text-primary" role="status">
+        <span class="sr-only">Cargando...</span>
+    </div>
+}
+else
+{
+    @if (Productos.Count == 0 && !string.IsNullOrEmpty(Filter))
+    {
+        <div class="alert alert-info">
+            <i class="fas fa-info-circle me-2"></i> No se encontraron coincidencias para el filtro "@Filter".
+        </div>
+    }
+    <GenericList MyList="Productos">
+        <Body>
+            <table class="table table-striped">
+                <thead>            <tr>
+                        <th>Cód.Interno</th>
+                        <th>Código</th>
+                        <th>Descripción</th>
+                        <th class="text-end">Saldo</th>
+                        <th>U.Med.</th>
+                        <th>X Depósito</th>
+                        <th>Transferenrir</th>
+                        <th>Mov.Históricos</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @if (Productos.Count > 0)
+                    {
+                        @foreach (var item in Productos)
+                        {
+                            <tr>
+                                <td>@item.Cod_inte</td>
+                                <td>@item.Codigo</td>
+                                <td>@item.Descripcion</td>
+                                <td class="text-end">@item.Saldo.ToString("N2")</td>
+                                <td>@item.UnidadMedida</td>
+                                <td>
+                                    <button class="btn btn-warning" @onclick="() => MostrarStockPorDeposito(item)">
+                                        <i class="oi oi-eye"></i> X Depósito + Ajustes
+                                    </button>
+                                </td>
+                                <td>
+                                    <button class="btn btn-info" @onclick="() => AbrirTransferencias(item)">
+                                        <i class="oi oi-transfer"></i> Transferencias
+                                    </button>
+                                </td>
+                                <td>
+                                    <button class="btn btn-secondary" @onclick="() => AbrirHistorico(item)">
+                                        <i class="oi oi-clock"></i> Histórico
+                                    </button>
+
+
+                                </td>
+                            </tr>
+                        }
+                    }
+                    else
+                    {
+                        <tr><td colspan="3">No hay productos con saldo.</td></tr>
+                    }
+                </tbody>
+            </table>
+        </Body>
+    </GenericList>
+}
+@if (mostrarDetalleDeposito)
+{
+    <div class="modal fade show" style="display: block" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header bg-warning text-dark">
+                    <h5 class="modal-title">Stock por Depósito - @repuestoSeleccionado?.Codigo</h5>
+                    <button type="button" class="btn-close" @onclick="CerrarDetalleDeposito"></button>
+                </div>
+                <div class="modal-body">
+                    @if (stocksPorDeposito == null)
+                    {
+                        <div class="spinner-border text-primary" role="status">
+                            <span class="sr-only">Cargando...</span>
+                        </div>
+                    }
+                    else if (!stocksPorDeposito.Any())
+                    {
+                        <div class="alert alert-info">
+                            No hay stock registrado en ningún depósito.
+                        </div>
+                    }
+                    else
+                    {
+                        <div id="tablaScroll" class="table-container" style="max-height: 15cm; overflow-y: auto;">
+                            <div class="table-responsive">
+                                <table class="table table-striped table-hover">
+                                    <thead>
+                                        <tr>
+                                            <th>Depósito</th>
+                                            <th>Descripción</th>
+                                            <th class="text-end">Stock</th>
+                                            <th></th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach (var stock in stocksPorDeposito)
+                                        {
+                                            <tr>
+                                                <td>@stock.Deposito</td>
+                                                <td>@stock.Descripcion</td>
+                                                <td class="text-end">@stock.Stock.ToString("N2")</td>
+                                                <td class="text-end">
+                                                   @*  <button class="btn btn-primary btn-sm" @onclick="() => AbrirModalAjuste(stock)">
+                                                        <i class="oi oi-pencil"></i> Ajustar
+                                                    </button *@>
+                                                    <button class="btn btn-primary btn-sm" @onclick="async () => await PrepararAjuste(stock)">
+                                                        <i class="oi oi-pencil"></i> Ajustar
+                                                    </button>
+                                                </td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+
+                    }
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" @onclick="CerrarDetalleDeposito">Cerrar</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="modal-backdrop fade show"></div>
+
+}
+@if (mostrarModalAjuste && repuestoSeleccionado != null && stockDepositoSeleccionado != null)
+{
+    @if (NivelTrazable == 1)
+    {
+        <StockAjustesTrazablesFormModal
+            Repuesto="repuestoSeleccionado"
+            StockDeposito="stockDepositoSeleccionado"
+            Visible="true"
+            OnClose="CerrarModalAjuste"
+            OnSave="GuardarAjuste" />
+    }
+    else
+    {
+        <StockAjustesFormModal
+            Repuesto="repuestoSeleccionado"
+            StockDeposito="stockDepositoSeleccionado"
+            Visible="true"
+            OnClose="CerrarModalAjuste"
+            OnSave="GuardarAjuste" />
+    }
+}
+@if (mostrarModalTransferencia)
+{
+    <StockTransferenciaModal
+    Repuesto="repuestoSeleccionado" 
+    Visible="mostrarModalTransferencia"
+    OnClose="CerrarModalTransferencia"
+    OnSave="GuardarTransferencia" />
+}
+@if (mostrarModalHistorico)
+{
+    <div class="modal fade show" style="display: block" tabindex="-1">
+        <div class="modal-dialog modal-xl">
+            <div class="modal-content">
+                <div class="modal-header bg-secondary text-white">
+                    <h5 class="modal-title">Histórico de Movimientos</h5>
+                    <button type="button" class="btn-close btn-close-white" @onclick="CerrarHistorico"></button>
+                </div>
+                <div class="modal-body p-0">
+                    <HistoricoMovimientosComponent Repuesto="repuestoSeleccionado"
+                    ShowInModal="true"
+                    HeaderClass="bg-secondary"
+                    HeaderStyle="margin: -1px;" />
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="modal-backdrop fade show"></div>
+}
+</div>
+
+@code {
+
+    private ClaimsPrincipal user;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (isProcessing) return;
+        await LoadAsync();
+    }
+
+    int? NivelTrazable;
+
+
+
+
+    private int PaginaActual = 1;
+    private Dictionary<int, decimal> stocksTotales = new();
+    private List<ProductoConSaldoDTO>Productos = new();
+    private ProductoConSaldoDTO? repuestoSeleccionado;
+    // private List<Master>? repuestos;
+    private List<Usuario>? usuarios;
+    private MasterFuncionesDTO? masterFuncionesDTO;
+    private int TotalPaginas = 1;
+    private bool isLoading = true;
+    private int? idFlexoft;
+
+
+    [Parameter]
+    [SupplyParameterFromQuery]
+    public string Page { get; set; } = string.Empty;
+
+    [Parameter]
+    [SupplyParameterFromQuery]
+    public string Filter { get; set; } = string.Empty;
+
+    private int currentPage = 1;
+    private int totalPages;
+    private bool isProcessing = false;
+    private StockDepositoDTO? stockDepositoSeleccionado;
+
+    private List<StockDepositoDTO>? stocksPorDeposito;
+
+    private bool mostrarDetalleDeposito;
+    private bool mostrarModalTransferencia;
+    private bool mostrarModalHistorico;
+    private bool mostrarModalAjuste;
+
+
+
+    /// <summary>
+    /// Carga los productos con saldo paginados desde el backend
+    /// </summary>
+    private async Task LoadAsync(int page = 1)
+    {
+        if (isProcessing) return;
+
+        if (!string.IsNullOrWhiteSpace(Page))
+        {
+            page = Convert.ToInt32(Page);
+        }
+
+        try
+        {
+            isLoading = true;
+            isProcessing = true;
+
+            // Construir URLs con parámetros de paginación correctos
+            string url1 = $"api/movisto?page={page}&recordsNumber=10";
+            string url2 = $"api/movisto/totalPages?page={page}&recordsNumber=10";
+
+            // Agregar filtro si existe
+            if (!string.IsNullOrEmpty(Filter))
+            {
+                url1 += $"&filter={Uri.EscapeDataString(Filter)}";
+                url2 += $"&filter={Uri.EscapeDataString(Filter)}";
+            }
+
+            var responseHppt = await repository.Get<List<ProductoConSaldoDTO>>(url1);
+            var responseHppt2 = await repository.Get<int>(url2);
+            
+            Productos = responseHppt.Response!;
+            totalPages = responseHppt2.Response!;
+            currentPage = page;
+        }
+        catch (Exception ex)
+        {
+            await sweetAlertService.FireAsync("Error", ex.Message, SweetAlertIcon.Error);
+        }
+        finally
+        {
+            isProcessing = false;
+            isLoading = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task PrepararAjuste(StockDepositoDTO stockDeposito)
+    {
+        try
+        {
+            Console.WriteLine($"[PrepararAjuste] Iniciando ajuste para depósito: {stockDeposito.Deposito}");
+            Console.WriteLine($"[PrepararAjuste] Repuesto seleccionado: {repuestoSeleccionado?.Codigo ?? "NULL"}");
+            
+            if (repuestoSeleccionado == null)
+            {
+                await sweetAlertService.FireAsync("Error", "No hay un producto seleccionado", SweetAlertIcon.Error);
+                return;
+            }
+
+            stockDepositoSeleccionado = stockDeposito;
+            
+            Console.WriteLine($"[PrepararAjuste] Leyendo trazabilidad para Cod_inte: {repuestoSeleccionado.Cod_inte}");
+            await LeerTrazabilidad(repuestoSeleccionado);
+
+            Console.WriteLine($"[PrepararAjuste] Nivel trazable: {NivelTrazable}");
+            Console.WriteLine($"[PrepararAjuste] Abriendo modal de ajuste");
+            
+            mostrarModalAjuste = true;
+            StateHasChanged();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[PrepararAjuste] ERROR: {ex.Message}");
+            await sweetAlertService.FireAsync("Error", $"Error al preparar ajuste: {ex.Message}", SweetAlertIcon.Error);
+        }
+    }
+
+    private async Task LeerTrazabilidad(ProductoConSaldoDTO repuesto)
+    {
+        var funcionesMaster = await repository.Get<MasterFuncionesDTO>($"api/masterfunciones/funcionesAtributos/{repuesto.Cod_inte}");
+
+        if (funcionesMaster?.Response != null)
+        {
+            NivelTrazable = funcionesMaster.Response.Trazable;
+        }
+        else
+        {
+            NivelTrazable = 0; // Valor por defecto si el producto no tiene datos o hubo error
+        }
+    }
+
+
+    // private async Task CargarUsuarios()
+    // {
+    //     try
+    //     {
+
+    //         var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+    //         user = authState.User;
+
+    //         if (user.Identity.IsAuthenticated)
+    //         {
+    //             var username = user.Identity.Name;
+    //             var email = user.FindFirst(ClaimTypes.Email)?.Value;
+
+    //             if (!string.IsNullOrEmpty(username) && !string.IsNullOrEmpty(email))
+    //             {
+
+    //             idFlexoft = await Http.GetFromJsonAsync<int?>(
+    //                 $"api/Usuarios/ObtenerIdFlexoft?username={username}&email={email}");
+    //             }
+    //             else
+    //             {
+    //                 await sweetAlertService.FireAsync("Atención", "No se encontró el usuario autenticado en la lista.", SweetAlertIcon.Warning);
+    //             }
+    //         }
+    //     }
+    // catch (Exception ex)
+    // {
+    //     await sweetAlertService.FireAsync("Error", "Error al leer lista de usuarios", SweetAlertIcon.Error);
+    // }
+
+
+    private async Task MostrarStockPorDeposito(ProductoConSaldoDTO repuesto)
+    {
+        try
+        {
+            repuestoSeleccionado = repuesto;
+
+            // Primero obtenemos la lista de todos los depósitos
+            var responseDepositos = await repository.Get<List<int>>("api/tadeposi/SoloCodigos");
+            if (responseDepositos.Error)
+            {
+                await sweetAlertService.FireAsync("Error", "No se pudieron cargar los depósitos", SweetAlertIcon.Error);
+                return;
+            }
+
+            // Luego obtenemos el stock por depósito
+
+            int codint = 0;
+
+            codint = repuesto.Cod_inte;
+
+            // Obtenemos el stock por depósito para el producto seleccionado
+            var responseStock = await repository.Get<List<StockDepositoDTO>>($"api/movisto/stock/{codint}");
+            if (responseStock.Error)
+            {
+                await sweetAlertService.FireAsync("Error", responseStock.HttpResponseMessage.ReasonPhrase, SweetAlertIcon.Error);
+                return;
+            }
+
+            // Obtenemos la información de todos los depósitos (incluida la descripción)
+            // El endpoint devuelve un diccionario donde la clave es el código del depósito y el valor es la descripción
+            var responseDepositosInfo = await repository.Get<Dictionary<int, string>>("api/tadeposi/combo");
+            if (responseDepositosInfo.Error)
+            {
+                await sweetAlertService.FireAsync("Error", responseDepositosInfo.HttpResponseMessage.ReasonPhrase, SweetAlertIcon.Error);
+                return;
+            }
+
+            // Creamos una lista con todos los depósitos, tengan o no stock
+            // Incluimos la descripción del depósito y ordenamos por cantidad de stock descendente
+            stocksPorDeposito = responseDepositos.Response.Select(deposito =>
+            {
+                // Buscamos si existe stock para este depósito
+                var stockExistente = responseStock.Response?.FirstOrDefault(s => s.Deposito == deposito);
+
+                // Obtenemos la descripción directamente del diccionario usando el código del depósito como clave
+                string descripcion = "Sin descripción";
+                if (responseDepositosInfo.Response != null && responseDepositosInfo.Response.TryGetValue(deposito, out string desc))
+                {
+                    descripcion = desc;
+                }
+
+                return new StockDepositoDTO
+            {
+                Deposito = deposito,
+                Stock = stockExistente?.Stock ?? 0,
+                Descripcion = descripcion // Asignamos la descripción obtenida del diccionario
+            };
+            })
+            .OrderByDescending(s => s.Stock) // Ordenamos por cantidad de stock de manera descendente
+            .ToList();
+
+            // // Agregamos un log para verificar que las descripciones se están obteniendo correctamente
+            // Console.WriteLine($"Se cargaron {stocksPorDeposito.Count} depósitos con sus descripciones");
+            // foreach (var stock in stocksPorDeposito.Take(3)) // Mostramos los primeros 3 como ejemplo
+            // {
+            //     Console.WriteLine($"Depósito: {stock.Deposito}, Descripción: {stock.Descripcion}, Stock: {stock.Stock}");
+            // }
+
+            mostrarDetalleDeposito = true;
+        }
+        catch (Exception ex)
+        {
+            await sweetAlertService.FireAsync("Error", "No se pudo cargar el stock por depósito", SweetAlertIcon.Error);
+        }
+    }
+    private async Task GuardarAjuste()
+    {
+        // await CargarRepuestos();
+        await LoadAsync();
+        await MostrarStockPorDeposito(repuestoSeleccionado);
+        CerrarModalAjuste();
+    }
+
+    private void AbrirTransferencias(ProductoConSaldoDTO repuesto)
+    {
+        repuestoSeleccionado = repuesto;
+        mostrarModalTransferencia = true;
+    }
+    private void AbrirTransferencias()
+    {
+        mostrarModalTransferencia = false;
+    }
+    private void CerrarDetalleDeposito()
+    {
+        mostrarDetalleDeposito = false;
+        repuestoSeleccionado = null;
+        stocksPorDeposito = null;
+    }
+    private void CerrarModalTransferencia()
+    {
+        mostrarModalTransferencia = false;
+    }
+    private async Task GuardarTransferencia()
+    {
+        CerrarModalTransferencia();
+    }
+    private void AbrirHistorico(ProductoConSaldoDTO repuesto)
+    {
+        repuestoSeleccionado = repuesto;
+        mostrarModalHistorico = true;
+    }
+
+    private void CerrarHistorico()
+    {
+        mostrarModalHistorico = false;
+    }
+
+    private void AbrirModalAjuste(StockDepositoDTO stockDeposito)
+    {
+        stockDepositoSeleccionado = stockDeposito;
+        mostrarModalAjuste = true;
+    }
+
+    private void CerrarModalAjuste()
+    {
+        mostrarModalAjuste = false;
+        stockDepositoSeleccionado = null;
+    }
+
+
+    private async Task CleanFilterAsync()
+    {
+        Filter = string.Empty;
+        await ApplyFilterAsync();
+    }
+
+    private async Task ApplyFilterAsync()
+    {
+        int page = 1;
+        await LoadAsync(page);
+    }
+
+    private async Task SelectedPageAsync(int page)
+    {
+        currentPage = page;
+        await LoadAsync(page);
+    }
+    private async Task HandleKeyPress(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+        {
+            await ApplyFilterAsync();
+        }
+    }
+}

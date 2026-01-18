@@ -1,0 +1,40 @@
+@page "/ordenes-compra/editar/{Id:int}"
+@using IMPLANPROD.Shared.Entities
+@using IMPLANPROD.Client.Repositories
+@inject IRepository repository
+@inject NavigationManager navigationManager
+@inject SweetAlertService sweetAlertService
+
+<PageTitle>Editar Orden de Compra</PageTitle>
+
+@code {
+    [Parameter] public int Id { get; set; }
+    private bool cargando = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        // Pequeña demora para mostrar el loading
+        await Task.Delay(100);
+        cargando = false;
+        StateHasChanged();
+    }
+
+    private void Regresar()
+    {
+        navigationManager.NavigateTo("/ordenes-compra");
+    }
+}
+
+@if (cargando)
+{
+    <div class="text-center mt-5">
+        <div class="spinner-border" role="status">
+            <span class="visually-hidden">Cargando orden de compra...</span>
+        </div>
+        <p class="mt-2">Cargando orden de compra...</p>
+    </div>
+}
+else
+{
+    <OrdenesCompraEditForm OrdenId="Id" OnCancel="Regresar" />
+}

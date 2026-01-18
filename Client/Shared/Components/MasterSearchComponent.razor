@@ -1,0 +1,180 @@
+@inject IRepository repository
+@inject SweetAlertService sweetAlertService
+
+<div class="search-component">
+    <div class="input-group mb-3" style="width: 100%; max-width: 600px;">
+        <input type="text"
+               class="form-control"
+               placeholder="Buscar producto..."
+               @bind="searchQuery"
+               @bind:event="oninput"
+               @onkeyup="HandleKeyPress" />
+        <button class="btn btn-outline-primary" @onclick="SearchMaster">
+            <i class="oi oi-magnifying-glass"></i> Buscar
+        </button>
+    </div>
+
+    @if (showResults && searchResults != null && searchResults.Any())
+    {
+        <div class="search-results">
+            <div class="list-group">
+                @foreach (var repuesto in searchResults)
+                {
+                    <button type="button"
+                            class="list-group-item list-group-item-action"
+                            @onclick="() => SelectRepuesto(repuesto)">
+                        <div class="d-flex w-100 justify-content-between align-items-start">
+                            <div class="ms-2 me-auto">
+                                <div>
+                                    <strong>@repuesto.Codigo</strong>
+                                    <span class="badge bg-secondary ms-2">@repuesto.Codint</span>
+                                </div>
+                                <div class="text-wrap">
+                                    @repuesto.Descripcion
+                                </div>
+                                <small class="text-muted">
+                                    U.M.: @(string.IsNullOrEmpty(repuesto.Umedida) ? "-" : repuesto.Umedida)
+                                </small>
+                            </div>
+                        </div>
+                    </button>
+                }
+            </div>
+        </div>
+    }
+    else if (showResults && (searchResults == null || !searchResults.Any()))
+    {
+        <div class="alert alert-info">
+            No se encontraron repuestos.
+        </div>
+    }
+</div>
+
+<style>
+    .search-component {
+        position: relative;
+    }
+
+    .search-results {
+        position: absolute;
+        top: 100%;
+        left: 0;
+        right: 0;
+        z-index: 1000;
+        max-height: 400px;
+        overflow-y: auto;
+        background: white;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+
+    .list-group-item {
+        padding: 0.5rem 0.75rem;
+    }
+
+    .list-group-item:hover {
+        background-color: #f8f9fa;
+        cursor: pointer;
+    }
+
+    .list-group-item .badge {
+        font-size: 0.75rem;
+        padding: 0.2rem 0.4rem;
+    }
+
+    .list-group-item .text-wrap {
+        margin: 0.1rem 0;
+        line-height: 1.2;
+    }
+
+    .list-group-item small {
+        font-size: 0.75rem;
+    }
+
+    .list-group-item strong {
+        font-size: 0.9rem;
+    }
+</style>
+
+@code {
+    private string searchQuery = "";
+    private List<Master> searchResults = new();
+    private bool showResults;
+
+    [Parameter]
+    public EventCallback<Master> OnRepuestoSelected { get; set; }
+
+    private async Task HandleKeyPress(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+        {
+            await SearchMaster();
+        }
+    }
+
+    private async Task SearchMaster()
+    {
+        try
+        {
+            if (string.IsNullOrWhiteSpace(searchQuery))
+            {
+                searchResults.Clear();
+                showResults = false;
+                StateHasChanged();
+                return;
+            }
+
+            var response = await repository.Get<List<Master>>($"api/master/search?filter={Uri.EscapeDataString(searchQuery)}");
+            
+            if (response.Error)
+            {
+                var message = await response.GetErrorMessageAsync();
+                await sweetAlertService.FireAsync("Error", message, SweetAlertIcon.Error);
+                searchResults.Clear();
+                showResults = false;
+                StateHasChanged();
+                return;
+            }
+
+            if (response.Response != null)
+            {
+                searchResults = response.Response;
+                showResults = true;
+            }
+            else
+            {
+                searchResults.Clear();
+                showResults = false;
+            }
+
+            StateHasChanged();
+        }
+        catch (Exception ex)
+        {
+            await sweetAlertService.FireAsync("Error", $"Error al buscar productos: {ex.Message}", SweetAlertIcon.Error);
+            searchResults.Clear();
+            showResults = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task SelectRepuesto(Master repuesto)
+    {
+        try
+        {
+            if (OnRepuestoSelected.HasDelegate)
+            {
+                await OnRepuestoSelected.InvokeAsync(repuesto);
+                searchQuery = "";
+                searchResults.Clear();
+                showResults = false;
+                StateHasChanged();
+            }
+        }
+        catch (Exception ex)
+        {
+            await sweetAlertService.FireAsync("Error", $"Error al seleccionar el producto: {ex.Message}", SweetAlertIcon.Error);
+        }
+    }
+}

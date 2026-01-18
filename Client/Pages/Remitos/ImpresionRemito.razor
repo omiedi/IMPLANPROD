@@ -1,0 +1,218 @@
+@* Componente para impresión de remito sobre formulario preimpreso *@
+@inject IJSRuntime JSRuntime
+
+<div id="remito-impresion" style="display: none;">
+    <div class="remito-preimpreso">
+        @* Encabezado derecho *@
+        <div class="encabezado-derecho">
+            <div class="nci">N.C.I.: @NCI</div>
+            <div class="numero-remito">@NumeroRemito</div>
+            <div class="fecha">@Fecha</div>
+        </div>
+
+        @* Datos del cliente *@
+        <div class="datos-cliente">
+            <div class="linea1">@RazonSocial</div>
+            <div class="linea2">
+                <span class="domicilio">@Domicilio</span>
+                <span class="cuit">@CUIT</span>
+            </div>
+            <div class="linea3">@CondicionIVA</div>
+            <div class="localidad">@Localidad</div>
+        </div>
+
+        @* Orden de compra *@
+        <div class="orden-compra">
+            <span class="oc-numero">@OrdenCompra</span>
+            <span class="ov-numero">O.V.: @OrdenVenta</span>
+        </div>
+
+        @* Detalle de productos *@
+        <div class="detalle-productos">
+            @foreach (var item in Items)
+            {
+                <div class="item-producto">
+                    <span class="cantidad">@item.Cantidad.ToString("F2")</span>
+                    <span class="codigo">@item.Codigo</span>
+                    <span class="descripcion">@item.Descripcion</span>
+                </div>
+            }
+        </div>
+
+        @* Pie del remito *@
+        <div class="pie-remito">
+            <div class="observaciones">Obs.: @Observaciones</div>
+            <div class="footer-info">
+                <span class="valor-declarado">Valor Declarado: @ValorDeclarado</span>
+                <span class="bultos">Bultos: @Bultos</span>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+    @@media print {
+        body * {
+            visibility: hidden;
+        }
+        
+        #remito-impresion,
+        #remito-impresion * {
+            visibility: visible;
+        }
+        
+        #remito-impresion {
+            position: absolute;
+            left: 0;
+            top: 0;
+            width: 100%;
+            display: block !important;
+        }
+    }
+
+    .remito-preimpreso {
+        width: 21.5cm;
+        height: 30.5cm;
+        font-family: 'Courier New', monospace;
+        font-size: 11pt;
+        position: relative;
+        padding: 0;
+        margin: 0;
+    }
+
+    /* Encabezado derecho */
+    .encabezado-derecho {
+        position: absolute;
+        top: 2.5cm;
+        right: 1.5cm;
+        text-align: right;
+        line-height: 1.4;
+    }
+
+    .nci {
+        font-size: 10pt;
+        margin-bottom: 0.3cm;
+    }
+
+    .numero-remito {
+        font-size: 11pt;
+        font-weight: bold;
+        margin-bottom: 0.5cm;
+    }
+
+    .fecha {
+        font-size: 11pt;
+    }
+
+    /* Datos del cliente */
+    .datos-cliente {
+        position: absolute;
+        top: 6.5cm;
+        left: 2cm;
+        width: 17cm;
+        line-height: 1.3;
+    }
+
+    .datos-cliente .linea1 {
+        margin-bottom: 0.3cm;
+    }
+
+    .datos-cliente .linea2 {
+        display: flex;
+        justify-content: space-between;
+        margin-bottom: 0.3cm;
+    }
+
+    .datos-cliente .linea3 {
+        margin-bottom: 0.3cm;
+    }
+
+    .datos-cliente .localidad {
+        margin-left: 2cm;
+    }
+
+    /* Orden de compra */
+    .orden-compra {
+        position: absolute;
+        top: 11cm;
+        left: 2cm;
+        width: 17cm;
+        display: flex;
+        justify-content: space-between;
+    }
+
+    /* Detalle de productos */
+    .detalle-productos {
+        position: absolute;
+        top: 13.5cm;
+        left: 1.5cm;
+        width: 18cm;
+    }
+
+    .item-producto {
+        display: flex;
+        margin-bottom: 0.25cm;
+        line-height: 1.2;
+    }
+
+    .item-producto .cantidad {
+        width: 2.5cm;
+        text-align: right;
+        padding-right: 0.5cm;
+    }
+
+    .item-producto .codigo {
+        width: 4cm;
+        padding-right: 0.5cm;
+    }
+
+    .item-producto .descripcion {
+        flex: 1;
+    }
+
+    /* Pie del remito */
+    .pie-remito {
+        position: absolute;
+        bottom: 4cm;
+        left: 2cm;
+        width: 17cm;
+    }
+
+    .observaciones {
+        margin-bottom: 1cm;
+    }
+
+    .footer-info {
+        display: flex;
+        justify-content: space-between;
+    }
+</style>
+
+@code {
+    [Parameter] public string NCI { get; set; } = "";
+    [Parameter] public string NumeroRemito { get; set; } = "";
+    [Parameter] public string Fecha { get; set; } = "";
+    [Parameter] public string RazonSocial { get; set; } = "";
+    [Parameter] public string Domicilio { get; set; } = "";
+    [Parameter] public string CUIT { get; set; } = "";
+    [Parameter] public string CondicionIVA { get; set; } = "";
+    [Parameter] public string Localidad { get; set; } = "";
+    [Parameter] public string OrdenCompra { get; set; } = "";
+    [Parameter] public string OrdenVenta { get; set; } = "";
+    [Parameter] public List<ItemRemito> Items { get; set; } = new();
+    [Parameter] public string Observaciones { get; set; } = "";
+    [Parameter] public string ValorDeclarado { get; set; } = "";
+    [Parameter] public int Bultos { get; set; } = 1;
+
+    public async Task Imprimir()
+    {
+        await JSRuntime.InvokeVoidAsync("window.print");
+    }
+
+    public class ItemRemito
+    {
+        public decimal Cantidad { get; set; }
+        public string Codigo { get; set; } = "";
+        public string Descripcion { get; set; } = "";
+    }
+}

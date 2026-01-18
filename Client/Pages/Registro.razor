@@ -1,0 +1,419 @@
+@page "/registro"
+@using IMPLANPROD.Shared.Entities
+@using System.Text.Json
+@using System.Text
+@using System.Net.Http.Headers
+@inject HttpClient Http
+@inject NavigationManager NavigationManager
+
+<h3>Registro de Usuario</h3>
+
+<div class="row">
+    <div class="col-md-6">
+        <EditForm Model="@usuario" OnValidSubmit="@HandleValidSubmit">
+            <DataAnnotationsValidator />
+            <ValidationSummary />
+
+            <div class="form-group mb-3">
+                <label for="nombreUsuario">Nombre de Usuario:</label>
+                <InputText id="nombreUsuario" 
+                          @bind-Value="usuario.NombreUsuario" 
+                          class="form-control" 
+                          autocomplete="off" />
+                <ValidationMessage For="@(() => usuario.NombreUsuario)" />
+            </div>
+
+            <div class="form-group mb-3">
+                <label for="email">Correo Electrónico:</label>
+                <InputText id="email" 
+                          @bind-Value="usuario.Email" 
+                          class="form-control" 
+                          autocomplete="off" />
+                <ValidationMessage For="@(() => usuario.Email)" />
+            </div>
+
+            <div class="form-group mb-3">
+                <label for="password">Contraseña:</label>
+                <div class="input-group">
+                    <InputText type="@(mostrarPassword ? "text" : "password")" 
+                              id="password" 
+                              @bind-Value="usuario.Password" 
+                              class="form-control" 
+                              autocomplete="new-password" />
+                    <button type="button" 
+                            class="btn btn-outline-secondary" 
+                            @onclick="TogglePasswordVisibility">
+                        <i class="@(mostrarPassword ? "oi oi-eye-closed" : "oi oi-eye")" 
+                           aria-hidden="true"></i>
+                    </button>
+                </div>
+                <ValidationMessage For="@(() => usuario.Password)" />
+            </div>
+
+            <div class="form-group mb-3">
+                <label for="foto">Foto de Perfil:</label>
+                <InputFile id="foto" OnChange="@OnFileChange" class="form-control" accept="image/*" />
+                @if (!string.IsNullOrEmpty(mensajeError))
+                {
+                    <div class="alert alert-danger mt-2">
+                        @mensajeError
+                    </div>
+                }
+                @if (fotoPreview != null)
+                {
+                    <img src="@fotoPreview" class="mt-2" style="max-width: 200px; max-height: 200px;" />
+                }
+            </div>
+
+            <div class="form-group mb-3">
+                <label for="empresa">Empresa:</label>
+                <!-- Selector de empresa: al cambiar, se ejecuta EmpresaChangeAsync y se actualiza usuario.EmpresaId -->
+                <select id="empresa" class="form-select" @onchange="EmpresaChangeAsync">
+                    <option value="0">Seleccione una empresa...</option>
+                    @foreach (var empresa in empresas)
+                    {
+                        <option value="@empresa.Id" selected="@(empresa.Id == usuario.EmpresaId)">@empresa.razon</option>
+                    }
+                </select>
+                <ValidationMessage For="@(() => usuario.EmpresaId)" />
+            </div>
+
+            <div class="form-group mb-3">
+                <label for="dependencia">Dependencia:</label>
+                <!-- Selector de dependencia: al cambiar, se ejecuta DependenciaChangedAsync y se actualiza usuario.DependenciaId -->
+                <select id="dependencia" class="form-select" @onchange="DependenciaChangedAsync">
+                    <option value="0">Seleccione una dependencia...</option>
+                    @foreach (var dependencia in dependencias)
+                    {
+                        <option value="@dependencia.Id" selected="@(dependencia.Id == usuario.DependenciaId)">@dependencia.dependencia</option>
+                    }
+                </select>
+                <ValidationMessage For="@(() => usuario.DependenciaId)" />
+            </div>
+
+            <div class="form-group mb-3">
+                <label for="sector">Sector:</label>
+                <!-- Selector de sector: al cambiar, usuario.SectorId se actualiza automáticamente -->
+                <select id="sector" class="form-select" @onchange="SectoresChangedAsync">
+                    <option value="0">Seleccione un sector...</option>
+                    @foreach (var sector in sectores)
+                    {
+                        <option value="@sector.Id" selected="@(sector.Id == usuario.SectorId)">@sector.sector</option>
+                    }
+                </select>
+                <ValidationMessage For="@(() => usuario.SectorId)" />
+            </div>
+
+            <div class="form-group mb-3">
+                <label for="perfil">Perfil:</label>
+                <InputSelect id="perfil" @bind-Value="usuario.PerfilId" class="form-control">
+                    <option value="">Seleccione un perfil...</option>
+                    @foreach (var perfil in perfiles)
+                    {
+                        <option value="@perfil.Id">@perfil.Nombre</option>
+                    }
+                </InputSelect>
+                <ValidationMessage For="@(() => usuario.PerfilId)" />
+            </div>
+
+            <div class="form-group mb-3">
+                <label for="country">País:</label>
+                <!-- Selector de país: al cambiar, se ejecuta CountryChangeAsync y se actualiza usuario.CountryId -->
+                <select id="country" class="form-select" @onchange="CountryChangeAsync">
+                    <option value="0">Seleccione un país...</option>
+                    @foreach (var country in countries)
+                    {
+                        <option value="@country.Id" selected="@(country.Id == usuario.CountryId)">@country.Name</option>
+                    }
+                </select>
+                <ValidationMessage For="@(() => usuario.CountryId)" />
+            </div>
+
+            <div class="form-group mb-3">
+                <label for="state">Provincia:</label>
+                <!-- Selector de provincia: al cambiar, se ejecuta StateChangeAsync y se actualiza usuario.StateId -->
+                <select id="state" class="form-select" @onchange="StateChangeAsync">
+                    <option value="0">Seleccione una provincia...</option>
+                    @foreach (var state in states)
+                    {
+                        <option value="@state.Id" selected="@(state.Id == usuario.StateId)">@state.Name</option>
+                    }
+                </select>
+                <ValidationMessage For="@(() => usuario.StateId)" />
+            </div>
+
+            <div class="form-group mb-3">
+                <label for="city">Localidad:</label>
+                <!-- Selector de localidad: al cambiar, usuario.CityId se actualiza automáticamente -->
+                <select id="city" class="form-select" @onchange="CityChangeAsync">
+                    <option value="0">Seleccione una localidad...</option>
+                    @foreach (var city in cities)
+                    {
+                        <option value="@city.Id" selected="@(city.Id == usuario.CityId)">@city.Name</option>
+                    }
+                </select>
+                <ValidationMessage For="@(() => usuario.CityId)" />
+            </div>
+
+            <button type="submit" class="btn btn-primary">Registrar</button>
+            <button type="button" class="btn btn-secondary" @onclick="Cancelar">Cancelar</button>
+        </EditForm>
+    </div>
+</div>
+
+@code {
+    // Modelo de usuario inicializado con valores por defecto
+    private Usuario usuario = new Usuario
+    {
+        NombreUsuario = "",
+        Email = "",
+        Password = "",
+        FechaRegistro = DateTime.Now,
+        Activo = true
+    };
+
+    // Listas para los combos de selección
+    private List<Perfil> perfiles = new List<Perfil>();
+    private List<Empresa> empresas = new List<Empresa>();
+    private List<Dependencia> dependencias = new List<Dependencia>();
+    private List<Sector> sectores = new List<Sector>();
+    private List<Country> countries = new List<Country>();
+    private List<State> states = new List<State>();
+    private List<City> cities = new List<City>();
+
+    // Variables para manejo de la foto de perfil
+    private IBrowserFile? foto;
+    private string? fotoPreview;
+    private string? mensajeError;
+    private bool mostrarPassword = false;
+
+    /// <summary>
+    /// Se ejecuta cuando se inicializa el componente
+    /// </summary>
+    protected override async Task OnInitializedAsync()
+    {
+        // Cargar lista de empresas al inicializar
+        empresas = await Http.GetFromJsonAsync<List<Empresa>>("api/Empresas") ?? new List<Empresa>();
+        
+        // Si ya hay una empresa seleccionada (por ejemplo, por defecto o por lógica previa), cargar dependencias
+        if (usuario.EmpresaId > 0)
+        {
+            dependencias = await Http.GetFromJsonAsync<List<Dependencia>>($"api/dependencias/combo/{usuario.EmpresaId}") ?? new List<Dependencia>();
+        }
+        // Si ya hay una dependencia seleccionada, cargar sectores correspondientes
+        if (usuario.DependenciaId > 0)
+        {
+            sectores = await Http.GetFromJsonAsync<List<Sector>>($"api/sectores/combo/{usuario.DependenciaId}") ?? new List<Sector>();
+        }
+        // Cargar lista de países
+        countries = await Http.GetFromJsonAsync<List<Country>>("api/countries") ?? new List<Country>();
+        // Cargar lista de perfiles de usuario
+        perfiles = await Http.GetFromJsonAsync<List<Perfil>>("api/Perfiles") ?? new List<Perfil>();
+    }
+
+    /// <summary>
+    /// Carga los datos iniciales necesarios para los combos
+    /// </summary>
+    private async Task CargarDatosIniciales()
+    {
+        // Carga la lista de perfiles y empresas desde la API
+        perfiles = await Http.GetFromJsonAsync<List<Perfil>>("api/Perfiles") ?? new List<Perfil>();
+    }
+
+    /// <summary>
+    /// Maneja el cambio de empresa. Actualiza el modelo, carga dependencias y limpia combos dependientes.
+    /// </summary>
+    private async Task EmpresaChangeAsync(ChangeEventArgs e)
+    {
+        var empresaId = Convert.ToInt32(e.Value!);
+        usuario.EmpresaId = empresaId;
+        // Cargar dependencias de la empresa seleccionada
+        if (empresaId > 0)
+        {
+            dependencias = await Http.GetFromJsonAsync<List<Dependencia>>($"api/dependencias/combo/{empresaId}") ?? new List<Dependencia>();
+        }
+        else
+        {
+            dependencias.Clear();
+        }
+        // Limpiar selección de dependencia y sector
+        usuario.DependenciaId = 0;
+        usuario.SectorId = 0;
+        sectores.Clear();
+        StateHasChanged();
+    }
+
+    /// <summary>
+    /// Maneja el cambio de dependencia. Actualiza el modelo, carga sectores y limpia el sector seleccionado.
+    /// </summary>
+    private async Task DependenciaChangedAsync(ChangeEventArgs e)
+    {
+        var depId = Convert.ToInt32(e.Value!);
+        usuario.DependenciaId = depId;
+        usuario.SectorId = 0; // Limpiar selección de sector
+        sectores.Clear(); // Limpiar lista de sectores
+        if (depId > 0)
+        {
+            sectores = await Http.GetFromJsonAsync<List<Sector>>($"api/sectores/combo/{depId}") ?? new List<Sector>();
+        }
+        StateHasChanged();
+    }
+
+    /// <summary>
+    /// Maneja el cambio de sector. Actualiza el modelo.
+    /// </summary>
+    private Task SectoresChangedAsync(ChangeEventArgs e)
+    {
+        var sectorId = Convert.ToInt32(e.Value!);
+        usuario.SectorId = sectorId;
+        return Task.CompletedTask;
+    }
+
+    /// <summary>
+    /// Maneja el cambio de país. Actualiza el modelo, carga provincias y limpia combos dependientes.
+    /// </summary>
+    private async Task CountryChangeAsync(ChangeEventArgs e)
+    {
+        var countryId = Convert.ToInt32(e.Value!);
+        usuario.CountryId = countryId;
+        // Cargar provincias del país seleccionado
+        if (countryId > 0)
+        {
+            states = await Http.GetFromJsonAsync<List<State>>($"api/states/combo/{countryId}") ?? new List<State>();
+        }
+        else
+        {
+            states.Clear();
+        }
+        // Limpiar selección de provincia y localidad
+        usuario.StateId = 0;
+        usuario.CityId = 0;
+        cities.Clear();
+        StateHasChanged();
+    }
+
+    /// <summary>
+    /// Maneja el cambio de provincia. Actualiza el modelo, carga localidades y limpia la localidad seleccionada.
+    /// </summary>
+    private async Task StateChangeAsync(ChangeEventArgs e)
+    {
+        var stateId = Convert.ToInt32(e.Value!);
+        usuario.StateId = stateId;
+        usuario.CityId = 0; // Limpiar selección de localidad
+        cities.Clear(); // Limpiar lista de ciudades
+        if (stateId > 0)
+        {
+            cities = await Http.GetFromJsonAsync<List<City>>($"api/cities/combo/{stateId}") ?? new List<City>();
+        }
+        StateHasChanged();
+    }
+
+    /// <summary>
+    /// Maneja el cambio de localidad. Actualiza el modelo.
+    /// </summary>
+    private Task CityChangeAsync(ChangeEventArgs e)
+    {
+        var cityId = Convert.ToInt32(e.Value!);
+        usuario.CityId = cityId;
+        return Task.CompletedTask;
+    }
+
+    /// <summary>
+    /// Maneja el cambio de archivo cuando se selecciona una foto
+    /// </summary>
+    private async Task OnFileChange(InputFileChangeEventArgs e)
+    {
+        try
+        {
+            mensajeError = null;
+            var file = e.File;
+            
+            // Validación del tamaño del archivo (máximo 2MB)
+            if (file.Size > 2097152)
+            {
+                mensajeError = "La imagen no puede ser mayor a 2MB";
+                return;
+            }
+
+            // Validación de la extensión del archivo
+            var allowedExtensions = new[] { ".jpg", ".jpeg", ".png" };
+            var extension = Path.GetExtension(file.Name).ToLowerInvariant();
+            if (!allowedExtensions.Contains(extension))
+            {
+                mensajeError = "Solo se permiten archivos JPG y PNG";
+                return;
+            }
+
+            foto = file;
+
+            // Crear preview de la imagen
+            var resizedImage = await file.RequestImageFileAsync("image/jpeg", 200, 200);
+            var buffer = new byte[resizedImage.Size];
+            await resizedImage.OpenReadStream().ReadAsync(buffer);
+            fotoPreview = $"data:image/jpeg;base64,{Convert.ToBase64String(buffer)}";
+        }
+        catch (Exception ex)
+        {
+            mensajeError = "Error al procesar la imagen";
+            Console.WriteLine($"Error al procesar la imagen: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// Maneja el envío del formulario cuando es válido
+    /// </summary>
+    private async Task HandleValidSubmit()
+    {
+        try
+        {
+            mensajeError = null;
+            var content = new MultipartFormDataContent();
+
+            // Serializa los datos del usuario a JSON
+            var usuarioJson = JsonSerializer.Serialize(usuario);
+            content.Add(new StringContent(usuarioJson), "usuarioJson");
+
+            // Agrega la foto si existe
+            if (foto != null)
+            {
+                var fotoContent = new StreamContent(foto.OpenReadStream());
+                fotoContent.Headers.ContentType = new MediaTypeHeaderValue(foto.ContentType);
+                content.Add(fotoContent, "foto", foto.Name);
+            }
+
+            // Envía la solicitud POST a la API
+            var response = await Http.PostAsync("api/Usuarios/registro", content);
+            if (response.IsSuccessStatusCode)
+            {
+                NavigationManager.NavigateTo("/usuarios");
+            }
+            else
+            {
+                var error = await response.Content.ReadAsStringAsync();
+                Console.WriteLine($"Error: {error}");
+                mensajeError = "Error al registrar el usuario: " + error;
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error: {ex.Message}");
+            mensajeError = "Error al registrar el usuario";
+        }
+    }
+
+    /// <summary>
+    /// Navega de vuelta a la lista de usuarios
+    /// </summary>
+    private void Cancelar()
+    {
+        NavigationManager.NavigateTo("/usuarios");
+    }
+
+    /// <summary>
+    /// Alterna la visibilidad de la contraseña
+    /// </summary>
+    private void TogglePasswordVisibility()
+    {
+        mostrarPassword = !mostrarPassword;
+    }
+}

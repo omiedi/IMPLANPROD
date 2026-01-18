@@ -1,0 +1,260 @@
+@using IMPLANPROD.Shared.Entities
+@using IMPLANPROD.Shared.DTOs
+@using IMPLANPROD.Client.Repositories
+@inject IRepository repository
+
+<!-- Modal para seleccionar depósito -->
+<div class="modal fade @(IsVisible ? "show" : "")" style="display: @(IsVisible ? "block" : "none")" tabindex="-1" role="dialog" aria-labelledby="depositoModalLabel" aria-hidden="@(!IsVisible)">
+    <div class="modal-dialog modal-dialog-centered" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="depositoModalLabel">
+                    <i class="fas fa-warehouse me-2"></i>
+                    Seleccionar Depósito
+                </h5>
+                <button type="button" class="btn-close" @onclick="CerrarModal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                @if (cargandoDepositos)
+                {
+                    <div class="text-center">
+                        <div class="spinner-border text-primary" role="status">
+                            <span class="visually-hidden">Cargando depósitos...</span>
+                        </div>
+                        <p class="mt-2">Cargando depósitos...</p>
+                    </div>
+                }
+                else if (depositos == null || !depositos.Any())
+                {
+                    <div class="alert alert-warning" role="alert">
+                        <i class="fas fa-exclamation-triangle me-2"></i>
+                        No se encontraron depósitos disponibles.
+                    </div>
+                }
+                else
+                {
+                    <div class="mb-3">
+                        <label for="depositoSelect" class="form-label">
+                            <strong>Seleccione un depósito:</strong>
+                        </label>
+                        <select id="depositoSelect" class="form-select" @bind="depositoSeleccionadoId">
+                            <option value="0">-- Seleccione un depósito --</option>
+                            @foreach (var deposito in depositos)
+                            {
+                                <option value="@deposito.CodigoDepo">
+                                    @deposito.CodigoDepo - @deposito.Descripcion
+                                </option>
+                            }
+                        </select>
+                    </div>
+
+                    @if (depositoSeleccionadoId > 0)
+                    {
+                        var depositoSeleccionado = depositos.FirstOrDefault(d => d.CodigoDepo == depositoSeleccionadoId);
+                        if (depositoSeleccionado != null)
+                        {
+                            <div class="alert alert-info" role="alert">
+                                <h6><i class="fas fa-info-circle me-2"></i>Depósito seleccionado:</h6>
+                                <strong>Código:</strong> @depositoSeleccionado.CodigoDepo<br>
+                                <strong>Descripción:</strong> @depositoSeleccionado.Descripcion
+                                @if (!string.IsNullOrEmpty(depositoSeleccionado.DescripAbreviada))
+                                {
+                                    <br><strong>Descripción Abreviada:</strong> @depositoSeleccionado.DescripAbreviada
+                                }
+                            </div>
+                        }
+                    }
+                }
+
+                @if (!string.IsNullOrEmpty(mensajeError))
+                {
+                    <div class="alert alert-danger" role="alert">
+                        <i class="fas fa-exclamation-circle me-2"></i>
+                        @mensajeError
+                    </div>
+                }
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" @onclick="CerrarModal">
+                    <i class="fas fa-times me-1"></i>
+                    Cancelar
+                </button>
+                <button type="button" 
+                        class="btn btn-primary" 
+                        @onclick="ConfirmarSeleccion" 
+                        disabled="@(depositoSeleccionadoId <= 0)">
+                    <i class="fas fa-check me-1"></i>
+                    Seleccionar
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Backdrop del modal -->
+@if (IsVisible)
+{
+    <div class="modal-backdrop fade show" @onclick="CerrarModal"></div>
+}
+
+@code {
+    /// <summary>
+    /// Evento que se dispara cuando se selecciona un depósito
+    /// Devuelve el código del depósito y su descripción
+    /// </summary>
+    [Parameter] public EventCallback<DepositoSeleccionadoDTO> OnDepositoSeleccionado { get; set; }
+
+    /// <summary>
+    /// Controla la visibilidad del modal
+    /// </summary>
+    [Parameter] public bool IsVisible { get; set; }
+
+    /// <summary>
+    /// Evento que se dispara cuando se cierra el modal
+    /// </summary>
+    [Parameter] public EventCallback OnModalClosed { get; set; }
+
+    /// <summary>
+    /// Filtro personalizado para el status de los depósitos (por defecto >= 0)
+    /// </summary>
+    [Parameter] public int StatusFilter { get; set; } = 0;
+
+    /// <summary>
+    /// Código del depósito que debe aparecer preseleccionado por defecto
+    /// </summary>
+    [Parameter] public int DepositoPorDefecto { get; set; } = 0;
+
+    // Variables privadas del componente
+    private List<Tadeposi>? depositos;
+    private int depositoSeleccionadoId = 0;
+    private bool cargandoDepositos = false;
+    private string mensajeError = string.Empty;
+
+    /// <summary>
+    /// Se ejecuta cuando el componente se inicializa
+    /// </summary>
+    protected override async Task OnInitializedAsync()
+    {
+        await CargarDepositos();
+    }
+
+    /// <summary>
+    /// Se ejecuta cuando cambian los parámetros del componente
+    /// </summary>
+    protected override async Task OnParametersSetAsync()
+    {
+        if (IsVisible && (depositos == null || !depositos.Any()))
+        {
+            await CargarDepositos();
+        }
+        
+        // Establecer el depósito por defecto si se especificó
+        if (DepositoPorDefecto > 0 && depositoSeleccionadoId == 0)
+        {
+            depositoSeleccionadoId = DepositoPorDefecto;
+        }
+    }
+
+    /// <summary>
+    /// Carga la lista de depósitos desde el backend
+    /// Utiliza el endpoint /api/tadeposi/activos que filtra por Status >= 0
+    /// </summary>
+    private async Task CargarDepositos()
+    {
+        try
+        {
+            cargandoDepositos = true;
+            mensajeError = string.Empty;
+            StateHasChanged();
+
+            // Usar el endpoint que ya existe para obtener depósitos activos
+            var response = await repository.Get<List<Tadeposi>>("api/tadeposi/activos");
+            
+            if (response.Error)
+            {
+                mensajeError = "Error al cargar los depósitos: " + response.HttpResponseMessage.ReasonPhrase;
+                depositos = new List<Tadeposi>();
+            }
+            else
+            {
+                depositos = response.Response ?? new List<Tadeposi>();
+                
+                // Aplicar filtro adicional si es necesario
+                if (StatusFilter != 0)
+                {
+                    depositos = depositos.Where(d => d.Status >= StatusFilter).ToList();
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            mensajeError = $"Error inesperado al cargar depósitos: {ex.Message}";
+            depositos = new List<Tadeposi>();
+        }
+        finally
+        {
+            cargandoDepositos = false;
+            StateHasChanged();
+        }
+    }
+
+    /// <summary>
+    /// Confirma la selección del depósito y cierra el modal
+    /// </summary>
+    private async Task ConfirmarSeleccion()
+    {
+        if (depositoSeleccionadoId <= 0 || depositos == null)
+            return;
+
+        var depositoSeleccionado = depositos.FirstOrDefault(d => d.CodigoDepo == depositoSeleccionadoId);
+        if (depositoSeleccionado == null)
+            return;
+
+        // Crear el objeto de respuesta con los datos del depósito seleccionado
+        var resultado = new DepositoSeleccionadoDTO
+        {
+            CodigoDepo = depositoSeleccionado.CodigoDepo,
+            Descripcion = depositoSeleccionado.Descripcion ?? string.Empty,
+            DescripcionAbreviada = depositoSeleccionado.DescripAbreviada ?? string.Empty,
+            CodPlanta = depositoSeleccionado.CodPlanta
+        };
+
+        // Notificar la selección al componente padre
+        await OnDepositoSeleccionado.InvokeAsync(resultado);
+        
+        // Cerrar el modal
+        await CerrarModal();
+    }
+
+    /// <summary>
+    /// Cierra el modal y resetea la selección
+    /// </summary>
+    private async Task CerrarModal()
+    {
+        IsVisible = false;
+        depositoSeleccionadoId = DepositoPorDefecto; // Volver al depósito por defecto
+        mensajeError = string.Empty;
+        
+        // Notificar al componente padre que se cerró el modal
+        await OnModalClosed.InvokeAsync();
+        StateHasChanged();
+    }
+
+    /// <summary>
+    /// Método público para abrir el modal desde el componente padre
+    /// </summary>
+    public async Task AbrirModal()
+    {
+        IsVisible = true;
+        depositoSeleccionadoId = DepositoPorDefecto; // Usar el depósito por defecto
+        mensajeError = string.Empty;
+        
+        // Recargar depósitos si es necesario
+        if (depositos == null || !depositos.Any())
+        {
+            await CargarDepositos();
+        }
+        
+        StateHasChanged();
+    }
+}

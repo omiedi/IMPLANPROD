@@ -1,0 +1,1346 @@
+VERSION 5.00
+Object = "{90F3D7B3-92E7-44BA-B444-6A8E2A3BC375}#1.0#0"; "actskin4.ocx"
+Object = "{5E9E78A0-531B-11CF-91F6-C2863C385E30}#1.0#0"; "msflxgrd.ocx"
+Begin VB.Form CERTIFICADOS 
+   BackColor       =   &H00FFFFFF&
+   Caption         =   "Databook"
+   ClientHeight    =   8820
+   ClientLeft      =   75
+   ClientTop       =   285
+   ClientWidth     =   13935
+   ForeColor       =   &H00000000&
+   KeyPreview      =   -1  'True
+   LinkTopic       =   "Form1"
+   MaxButton       =   0   'False
+   MinButton       =   0   'False
+   PaletteMode     =   1  'UseZOrder
+   ScaleHeight     =   8820
+   ScaleWidth      =   13935
+   StartUpPosition =   2  'CenterScreen
+   Begin VB.CommandButton Command5 
+      Caption         =   "ABM"
+      BeginProperty Font 
+         Name            =   "MS Sans Serif"
+         Size            =   8.25
+         Charset         =   0
+         Weight          =   700
+         Underline       =   0   'False
+         Italic          =   0   'False
+         Strikethrough   =   0   'False
+      EndProperty
+      Height          =   615
+      Left            =   120
+      Picture         =   "CERTIFICADOS.frx":0000
+      TabIndex        =   23
+      ToolTipText     =   "Acceso Directo a ABM de Certificados"
+      Top             =   8415
+      Width           =   1560
+   End
+   Begin VB.CommandButton Command6 
+      Caption         =   "Refresh"
+      BeginProperty Font 
+         Name            =   "MS Sans Serif"
+         Size            =   8.25
+         Charset         =   0
+         Weight          =   700
+         Underline       =   0   'False
+         Italic          =   0   'False
+         Strikethrough   =   0   'False
+      EndProperty
+      Height          =   615
+      Left            =   1800
+      Picture         =   "CERTIFICADOS.frx":066A
+      TabIndex        =   22
+      ToolTipText     =   "Refresca la Informacion en pantalla"
+      Top             =   8415
+      Width           =   1560
+   End
+   Begin VB.CommandButton Command4 
+      Caption         =   "Carátula"
+      BeginProperty Font 
+         Name            =   "MS Sans Serif"
+         Size            =   8.25
+         Charset         =   0
+         Weight          =   700
+         Underline       =   0   'False
+         Italic          =   0   'False
+         Strikethrough   =   0   'False
+      EndProperty
+      Height          =   615
+      Left            =   10560
+      Picture         =   "CERTIFICADOS.frx":0CD4
+      TabIndex        =   21
+      ToolTipText     =   "Genera Caratula e Imprime"
+      Top             =   8410
+      Width           =   1560
+   End
+   Begin VB.CommandButton Command8 
+      Caption         =   "Print"
+      BeginProperty Font 
+         Name            =   "MS Sans Serif"
+         Size            =   8.25
+         Charset         =   0
+         Weight          =   700
+         Underline       =   0   'False
+         Italic          =   0   'False
+         Strikethrough   =   0   'False
+      EndProperty
+      Height          =   615
+      Left            =   12250
+      Picture         =   "CERTIFICADOS.frx":133E
+      Style           =   1  'Graphical
+      TabIndex        =   19
+      ToolTipText     =   "Imprime Databook "
+      Top             =   8410
+      Width           =   1560
+   End
+   Begin VB.Frame Frame1 
+      BackColor       =   &H00FFFFFF&
+      Height          =   8415
+      Left            =   120
+      TabIndex        =   3
+      Top             =   0
+      Width           =   13695
+      Begin VB.CommandButton Command43 
+         BeginProperty Font 
+            Name            =   "MS Sans Serif"
+            Size            =   8.25
+            Charset         =   0
+            Weight          =   700
+            Underline       =   0   'False
+            Italic          =   0   'False
+            Strikethrough   =   0   'False
+         EndProperty
+         Height          =   435
+         Left            =   10920
+         Picture         =   "CERTIFICADOS.frx":19A8
+         Style           =   1  'Graphical
+         TabIndex        =   24
+         ToolTipText     =   "Actualizar Indice de Selección de O.Fab."
+         Top             =   240
+         Width           =   525
+      End
+      Begin VB.CommandButton Command1 
+         Caption         =   "x Familia"
+         BeginProperty Font 
+            Name            =   "MS Sans Serif"
+            Size            =   8.25
+            Charset         =   0
+            Weight          =   700
+            Underline       =   0   'False
+            Italic          =   0   'False
+            Strikethrough   =   0   'False
+         EndProperty
+         Height          =   435
+         Left            =   11640
+         Picture         =   "CERTIFICADOS.frx":1AF2
+         TabIndex        =   20
+         ToolTipText     =   "Selección Por Familia + N.Serie"
+         Top             =   840
+         Width           =   1005
+      End
+      Begin VB.CommandButton Command41 
+         Height          =   435
+         Left            =   11640
+         Picture         =   "CERTIFICADOS.frx":1DFC
+         Style           =   1  'Graphical
+         TabIndex        =   16
+         ToolTipText     =   "Sube al Nivel Anterior"
+         Top             =   240
+         Width           =   1005
+      End
+      Begin VB.CommandButton COMMAND3 
+         Caption         =   "O.K."
+         BeginProperty Font 
+            Name            =   "Arial"
+            Size            =   8.25
+            Charset         =   0
+            Weight          =   700
+            Underline       =   0   'False
+            Italic          =   0   'False
+            Strikethrough   =   0   'False
+         EndProperty
+         Height          =   1065
+         Left            =   12840
+         Picture         =   "CERTIFICADOS.frx":2106
+         Style           =   1  'Graphical
+         TabIndex        =   12
+         ToolTipText     =   "Cargar Items"
+         Top             =   210
+         Width           =   735
+      End
+      Begin VB.CommandButton Command2 
+         Caption         =   "O.F."
+         BeginProperty Font 
+            Name            =   "MS Sans Serif"
+            Size            =   8.25
+            Charset         =   0
+            Weight          =   700
+            Underline       =   0   'False
+            Italic          =   0   'False
+            Strikethrough   =   0   'False
+         EndProperty
+         Height          =   435
+         Left            =   10920
+         TabIndex        =   11
+         Top             =   840
+         Width           =   525
+      End
+      Begin VB.Frame Frame5 
+         BackColor       =   &H00FFFFFF&
+         Caption         =   "A.B.M. de Certificados x Orden de Fabricación "
+         BeginProperty Font 
+            Name            =   "MS Sans Serif"
+            Size            =   8.25
+            Charset         =   0
+            Weight          =   700
+            Underline       =   0   'False
+            Italic          =   0   'False
+            Strikethrough   =   0   'False
+         EndProperty
+         Height          =   1065
+         Index           =   1
+         Left            =   120
+         TabIndex        =   4
+         Top             =   240
+         Width           =   10740
+         Begin VB.TextBox Text6 
+            Alignment       =   1  'Right Justify
+            Appearance      =   0  'Flat
+            BackColor       =   &H00E0E0E0&
+            BeginProperty DataFormat 
+               Type            =   1
+               Format          =   "0,00"
+               HaveTrueFalseNull=   0
+               FirstDayOfWeek  =   0
+               FirstWeekOfYear =   0
+               LCID            =   11274
+               SubFormatType   =   1
+            EndProperty
+            BeginProperty Font 
+               Name            =   "MS Sans Serif"
+               Size            =   8.25
+               Charset         =   0
+               Weight          =   700
+               Underline       =   0   'False
+               Italic          =   0   'False
+               Strikethrough   =   0   'False
+            EndProperty
+            Height          =   350
+            Left            =   10130
+            Locked          =   -1  'True
+            TabIndex        =   18
+            TabStop         =   0   'False
+            ToolTipText     =   " "
+            Top             =   540
+            Width           =   420
+         End
+         Begin VB.TextBox Text5 
+            Appearance      =   0  'Flat
+            BackColor       =   &H00E0E0E0&
+            BeginProperty Font 
+               Name            =   "MS Sans Serif"
+               Size            =   8.25
+               Charset         =   0
+               Weight          =   700
+               Underline       =   0   'False
+               Italic          =   0   'False
+               Strikethrough   =   0   'False
+            EndProperty
+            Height          =   285
+            Left            =   10130
+            Locked          =   -1  'True
+            TabIndex        =   17
+            TabStop         =   0   'False
+            Text            =   "Niv."
+            Top             =   270
+            Width           =   420
+         End
+         Begin VB.TextBox Text3 
+            Appearance      =   0  'Flat
+            BackColor       =   &H00E0E0E0&
+            BeginProperty Font 
+               Name            =   "MS Sans Serif"
+               Size            =   8.25
+               Charset         =   0
+               Weight          =   700
+               Underline       =   0   'False
+               Italic          =   0   'False
+               Strikethrough   =   0   'False
+            EndProperty
+            Height          =   285
+            Left            =   8040
+            Locked          =   -1  'True
+            TabIndex        =   15
+            TabStop         =   0   'False
+            Text            =   "Número de Serie"
+            Top             =   270
+            Width           =   2100
+         End
+         Begin VB.TextBox Text1 
+            Appearance      =   0  'Flat
+            BackColor       =   &H00E0E0E0&
+            BeginProperty DataFormat 
+               Type            =   1
+               Format          =   "0,00"
+               HaveTrueFalseNull=   0
+               FirstDayOfWeek  =   0
+               FirstWeekOfYear =   0
+               LCID            =   11274
+               SubFormatType   =   1
+            EndProperty
+            BeginProperty Font 
+               Name            =   "MS Sans Serif"
+               Size            =   8.25
+               Charset         =   0
+               Weight          =   700
+               Underline       =   0   'False
+               Italic          =   0   'False
+               Strikethrough   =   0   'False
+            EndProperty
+            Height          =   350
+            Left            =   8040
+            Locked          =   -1  'True
+            TabIndex        =   14
+            TabStop         =   0   'False
+            ToolTipText     =   " "
+            Top             =   540
+            Width           =   2100
+         End
+         Begin VB.TextBox Text2 
+            Alignment       =   2  'Center
+            Appearance      =   0  'Flat
+            BackColor       =   &H00E0E0E0&
+            BeginProperty Font 
+               Name            =   "MS Sans Serif"
+               Size            =   8.25
+               Charset         =   0
+               Weight          =   700
+               Underline       =   0   'False
+               Italic          =   0   'False
+               Strikethrough   =   0   'False
+            EndProperty
+            Height          =   285
+            Left            =   2340
+            Locked          =   -1  'True
+            TabIndex        =   10
+            TabStop         =   0   'False
+            Text            =   "Descripción"
+            Top             =   270
+            Width           =   4100
+         End
+         Begin VB.TextBox Text4 
+            Appearance      =   0  'Flat
+            BackColor       =   &H00E0E0E0&
+            BeginProperty DataFormat 
+               Type            =   1
+               Format          =   "0,00"
+               HaveTrueFalseNull=   0
+               FirstDayOfWeek  =   0
+               FirstWeekOfYear =   0
+               LCID            =   11274
+               SubFormatType   =   1
+            EndProperty
+            BeginProperty Font 
+               Name            =   "MS Sans Serif"
+               Size            =   8.25
+               Charset         =   0
+               Weight          =   700
+               Underline       =   0   'False
+               Italic          =   0   'False
+               Strikethrough   =   0   'False
+            EndProperty
+            Height          =   350
+            Left            =   2340
+            Locked          =   -1  'True
+            TabIndex        =   9
+            TabStop         =   0   'False
+            ToolTipText     =   " "
+            Top             =   540
+            Width           =   4100
+         End
+         Begin VB.TextBox Text10 
+            Alignment       =   1  'Right Justify
+            Appearance      =   0  'Flat
+            BackColor       =   &H00E0E0E0&
+            BeginProperty DataFormat 
+               Type            =   1
+               Format          =   "0,00"
+               HaveTrueFalseNull=   0
+               FirstDayOfWeek  =   0
+               FirstWeekOfYear =   0
+               LCID            =   11274
+               SubFormatType   =   1
+            EndProperty
+            BeginProperty Font 
+               Name            =   "MS Sans Serif"
+               Size            =   8.25
+               Charset         =   0
+               Weight          =   700
+               Underline       =   0   'False
+               Italic          =   0   'False
+               Strikethrough   =   0   'False
+            EndProperty
+            Height          =   350
+            Left            =   6420
+            Locked          =   -1  'True
+            TabIndex        =   8
+            TabStop         =   0   'False
+            ToolTipText     =   " "
+            Top             =   540
+            Width           =   1630
+         End
+         Begin VB.TextBox Text11 
+            Appearance      =   0  'Flat
+            BackColor       =   &H00E0E0E0&
+            BeginProperty Font 
+               Name            =   "MS Sans Serif"
+               Size            =   8.25
+               Charset         =   0
+               Weight          =   700
+               Underline       =   0   'False
+               Italic          =   0   'False
+               Strikethrough   =   0   'False
+            EndProperty
+            Height          =   350
+            Left            =   120
+            Locked          =   -1  'True
+            TabIndex        =   7
+            Top             =   540
+            Width           =   2235
+         End
+         Begin VB.TextBox Text13 
+            Appearance      =   0  'Flat
+            BackColor       =   &H00E0E0E0&
+            BeginProperty Font 
+               Name            =   "MS Sans Serif"
+               Size            =   8.25
+               Charset         =   0
+               Weight          =   700
+               Underline       =   0   'False
+               Italic          =   0   'False
+               Strikethrough   =   0   'False
+            EndProperty
+            Height          =   285
+            Left            =   120
+            Locked          =   -1  'True
+            TabIndex        =   6
+            TabStop         =   0   'False
+            Text            =   "Código"
+            Top             =   270
+            Width           =   2235
+         End
+         Begin VB.TextBox Text14 
+            Appearance      =   0  'Flat
+            BackColor       =   &H00E0E0E0&
+            BeginProperty Font 
+               Name            =   "MS Sans Serif"
+               Size            =   8.25
+               Charset         =   0
+               Weight          =   700
+               Underline       =   0   'False
+               Italic          =   0   'False
+               Strikethrough   =   0   'False
+            EndProperty
+            Height          =   285
+            Left            =   6420
+            Locked          =   -1  'True
+            TabIndex        =   5
+            TabStop         =   0   'False
+            Text            =   "O.Fabricación"
+            Top             =   270
+            Width           =   1630
+         End
+      End
+      Begin MSFlexGridLib.MSFlexGrid MSF 
+         Bindings        =   "CERTIFICADOS.frx":2410
+         Height          =   6975
+         Left            =   120
+         TabIndex        =   13
+         Top             =   1320
+         Width           =   13500
+         _ExtentX        =   23813
+         _ExtentY        =   12303
+         _Version        =   393216
+         BackColor       =   16777215
+         FocusRect       =   2
+         BeginProperty Font {0BE35203-8F91-11CE-9DE3-00AA004BB851} 
+            Name            =   "Lucida Console"
+            Size            =   9
+            Charset         =   0
+            Weight          =   700
+            Underline       =   0   'False
+            Italic          =   0   'False
+            Strikethrough   =   0   'False
+         EndProperty
+      End
+   End
+   Begin VB.Timer Timer1 
+      Enabled         =   0   'False
+      Interval        =   150
+      Left            =   0
+      Top             =   0
+   End
+   Begin VB.PictureBox Picture999 
+      Height          =   540
+      Index           =   0
+      Left            =   4920
+      ScaleHeight     =   480
+      ScaleWidth      =   1110
+      TabIndex        =   0
+      Top             =   9720
+      Visible         =   0   'False
+      Width           =   1170
+   End
+   Begin ACTIVESKINLibCtl.Skin Skin1 
+      Left            =   120
+      OleObjectBlob   =   "CERTIFICADOS.frx":2424
+      Top             =   0
+   End
+   Begin ACTIVESKINLibCtl.SkinLabel SkinLabel999 
+      Height          =   225
+      Index           =   0
+      Left            =   0
+      OleObjectBlob   =   "CERTIFICADOS.frx":2658
+      TabIndex        =   1
+      Top             =   0
+      Visible         =   0   'False
+      Width           =   1485
+   End
+   Begin VB.Label TEPRUEBA 
+      AutoSize        =   -1  'True
+      Caption         =   "Label2"
+      Height          =   435
+      Left            =   0
+      TabIndex        =   2
+      Top             =   0
+      Visible         =   0   'False
+      Width           =   1560
+   End
+   Begin VB.Menu AGREGAR_RUTA 
+      Caption         =   "Agregar Ruta"
+      Visible         =   0   'False
+      Begin VB.Menu mnuedi 
+         Caption         =   "Editar"
+      End
+   End
+End
+Attribute VB_Name = "CERTIFICADOS"
+Attribute VB_GlobalNameSpace = False
+Attribute VB_Creatable = False
+Attribute VB_PredeclaredId = True
+Attribute VB_Exposed = False
+Private Declare Function ShellExecute Lib "shell32.dll" _
+                                    Alias "ShellExecuteA" _
+                                    (ByVal hwnd As Long, _
+                                    ByVal lpOperation As String, _
+                                    ByVal lpFile As String, _
+                                    ByVal lpParameters As String, _
+                                    ByVal lpDirectory As String, _
+                                    ByVal nShowCmd As Long) _
+                                    As Long
+Public CAMBIO%
+Public ID_LOTENIVELANTERIOR%
+Dim LOTENIVELANTERIOR$(15)
+
+Sub CARGA_GRILLA_CARATULA()
+   '
+   '
+   'VERIFICO SI LA ORDEN DE FABRICACION SELECCIONADA TIENE CERTIFICADOS APLICADOS
+   SQLX0$ = "SELECT * FROM CERTIFICADOS WITH(NOLOCK)" '**TABLA CERTIFICADOS***QUE SE GRABA EN ABMCERTIFICADOS
+   SQLX0$ = SQLX0$ + " WHERE IDENLOTE ='" & Text10 & "'"
+   SQLX0$ = SQLX0$ + " AND NUMEROSERIE = '" & Text1 & "'"
+   Set RST0 = READSET(SQLX0$)
+   With RST0
+     Do While Not .EOF
+        LOTE$ = SAFETEXT$(!idenlote)
+        RUT$ = SAFETEXT$(!RUT_ARCHIVO)
+        'COFA$ = SAFETEXT$(!FAMILIA)
+        COFA$ = TRIM$(CODFAMIL$(CODINT%(Text11)))
+        FAMI$ = TRIM$(ECOARCH$("TAFAMIL", COFA$))
+        If FAMI$ = "" Then GoTo 10
+        TIT% = XVALO(!TIT_CERTIFICADO)
+        TITU$ = ECOARCH$("TITUCERT", MKI$(TIT%))
+        HOJAX% = XVALO(!HOJAS)
+        If FAMI_ANT$ <> FAMI$ Then
+           INDI% = INDI% + 1
+           ACUMULA_HOJAX% = 0
+           HOJAINI% = 0
+        End If
+        GoSub CARGAREGIS
+10      .MoveNext
+     Loop
+   End With
+   
+   SQLX$ = " SELECT * FROM CERTI_ESTRUC WITH(NOLOCK)"
+   SQLX$ = SQLX$ + " WHERE ORD_Fabric_Gral = '" & Text10 & "'"
+   SQLX$ = SQLX$ + " AND N_Serie_Gral = '" & Text1 & "'"
+   SQLX$ = SQLX$ + " order by  FAMILIA "
+   
+   Set RS = READSET(SQLX$)
+   With RS
+     Do While Not .EOF
+        CI1% = XVALO(!CODINT)
+        
+        LOTE$ = SAFETEXT$(!idenlote)
+        NUMSE$ = SAFETEXT$(!NUMEROSERIE)
+        'COFA$ = SAFETEXT$(!FAMILIA)
+        COFA$ = TRIM$(CODFAMIL$(CI1%))
+        FAMI$ = TRIM$(ECOARCH$("TAFAMIL", COFA$))
+        TIT% = XVALO(!TIT_CERTIFICADO)
+        TITU$ = ECOARCH$("TITUCERT", MKI$(TIT%))
+        HOJAX% = XVALO(!HOJAS)
+        '
+        If LOTE$ = "" And FAMI$ = "" Then GoTo 100
+        If LOTE$ <> "" Then
+           '
+           CONDI2$ = "CODINT = " & CI1%
+           CONDI2$ = CONDI2$ + " AND IDENLOTE = '" & LOTE$ & "'"
+            If NUMSE$ <> "" Then
+               CONDI2$ = CONDI2$ + " AND NUMEROSERIE = '" & NUMSE$ & "'"
+            Else
+               CONDI2$ = CONDI2$ + " AND (NUMEROSERIE = '' OR NUMEROSERIE IS NULL) "
+            End If
+            '
+            If LOTE$ = LOTE2$ Then GoTo 100 'POR QUE SI ES EL MISMO LOTE DUPLICA
+                '                           'INFORMACION
+            sqlx2$ = "SELECT * FROM CERTIFICADOS WITH(NOLOCK)" '**TABLA CERTIFICADOS***QUE SE GRABA EN ABMCERTIFICADOS
+            sqlx2$ = sqlx2$ + " WHERE " & CONDI2$
+            Set Rst = READSET(sqlx2$)
+            With Rst
+              Do While Not .EOF
+                LOTE2$ = SAFETEXT$(!idenlote)
+
+                RUT$ = SAFETEXT$(!RUT_ARCHIVO)
+                'COFA$ = SAFETEXT$(!FAMILIA)
+                COFA$ = TRIM$(CODFAMIL$(CI1%))
+                FAMI$ = TRIM$(ECOARCH$("TAFAMIL", COFA$))
+                TIT% = XVALO(!TIT_CERTIFICADO)
+                TITU$ = ECOARCH$("TITUCERT", MKI$(TIT%))
+                HOJAX% = XVALO(!HOJAS)
+                '
+                If FAMI_ANT$ <> FAMI$ Then
+                   INDI% = INDI% + 1
+                   ACUMULA_HOJAX% = 0
+                   HOJAINI% = 0
+                End If
+                '
+                GoSub CARGAREGIS
+                '
+30              .MoveNext
+              Loop
+            End With
+          Else
+                If FAMI_ANT$ <> FAMI$ Then
+                   INDI% = INDI% + 1
+                   ACUMULA_HOJAX% = 0
+                   HOJAINI% = 0
+                End If
+                GoSub CARGAREGIS
+          End If
+100    .MoveNext
+     Loop
+   End With
+   On Error Resume Next
+   RS.Close
+   Rst.Close
+   RST0.Close
+   Set RST0 = Nothing
+   Set RS = Nothing
+   Set Rst = Nothing
+   On Error GoTo 0
+   
+Exit Sub
+    'CARGA LOS REGISTROS EN LA GRILLA
+    'FAMILIA (BOMBA)
+    'TITULO DE CERTIFICADO
+    'HOJAS DESDE HASTA (1.1 - 1.3)
+CARGAREGIS:
+    If INDI% < 1 Then INDI% = 1
+    If HOJAX% < 1 Then HOJAX% = 1
+    ACUMULA_HOJAX% = ACUMULA_HOJAX% + HOJAX%
+    HOJAINI% = HOJAINI%: If HOJAINI% < 1 Then HOJAINI% = 1
+    If ACUMULA_HOJAX% < 1 Then ACUMULA_HOJAX% = 1
+    HOJAFIN% = ACUMULA_HOJAX%
+    INICIA$ = SAFETEXT$(INDI%) & "." & HOJAINI%
+    FINALIZA$ = SAFETEXT$(INDI%) & "." & HOJAFIN%
+    TX$ = INICIA$ & " - " & FINALIZA$
+    '
+    k& = k& + 1
+    CARATULA.MSF.Rows = k& + 1
+    CARATULA.MSF.TextMatrix(k&, 1) = FAMI$
+    CARATULA.MSF.TextMatrix(k&, 2) = TITU$
+    CARATULA.MSF.TextMatrix(k&, 3) = TX$
+    FAMI_ANT$ = FAMI$
+    HOJAINI% = HOJAFIN% + 1
+    
+Return
+
+End Sub
+Private Sub Command1_Click()
+     Command1.Enabled = False
+     '
+     If CAMBIO% > 0 Then
+      If COMALTER%("Se han Modificado Datos \\Registrar Cambios\Cancelar") = 1 Then
+        Call GRABAR_CERTIFICADOS
+      End If
+     End If
+     CAMBIO% = 0
+     '
+     Call SELECHO("TAFAMIL")
+     CODFAMI$ = TRIM$(VALACT1$("TAFAMIL"))
+     If CODFAMI$ = "" Then GoTo 99
+     '
+     ENCA$ = "/" & "O.F.                          N.Serie                              Código                                     Descripción"
+     CONDI$ = "PACIENTE =  '" & CODFAMI$ & "' ORDER BY IDSUBOR ,COD_EXTE,NUMEROSERIE,NUMEORD"
+     Call CARGALISEL("INDIFANU", "TANUMSE", "IDSUBOR/A12;NUMEROSERIE/A16;COD_EXTE/A18;DESCRIP/A24", CONDI$)
+     Call SELECHO("INDIFANU" & ENCA$)
+     NORFA$ = TRIM$(VALACT1$("INDIFANU"))
+     If NORFA$ = "" Then GoTo 99
+     '
+     CI1% = CODIFAB%(NORFA$)
+     NUSERIE$ = TRIM$(Left$(VALACT2$("INDIFANU"), 16))
+     Text1 = NUSERIE$
+     Text10 = NORFA$
+     '
+     Text11 = CODEXT(CI1%)
+     '
+99   Command1.Enabled = True
+
+End Sub
+
+Private Sub Command2_Click()
+    Command2.Enabled = False
+    Command1.Enabled = False
+    Command41.Enabled = False
+    '
+    If CAMBIO% > 0 Then
+      If COMALTER%("Se han Modificado Datos \\Registrar Cambios\Cancelar") = 1 Then
+        Call GRABAR_CERTIFICADOS
+      End If
+    End If
+    CAMBIO% = 0
+    '
+    ENCA$ = "/" & "O.F.                          N.Serie                              Código                                     Descripción"
+    Call SELECHO("INDIFANU" & ENCA$)
+    NORFA$ = TRIM$(VALACT1$("INDIFANU"))
+    If NORFA$ = "" Then GoTo 99
+    '
+    Screen.MousePointer = 11
+    '
+    
+    CI1% = CODIFAB%(NORFA$)
+'    If ESTRAZABLE%(CI1%) < 2 Then
+    If TRIM$(CODFAMIL$(CI1%)) = "" Then
+       Call MENSERR(24, "Código: " & CODEXT(CI1%) & " No Tiene Asignado Familia")
+    End If
+    '
+    ID_LOTENIVELANTERIOR% = 0
+    LOTENIVELANTERIOR$(ID_LOTENIVELANTERIOR%) = NORFA$
+    NUSERIE$ = TRIM$(Left$(VALACT2$("INDIFANU"), 16))
+    Text1 = NUSERIE$
+    Text10 = NORFA$
+    Text6 = 0
+    '
+    Text11 = CODEXT(CI1%)
+    '
+99  Screen.MousePointer = 1
+    Command1.Enabled = True
+    Command41.Enabled = True
+
+    Command2.Enabled = True
+End Sub
+Sub ACTULLISE_INFIFANU()
+    'CARGALISEL MUESTRA LAS ORDENES DE FABRICACION CON NUMEROS DE SERIE QUE NO ESTEN ANULADAS NI CUMPLIDAS
+    CONDI$ = "TANUMSE.NUMEROSERIE <> '' AND ORDEFABR.StatuOrf < 8  ORDER BY TANUMSE.IDSUBOR,TANUMSE.COD_EXTE,TANUMSE.NUMEROSERIE,TANUMSE.NUMEORD"
+    ENCA$ = "/" & "O.F.                          N.Serie                              Código                                     Descripción"
+    Call CARGALISEL("INDIFANU", "TANUMSE+ORDEFABR/TANUMSE.IDSUBOR = ORDEFABR.IDSUBOR", "TANUMSE.IDSUBOR/A12;TANUMSE.NUMEROSERIE/A16;TANUMSE.COD_EXTE/A18;TANUMSE.DESCRIP/A24", CONDI$, "NOMESS")
+
+End Sub
+
+
+Private Sub Command3_Click()
+    Command3.Enabled = False
+    Screen.MousePointer = 11
+    Call GRABAR_CERTIFICADOS
+    CAMBIO% = 0
+    Call Text11_Change ' REFERESCO LA GRILLA
+    Screen.MousePointer = 1
+    Command3.Enabled = True
+End Sub
+
+Private Sub Command4_Click()
+
+   Command4.Enabled = False
+   '
+   NORFA$ = TRIM$(Text10)
+   '
+   If NORFA$ = "" Then
+     Call COMUNI("Debe Seleccionar una Orden de Fabricación")
+     GoTo 99
+   End If
+   '
+   CARATULA.Text33 = Text1
+   CARATULA.Text29 = Text4
+   CARATULA.Text33 = Text1
+   CARATULA.Text4 = Text11
+   CARATULA.Text2 = NORFA$
+
+   Call CARGA_GRILLA_CARATULA
+   CARATULA.MSF.MergeCells = flexMergeRestrictColumns
+   CARATULA.MSF.MergeCol(1) = True
+
+   CARATULA.Show 1
+   
+99 Command4.Enabled = True
+End Sub
+
+Private Sub Command41_Click()
+  Command41.Enabled = False
+  
+  If IUCOD% > 0 Then
+    If CAMBIO% > 0 Then
+      If COMALTER%("Se han Modificado Datos\\Registrar Cambios\Cancelar") <> 1 Then
+        CAMBIO% = 0
+        Call GRABAR_CERTIFICADOS
+      End If
+    End If
+
+    ID_LOTENIVELANTERIOR% = ID_LOTENIVELANTERIOR% - 1
+    IUCOD% = IUCOD% - 1
+    Text6 = SAFETEXT$(XVALO(Text6) - 1)
+
+    Text11.TEXT = UCOD$(IUCOD% + 1)
+  End If
+  Command41.Enabled = True
+End Sub
+
+Private Sub Command43_Click()
+   Command43.Enabled = False
+   ACTULLISE_INFIFANU
+   Command43.Enabled = True
+End Sub
+
+Private Sub Command5_Click()
+    Command5.Enabled = False
+    ABMCERTI09.Show 1
+    Command5.Enabled = True
+End Sub
+
+Sub Command6_Click()
+    Call Text11_Change
+End Sub
+
+Private Sub Command8_Click()
+   Command8.Enabled = False
+   '
+   SQLX$ = " SELECT * FROM CERTI_ESTRUC WITH(NOLOCK)"
+   SQLX$ = SQLX$ + " WHERE ORD_Fabric_Gral = '" & Text10 & "'"
+   SQLX$ = SQLX$ + " AND N_Serie_Gral = '" & Text1 & "'"
+   Set RS = READSET(SQLX$)
+   With RS
+     Do While Not .EOF
+        RUT$ = TRIM(SAFETEXT$(!RUT_ARCHIVO))
+        COD$ = SAFETEXT$(!Cod_Exte)
+        CI1% = CODINT%(COD$)
+        LOTE$ = SAFETEXT$(!idenlote)
+        NUMSE$ = SAFETEXT$(!NUMEROSERIE)
+        '
+        If RUT$ <> "" Then
+          If EXISTE%(RUT$) > 0 Then
+           Call IMPRIMIR(Me.hwnd, RUT$)
+          Else
+           Call COMUNI("Ruta de Archivo Inexistente\Para Código: " & COD$ & "\Lote-O.F.: " & LOTE$)
+          End If
+        Else
+           '
+           CONDI2$ = "CODINT = " & CI1%
+           CONDI2$ = CONDI2$ + " AND IDENLOTE = '" & LOTE$ & "'"
+            If NUMSE$ <> "" Then
+               CONDI2$ = CONDI2$ + " AND NUMEROSERIE = '" & NUMSE$ & "'"
+            Else
+               CONDI2$ = CONDI2$ + " AND (NUMEROSERIE = '' OR NUMEROSERIE IS NULL) "
+            End If
+            '
+            sqlx2$ = "SELECT * FROM CERTIFICADOS WITH(NOLOCK)" '**TABLA CERTIFICADOS***QUE SE GRABA EN ABMCERTIFICADOS
+            sqlx2$ = sqlx2$ + " WHERE " & CONDI2$
+            Set Rst = READSET(sqlx2$)
+            With Rst
+              Do While Not .EOF
+                RUT$ = SAFETEXT$(!RUT_ARCHIVO)
+                LOTE$ = SAFETEXT$(!idenlote)
+                If EXISTE%(RUT$) > 0 Then
+                 Call IMPRIMIR(Me.hwnd, RUT$)
+                Else
+                 Call COMUNI("Ruta de Archivo Inexistente\Para Código: " & COD$ & "\Lote-O.F.: " & LOTE$)
+                End If
+                .MoveNext
+              Loop
+            End With
+          End If
+       .MoveNext
+     Loop
+   End With
+   
+99 Command8.Enabled = True
+
+End Sub
+
+Private Sub Form_Load()
+
+    Call CARGA_ENCABEZADO(MSF, "Código/A16;Descripción/A32;U.M./A3;Uso/F8.1;Lote-O.F./A12;N.Serie/A16;Ruta Archivo/A64;C.T./I5;Hojas/A5;Lote Orig/A12;N-Serie Orig/a16", CERTIFICADOS)
+    MSF.MergeCells = flexMergeRestrictColumns
+    MSF.MergeCol(1) = True
+
+    Call ABRECONEXION
+    
+    Call CREACAMPO("", "CERTI_ESTRUC", "CODINT", 3, 0, 1)
+    Call CREACAMPO("", "CERTI_ESTRUC", "COD_EXTE", 10, 20)
+    Call CREACAMPO("", "CERTI_ESTRUC", "DESCRIPCION", 10, 64)
+    Call CREACAMPO("", "CERTI_ESTRUC", "STATUS", 3, 0)
+    Call CREACAMPO("", "CERTI_ESTRUC", "IDENLOTE", 10, 32, 1)
+    Call CREACAMPO("", "CERTI_ESTRUC", "NUMEROSERIE", 10, 32, 1)
+    Call CREACAMPO("", "CERTI_ESTRUC", "RUT_ARCHIVO", 12, 0)
+    Call CREACAMPO("", "CERTI_ESTRUC", "MARBORRA", 3, 0, 1)
+    Call CREACAMPO("", "CERTI_ESTRUC", "NIVEL_ESTRUCT", 3, 0, 1)
+    Call CREACAMPO("", "CERTI_ESTRUC", "ORD_Fabric_Gral", 10, 12)
+    Call CREACAMPO("", "CERTI_ESTRUC", "Codigo_Niv_Superior", 3, 0, 1)
+    Call CREACAMPO("", "CERTI_ESTRUC", "N_Serie_Gral", 10, 32)
+    Call CREACAMPO("", "CERTI_ESTRUC", "TIT_CERTIFICADO", 3, 10, 1)
+    Call CREACAMPO("", "CERTI_ESTRUC", "Familia", 10, 4)
+    Call CREACAMPO("", "CERTI_ESTRUC", "Hojas", 10, 4)
+    '
+    Call CREACAMPO("", "CARATULA", "O_VENTA", 10, 64)
+    Call CREACAMPO("", "CARATULA", "DESTINO", 10, 64)
+    Call CREACAMPO("", "CARATULA", "IDSUBOR", 10, 16)
+    Call CREACAMPO("", "CARATULA", "NUCLIEN", 3, 0)
+    Call CREACAMPO("", "CARATULA", "DOMICLI", 10, 64, 1)
+    Call CREACAMPO("", "CARATULA", "NUMEROSERIE", 10, 32, 1)
+    Call CREACAMPO("", "CARATULA", "PAGINAS", 3, 0)
+
+    CAMBIO% = 0
+End Sub
+Sub GRABAR_CERTIFICADOS()
+    'CRITERIO DE GRABACION DE DATOS
+    '*********************************
+    '1.-RECORRO LA GRILLA
+    '2.-GRABO EN LA TABLA CERTI_ESTRUC, LOTE Y N.SERIE
+    '3.-SI TIENE LOTE Y/O NUMERO DE SERIE LA RUTA DEL ARCHIVO VA EN BLANCO
+    '4.-SI NO TIENE LOTE Y/O NUMERO DE SERIE SE GRABA CON LA RUTA.
+    '4.2.- SI NO TIENE LOTE NI RUTA NO SE GRABA, EN LA PRESENTACION LA GRILLA SE CARGA A PARTIR DE LA ESTRUCTURA.
+    '5.-TENER EN CUENTA QUE SI EN LA GRILLA HAY MAS DE UN REGISTRO CON MISMO CODIGO,LOTE Y N.SERIE EL MISMO SE DEBE GRABAR UNA SOLA VEZ
+       ' POR QUE SI NO CUANDO SE LEVANTE LA INFORMACION DE ESTE SE VA A MULTIPLICAR LAS FILAS PARA AQUELLOS QUE TENGAN UN LOTE CON MAS DE
+       ' DE UN CERTICADO
+       
+        Screen.MousePointer = 11
+    '
+        CODI_SUP$ = Text11
+        COSUPE% = CODINT%(CODI_SUP$)
+        NORFA$ = TRIM$(Text10)
+        NUMERSE$ = TRIM$(Text1)
+        NIVEX% = XVALO(Text6)
+        '
+        'MARCO MARBORRA 1 LOS REGISTROS DE LA GRILLA CON LA INFORMACION
+        'QUE ES IGUAL
+        CONDI$ = " Codigo_Niv_Superior = " & COSUPE%
+        CONDI$ = CONDI$ + " AND ORD_Fabric_Gral = '" & NORFA$ & "'"
+        CONDI$ = CONDI$ + " AND N_Serie_Gral = '" & NUMERSE$ & "'"
+        CONDI$ = CONDI$ + " AND NIVEL_ESTRUCT = " & NIVEX%
+        Call ACTUREGISTRO("CERTI_ESTRUC", "MARBORRA", CONDI$, 1, REGAF&, "NOMESS")
+        '
+        SQLX$ = "SELECT * FROM CERTI_ESTRUC "
+        SQLX$ = SQLX$ + " WHERE CODINT < 1 "
+        
+        Dim RS As ADODB.Recordset
+        Set RS = New ADODB.Recordset
+25      On Error Resume Next
+        RS.Open FILTSQL$(SQLX$), FLEXCONN, adOpenKeyset, adLockPessimistic, adCmdText     ' SE MODIFICO EL adOpenDynamic POR EL adOpenKeyset
+        '
+        If Err Then  'VALIDACION DE ERROR POR SI GENERA ERROR POR TIEMPO DE ESPERA
+         On Error GoTo 0
+         Call CapturaErrorOpen
+         GoTo 25
+        End If
+        On Error GoTo 0
+        '
+        With RS
+         For i& = 1 To MSF.Rows - 1
+            
+            LOTE$ = TRIM$(MSF.TextMatrix(i&, 5))
+            RUTARCH$ = MSF.TextMatrix(i&, 7)
+            CODI$ = TRIM$(MSF.TextMatrix(i&, 1))
+            NUMSER1$ = TRIM$(MSF.TextMatrix(i&, 6))
+            CANHOJA% = XVALO(MSF.TextMatrix(i&, 9))
+            'PARA QUE NO GUARDE REPETIDOS
+            If CODI$ = CODI_ANT$ And LOTE$ = LOTE_ANT$ And NUMSER1$ = NUMSER1_ACT$ And RUTARCH$ = RUTARCH_ANT$ Then GoTo 80
+            If LOTE$ = "" And RUTARCH$ = "" Then GoTo 80
+            .AddNew
+            On Error Resume Next
+            !CODIEMPR = CodiEmp%
+            On Error GoTo 0
+            
+            'DATOS FIJOS DE ENCABEZADO
+            !ORD_Fabric_Gral = NORFA$
+            !N_Serie_Gral = NUMERSE$
+            'CODIGO SUPERIOR VARIANDO SEGUN POSICION DE ESTRUCTURA
+            !Codigo_Niv_Superior = COSUPE%
+            '
+            'DATOS QUE RECORRE DE LA GRILLA.
+            CI1% = CODINT%(CODI$)
+            !CODINT = CI1%
+            !Cod_Exte = CODI$
+            !Descripcion = MSF.TextMatrix(i&, 2)
+            !Status = 0
+            !idenlote = LOTE$
+            !NUMEROSERIE = NUMSER1$
+                RUTARCH$ = MSF.TextMatrix(i&, 7)
+                'SI TIENE LOTE U OF (QUE ESTA EN EL MISMO CAMPO) LA RUTA ES VACIA POR QUE  LA TIENE QUE TRAER DE TABLA CERIFICADOS
+            If TRIM$(MSF.TextMatrix(i&, 5)) <> "" Then RUTARCH$ = ""
+            !RUT_ARCHIVO = RUTARCH$
+            !TIT_CERTIFICADO = XVALO(MSF.TextMatrix(i&, 8))
+            !familia = TRIM$(CODFAMIL$(CI1%))
+            !HOJAS = CANHOJA%
+            '
+            'GUARDO EL DATO
+            !NIVEL_ESTRUCT = NIVEX%
+            CODI_ANT$ = CODI$
+            LOTE_ANT$ = LOTE$
+            NUMSER1_ANT$ = NUMSER1$
+            RUTARCH_ANT$ = RUTARCH$
+            .Update
+            '
+            ' ACTUALIZA LA TRAZABILIDAD POR NUMERO DE SERIE QUE PARTE DE LA RECEPCION
+            LOTEORIG$ = TRIM$(MSF.TextMatrix(i&, 10))
+            NSERIEORIG$ = TRIM$(MSF.TextMatrix(i&, 11))
+            If LOTEORIG$ <> "" And NSERIEORIG$ <> "" Then
+                CONDI11$ = "COD_INTE=" & CStr(CI1%) & " AND IDENLOTE='" & LOTEORIG$ & "' AND NUMEROSERIE=" & NSERIEORIG$
+                Call ACTUREGISTRO("TRAZARECE", "DESTINOCONSUMO", CONDI11$, "", REGAF&)
+            End If
+            If TRIM$(LOTE$) <> "" And TRIM$(NUMSER1$) <> "" Then
+                CONDI11$ = "COD_INTE=" & CStr(CI1%) & " AND IDENLOTE='" & TRIM$(LOTE$) & "' AND NUMEROSERIE=" & NUMSER1$
+                Call ACTUREGISTRO("TRAZARECE", "DESTINOCONSUMO", CONDI11$, NORFA$, REGAF&)
+            End If
+            '
+80        Next i&
+        End With
+        '
+        CONDI$ = "MARBORRA = 1"
+        Call BORRAREGISTROS("CERTI_ESTRUC", CONDI$, REGAF&, "NOMESS")
+        '
+        Screen.MousePointer = 1
+End Sub
+
+Private Sub MSF_DblClick()
+    If CAMBIO% > 0 Then
+      If COMALTER%("Se han Modificado Datos \\Registrar Cambios\Cancelar") = 1 Then
+        CAMBIO% = 0
+        Call GRABAR_CERTIFICADOS
+      End If
+    End If
+
+   If IUCOD% < 128 Then
+     If TRIM$(Text11) <> "" Then
+       If Text11 <> UCOD$(IUCOD%) Then
+         IUCOD% = IUCOD% + 1: UCOD$(IUCOD%) = Text11.TEXT
+                              ICOMPO%(IUCOD%) = MSF.Row
+       End If
+     End If
+   End If
+   '
+   'PONE EL CODIGO EN LA CAJA DE TEXTO  Y SE EJECUTA EL EVENTO CHANGE
+   COD$ = TRIM$(MSF.TextMatrix(MSF.Row, 1))
+   If COD$ <> "" Then
+     ID_LOTENIVELANTERIOR% = ID_LOTENIVELANTERIOR% + 1
+     LOTENIVELANTERIOR$(ID_LOTENIVELANTERIOR%) = TRIM$(MSF.TextMatrix(MSF.Row, 5))
+     Text11.TEXT = COD$
+     Call Command3_Click
+   End If
+   '
+   'SUBE UN NIVEL
+   Text6 = SAFETEXT$(XVALO(Text6) + 1)
+   '
+   'SI NO TIENE ESTRUCTURA PRESENTAMENSAJE Y VUELVE PARA ATRAS
+   If CAIT% < 1 Then
+     Call COMUNI("Código Seleccionado No Posee Estructura")
+     'CODIGONIVELANTERIOR% = CODINT%(UCOD$(IUCOD%))
+     Call Command41_Click 'vuelve para atras
+   End If
+End Sub
+
+Private Sub MSF_MouseDown(Button As Integer, Shift As Integer, X As Single, Y As Single)
+  If Button = 2 Then
+    '
+    i& = MSF.MouseRow
+    J& = MSF.MouseCol
+    If i& = 0 Or i& > MSF.Rows Then Exit Sub
+    '
+    On Error Resume Next
+    MSF.Row = i&
+    MSF.COL = J&
+    On Error Resume Next
+
+    COD$ = TRIM$(MSF.TextMatrix(i&, 1))
+    If COD$ = "" Then
+        Exit Sub
+    Else
+        ASIGLOTERUTA.Text11 = COD$
+        ASIGLOTERUTA.Text4 = MSF.TextMatrix(i&, 2) 'DESC
+        If Left$(MSF.TextMatrix(i&, 5), 2) = "BR" Then
+           ASIGLOTERUTA.Text15 = MSF.TextMatrix(i&, 5)
+           ASIGLOTERUTA.Text10 = ""
+        Else
+           ASIGLOTERUTA.Text10 = MSF.TextMatrix(i&, 5)
+           ASIGLOTERUTA.Text15 = ""
+        End If
+        ASIGLOTERUTA.Text3 = MSF.TextMatrix(i&, 6)
+        ASIGLOTERUTA.Text1 = MSF.TextMatrix(i&, 7)
+        ASIGLOTERUTA.Text5 = ECOARCH$("TITUCERT", MKI$(XVALO(MSF.TextMatrix(i&, 8))))
+        ASIGLOTERUTA.ORDEX% = XVALO(MSF.TextMatrix(i&, 8))
+        ASIGLOTERUTA.Text6 = XVALO(MSF.TextMatrix(i&, 9))
+        ASIGLOTERUTA.Label1 = TRIM$(Text10)
+        ASIGLOTERUTA.Label2 = TRIM$(Text1)
+        ASIGLOTERUTA.Show 1
+    End If
+    
+  End If
+End Sub
+
+Sub INVICTRL()
+  '
+  AGREGAR_RUTA.Visible = Not (AGREGAR_RUTA.Visible)
+  '
+End Sub
+
+
+Private Sub Text1_Change()
+   
+   Call Text11_Change
+
+End Sub
+
+Private Sub Text1_DblClick()
+'
+'    Text10 = NORFA$
+'    NUSEX$ = InputBox("Número de Serie Nuevo", NORFA$, "")
+'    Text1 = TRIM$(NUSEX$)
+'    If NUSEX$ = "" Then
+'    If VALIDANUMEROSERIE%(NORFA$, NUSEX$) > 0 Then
+'       Call COMUNI("Número de Serie Existente")
+'       Exit Sub
+'    Else
+'       OPX% = COMALTER%("Números de Serie\\Realmente Quiere Asignar el Número: " & NUSEX$ & "\Cancelar sin Grabar")
+'       If OPX% < 1 Or OPX% > 1 Then Exit Sub
+'       If OPX% = 1 Then
+'            CI1% = CODINT%(Text11)
+'            COFA$ = CODFAMIL$(CI1%)
+'            FAMI$ = TRIM$(ECOARCH$("TAFAMIL", COFA$))
+'            Call GRABAR_NSEREIE(NORFA$, NUSEX$, FAMI$)
+'       End If
+'    End If
+End Sub
+
+
+Private Sub Text10_Change()
+    Call Text11_Change
+End Sub
+
+Private Sub Text11_Change()
+      '
+      CODD$ = Text11.TEXT                       ' CODIGO DEL CONJUNTO
+      CI% = CODINT%(CODD$)                      ' CODIGO INTERNO DEL CONJUNTO
+      NORFA$ = TRIM$(Text10)                    ' NUMERO DE ORDEN DE FABRICACION
+      
+      If CI% < 1 Or NORFA$ = "" Then Exit Sub
+      Text4 = DESCRIT0$(CI%)
+
+      Screen.MousePointer = 11
+      
+      PORMILLAR% = 0
+      ' LEE LA ESTRUCTURA DEL PRODUCTO
+      Call LEEEXPLO(CODD$, 1, 1)
+      '
+      MSF.Rows = 1
+      MSF.BackColor = vbWhite
+      '
+      CODI_SUP$ = CODD$
+      COSUPE% = CI%                     ' CODIGO INTERNO DEL CONJUNTO
+      NUMERSE$ = TRIM$(Text1)           ' NUMERO DE SERIE DEL CONJUNTO
+      NIVEX% = XVALO(Text6)             ' NIVEL
+      i% = 0
+      
+      ' RECORRE LA ESTRUCTURA DEL PRODUCTO
+      For J% = 1 To CAIT%
+         'BUSCO RUTA EN TABLA CERTIFICADOS
+         CODI$ = TRIM$(Mid$(EXPLOLIN$(J%), 1, 16))
+         CI1% = CODINT%(CODI$)
+         '
+         ' VERIFICA SI TIENE CODIGO DE FAMILIA
+         If CODFAMIL$(CI1%) <> "" Then
+             '
+             ' GUARDA LA CANTIDAD DE REPETICIONES. O SEA LA CANTIDAD UNITARIA DEL COMPONENTE. EN CERTI_ESTRUC DEBE
+             ' HABER TANTA CANTIDADES UNITARIAS COMO EL USO UNITARIO SEGUN LA FORMULA
+             CantidadDeRepeticiones = XVALO(Mid$(EXPLOLIN$(J%), 49, 12))
+             AcumulaRepeticiones = 0
+             '
+             ' VERIFICA SI EL COMPONENTE ESTA EN CERTI_ESTRUC. EN CASO DE QUE SÍ LO ESTE, TOMA LOS DATOS DE
+             ' ESTA TABLA.
+             CONDI$ = " Codigo_Niv_Superior = " & COSUPE%
+             CONDI$ = CONDI$ + " AND ORD_Fabric_Gral = '" & NORFA$ & "'"
+             CONDI$ = CONDI$ + " AND N_Serie_Gral = '" & NUMERSE$ & "'"
+             CONDI$ = CONDI$ + " AND NIVEL_ESTRUCT = " & NIVEX%
+             CONDI$ = CONDI$ + " AND CODINT = " & CI1%
+             '
+             SQLX$ = " SELECT * FROM CERTI_ESTRUC WITH(NOLOCK)"
+             SQLX$ = SQLX$ + " WHERE " & CONDI$
+             '
+             ExcluyeLoteAnteriores$ = ""
+             '
+             ' INCORPORA A LA GRILLA LO ENCONTRADO EN CERTI_ESTRUC
+             Set RS = READSET(SQLX$)
+             With RS
+                Do While Not .EOF
+                    LOTE$ = SAFETEXT$(!idenlote)
+                    NUMSE$ = TRIM$(SAFETEXT$(!NUMEROSERIE))
+                    CANTI = XVALO(Mid$(EXPLOLIN$(J%), 49, 12))
+                    CANTIHOJAS% = XVALO(!HOJAS)
+                    Ruta$ = SAFETEXT$(!RUT_ARCHIVO)
+                    '
+                    ' COMPLETA LAS COLUMNAS
+                    i% = i% + 1
+                    MSF.Rows = i% + 1
+                    MSF.TextMatrix(i%, 1) = Mid$(EXPLOLIN$(J%), 1, 16)
+                    MSF.TextMatrix(i%, 2) = Mid$(EXPLOLIN$(J%), 17, 28)
+                    MSF.TextMatrix(i%, 3) = Mid$(EXPLOLIN$(J%), 47, 2)
+                    MSF.TextMatrix(i%, 4) = CANTI / CantidadDeRepeticiones
+                    '
+                    ' SI NO TIENE LOTE ASIGNA UNO DISPONIBLE
+                    If LOTE$ = "" Then
+                        ' BUSCA PRIMERO SI EL COMPONENTE ESTÁ RELACIONADO CON EL NIVEL ANTERIOR MEDIANTE EL CAMPO DESTINO
+                        CONDI$ = "COD_INTE=" & CStr(CI1%) & " AND DESTINO='" & LOTENIVELANTERIOR$(ID_LOTENIVELANTERIOR%) & "' AND NUMEROSERIE=" & NUMERSE$
+                        If ExcluyeLoteAnteriores$ <> "" Then
+                            CONDI$ = CONDI$ & " AND " & ExcluyeLoteAnteriores$
+                        End If
+                        LOTE$ = TRIM$(VALOBADA("TRAZARECE", "IDENLOTE", CONDI$ & " ORDER BY NUMEROSERIE"))
+                        NUMSE$ = CStr(XVALO(VALOBADA("TRAZARECE", "NUMEROSERIE", CONDI$ & " ORDER BY NUMEROSERIE")))
+                        ' SI NO ENCONTRO RELACION, BUSCA UNO DISPONIBLE
+                        If LOTE$ = "" Then
+                            CONDI$ = "COD_INTE=" & CStr(CI1%) & " AND (DESTINO='' AND DESTINOCONSUMO='')"
+                            If ExcluyeLoteAnteriores$ <> "" Then
+                                CONDI$ = CONDI$ & " AND " & ExcluyeLoteAnteriores$
+                            End If
+                            LOTE$ = TRIM$(VALOBADA("TRAZARECE", "IDENLOTE", CONDI$ & " ORDER BY NUMEROSERIE"))
+                            NUMSE$ = CStr(XVALO(VALOBADA("TRAZARECE", "NUMEROSERIE", CONDI$ & " ORDER BY NUMEROSERIE")))
+                        End If
+                        If LOTE$ = "" Then NUMSE$ = ""
+                    End If
+                    '
+                    ' COMPLETA EL RESTO DE LAS COLUMNAS
+                    MSF.TextMatrix(i%, 5) = LOTE$
+                    MSF.TextMatrix(i%, 6) = NUMSE$
+                    MSF.TextMatrix(i%, 7) = Ruta$
+                    MSF.TextMatrix(i%, 8) = SAFETEXT$(!TIT_CERTIFICADO)
+                    MSF.TextMatrix(i%, 9) = CANTIHOJAS%
+                    ExcluyeLoteAnteriores$ = ExcluyeLoteAnteriores$ & " NUMEROSERIE<>'" & NUMSE$ & "'"
+                    '
+                    AcumulaRepeticiones = AcumulaRepeticiones + 1
+                    '
+                    .MoveNext
+                Loop
+            End With
+            ' SI FALTA COMPLETAR CON MAS REGISTROS CON CANTIDAD UNITARIA DEL COMPONENTE ACTUAL
+            ' SE UTILIZA EL CODIGO DENTRO DEL IF
+            If AcumulaRepeticiones < CantidadDeRepeticiones Then
+                For UU& = 1 To (CantidadDeRepeticiones - AcumulaRepeticiones)
+                    i% = i% + 1
+                    MSF.Rows = i% + 1
+                    MSF.TextMatrix(i%, 1) = Mid$(EXPLOLIN$(J%), 1, 16)
+                    MSF.TextMatrix(i%, 2) = Mid$(EXPLOLIN$(J%), 17, 28)
+                    MSF.TextMatrix(i%, 3) = Mid$(EXPLOLIN$(J%), 47, 2)
+                    CANTI = XVALO(Mid$(EXPLOLIN$(J%), 49, 12))
+                    MSF.TextMatrix(i%, 4) = TRIM$(FORMATNUM$(CANTI / CantidadDeRepeticiones, "F8.4"))
+                        
+                        ' BUSCA PRIMERO SI EL COMPONENTE ESTÁ RELACIONADO CON EL NIVEL ANTERIOR MEDIANTE EL CAMPO DESTINO
+                        CONDI$ = "COD_INTE=" & CStr(CI1%) & " AND DESTINO='" & LOTENIVELANTERIOR$(ID_LOTENIVELANTERIOR%) & "' AND NUMEROSERIE='" & NUMERSE$ & "'"
+                        If ExcluyeLoteAnteriores$ <> "" Then
+                            CONDI$ = CONDI$ & " AND " & ExcluyeLoteAnteriores$
+                        End If
+                        LOTE$ = TRIM$(VALOBADA("TRAZARECE", "IDENLOTE", CONDI$ & " ORDER BY NUMEROSERIE"))
+                        NUMSE$ = CStr(XVALO(VALOBADA("TRAZARECE", "NUMEROSERIE", CONDI$ & " ORDER BY NUMEROSERIE")))
+                        ' SI NO ENCONTRO RELACION, BUSCA UNO DISPONIBLE
+                        If LOTE$ = "" Then
+                            CONDI$ = "COD_INTE=" & CStr(CI1%) & " AND (DESTINO='' AND DESTINOCONSUMO='') AND NUMEROSERIE<>'0'"
+                            If ExcluyeLoteAnteriores$ <> "" Then
+                                CONDI$ = CONDI$ & " AND " & ExcluyeLoteAnteriores$
+                            End If
+                            LOTE$ = TRIM$(VALOBADA("TRAZARECE", "IDENLOTE", CONDI$ & " ORDER BY NUMEROSERIE"))
+                            NUMSE$ = CStr(XVALO(VALOBADA("TRAZARECE", "NUMEROSERIE", CONDI$ & " ORDER BY NUMEROSERIE")))
+                        End If
+                        If LOTE$ = "" Then NUMSE$ = ""
+                        
+                    MSF.TextMatrix(i%, 5) = LOTE$
+                    MSF.TextMatrix(i%, 6) = NUMSE$
+                    MSF.TextMatrix(i%, 7) = ""
+                    MSF.TextMatrix(i%, 8) = ""
+                    MSF.TextMatrix(i%, 9) = "0"
+                    MSF.TextMatrix(i%, 10) = LOTE$
+                    MSF.TextMatrix(i%, 11) = NUMSE$
+                    '
+                    ExcluyeLoteAnteriores$ = ExcluyeLoteAnteriores$ & " NUMEROSERIE<>'" & NUMSE$ & "'"
+                Next UU&
+            End If
+         Else
+                ' SI NO TIENE FAMILIA LO AGREGA ASI COMO ESTA. O SEA, NO TIENE TRAZABILIDAD
+                i% = i% + 1
+                MSF.Rows = i% + 1
+                MSF.TextMatrix(i%, 1) = Mid$(EXPLOLIN$(J%), 1, 16)
+                MSF.TextMatrix(i%, 2) = Mid$(EXPLOLIN$(J%), 17, 28)
+                MSF.TextMatrix(i%, 3) = Mid$(EXPLOLIN$(J%), 47, 2)
+                MSF.TextMatrix(i%, 4) = Mid$(EXPLOLIN$(J%), 49, 12)
+                MSF.TextMatrix(i%, 5) = ""
+                MSF.TextMatrix(i%, 6) = ""
+                MSF.TextMatrix(i%, 7) = ""
+                MSF.TextMatrix(i%, 8) = ""
+                MSF.TextMatrix(i%, 9) = "0"
+                MSF.TextMatrix(i%, 10) = ""
+                MSF.TextMatrix(i%, 11) = ""
+          End If
+     Next J%
+     On Error Resume Next
+     Rst.Close
+     Set Rst = Nothing
+     RS.Close
+     Set RS = Nothing
+     On Error GoTo 0
+     '
+     Call ORDENAR_MSF(CERTIFICADOS.MSF, 1, 6)
+     '
+     INDEXI% = 0
+     If IUCOD% >= 0 Then
+        If ICOMPO%(IUCOD% + 1) >= 0 Then
+          If ICOMPO%(IUCOD% + 1) < MSF.Rows Then
+            INDEXI% = ICOMPO%(IUCOD% + 1)
+          End If
+        End If
+     End If
+     If INDEXI% > 0 Then
+         MSF.Row = INDEXI%
+         Call COLOREAR_GRILLA_SOLAFILA(CERTIFICADOS.MSF, &H8000000F, MSF.Row)
+         If MSF.TopRow < MSF.Row - 8 Then
+           MSF.TopRow = MSF.Row - 8
+         End If
+     End If
+      
+     Screen.MousePointer = 1
+     Me.Caption = "Databook (Cantidad de Registros: " & i% & ")"
+      '
+End Sub
+Private Sub Text6_Change()
+   Call Text11_Change
+End Sub
+Private Sub IMPRIMIR(ByVal HwndForm As Long, ByVal Ruta As String)
+    Dim lRet    As Long
+    lRet = ShellExecute(HwndForm, "Print", Ruta, ByVal 0&, 0&, 7)
+End Sub
+
+
+

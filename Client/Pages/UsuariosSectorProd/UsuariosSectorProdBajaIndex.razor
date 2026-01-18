@@ -1,0 +1,247 @@
+@page "/UsuariosSectorProd/Baja"
+@inject IRepository repository
+@inject NavigationManager navigationManager
+@inject SweetAlertService sweetAlertService
+@inject IJSRuntime JS
+
+@using System.Net.Http
+@using CurrieTechnologies.Razor.SweetAlert2
+
+<div class="bg-warning text-white text-center p-3 mb-4">
+    <h1>Usuarios - Sectores Productivos (Dados de Baja)</h1>
+</div>
+
+<div class="d-flex align-items-center justify-content-between mb-3">
+    <div class="d-flex align-items-center">
+        <input style="width: 400px;" type="text" class="form-control me-2" id="titulo" placeholder="Buscar por usuario o sector..." @bind-value="Filter" />
+        <button type="button" class="btn btn-outline-primary me-2" @onclick="ApplyFilterAsync">Filtrar</button>
+        <button type="button" class="btn btn-outline-danger" @onclick="CleanFilterAsync">Limpiar</button>
+    </div>
+
+    <div>
+        <a href="/UsuariosSectorProd" class="btn btn-sm btn-primary">
+            <i class="fas fa-arrow-left"></i> Volver a Asignaciones Activas
+        </a>
+    </div>
+</div>
+
+<Pagination CurrentPage="currentPage"
+TotalPages="totalPages"
+SelectedPage="SelectedPageAsync" />
+
+<GenericList MyList="usuariosSectorProd">
+    <Body>
+        <table class="table table-striped">
+            <thead>
+                <tr>
+                    <th>Id</th>
+                    <th>ID Flexoft</th>
+                    <th>Nombre Usuario</th>
+                    <th>Código SecProd</th>
+                    <th>Descripción Sector</th>
+                    <th>Fecha Creación</th>
+                    <th>Acciones</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var item in usuariosSectorProd!)
+                {
+                    <tr>
+                        <td>@item.Id</td>
+                        <td>@item.IdFlexoft</td>
+                        <td>@item.NombreUsuario</td>
+                        <td>@item.CodigoSecProd</td>
+                        <td>@item.Descripcion</td>
+                        <td>@item.FechaCreacion.ToString("dd/MM/yyyy")</td>
+                        <td>
+                            <button class="btn btn-success btn-sm" @onclick=@(() => RestoreAsync(item.Id))>
+                                <i class="fas fa-undo"></i> Restaurar
+                            </button>
+                            <button class="btn btn-danger btn-sm" @onclick=@(() => DeletePermanentlyAsync(item.Id))>
+                                <i class="fas fa-trash"></i> Eliminar Definitivamente
+                            </button>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </Body>
+    <NoRecords>
+        <div class="alert alert-warning text-center" role="alert">
+            <i class="fas fa-info-circle fa-2x mb-3"></i>
+            <h5>No hay asignaciones de usuarios a sectores productivos dados de baja</h5>
+            <p class="mb-0">Todas las asignaciones están activas. Los registros eliminados aparecerán aquí.</p>
+        </div>
+    </NoRecords>
+</GenericList>
+
+@code {
+
+    /// <summary>
+    /// Lista de asignaciones usuario-sector productivo dadas de baja
+    /// </summary>
+    public List<UsuariosSectorProd>? usuariosSectorProd { get; set; } = new();
+
+    [Parameter]
+    [SupplyParameterFromQuery]
+    public string Page { get; set; } = string.Empty;
+
+    [Parameter]
+    [SupplyParameterFromQuery]
+    public string Filter { get; set; } = string.Empty;
+
+    private int currentPage = 1;
+    private int totalPages;
+
+    /// <summary>
+    /// Inicialización del componente - carga los datos de registros dados de baja
+    /// </summary>
+    protected async override Task OnInitializedAsync()
+    {
+        await LoadAsync();
+    }
+
+    /// <summary>
+    /// Carga los datos de asignaciones dadas de baja con paginación y filtros
+    /// </summary>
+    /// <param name="page">Número de página a cargar</param>
+    private async Task LoadAsync(int page = 1)
+    {
+        if (!string.IsNullOrWhiteSpace(Page))
+        {
+            page = Convert.ToInt32(Page);
+        }
+
+        string url1 = string.Empty;
+        string url2 = string.Empty;
+
+        if (string.IsNullOrEmpty(Filter))
+        {
+            url1 = $"api/usuariossectorprod?page={page}&estado=-1";
+            url2 = $"api/usuariossectorprod/totalPages?estado=-1";
+        }
+        else
+        {
+            url1 = $"api/usuariossectorprod?page={page}&filter={Filter}&estado=-1";
+            url2 = $"api/usuariossectorprod/totalPages?filter={Filter}&estado=-1";
+        }
+
+        var responseHppt = await repository.Get<List<UsuariosSectorProd>>(url1);
+        var responseHppt2 = await repository.Get<int>(url2);
+        usuariosSectorProd = responseHppt.Response!;
+        totalPages = responseHppt2.Response!;
+    }
+
+    /// <summary>
+    /// Restaura una asignación usuario-sector (cambia status a 0)
+    /// </summary>
+    /// <param name="id">ID de la asignación a restaurar</param>
+    private async Task RestoreAsync(int id)
+    {
+        var result = await sweetAlertService.FireAsync(new SweetAlertOptions
+        {
+            Title = "Confirmación",
+            Text = "¿Realmente deseas restaurar esta asignación?",
+            Icon = SweetAlertIcon.Question,
+            ShowCancelButton = true,
+            CancelButtonText = "No",
+            ConfirmButtonText = "Si"
+        });
+
+        var confirm = string.IsNullOrEmpty(result.Value);
+        if (confirm)
+        {
+            return;
+        }
+
+        int status = 0; // Activo
+        var responseHTTP = await repository.Delete($"api/usuariossectorprod/cambiaStatus/{id}/{status}");
+        if (responseHTTP.Error)
+        {
+            if (responseHTTP.HttpResponseMessage.StatusCode == System.Net.HttpStatusCode.NotFound)
+            {
+                navigationManager.NavigateTo("/");
+            }
+            else
+            {
+                var mensajeError = await responseHTTP.GetErrorMessageAsync();
+                await sweetAlertService.FireAsync("Error", mensajeError, SweetAlertIcon.Error);
+            }
+        }
+        else
+        {
+            await sweetAlertService.FireAsync("Éxito", "Asignación restaurada correctamente.", SweetAlertIcon.Success);
+            await LoadAsync();
+        }
+    }
+
+    /// <summary>
+    /// Elimina definitivamente una asignación usuario-sector (borrado físico)
+    /// </summary>
+    /// <param name="id">ID de la asignación a eliminar</param>
+    private async Task DeletePermanentlyAsync(int id)
+    {
+        var result = await sweetAlertService.FireAsync(new SweetAlertOptions
+        {
+            Title = "¡ATENCIÓN!",
+            Text = "¿Realmente deseas eliminar DEFINITIVAMENTE esta asignación? Esta acción NO se puede deshacer.",
+            Icon = SweetAlertIcon.Warning,
+            ShowCancelButton = true,
+            CancelButtonText = "No",
+            ConfirmButtonText = "Si, eliminar definitivamente"
+        });
+
+        var confirm = string.IsNullOrEmpty(result.Value);
+        if (confirm)
+        {
+            return;
+        }
+
+        var responseHTTP = await repository.Delete($"api/usuariossectorprod/{id}");
+        if (responseHTTP.Error)
+        {
+            if (responseHTTP.HttpResponseMessage.StatusCode == System.Net.HttpStatusCode.NotFound)
+            {
+                navigationManager.NavigateTo("/");
+            }
+            else
+            {
+                var mensajeError = await responseHTTP.GetErrorMessageAsync();
+                await sweetAlertService.FireAsync("Error", mensajeError, SweetAlertIcon.Error);
+            }
+        }
+        else
+        {
+            await sweetAlertService.FireAsync("Éxito", "Asignación eliminada definitivamente.", SweetAlertIcon.Success);
+            await LoadAsync();
+        }
+    }
+
+    /// <summary>
+    /// Limpia el filtro de búsqueda
+    /// </summary>
+    private async Task CleanFilterAsync()
+    {
+        Filter = string.Empty;
+        await ApplyFilterAsync();
+    }
+
+    /// <summary>
+    /// Aplica el filtro de búsqueda
+    /// </summary>
+    private async Task ApplyFilterAsync()
+    {
+        int page = 1;
+        await LoadAsync(page);
+    }
+
+    /// <summary>
+    /// Cambia a la página seleccionada
+    /// </summary>
+    /// <param name="page">Número de página</param>
+    private async Task SelectedPageAsync(int page)
+    {
+        currentPage = page;
+        await LoadAsync(page);
+    }
+}

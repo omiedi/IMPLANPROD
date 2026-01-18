@@ -1,0 +1,56 @@
+@inherits LayoutComponentBase
+@using Microsoft.AspNetCore.Components.Authorization
+@inject AuthenticationStateProvider AuthStateProvider
+@implements IDisposable
+
+<div class="page">
+    <div class="sidebar">
+        <NavMenu />
+    </div>
+
+    <main>
+        <div class="top-row px-4">
+            <AuthorizeView>
+                <Authorized>
+                    <span>Bienvenido, @context.User.Identity?.Name</span>
+                </Authorized>
+                <NotAuthorized>
+                    <a href="/login">Iniciar Sesión</a>
+                </NotAuthorized>
+            </AuthorizeView>
+        </div>
+
+        <article class="content px-4">
+            @Body
+        </article>
+    </main>
+</div>
+
+@code {
+    /// <summary>
+    /// Método que se ejecuta cuando se inicializa el componente
+    /// </summary>
+    protected override void OnInitialized()
+    {
+        // Suscribirse a los cambios de estado de autenticación
+        ((AuthenticationStateProvider)AuthStateProvider).AuthenticationStateChanged += AuthenticationStateChanged;
+    }
+
+    /// <summary>
+    /// Método que se ejecuta cuando cambia el estado de autenticación
+    /// </summary>
+    private void AuthenticationStateChanged(Task<AuthenticationState> task)
+    {
+        // Forzar la actualización del componente cuando cambia el estado de autenticación
+        InvokeAsync(StateHasChanged);
+    }
+
+    /// <summary>
+    /// Método para liberar recursos cuando se destruye el componente
+    /// </summary>
+    public void Dispose()
+    {
+        // Cancelar la suscripción a los cambios de estado de autenticación
+        ((AuthenticationStateProvider)AuthStateProvider).AuthenticationStateChanged -= AuthenticationStateChanged;
+    }
+}

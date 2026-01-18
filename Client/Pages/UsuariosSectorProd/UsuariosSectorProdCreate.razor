@@ -1,0 +1,63 @@
+@page "/UsuariosSectorProd/create"
+@inject IRepository repository
+@inject NavigationManager navigationManager
+@inject SweetAlertService sweetAlertService
+@inject IModalService Modal
+
+<h3>Nueva Asignación Usuario - Sector Productivo</h3>
+
+<UsuariosSectorProdForm @ref="usuariosSectorProdForm" usuariosSectorProd="usuariosSectorProd" OnValidSubmit="Create" ReturnAction="Return" IsEdit="false" />
+
+@code {
+    /// <summary>
+    /// Instancia del modelo para nueva asignación usuario-sector productivo
+    /// </summary>
+    private UsuariosSectorProd usuariosSectorProd = new();
+    
+    /// <summary>
+    /// Referencia al componente formulario
+    /// </summary>
+    private UsuariosSectorProdForm? usuariosSectorProdForm;
+    
+    /// <summary>
+    /// Instancia del modal de Blazored
+    /// </summary>
+    [CascadingParameter]
+    BlazoredModalInstance BlazoredModal { get; set; } = default!;
+
+    /// <summary>
+    /// Crea una nueva asignación usuario-sector productivo
+    /// </summary>
+    private async Task Create()
+    {
+        // Validar que no exista ya la misma asignación
+        var responseValidacion = await repository.Get<bool>($"api/usuariossectorprod/existe/{usuariosSectorProd.IdFlexoft}/{usuariosSectorProd.CodigoSecProd}");
+        if (!responseValidacion.Error && responseValidacion.Response)
+        {
+            await sweetAlertService.FireAsync("Error", "Ya existe una asignación para este usuario y sector productivo.", SweetAlertIcon.Error);
+            return;
+        }
+
+        // Crear la nueva asignación
+        var responseHttp = await repository.Post("/api/usuariossectorprod", usuariosSectorProd);
+        if (responseHttp.Error)
+        {
+            var mensajeError = await responseHttp.GetErrorMessageAsync();
+            await sweetAlertService.FireAsync("Error", mensajeError, SweetAlertIcon.Error);
+            return;
+        }
+
+        await sweetAlertService.FireAsync("Éxito", "Asignación creada correctamente.", SweetAlertIcon.Success);
+        await BlazoredModal.CloseAsync(ModalResult.Ok());
+        Return();
+    }
+
+    /// <summary>
+    /// Regresa a la pantalla principal de asignaciones
+    /// </summary>
+    private void Return()
+    {
+        usuariosSectorProdForm!.FormPostedSuccessfully = true;
+        navigationManager.NavigateTo("/UsuariosSectorProd");
+    }
+}

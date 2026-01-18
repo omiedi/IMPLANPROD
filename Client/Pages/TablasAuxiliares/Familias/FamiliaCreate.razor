@@ -1,0 +1,37 @@
+@inject IRepository repository
+@inject NavigationManager navigationManager
+@inject SweetAlertService sweetAlertService
+@inject IModalService Modal
+
+<div class="modal-body">
+    <h3>Crear Familia</h3>
+
+    <FamiliaForm @ref="familiaForm" Familia="familia" OnValidSubmit="Create" ReturnAction="Return" IsEdit="false" />
+</div>
+
+@code {
+    private Familia familia = new();
+    private FamiliaForm? familiaForm;
+    [CascadingParameter]
+    BlazoredModalInstance BlazoredModal { get; set; } = default!;
+
+    private async Task Create()
+    {
+        var responseHttp = await repository.Post("/api/familias", familia);
+        if (responseHttp.Error)
+        {
+            var mensajeError = await responseHttp.GetErrorMessageAsync();
+            await sweetAlertService.FireAsync("Error", mensajeError, SweetAlertIcon.Error);
+            return;
+        }
+
+        await BlazoredModal.CloseAsync(ModalResult.Ok());
+        Return();
+    }
+
+    private void Return()
+    {
+        familiaForm!.FormPostedSuccessfully = true;
+        navigationManager.NavigateTo("/TablasAuxiliares/Familias/Familia");
+    }
+}

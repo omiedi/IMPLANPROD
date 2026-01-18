@@ -1,0 +1,773 @@
+@page "/ordenes-compra"
+@using IMPLANPROD.Shared.Entities
+@using IMPLANPROD.Client.Repositories
+@using IMPLANPROD.Client.Shared.Components
+@using IMPLANPROD.Client.Services
+@using IMPLANPROD.Client.Pages.Reportes
+@inject IRepository repository
+@inject NavigationManager navigationManager
+@inject SweetAlertService sweetAlertService
+@inject IJSRuntime JS
+
+<PageTitle>Órdenes de Compra</PageTitle>
+
+<div class="container-fluid">
+    <!-- Título de la página -->
+    <div class="mb-4">
+        <h2 class="text-center fw-bold text-primary">
+            <i class="fas fa-shopping-cart me-2"></i>
+            ÓRDENES DE COMPRA
+        </h2>
+        <hr class="border-primary border-2 opacity-50" />
+    </div>
+
+    <div class="row mb-3">
+        <div class="col-auto d-flex gap-2">
+            <button class="btn btn-primary" @onclick="CrearNuevaOrden">
+                <i class="fas fa-plus"></i> Nueva Orden
+            </button>
+            <button class="btn btn-info" @onclick="IrAGraficos" title="Ver gráficos de compras">
+                <i class="fas fa-chart-bar"></i> Gráficos
+            </button>
+            <div class="dropdown">
+                <button class="btn btn-sm btn-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown">
+                    <i class="fas fa-cogs"></i> Opciones
+                </button>
+                <ul class="dropdown-menu dropdown-menu-end">
+                    <li>
+                        <button class="dropdown-item" type="button" @onclick="AbrirModalConfiguracion">
+                            <i class="fas fa-cogs me-2"></i>Configuración
+                        </button>
+                    </li>
+                    <li>
+                        <button class="dropdown-item" type="button" @onclick="IrAGraficos">
+                            <i class="fas fa-chart-bar me-2"></i>Gráficos de Compras
+                        </button>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </div>
+
+    <!-- Filtros de búsqueda -->
+    <div class="card mb-3">
+        <div class="card-header">
+            <h6 class="mb-0">
+                <i class="fas fa-filter"></i> Filtros de Búsqueda 
+                <small class="text-muted">(Por defecto: últimos 30 días)</small>
+            </h6>
+        </div>
+        <div class="card-body">
+            <div class="row">
+                <div class="col-md-3">
+                    <label class="form-label">Buscar Proveedor:</label>
+                    <div class="input-group">
+                        <input type="text" class="form-control" @bind="proveedorSeleccionado" @bind:event="oninput" placeholder="Proveedor seleccionado..." readonly />
+                        <button class="btn btn-outline-secondary" @onclick="LimpiarProveedor">
+                            <i class="fas fa-times"></i>
+                        </button>
+                        <button class="btn btn-outline-primary" @onclick="AbrirSelectorProveedores" title="Seleccionar Proveedor">
+                            <i class="fas fa-truck"></i>
+                        </button>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Buscar:</label>
+                    <input type="text" class="form-control" @bind="Filter" @bind:event="oninput" placeholder="N° Orden, Referencia..." />
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">Estado:</label>
+                    <select class="form-select" @bind="filtroEstado" @bind:event="oninput">
+                        <option value="">Todos</option>
+                        <option value="0">Activas</option>
+                        <option value="-1">Pendientes</option>
+                        <option value="9">Anuladas</option>
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">Fecha Desde:</label>
+                    <input type="date" class="form-control" @bind="fechaDesde" @bind:event="oninput" />
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">Fecha Hasta:</label>
+                    <input type="date" class="form-control" @bind="fechaHasta" @bind:event="oninput" />
+                </div>
+            </div>
+            <div class="row mt-3">
+                <div class="col-12 text-end">
+                    <button class="btn btn-primary" @onclick="ApplyFilterAsync">
+                        <i class="fas fa-filter"></i> Filtrar
+                    </button>
+                    <button class="btn btn-outline-secondary ms-2" @onclick="CleanFilterAsync">
+                        <i class="fas fa-eraser"></i> Limpiar Filtros
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Paginación estándar -->
+    <Pagination CurrentPage="currentPage"
+                TotalPages="totalPages"
+                SelectedPage="SelectedPageAsync" />
+
+    <!-- Tabla de órdenes de compra -->
+    <div class="card">
+        <div class="card-body">
+            @if (ordenesCompra == null)
+            {
+                <div class="text-center">
+                    <div class="spinner-border" role="status">
+                        <span class="visually-hidden">Cargando...</span>
+                    </div>
+                </div>
+            }
+            else if (!ordenesCompra.Any())
+            {
+                <div class="alert alert-info text-center">
+                    <i class="fas fa-info-circle"></i> No se encontraron órdenes de compra.
+                </div>
+            }
+            else
+            {
+                <!-- Botón de impresión -->
+                <div class="d-flex justify-content-end mb-3">
+                    <button class="btn btn-outline-success" @onclick="ConfirmarImpresionAsync" disabled="@isPrinting">
+                        <i class="oi oi-print"></i> Imprimir/Exp.Excel
+                    </button>
+                    @if (isPrinting)
+                    {
+                        <div class="ms-2 d-flex align-items-center">
+                            <div class="spinner-border text-success" role="status">
+                                <span class="visually-hidden">Preparando impresión...</span>
+                            </div>
+                        </div>
+                    }
+                </div>
+
+                <div class="table-responsive">
+                    <table class="table table-striped table-hover">
+                        <thead class="table-dark">
+                            <tr>
+                                <th>N° Orden</th>
+                                <th>Fecha Emisión</th>
+                                <th>Proveedor</th>
+                                <th>Razón Social</th>
+                                <th>Referencia</th>
+                                <th>Estado</th>
+                                <th>Total</th>
+                                <th>Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var orden in ordenesCompra)
+                            {
+                                <tr>
+                                    <td><strong>@orden.NumeOcom</strong></td>
+                                    <td>@orden.FemiOcom?.ToString("dd/MM/yyyy")</td>
+                                    <td>@orden.NproOcom</td>
+                                    <td>@orden.RaSoProv</td>
+                                    <td>@orden.RefeOcom</td>
+                                    <td>
+                                        @if (orden.StatOcom == 0)
+                                        {
+                                            <span class="badge bg-success">Activa</span>
+                                        }
+                                        else if (orden.StatOcom == -1)
+                                        {
+                                            <span class="badge bg-warning">Pendiente</span>
+                                        }
+                                        else if (orden.StatOcom == 9)
+                                        {
+                                            <span class="badge bg-danger">Anulada</span>
+                                        }
+                                        else
+                                        {
+                                            <span class="badge bg-secondary">@orden.StatOcom</span>
+                                        }
+                                    </td>
+                                    <td>@orden.TotalOcom?.ToString("C2")</td>
+                                    <td>
+                                        <div class="btn-group" role="group">
+                                            <button class="btn btn-sm btn-outline-primary" @onclick="(() => EditarOrden(orden.OCOMENCA_ID))" title="Editar">
+                                                <i class="fas fa-edit"></i>
+                                            </button>
+                                            <button class="btn btn-sm btn-outline-info" @onclick="(() => VerDetalle(orden.OCOMENCA_ID))" title="Ver Detalle">
+                                                <i class="fas fa-eye"></i>
+                                            </button>
+                                            <button class="btn btn-sm btn-outline-success" @onclick="(() => ImprimirOrden(orden.NumeOcom ?? 0))" title="Imprimir">
+                                                <i class="fas fa-print"></i>
+                                            </button>
+                                            @if (orden.StatOcom == 9)
+                                            {
+                                                <button class="btn btn-sm btn-outline-warning" @onclick="(() => RevertirAnulacionOrden(orden))" title="Revertir Anulación">
+                                                    <i class="fas fa-undo"></i>
+                                                </button>
+                                            }
+                                            else
+                                            {
+                                                <button class="btn btn-sm btn-outline-danger" @onclick="(() => AnularOrden(orden))" title="Anular">
+                                                    <i class="fas fa-ban"></i>
+                                                </button>
+                                            }
+                                        </div>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        </div>
+    </div>
+
+    <!-- Paginación inferior -->
+    <Pagination CurrentPage="currentPage"
+                TotalPages="totalPages"
+                SelectedPage="SelectedPageAsync" />
+</div>
+
+<!-- Componente de impresión -->
+@if (ordenesCompra != null && ordenesCompra.Any())
+{
+    <ImpresionLista TItem="Ocomenca"
+                    Datos="ordenesCompra"
+                    Titulo="@TituloReporte"
+                    UrlExportarExcel="api/excel/exportar-ordenes-compra"
+                    Encabezados="encabezadosOrdenesCompra"
+                    ModoDirecto="false"
+                    MostrarModal="mostrarModalImpresion"
+                    OnCerrar="ResetearImpresion" />
+}
+
+<!-- Componente selector de proveedores -->
+<SelectorProveedores @ref="selectorProveedores" OnProveedorSeleccionado="OnProveedorSeleccionado" />
+
+@* Modal de configuración de Órdenes de Compra *@
+<OrdenesCompraConfigModal IsVisible="@mostrarModalConfiguracion"
+                         OnCloseRequested="@CerrarModalConfiguracion"
+                         OnConfigurationSaved="@OnConfiguracionGuardada" />
+
+@* Modal de detalle de orden de compra *@
+<OrdenCompraDetalleModal IsVisible="@mostrarModalDetalle"
+                        OrdenId="@ordenIdSeleccionada"
+                        OnCerrar="@CerrarModalDetalle" />
+
+@* Modal de impresión de orden de compra *@
+<ImpresionOrdenCompra MostrarModal="@mostrarModalImpresionOrden"
+                     OrdenCompra="@ordenParaImprimir"
+                     DetalleItems="@detalleParaImprimir"
+                     OnCerrar="@CerrarModalImpresionOrden" />
+
+@code {
+    private List<Ocomenca>? ordenesCompra;
+    private int currentPage = 1;
+    private int totalPages;
+
+    // Filtros
+    private string Filter = string.Empty;
+    private string filtroEstado = string.Empty;
+    private DateTime? fechaDesde;
+    private DateTime? fechaHasta;
+    private string proveedorSeleccionado = string.Empty;
+    private int? numeroProveedorSeleccionado;
+
+    // Componentes
+    private SelectorProveedores selectorProveedores = null!;
+
+    // Variables para el modal de configuración
+    private bool mostrarModalConfiguracion = false;
+
+    // Variables para el modal de detalle
+    private bool mostrarModalDetalle = false;
+    private int ordenIdSeleccionada = 0;
+
+    // Variables para impresión de listado
+    private bool isPrinting = false;
+    private bool mostrarModalImpresion = false;
+    private string TituloReporte => "Listado de Órdenes de Compra";
+    
+    // Variables para impresión de orden individual
+    private bool mostrarModalImpresionOrden = false;
+    private Ocomenca? ordenParaImprimir;
+    private List<Ocomdeta>? detalleParaImprimir;
+
+    protected override async Task OnInitializedAsync()
+    {
+        // Establecer rango de fechas por defecto: últimos 30 días
+        fechaHasta = DateTime.Today;
+        fechaDesde = DateTime.Today.AddDays(-30);
+        
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync(int page = 1)
+    {
+        try
+        {
+            // Construir URL con parámetros de consulta
+            var url = $"api/ocomenca?page={page}&recordsNumber=10";
+
+            // Agregar filtros solo si tienen valores válidos
+            if (!string.IsNullOrWhiteSpace(Filter))
+            {
+                url += $"&filter={Uri.EscapeDataString(Filter)}";
+            }
+
+            if (numeroProveedorSeleccionado.HasValue && numeroProveedorSeleccionado > 0)
+            {
+                url += $"&numeroProveedor={numeroProveedorSeleccionado}";
+            }
+
+            if (!string.IsNullOrWhiteSpace(filtroEstado))
+            {
+                url += $"&filtroEstado={Uri.EscapeDataString(filtroEstado)}";
+            }
+
+            if (fechaDesde.HasValue)
+            {
+                url += $"&fechaDesde={fechaDesde.Value:yyyy-MM-dd}";
+            }
+
+            if (fechaHasta.HasValue)
+            {
+                url += $"&fechaHasta={fechaHasta.Value:yyyy-MM-dd}";
+            }
+
+            // Log de la URL para debugging
+            Console.WriteLine($"Cargando órdenes de compra desde: {url}");
+
+            // Realizar la consulta
+            var responseHttp = await repository.Get<List<Ocomenca>>(url);
+            
+            if (responseHttp.Error)
+            {
+                var message = await responseHttp.GetErrorMessageAsync();
+                Console.WriteLine($"Error en la respuesta HTTP: {message}");
+                await sweetAlertService.FireAsync("Error", $"Error al cargar órdenes de compra: {message}", SweetAlertIcon.Error);
+                return;
+            }
+
+            // Verificar que la respuesta no sea null
+            if (responseHttp.Response == null)
+            {
+                Console.WriteLine("La respuesta del servidor es null");
+                await sweetAlertService.FireAsync("Error", "No se recibieron datos del servidor", SweetAlertIcon.Error);
+                return;
+            }
+
+            ordenesCompra = responseHttp.Response;
+            Console.WriteLine($"Se cargaron {ordenesCompra.Count} órdenes de compra");
+
+            // Cargar total de páginas
+            await LoadTotalPagesAsync();
+        }
+        catch (HttpRequestException httpEx)
+        {
+            Console.WriteLine($"Error de conexión HTTP: {httpEx.Message}");
+            await sweetAlertService.FireAsync("Error de Conexión", 
+                "No se pudo conectar con el servidor. Verifique su conexión.", 
+                SweetAlertIcon.Error);
+        }
+        catch (TaskCanceledException tcEx)
+        {
+            Console.WriteLine($"Timeout en la consulta: {tcEx.Message}");
+            await sweetAlertService.FireAsync("Timeout", 
+                "La consulta tardó demasiado tiempo. Intente nuevamente.", 
+                SweetAlertIcon.Warning);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error inesperado: {ex.Message}");
+            Console.WriteLine($"Stack trace: {ex.StackTrace}");
+            await sweetAlertService.FireAsync("Error", 
+                $"Error inesperado: {ex.Message}", 
+                SweetAlertIcon.Error);
+        }
+    }
+
+    private async Task LoadTotalPagesAsync()
+    {
+        try
+        {
+            var url = $"api/ocomenca/totalPages?recordsNumber=10";
+
+            // Aplicar los mismos filtros que en LoadAsync
+            if (!string.IsNullOrWhiteSpace(Filter))
+            {
+                url += $"&filter={Uri.EscapeDataString(Filter)}";
+            }
+
+            if (numeroProveedorSeleccionado.HasValue && numeroProveedorSeleccionado > 0)
+            {
+                url += $"&numeroProveedor={numeroProveedorSeleccionado}";
+            }
+
+            if (!string.IsNullOrWhiteSpace(filtroEstado))
+            {
+                url += $"&filtroEstado={Uri.EscapeDataString(filtroEstado)}";
+            }
+
+            if (fechaDesde.HasValue)
+            {
+                url += $"&fechaDesde={fechaDesde.Value:yyyy-MM-dd}";
+            }
+
+            if (fechaHasta.HasValue)
+            {
+                url += $"&fechaHasta={fechaHasta.Value:yyyy-MM-dd}";
+            }
+
+            Console.WriteLine($"Cargando total de páginas desde: {url}");
+
+            var responseHttp = await repository.Get<int>(url);
+            if (responseHttp.Error)
+            {
+                var message = await responseHttp.GetErrorMessageAsync();
+                Console.WriteLine($"Error al obtener total de páginas: {message}");
+                totalPages = 1; // Valor por defecto
+                return;
+            }
+
+            totalPages = responseHttp.Response;
+            Console.WriteLine($"Total de páginas: {totalPages}");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error en LoadTotalPagesAsync: {ex.Message}");
+            totalPages = 1; // Valor por defecto en caso de error
+        }
+    }
+
+    private async Task SelectedPageAsync(int page)
+    {
+        currentPage = page;
+        await LoadAsync(page);
+    }
+
+    private async Task ApplyFilterAsync()
+    {
+        currentPage = 1;
+        await LoadAsync();
+    }
+
+    private async Task CleanFilterAsync()
+    {
+        Filter = string.Empty;
+        filtroEstado = string.Empty;
+        // Mantener rango de fechas por defecto: últimos 30 días
+        fechaHasta = DateTime.Today;
+        fechaDesde = DateTime.Today.AddDays(-30);
+        proveedorSeleccionado = string.Empty;
+        numeroProveedorSeleccionado = null;
+        currentPage = 1;
+        await LoadAsync();
+    }
+
+    private void CrearNuevaOrden()
+    {
+        navigationManager.NavigateTo("/ordenes-compra/crear");
+    }
+
+    private void EditarOrden(int id)
+    {
+        navigationManager.NavigateTo($"/ordenes-compra/editar/{id}");
+    }
+
+    private void VerDetalle(int id)
+    {
+        ordenIdSeleccionada = id;
+        mostrarModalDetalle = true;
+    }
+
+    private async Task ImprimirOrden(int numeroOrden)
+    {
+        try
+        {
+            // Buscar la orden en la lista actual
+            ordenParaImprimir = ordenesCompra?.FirstOrDefault(o => o.NumeOcom == numeroOrden);
+            
+            if (ordenParaImprimir == null)
+            {
+                await sweetAlertService.FireAsync("Error", "No se encontró la orden de compra.", SweetAlertIcon.Error);
+                return;
+            }
+
+            // Cargar el detalle de la orden
+            var responseDetalle = await repository.Get<List<Ocomdeta>>($"api/ocomdeta/orden/{ordenParaImprimir.OCOMENCA_ID}");
+            if (responseDetalle.Error)
+            {
+                var message = await responseDetalle.GetErrorMessageAsync();
+                await sweetAlertService.FireAsync("Error", $"Error al cargar detalle de la orden: {message}", SweetAlertIcon.Error);
+                return;
+            }
+
+            detalleParaImprimir = responseDetalle.Response ?? new List<Ocomdeta>();
+            mostrarModalImpresionOrden = true;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error al preparar impresión: {ex.Message}");
+            await sweetAlertService.FireAsync("Error", "Error al preparar la impresión.", SweetAlertIcon.Error);
+        }
+    }
+
+    private async Task AnularOrden(Ocomenca orden)
+    {
+        var result = await sweetAlertService.FireAsync(new SweetAlertOptions
+        {
+            Title = "Confirmar Anulación",
+            Text = $"¿Está seguro que desea anular la orden de compra N° {orden.NumeOcom}?",
+            Icon = SweetAlertIcon.Warning,
+            ShowCancelButton = true,
+            ConfirmButtonText = "Sí, Anular",
+            CancelButtonText = "Cancelar"
+        });
+
+        if (result.IsConfirmed)
+        {
+            orden.StatOcom = 9; // Estado anulado
+            var responseHttp = await repository.Put($"api/ocomenca/{orden.NumeOcom}", orden);
+            if (responseHttp.Error)
+            {
+                var message = await responseHttp.GetErrorMessageAsync();
+                await sweetAlertService.FireAsync("Error", message, SweetAlertIcon.Error);
+                return;
+            }
+
+            await sweetAlertService.FireAsync("Anulada", "La orden de compra ha sido anulada exitosamente.", SweetAlertIcon.Success);
+            await LoadAsync(currentPage);
+        }
+    }
+
+    private async Task RevertirAnulacionOrden(Ocomenca orden)
+    {
+        var result = await sweetAlertService.FireAsync(new SweetAlertOptions
+        {
+            Title = "Confirmar Reversión",
+            Text = $"¿Está seguro que desea revertir la anulación de la orden de compra N° {orden.NumeOcom}?\nLa orden volverá al estado 'Activa'.",
+            Icon = SweetAlertIcon.Question,
+            ShowCancelButton = true,
+            ConfirmButtonText = "Sí, Revertir",
+            CancelButtonText = "Cancelar"
+        });
+
+        if (result.IsConfirmed)
+        {
+            orden.StatOcom = 0; // Estado activo (revertir anulación)
+            var responseHttp = await repository.Put($"api/ocomenca/{orden.NumeOcom}", orden);
+            if (responseHttp.Error)
+            {
+                var message = await responseHttp.GetErrorMessageAsync();
+                await sweetAlertService.FireAsync("Error", message, SweetAlertIcon.Error);
+                return;
+            }
+
+            await sweetAlertService.FireAsync("Revertida", "La anulación ha sido revertida exitosamente. La orden está ahora activa.", SweetAlertIcon.Success);
+            await LoadAsync(currentPage);
+        }
+    }
+
+    private async Task AbrirSelectorProveedores()
+    {
+        await selectorProveedores.AbrirModal();
+    }
+
+    private async Task OnProveedorSeleccionado(SelectorProveedores.ProveedorSeleccionado proveedor)
+    {
+        proveedorSeleccionado = $"{proveedor.NumeCli} - {proveedor.RazonSocial}";
+        numeroProveedorSeleccionado = proveedor.NumeCli;
+        await ApplyFilterAsync();
+    }
+
+    private async Task LimpiarProveedor()
+    {
+        proveedorSeleccionado = string.Empty;
+        numeroProveedorSeleccionado = null;
+        await ApplyFilterAsync();
+    }
+
+    /// <summary>
+    /// Abre el modal de configuración de órdenes de compra
+    /// </summary>
+    private void AbrirModalConfiguracion()
+    {
+        mostrarModalConfiguracion = true;
+    }
+
+    /// <summary>
+    /// Cierra el modal de configuración
+    /// </summary>
+    private void CerrarModalConfiguracion()
+    {
+        mostrarModalConfiguracion = false;
+    }
+
+    /// <summary>
+    /// Se ejecuta cuando se guarda la configuración
+    /// </summary>
+    private async Task OnConfiguracionGuardada()
+    {
+        // Opcional: Recargar datos si es necesario
+        // await LoadAsync(currentPage);
+    }
+
+    /// <summary>
+    /// Cierra el modal de detalle de orden
+    /// </summary>
+    private void CerrarModalDetalle()
+    {
+        mostrarModalDetalle = false;
+        ordenIdSeleccionada = 0;
+    }
+
+    /// <summary>
+    /// Navega a la página de gráficos de compras
+    /// </summary>
+    private void IrAGraficos()
+    {
+        navigationManager.NavigateTo("/graficos-compras");
+    }
+
+    /// <summary>
+    /// Diccionario de encabezados para el reporte de órdenes de compra
+    /// </summary>
+    Dictionary<string, string> encabezadosOrdenesCompra = new()
+    {
+        { "NumeOcom", "N° Orden" },
+        { "FemiOcom", "Fecha Emisión" },
+        { "NproOcom", "N° Proveedor" },
+        { "RaSoProv", "Razón Social" },
+        { "RefeOcom", "Referencia" },
+        { "StatOcom", "Estado" },
+        { "TotalOcom", "Total" },
+        { "FGenOcom", "Fecha Generación" },
+        { "MoneEmis", "Moneda" }
+    };
+
+    /// <summary>
+    /// Obtiene TODAS las órdenes de compra que coincidan con los filtros actuales, sin paginación
+    /// Utiliza los mismos filtros que LoadAsync pero sin límite de página
+    /// </summary>
+    private async Task<List<Ocomenca>?> ObtenerTodasLasOrdenesFiltradas()
+    {
+        try
+        {
+            // Construir URL con parámetros de filtro idénticos a LoadAsync pero sin paginación
+            var url = $"api/ocomenca?page=1&recordsNumber=999999"; // Número muy alto para obtener todos los registros
+
+            // Agregar filtros solo si tienen valores válidos
+            if (!string.IsNullOrWhiteSpace(Filter))
+            {
+                url += $"&filter={Uri.EscapeDataString(Filter)}";
+            }
+
+            if (numeroProveedorSeleccionado.HasValue && numeroProveedorSeleccionado > 0)
+            {
+                url += $"&numeroProveedor={numeroProveedorSeleccionado}";
+            }
+
+            if (!string.IsNullOrWhiteSpace(filtroEstado))
+            {
+                url += $"&filtroEstado={Uri.EscapeDataString(filtroEstado)}";
+            }
+
+            if (fechaDesde.HasValue)
+            {
+                url += $"&fechaDesde={fechaDesde.Value:yyyy-MM-dd}";
+            }
+
+            if (fechaHasta.HasValue)
+            {
+                url += $"&fechaHasta={fechaHasta.Value:yyyy-MM-dd}";
+            }
+
+            Console.WriteLine($"Obteniendo todas las órdenes filtradas desde: {url}");
+
+            var responseHttp = await repository.Get<List<Ocomenca>>(url);
+            
+            if (!responseHttp.Error)
+            {
+                return responseHttp.Response;
+            }
+            else
+            {
+                await sweetAlertService.FireAsync("Error", "No se pudieron obtener las órdenes para impresión", SweetAlertIcon.Error);
+                return new List<Ocomenca>();
+            }
+        }
+        catch (Exception ex)
+        {
+            await sweetAlertService.FireAsync("Error", $"Error al obtener órdenes: {ex.Message}", SweetAlertIcon.Error);
+            return new List<Ocomenca>();
+        }
+    }
+
+    /// <summary>
+    /// Confirma la impresión del listado de órdenes de compra respetando filtros activos
+    /// Obtiene TODOS los registros que coincidan con los filtros, no solo la página actual
+    /// </summary>
+    private async Task ConfirmarImpresionAsync()
+    {
+        isPrinting = true;
+        StateHasChanged();
+
+        try
+        {
+            // Obtener TODAS las órdenes que coincidan con los filtros actuales (sin paginación)
+            var ordenesCompletas = await ObtenerTodasLasOrdenesFiltradas();
+            int cantidadTotal = ordenesCompletas?.Count ?? 0;
+
+            var result = await sweetAlertService.FireAsync(new SweetAlertOptions
+            {
+                Title = "Confirmar impresión",
+                Text = $"Se van a imprimir {cantidadTotal} registros que coinciden con los filtros aplicados (todas las páginas).\n¿Desea continuar?",
+                Icon = SweetAlertIcon.Warning,
+                ShowCancelButton = true,
+                ConfirmButtonText = "Sí, imprimir",
+                CancelButtonText = "Cancelar"
+            });
+
+            if (result.IsConfirmed)
+            {
+                // Actualizar la lista de órdenes para impresión con todos los registros
+                ordenesCompra = ordenesCompletas;
+                mostrarModalImpresion = true;
+            }
+        }
+        catch (Exception ex)
+        {
+            await sweetAlertService.FireAsync("Error", ex.Message, SweetAlertIcon.Error);
+        }
+        finally
+        {
+            isPrinting = false;
+            StateHasChanged();
+        }
+    }
+
+    /// <summary>
+    /// Resetea el estado de impresión y cierra el modal
+    /// Restaura la lista de órdenes original (paginada) después de la impresión
+    /// </summary>
+    private async void ResetearImpresion()
+    {
+        mostrarModalImpresion = false;
+        
+        // Restaurar la vista paginada original después de cerrar el modal de impresión
+        await LoadAsync(currentPage);
+        
+        StateHasChanged();
+    }
+
+    /// <summary>
+    /// Cierra el modal de impresión de orden individual
+    /// </summary>
+    private void CerrarModalImpresionOrden()
+    {
+        mostrarModalImpresionOrden = false;
+        ordenParaImprimir = null;
+        detalleParaImprimir = null;
+        StateHasChanged();
+    }
+}

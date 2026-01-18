@@ -1,0 +1,67 @@
+@page "/MotivosRechazoRecepcion/edit/{Id:int}"
+@inject IRepository repository
+@inject NavigationManager navigationManager
+@inject SweetAlertService sweetAlertService
+@inject IModalService Modal
+
+<h3>Editar Motivo de Rechazo</h3>
+
+@if (motivo is null)
+{
+    <div class="align-items-center">
+        <img src="https://media0.giphy.com/media/3oEjI6SIIHBdRxXI40/giphy.gif?cid=ecf05e47q4b7z67j4s1jr2t1uymf1mh3kq8sxpgmj89wf4xg&rid=giphy.gif&ct=g" />
+    </div>
+}
+else
+{
+    <MotivosRechazoRecepcionForm @ref="motivoForm"  Motivo="motivo" OnValidSubmit="Edit" ReturnAction="Return" IsEdit="true" />
+}
+
+@code {
+    private MotivosRechazoRecepcion? motivo;
+    private MotivosRechazoRecepcionForm? motivoForm;
+
+    [Parameter]
+    public int Id { get; set; }
+
+    [CascadingParameter]
+    BlazoredModalInstance BlazoredModal { get; set; } = default!;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var responseHttp = await repository.Get<MotivosRechazoRecepcion>($"/api/motivosrechazorecepcion/{Id}");
+        if (responseHttp.Error)
+        {
+            if (responseHttp.HttpResponseMessage.StatusCode == System.Net.HttpStatusCode.NotFound)
+            {
+                navigationManager.NavigateTo("/MotivosRechazoRecepcion");
+                return;
+            }
+
+            var message = await responseHttp.GetErrorMessageAsync();
+            await sweetAlertService.FireAsync("Error", message, SweetAlertIcon.Error);
+            return;
+        }
+        motivo = responseHttp.Response;
+    }
+
+    private async Task Edit()
+    {
+        var responseHttp = await repository.Put("/api/motivosrechazorecepcion", motivo);
+        if (responseHttp.Error)
+        {
+            var message = await responseHttp.GetErrorMessageAsync();
+            await sweetAlertService.FireAsync("Error", message, SweetAlertIcon.Error);
+            return;
+        }
+
+        await BlazoredModal.CloseAsync(ModalResult.Ok());
+        Return();
+    }
+
+    private void Return()
+    {
+        motivoForm!.FormPostedSuccessfully = true;
+        navigationManager.NavigateTo("/MotivosRechazoRecepcion");
+    }
+}

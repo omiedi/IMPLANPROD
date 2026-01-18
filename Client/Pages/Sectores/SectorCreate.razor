@@ -1,0 +1,38 @@
+﻿@page "/sectores/create/{DependenciaId:int}"
+@inject NavigationManager navigationManager
+@inject IRepository repository
+@inject SweetAlertService sweetAlertService
+
+<h3>Crear Sector</h3>
+
+<SectorForm @ref="sectorForm" sector="sector" OnValidSubmit="CreateAsync" ReturnAction="Volver" />
+
+@code {
+    private Sector sector = new();
+    private SectorForm? sectorForm;
+
+    [Parameter]
+    public int DependenciaId { get; set; }
+
+    private async Task CreateAsync()
+    {
+        // sector.sectorfilial = DependenciaId;
+        sector.DependenciaId = DependenciaId;
+        var httpResponse = await repository.Post("api/sectores", sector);
+
+        if (httpResponse.Error)
+        {
+            var mensajeError = await httpResponse.GetErrorMessageAsync();
+            await sweetAlertService.FireAsync("Error", mensajeError, SweetAlertIcon.Error);
+            return;
+        }
+        Volver();
+    }
+
+
+    private void Volver()
+    {
+        sectorForm!.FormPostedSuccessfully = true;
+        navigationManager.NavigateTo($"/dependencias/detalles/{DependenciaId}");
+    }
+}

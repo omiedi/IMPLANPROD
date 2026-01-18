@@ -1,0 +1,114 @@
+@using IMPLANPROD.Shared.Entities
+@using Blazored.Modal
+@using Blazored.Modal.Services
+
+<style>
+    .blazored-modal-container {
+        z-index: 2000 !important;
+    }
+    
+    .blazored-modal {
+        z-index: 2001 !important;
+    }
+</style>
+
+<div class="modal-content" style="z-index: 2002;">
+    <div class="modal-header bg-primary text-white">
+        <h5 class="modal-title">
+            <i class="fas fa-clipboard-list"></i> Pedidos Pendientes de Entrega
+        </h5>
+    </div>
+    <div class="modal-body" style="max-height: 600px; overflow-y: auto;">
+        @if (pedidosPendientes == null || !pedidosPendientes.Any())
+        {
+            <div class="alert alert-info">
+                <i class="fas fa-info-circle"></i> No hay pedidos pendientes para este cliente.
+            </div>
+        }
+        else
+        {
+            <div class="table-responsive">
+                <table class="table table-sm table-hover">
+                    <thead class="table-light sticky-top">
+                        <tr>
+                            <th>Pedido</th>
+                            <th>Orden</th>
+                            <th>Fecha Entrega</th>
+                            <th>Código</th>
+                            <th>Descripción</th>
+                            <th class="text-end">Pendiente</th>
+                            <th class="text-end">A Remitir</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var item in pedidosPendientes.OrderBy(p => p.NroPed).ThenBy(p => p.FeSolEnt))
+                        {
+                            <tr>
+                                <td>@item.NroPed</td>
+                                <td>
+                                    @if (item.NuOrItem.HasValue)
+                                    {
+                                        <span class="badge bg-success">@item.NuOrItem</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="text-muted">-</span>
+                                    }
+                                </td>
+                                <td>@(item.FeSolEnt?.ToString("dd/MM/yyyy") ?? "-")</td>
+                                <td>@item.CodiExt</td>
+                                <td>@item.Descrip</td>
+                                <td class="text-end">@item.CanSaldo</td>
+                                <td class="text-end">
+                                    <input type="number" 
+                                           class="form-control form-control-sm text-end" 
+                                           style="width: 100px;"
+                                           min="0" 
+                                           max="@item.CanSaldo" 
+                                           step="0.01"
+                                           @bind="item.CantidadARemitir" />
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </div>
+    <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" @onclick="Cancelar">
+            <i class="fas fa-times"></i> Cancelar
+        </button>
+        <button type="button" class="btn btn-primary" @onclick="Confirmar">
+            <i class="fas fa-check"></i> Confirmar
+        </button>
+    </div>
+</div>
+
+@code {
+    [CascadingParameter] BlazoredModalInstance Modal { get; set; } = default!;
+    [Parameter] public List<PeddetaConCantidad> pedidosPendientes { get; set; } = new();
+
+    private void Cancelar()
+    {
+        Modal.CancelAsync();
+    }
+
+    private void Confirmar()
+    {
+        // Filtrar solo los items con cantidad a remitir mayor a 0
+        var itemsSeleccionados = pedidosPendientes
+            .Where(p => p.CantidadARemitir > 0)
+            .ToList();
+
+        Modal.CloseAsync(ModalResult.Ok(itemsSeleccionados));
+    }
+
+    /// <summary>
+    /// Clase auxiliar para manejar la cantidad a remitir
+    /// </summary>
+    public class PeddetaConCantidad : Peddeta
+    {
+        public decimal CantidadARemitir { get; set; } = 0;
+    }
+}

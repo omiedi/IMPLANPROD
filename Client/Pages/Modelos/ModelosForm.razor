@@ -1,0 +1,983 @@
+@using IMPLANPROD.Shared.Entities
+@using IMPLANPROD.Client.Shared.Components
+@inject IRepository repository
+@inject SweetAlertService sweetAlertService
+
+<!--
+Componente: ModelosForm.razor
+Descripción: Formulario compartido para crear y editar modelos (BADAMODE)
+Autor: Sistema IMPLANPROD
+Fecha: 2026-01-08
+
+Este formulario se utiliza tanto en la creación como en la edición de modelos.
+Incluye todos los campos necesarios según la estructura de la tabla BADAMODE.
+-->
+
+@if (Modelo != null)
+{
+<EditForm Model="Modelo" OnValidSubmit="OnValidSubmit">
+    <DataAnnotationsValidator />
+
+    <div class="card">
+        <div class="card-header bg-primary text-white sticky-top" style="z-index: 1020;">
+            <h5 class="mb-0">
+                <i class="fas fa-cubes me-2"></i>
+                @(IsEdit ? "Editar Modelo" : "Nuevo Modelo")
+            </h5>
+        </div>
+        <div class="card-body">
+            <!-- Sistema de Solapas con Botones -->
+            <div class="d-flex gap-2 mb-4 flex-wrap">
+                <button type="button" 
+                        class="btn @(solapaActiva == "datos" ? "btn-primary" : "btn-outline-primary") flex-fill py-3 rounded-3 shadow-sm"
+                        @onclick='() => solapaActiva = "datos"'
+                        style="transition: all 0.3s ease; min-width: 260px;">
+                    <i class="fas fa-info-circle me-2"></i>
+                    <strong>DATOS DEL MODELO</strong>
+                </button>
+                @if (IsEdit && !string.IsNullOrWhiteSpace(Modelo.Cod_Mod))
+                {
+                    <button type="button" 
+                            class="btn @(solapaActiva == "notas-imagenes" ? "btn-primary" : "btn-outline-primary") flex-fill py-3 rounded-3 shadow-sm"
+                            @onclick='() => solapaActiva = "notas-imagenes"'
+                            style="transition: all 0.3s ease; min-width: 260px;">
+                        <i class="fas fa-sticky-note me-2"></i>
+                        <strong>NOTAS + IMÁGENES</strong>
+                    </button>
+                }
+            </div>
+
+            <!-- Contenido de las Solapas -->
+            <div>
+                <!-- Solapa: DATOS DEL MODELO -->
+                @if (solapaActiva == "datos")
+                {
+                    <!-- Instructivos colapsables -->
+            <div class="row mb-3">
+                <div class="col-12">
+                    <!-- Instructivo Usuario -->
+                    <div class="card mb-2">
+                        <div class="card-header bg-info text-white p-2">
+                            <button class="btn btn-link text-white text-decoration-none w-100 text-start p-0" 
+                                    type="button" 
+                                    @onclick="() => mostrarInstructivoUsuario = !mostrarInstructivoUsuario">
+                                <i class="fas @(mostrarInstructivoUsuario ? "fa-chevron-down" : "fa-chevron-right") me-2"></i>
+                                <strong>Instructivo para el Usuario</strong>
+                            </button>
+                        </div>
+                        @if (mostrarInstructivoUsuario)
+                        {
+                            <div class="card-body">
+                                <h6 class="text-primary"><i class="fas fa-info-circle"></i> Descripción</h6>
+                                <p>
+                                    Este formulario permite crear y editar modelos de producción (BADAMODE). Los modelos representan 
+                                    moldes, matrices o plantillas utilizadas en el proceso productivo que requieren control y verificación periódica.
+                                </p>
+
+                                <h6 class="text-primary"><i class="fas fa-list-check"></i> Secciones del Formulario</h6>
+                                
+                                <h6 class="text-secondary mt-3">1. Datos Principales (fondo gris con borde azul)</h6>
+                                <ul>
+                                    <li><strong>Código (*):</strong> Identificador único del modelo (obligatorio, máximo 16 caracteres)</li>
+                                    <li><strong>Tipo Material:</strong> Seleccione Madera, Aluminio u Otros
+                                        <ul>
+                                            <li>Si selecciona "Otros", aparecerá un campo adicional para especificar el material</li>
+                                        </ul>
+                                    </li>
+                                    <li><strong>Descripción:</strong> Descripción del modelo (máximo 64 caracteres)</li>
+                                    <li><strong>Ubicación:</strong> Ubicación física del modelo en planta</li>
+                                    <li><strong>Frecuencia de Verificación:</strong> Periodicidad de control (Semanal, Mensual, Trimestral, Semestral, Anual)</li>
+                                </ul>
+
+                                <h6 class="text-secondary mt-3">2. Fechas de Control (fondo gris con borde verde)</h6>
+                                <ul>
+                                    <li><strong>Último Control:</strong> Fecha del último control realizado
+                                        <ul>
+                                            <li>⚡ Al ingresar esta fecha, se calcula automáticamente el próximo control</li>
+                                        </ul>
+                                    </li>
+                                    <li><strong>Próximo Control:</strong> Campo calculado automáticamente (solo lectura, badge "Calculado")
+                                        <ul>
+                                            <li>Se calcula según: Fecha Último Control + Frecuencia</li>
+                                            <li>Frecuencias: Semanal (+7 días), Mensual (+1 mes), Trimestral (+3 meses), Semestral (+6 meses), Anual (+12 meses)</li>
+                                        </ul>
+                                    </li>
+                                    <li><strong>Cantidad de Piezas:</strong> Número de piezas que componen el modelo</li>
+                                </ul>
+
+                                <h6 class="text-secondary mt-3">3. Producto Asociado (fondo gris con borde cian)</h6>
+                                <ul>
+                                    <li><strong>Código Producto:</strong> Haga clic en el botón 🔍 para buscar y seleccionar un producto del catálogo</li>
+                                    <li><strong>Código Interno:</strong> Se muestra automáticamente al seleccionar el producto (MASTER.CODINT)</li>
+                                    <li><strong>U.Med.:</strong> Unidad de medida del producto (solo lectura)</li>
+                                    <li>⚠️ <strong>IMPORTANTE:</strong> El código interno del producto se guarda en BADAMODE.COD_INTE</li>
+                                </ul>
+
+                                <h6 class="text-secondary mt-3">4. Observaciones (fondo gris con borde amarillo)</h6>
+                                <ul>
+                                    <li><strong>Observaciones:</strong> Campo de texto libre para notas, comentarios o información adicional del modelo</li>
+                                </ul>
+
+                                <h6 class="text-secondary mt-3">5. Fotos</h6>
+                                <ul>
+                                    <li><strong>Foto 1, 2, 3, 4:</strong> Rutas o URLs de las fotografías del modelo (máximo 128 caracteres cada una)</li>
+                                </ul>
+
+                                <h6 class="text-secondary mt-3">6. Notas (solo en modo edición)</h6>
+                                <ul>
+                                    <li><strong>Historial de Notas:</strong> Visualiza todas las notas registradas para este modelo
+                                        <ul>
+                                            <li>Muestra: Fecha/hora, contenido de la nota y usuario que la registró</li>
+                                            <li>Ordenadas de más reciente a más antigua</li>
+                                            <li>Los saltos de línea se preservan tal como fueron escritos</li>
+                                        </ul>
+                                    </li>
+                                    <li><strong>Nueva Nota:</strong> Campo de texto para agregar una nueva nota
+                                        <ul>
+                                            <li>Máximo 500 caracteres</li>
+                                            <li>Puede usar Enter para crear múltiples líneas</li>
+                                            <li>Al guardar, se registra automáticamente: fecha/hora, usuario y empresa</li>
+                                            <li>La nota aparecerá inmediatamente en el historial después de guardar</li>
+                                        </ul>
+                                    </li>
+                                    <li>⚠️ <strong>IMPORTANTE:</strong> Las notas son permanentes y no se pueden editar ni eliminar una vez guardadas</li>
+                                </ul>
+
+                                <h6 class="text-primary mt-3"><i class="fas fa-lightbulb"></i> Consejos de Uso</h6>
+                                <ul>
+                                    <li>Los campos marcados con (*) son obligatorios</li>
+                                    <li>El cálculo de próximo control es completamente automático al cambiar la fecha o frecuencia</li>
+                                    <li>Use el selector de productos (🔍) para asociar correctamente el modelo con un producto</li>
+                                    <li>El formulario valida los datos antes de guardar</li>
+                                    <li>Las secciones están visualmente separadas con colores para facilitar la navegación</li>
+                                    <li>Use las notas para documentar mantenimientos, reparaciones o cualquier evento relevante del modelo</li>
+                                </ul>
+
+                                <h6 class="text-primary mt-3"><i class="fas fa-clipboard-list"></i> Casos de Uso</h6>
+                                <ul>
+                                    <li>Registrar un nuevo modelo de producción con su ubicación y características</li>
+                                    <li>Actualizar la fecha de último control y verificar el cálculo automático del próximo</li>
+                                    <li>Asociar un modelo con el producto que fabrica</li>
+                                    <li>Documentar observaciones sobre el estado o mantenimiento del modelo</li>
+                                    <li>Adjuntar fotografías del modelo para referencia visual</li>
+                                </ul>
+                            </div>
+                        }
+                    </div>
+
+                    <!-- Instructivo Desarrollador -->
+                    <InstructivoDesarrollador>
+                        <h6 class="text-info"><i class="fas fa-code"></i> Arquitectura</h6>
+                        <p>
+                            Componente Blazor compartido para crear y editar entidades BADAMODE. Implementa cálculo automático de fechas,
+                            integración con selector de productos, y validación de datos con separación visual por secciones.
+                        </p>
+
+                        <h6 class="text-info mt-3"><i class="fas fa-puzzle-piece"></i> Parámetros del Componente</h6>
+                        <ul>
+                            <li><code>[Parameter] Badamode Modelo</code> - Entidad principal que se edita/crea</li>
+                            <li><code>[Parameter] EventCallback OnValidSubmit</code> - Callback al enviar formulario válido</li>
+                            <li><code>[Parameter] EventCallback OnCancel</code> - Callback al cancelar</li>
+                            <li><code>[Parameter] bool IsEdit</code> - Indica si es edición (true) o creación (false)</li>
+                        </ul>
+
+                        <h6 class="text-info mt-3"><i class="fas fa-cogs"></i> Variables de Estado</h6>
+                        <ul>
+                            <li><code>codigoProducto</code> - MASTER.CODIGO del producto asociado</li>
+                            <li><code>codigoInterno</code> - MASTER.CODINT del producto asociado</li>
+                            <li><code>unidadMedida</code> - MASTER.UMEDIDA del producto asociado</li>
+                            <li><code>selectorProductosRef</code> - Referencia al componente SelectorProductos</li>
+                            <li><code>mostrarInstructivoUsuario</code> - Control de visibilidad del instructivo usuario</li>
+                        </ul>
+
+                        <h6 class="text-info mt-3"><i class="fas fa-calculator"></i> Lógica de Cálculo Automático</h6>
+                        <p><strong>Método:</strong> <code>CalcularProximoControl()</code></p>
+                        <p>Se ejecuta automáticamente cuando cambia:</p>
+                        <ul>
+                            <li><code>Modelo.FechUlt_Con</code> - Fecha de último control</li>
+                            <li><code>Modelo.Frecuen</code> - Frecuencia de verificación</li>
+                        </ul>
+                        <p><strong>Formato de Frecuencia:</strong> "número - descripción" (ej: "1 - Semanal", "4 - Semestral")</p>
+                        <pre class="bg-light p-2 rounded"><code>1 - Semanal:    fechaUltimoControl.AddDays(7)
+2 - Mensual:    fechaUltimoControl.AddMonths(1)
+3 - Trimestral: fechaUltimoControl.AddMonths(3)
+4 - Semestral:  fechaUltimoControl.AddMonths(6)
+5 - Anual:      fechaUltimoControl.AddMonths(12)</code></pre>
+
+                        <h6 class="text-info mt-3"><i class="fas fa-link"></i> Integración con SelectorProductos</h6>
+                        <ul>
+                            <li><strong>Método:</strong> <code>AbrirSelectorProducto()</code> - Abre el modal del selector</li>
+                            <li><strong>Callback:</strong> <code>OnProductoSeleccionado(Master producto)</code>
+                                <ul>
+                                    <li>Captura: <code>producto.Codigo</code> → <code>codigoProducto</code></li>
+                                    <li>Captura: <code>producto.Codint</code> → <code>codigoInterno</code> y <code>Modelo.Cod_Inte</code></li>
+                                    <li>Captura: <code>producto.Umedida</code> → <code>unidadMedida</code></li>
+                                </ul>
+                            </li>
+                            <li><strong>Carga en Edición:</strong> <code>CargarProductoAsociado(int codigoInterno)</code>
+                                <ul>
+                                    <li>Busca producto por <code>MASTER.CODINT</code> usando <code>api/master/search?filter={codigoInterno}</code></li>
+                                    <li>Se ejecuta en <code>OnParametersSetAsync()</code> si <code>IsEdit && Modelo.Cod_Inte.HasValue</code></li>
+                                </ul>
+                            </li>
+                        </ul>
+
+                        <h6 class="text-info mt-3"><i class="fas fa-database"></i> Campos de la Entidad BADAMODE</h6>
+                        <ul>
+                            <li><code>Cod_Mod</code> - Código del modelo (PK alternativa, string 16)</li>
+                            <li><code>Material</code> - Tipo de material (int?: 1=Madera, 2=Aluminio, 3=Otros)</li>
+                            <li><code>Desc_Mat</code> - Descripción material si Material=3 (string 32)</li>
+                            <li><code>Descripcion</code> - Descripción del modelo (string 64)</li>
+                            <li><code>Ubic</code> - Ubicación física (string 32)</li>
+                            <li><code>Frecuen</code> - Frecuencia de verificación (string 32, formato "N - Descripción")</li>
+                            <li><code>FechUlt_Con</code> - Fecha último control (DateTime?)</li>
+                            <li><code>FechPro_Con</code> - Fecha próximo control (DateTime?, calculado)</li>
+                            <li><code>CantPiezas</code> - Cantidad de piezas (decimal?)</li>
+                            <li><code>Cod_Inte</code> - Código interno del producto asociado (int?, = MASTER.CODINT)</li>
+                            <li><code>ObservaMod</code> - Observaciones (ntext)</li>
+                            <li><code>Foto1, Foto2, Foto3, Foto4</code> - Rutas de fotos (string 128)</li>
+                        </ul>
+
+                        <h6 class="text-info mt-3"><i class="fas fa-palette"></i> Diseño Visual</h6>
+                        <p>Cada sección tiene fondo gris claro (<code>bg-light</code>) con bordes de colores:</p>
+                        <ul>
+                            <li><strong>Datos Principales:</strong> <code>border-primary</code> (azul)</li>
+                            <li><strong>Fechas de Control:</strong> <code>border-success</code> (verde)</li>
+                            <li><strong>Producto Asociado:</strong> <code>border-info</code> (cian)</li>
+                            <li><strong>Observaciones:</strong> <code>border-warning</code> (amarillo)</li>
+                        </ul>
+                        <p>Clases aplicadas: <code>p-3 mb-4 bg-light border rounded</code></p>
+
+                        <h6 class="text-info mt-3"><i class="fas fa-check-circle"></i> Validaciones</h6>
+                        <ul>
+                            <li>Usa <code>DataAnnotationsValidator</code> de Blazor</li>
+                            <li><code>Cod_Mod</code> es requerido (validado en entidad)</li>
+                            <li>Longitudes máximas controladas con <code>maxlength</code> en inputs</li>
+                            <li>Campo "Próximo Control" es <code>readonly</code> (calculado automáticamente)</li>
+                        </ul>
+
+                        <h6 class="text-info mt-3"><i class="fas fa-sticky-note"></i> Componente NotasObservaciones - Guía de Uso</h6>
+                        <p><strong>Componente reutilizable:</strong> <code>Client/Shared/Components/NotasObservaciones.razor</code></p>
+                        <p>Sistema para gestionar notas históricas con auditoría automática.</p>
+
+                        <h6 class="text-secondary mt-2">📋 Parámetros del Componente</h6>
+                        <pre class="bg-light p-2 rounded"><code>&lt;NotasObservaciones 
+    NombreTabla="[TABLA]"              // Nombre de la tabla de notas
+    CampoIdentificador="[CAMPO]"       // Campo identificador en la tabla
+    ValorIdentificador="[VALOR]"       // Valor del identificador
+    EsTexto="[true/false]"             // true=string, false=numérico
+    OnObservacionGuardada="[Callback]" // Opcional: callback después de guardar
+/&gt;</code></pre>
+
+                        <h6 class="text-secondary mt-2">💡 Ejemplo 1: Notas de Modelos (BADAMODE_NOTA)</h6>
+                        <pre class="bg-light p-2 rounded"><code>@@* En ModelosForm.razor *@@
+@@if (IsEdit && !string.IsNullOrWhiteSpace(Modelo.Cod_Mod))
+{
+    &lt;NotasObservaciones 
+        NombreTabla="BADAMODE_NOTA"
+        CampoIdentificador="Cod_Mod"
+        ValorIdentificador="@@Modelo.Cod_Mod"
+        EsTexto="true" /&gt;
+}</code></pre>
+
+                        <h6 class="text-secondary mt-2">💡 Ejemplo 2: Notas de Productos (MASTER_NOTA)</h6>
+                        <pre class="bg-light p-2 rounded"><code>@@* En ProductosForm.razor *@@
+@@if (IsEdit && Producto.Codint > 0)
+{
+    &lt;NotasObservaciones 
+        NombreTabla="MASTER_NOTA"
+        CampoIdentificador="Codint"
+        ValorIdentificador="@@Producto.Codint.ToString()"
+        EsTexto="false" /&gt;  @@* Campo numérico *@@
+}</code></pre>
+
+                        <h6 class="text-secondary mt-2">💡 Ejemplo 3: Con Callback</h6>
+                        <pre class="bg-light p-2 rounded"><code>@@* Con notificación después de guardar *@@
+&lt;NotasObservaciones 
+    NombreTabla="REPARA_NOTA"
+    CampoIdentificador="Num_Repa"
+    ValorIdentificador="@@reparacion.Num_Repa.ToString()"
+    EsTexto="false"
+    OnObservacionGuardada="OnNotaGuardada" /&gt;
+
+@@code {
+    private async Task OnNotaGuardada()
+    {
+        Console.WriteLine("Nueva nota guardada");
+        // Lógica adicional si es necesaria
+    }
+}</code></pre>
+
+                        <h6 class="text-secondary mt-2">🔧 Backend - ObservacionesController</h6>
+                        <p><strong>Endpoints disponibles:</strong></p>
+                        <ul>
+                            <li><code>GET /api/observaciones?tabla=X&campo=Y&valor=Z&esTexto=true</code></li>
+                            <li><code>POST /api/observaciones</code> con <code>GuardarObservacionDTO</code></li>
+                        </ul>
+                        <p><strong>⚠️ IMPORTANTE:</strong> Usa Entity Framework, NO SQL directo</p>
+                        <pre class="bg-light p-2 rounded"><code>// ✅ CORRECTO - Entity Framework
+var nuevaNota = new BadamodeNota
+{
+    Cod_Mod = dto.ValorIdentificador,
+    Observaciones = dto.Observaciones
+    // NO asignar campos de auditoría manualmente
+};
+_context.BadamodeNotas.Add(nuevaNota);
+await _context.SaveChangesAsync(); // ← AuditInterceptor actúa aquí</code></pre>
+
+                        <h6 class="text-secondary mt-2">🗄️ Estructura de Tabla de Notas</h6>
+                        <p><strong>Campos requeridos en cualquier tabla de notas:</strong></p>
+                        <pre class="bg-light p-2 rounded"><code>CREATE TABLE [NOMBRE_TABLA_NOTA] (
+    Id INT IDENTITY(1,1) PRIMARY KEY,
+    [Campo_Identificador] [TIPO],  -- Ej: Cod_Mod VARCHAR(16)
+    Observaciones NTEXT,
+    AddRecord DATETIME,             -- ← Automático
+    LastUpdate DATETIME,            -- ← Automático
+    NumUsuar INT,                   -- ← Automático
+    CodiEmprNet SMALLINT DEFAULT 0  -- ← Automático (por defecto 0)
+)</code></pre>
+
+                        <h6 class="text-secondary mt-2">⚡ Auditoría Automática (AuditInterceptor)</h6>
+                        <p><strong>Campos llenados automáticamente al guardar:</strong></p>
+                        <ul>
+                            <li><code>AddRecord</code> = DateTime.Now (solo en INSERT)</li>
+                            <li><code>LastUpdate</code> = DateTime.Now (INSERT y UPDATE)</li>
+                            <li><code>NumUsuar</code> = ID del usuario logueado</li>
+                            <li><code>CodiEmprNet</code> = Código de empresa del usuario (por defecto 0)</li>
+                        </ul>
+                        <p><strong>❌ NO hacer:</strong></p>
+                        <pre class="bg-light p-2 rounded"><code>// ❌ INCORRECTO - No asignar manualmente
+nuevaNota.AddRecord = DateTime.Now;
+nuevaNota.NumUsuar = 1;
+nuevaNota.CodiEmprNet = 1;</code></pre>
+
+                        <h6 class="text-secondary mt-2">📊 Características del Componente</h6>
+                        <ul>
+                            <li><strong>Historial primero:</strong> Muestra notas existentes ordenadas por fecha DESC</li>
+                            <li><strong>Formulario después:</strong> TextArea + botón guardar debajo del historial</li>
+                            <li><strong>Saltos de línea:</strong> Preservados con <code>white-space: pre-wrap</code></li>
+                            <li><strong>Límite:</strong> 500 caracteres en UI (ntext en BD)</li>
+                            <li><strong>Recarga automática:</strong> Después de guardar</li>
+                            <li><strong>Estados visuales:</strong> Spinners de carga y procesamiento</li>
+                            <li><strong>Validaciones:</strong> Campo obligatorio antes de guardar</li>
+                            <li><strong>Notificaciones:</strong> SweetAlert para éxito/error</li>
+                        </ul>
+
+                        <h6 class="text-secondary mt-2">🔐 Seguridad</h6>
+                        <ul>
+                            <li>Solo tablas permitidas en whitelist del controller</li>
+                            <li>Requiere usuario autenticado (AuditInterceptor valida)</li>
+                            <li>Parámetros SQL seguros (Entity Framework)</li>
+                            <li>Notas permanentes (no se pueden editar ni eliminar)</li>
+                        </ul>
+
+                        <h6 class="text-info mt-3"><i class="fas fa-exclamation-triangle"></i> Consideraciones Importantes</h6>
+                        <ul>
+                            <li>El campo <code>Modelo.Cod_Inte</code> almacena <code>MASTER.CODINT</code>, NO <code>MASTER.Id</code></li>
+                            <li>La frecuencia debe guardarse con formato "N - Descripción" para compatibilidad con datos existentes</li>
+                            <li>El cálculo de próximo control usa <code>@@bind-Value:after</code> para ejecutarse después del binding</li>
+                            <li>El header del formulario es sticky (<code>sticky-top</code>) para mantenerlo visible al hacer scroll</li>
+                            <li>El componente valida que <code>Modelo != null</code> antes de renderizar el formulario</li>
+                            <li><strong>Notas:</strong> Solo se muestran en modo edición (<code>IsEdit && !string.IsNullOrWhiteSpace(Modelo.Cod_Mod)</code>)</li>
+                            <li><strong>Auditoría de notas:</strong> Los campos de auditoría se llenan automáticamente vía AuditInterceptor, NO manualmente</li>
+                        </ul>
+                    </InstructivoDesarrollador>
+                </div>
+            </div>
+
+            <!-- Sección: Datos Principales -->
+            <div class="p-3 mb-4 bg-light border rounded">
+                <div class="row mb-3">
+                    <div class="col-md-12">
+                        <h6 class="text-primary border-bottom border-primary pb-2 mb-3">
+                            <i class="fas fa-info-circle me-2"></i>Datos Principales
+                        </h6>
+                    </div>
+                </div>
+
+                <div class="row mb-3">
+                    <div class="col-md-2">
+                        <label class="form-label">Código: <span class="text-danger">*</span></label>
+                        <InputText class="form-control" @bind-Value="Modelo.Cod_Mod" maxlength="16" />
+                        <ValidationMessage For="@(() => Modelo.Cod_Mod)" />
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label">Tipo Material:</label>
+                        <InputSelect class="form-control" @bind-Value="Modelo.Material">
+                            <option value="">-- Seleccione --</option>
+                            <option value="1">Madera</option>
+                            <option value="2">Aluminio</option>
+                            <option value="3">Otros</option>
+                        </InputSelect>
+                    </div>
+                    @if (Modelo.Material == 3)
+                    {
+                        <div class="col-md-3">
+                            <label class="form-label">Especificar Material:</label>
+                            <InputText class="form-control" @bind-Value="Modelo.Desc_Mat" maxlength="32" placeholder="Ingrese el material" />
+                        </div>
+                    }
+                    <div class="col-md-@(Modelo.Material == 3 ? "4" : "7")">
+                        <label class="form-label">Descripción:</label>
+                        <InputText class="form-control" @bind-Value="Modelo.Descripcion" maxlength="64" />
+                    </div>
+                </div>
+
+                <div class="row">
+                    <div class="col-md-6">
+                        <label class="form-label">Ubicación:</label>
+                        <InputText class="form-control" @bind-Value="Modelo.Ubic" maxlength="32" />
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label">Frecuencia de Verificación:</label>
+                        <InputSelect class="form-control" @bind-Value="Modelo.Frecuen" @bind-Value:after="CalcularProximoControl">
+                            <option value="">-- Seleccione --</option>
+                            <option value="1 - Semanal">1 - Semanal</option>
+                            <option value="2 - Mensual">2 - Mensual</option>
+                            <option value="3 - Trimestral">3 - Trimestral</option>
+                            <option value="4 - Semestral">4 - Semestral</option>
+                            <option value="5 - Anual">5 - Anual</option>
+                        </InputSelect>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Sección: Fechas de Control -->
+            <div class="p-3 mb-4 bg-light border rounded">
+                <div class="row mb-3">
+                    <div class="col-md-12">
+                        <h6 class="text-success border-bottom border-success pb-2 mb-3">
+                            <i class="fas fa-calendar-check me-2"></i>Fechas de Control
+                        </h6>
+                    </div>
+                </div>
+
+                <div class="row">
+                    <div class="col-md-4">
+                        <label class="form-label">Último Control:</label>
+                        <InputDate class="form-control" @bind-Value="Modelo.FechUlt_Con" @bind-Value:after="CalcularProximoControl" />
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">Próximo Control: <span class="badge bg-info text-dark">Calculado</span></label>
+                        <InputDate class="form-control" @bind-Value="Modelo.FechPro_Con" readonly />
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">Cantidad de Piezas:</label>
+                        <InputNumber class="form-control" @bind-Value="Modelo.CantPiezas" />
+                    </div>
+                </div>
+            </div>
+
+            <!-- Sección: Producto Asociado -->
+            <div class="p-3 mb-4 bg-light border rounded">
+                <div class="row mb-3">
+                    <div class="col-md-12">
+                        <h6 class="text-info border-bottom border-info pb-2 mb-3">
+                            <i class="fas fa-box me-2"></i>Producto Asociado
+                        </h6>
+                    </div>
+                </div>
+
+                <div class="row">
+                    <div class="col-md-3">
+                        <label class="form-label">Código Producto:</label>
+                        <div class="input-group">
+                            <InputText class="form-control" @bind-Value="codigoProducto" readonly />
+                            <button type="button" class="btn btn-outline-primary" @onclick="AbrirSelectorProducto">
+                                <i class="fas fa-search"></i>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label">Código Interno:</label>
+                        <InputText class="form-control" @bind-Value="codigoInterno" readonly />
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label">U.Med.:</label>
+                        <InputText class="form-control" @bind-Value="unidadMedida" readonly />
+                    </div>
+                </div>
+            </div>
+
+            <!-- Sección: Observaciones -->
+            <div class="p-3 mb-4 bg-light border rounded">
+                <div class="row mb-3">
+                    <div class="col-md-12">
+                        <h6 class="text-warning border-bottom border-warning pb-2 mb-3">
+                            <i class="fas fa-comment me-2"></i>Observaciones
+                        </h6>
+                    </div>
+                </div>
+
+                <div class="row">
+                    <div class="col-md-12">
+                        <label class="form-label">Observaciones:</label>
+                        <InputTextArea class="form-control" @bind-Value="Modelo.ObservaMod" rows="4" />
+                    </div>
+                </div>
+            </div>
+                }
+
+                <!-- Solapa: NOTAS + IMÁGENES -->
+                @if (IsEdit && !string.IsNullOrWhiteSpace(Modelo.Cod_Mod) && solapaActiva == "notas-imagenes")
+                {
+                    <!-- Sección: Notas y Observaciones del Modelo -->
+                        <div class="row mb-4">
+                            <div class="col-md-12">
+                                <h6 class="text-primary border-bottom border-primary pb-2 mb-3">
+                                    <i class="fas fa-sticky-note me-2"></i>Notas y Observaciones
+                                </h6>
+                                <div style="max-height: 12cm; overflow-y: auto;">
+                                    <NotasObservaciones 
+                                        NombreTabla="BADAMODE_NOTA"
+                                        CampoIdentificador="Cod_Mod"
+                                        ValorIdentificador="@Modelo.Cod_Mod"
+                                        EsTexto="true" />
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Sección: Galería de Imágenes -->
+                <div class="row mb-3">
+                    <div class="col-md-12">
+                        <h6 class="text-primary border-bottom border-primary pb-2 mb-3">
+                            <i class="fas fa-images me-2"></i>Galería de Imágenes
+                        </h6>
+                    </div>
+                </div>
+
+                <div class="mb-3">
+                    <label for="fileUploadModelo" class="btn btn-primary">
+                        <i class="fas fa-upload"></i> Subir Imagen
+                    </label>
+                    <InputFile id="fileUploadModelo" OnChange="SubirImagen" accept="image/*" style="display: none;" />
+                </div>
+
+                @if (cargandoImagenes)
+                {
+                    <div class="text-center">
+                        <div class="spinner-border" role="status">
+                            <span class="visually-hidden">Cargando...</span>
+                        </div>
+                    </div>
+                }
+                else if (imagenes == null || !imagenes.Any())
+                {
+                    <div class="alert alert-info">
+                        <i class="fas fa-info-circle"></i> No hay imágenes cargadas para este modelo.
+                    </div>
+                }
+                else
+                {
+                    <div class="row">
+                        @foreach (var imagen in imagenes)
+                        {
+                            <div class="col-md-6 mb-4">
+                                <div class="card h-100">
+                                    <div class="card-header d-flex justify-content-between align-items-center">
+                                        <span><strong>Imagen @imagen.Norit_Imag</strong></span>
+                                        <button type="button" class="btn btn-sm btn-danger" @onclick="() => EliminarImagen(imagen.Id)">
+                                            <i class="fas fa-trash"></i>
+                                        </button>
+                                    </div>
+                                    <div class="card-body">
+                                        <div class="row">
+                                            <div class="col-md-6">
+                                                <img src="@imagen.RutaImagen" class="img-fluid rounded" alt="Imagen @imagen.Norit_Imag" style="max-height: 300px; object-fit: contain;" />
+                                            </div>
+                                            <div class="col-md-6">
+                                                <label class="form-label fw-bold">Observaciones:</label>
+                                                <textarea class="form-control" 
+                                                          rows="8" 
+                                                          @bind="imagen.Descripcion"
+                                                          @bind:after="() => ActualizarDescripcion(imagen)"
+                                                          placeholder="Ingrese observaciones...">
+                                                </textarea>
+                                                <small class="text-muted">Guardado automático.</small>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        }
+                    </div>
+                }
+                }
+            </div>
+        </div>
+
+        <div class="card-footer">
+            <div class="d-flex justify-content-between">
+                <button type="button" class="btn btn-secondary" @onclick="OnCancel">
+                    <i class="fas fa-times me-2"></i>Cancelar
+                </button>
+                <button type="submit" class="btn btn-primary" disabled="@isProcessing">
+                    @if (isProcessing)
+                    {
+                        <span class="spinner-border spinner-border-sm me-2" role="status"></span>
+                    }
+                    else
+                    {
+                        <i class="fas fa-save me-2"></i>
+                    }
+                    Guardar
+                </button>
+            </div>
+        </div>
+    </div>
+</EditForm>
+}
+else
+{
+    <div class="alert alert-info">
+        <i class="fas fa-spinner fa-spin me-2"></i>Cargando formulario...
+    </div>
+}
+
+<SelectorProductos @ref="selectorProductosRef"
+                   PermitirCantidad="false"
+                   OnProductoSeleccionado="OnProductoSeleccionado"
+                   OnClose="CerrarSelectorProducto" />
+
+@code {
+    [Parameter]
+    public Badamode Modelo { get; set; } = null!;
+
+    [Parameter]
+    public EventCallback OnValidSubmit { get; set; }
+
+    [Parameter]
+    public EventCallback OnCancel { get; set; }
+
+    [Parameter]
+    public bool IsEdit { get; set; } = false;
+
+    private bool isProcessing = false;
+    private string codigoProducto = string.Empty;
+    private string codigoInterno = string.Empty;
+    private string unidadMedida = string.Empty;
+    private SelectorProductos? selectorProductosRef;
+    private bool mostrarInstructivoUsuario = false;
+
+    // Variables para galería de imágenes
+    private List<GalimMod>? imagenes;
+    private bool cargandoImagenes = false;
+
+    // Variable para controlar la solapa activa
+    private string solapaActiva = "datos";
+
+    protected override async Task OnParametersSetAsync()
+    {
+        try
+        {
+            await base.OnParametersSetAsync();
+            
+            // Inicializar valores por defecto si el modelo es nuevo
+            if (Modelo != null && !IsEdit)
+            {
+                // Establecer valores por defecto para campos nullable
+                Modelo.Material ??= 1; // Madera por defecto
+                Modelo.CodiEmpr ??= 1;
+                Modelo.CodiEmprNet ??= 1;
+                Modelo.NumUsuar ??= 1;
+            }
+            
+            // Si es edición y tiene Cod_Inte, cargar los datos del producto
+            if (Modelo != null && IsEdit && Modelo.Cod_Inte.HasValue && Modelo.Cod_Inte.Value > 0)
+            {
+                await CargarProductoAsociado(Modelo.Cod_Inte.Value);
+            }
+
+            // Si es edición, cargar las imágenes del modelo
+            if (Modelo != null && IsEdit && !string.IsNullOrWhiteSpace(Modelo.Cod_Mod))
+            {
+                await CargarImagenes();
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error en OnParametersSet: {ex.Message}");
+            Console.WriteLine($"StackTrace: {ex.StackTrace}");
+        }
+    }
+
+    private async Task CargarProductoAsociado(int codigoInterno)
+    {
+        try
+        {
+            // Buscar el producto por Codint (no por Id)
+            var responseHttp = await repository.Get<List<Master>>($"api/master/search?filter={codigoInterno}");
+            if (!responseHttp.Error && responseHttp.Response != null && responseHttp.Response.Any())
+            {
+                var producto = responseHttp.Response.FirstOrDefault(p => p.Codint == codigoInterno);
+                if (producto != null)
+                {
+                    codigoProducto = producto.Codigo ?? string.Empty;
+                    this.codigoInterno = producto.Codint.ToString();
+                    unidadMedida = producto.Umedida ?? string.Empty;
+                    StateHasChanged();
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error al cargar producto asociado: {ex.Message}");
+        }
+    }
+
+    private async Task AbrirSelectorProducto()
+    {
+        if (selectorProductosRef != null)
+        {
+            await selectorProductosRef.AbrirModal();
+        }
+    }
+
+    private void OnProductoSeleccionado(Master producto)
+    {
+        if (producto != null)
+        {
+            codigoProducto = producto.Codigo ?? string.Empty;
+            codigoInterno = producto.Codint.ToString();
+            unidadMedida = producto.Umedida ?? string.Empty;
+            
+            // Guardar el MASTER.CODINT en BADAMODE.COD_INTE
+            Modelo.Cod_Inte = producto.Codint;
+            
+            Console.WriteLine($"Producto seleccionado - Código: {codigoProducto}, CodInt: {codigoInterno}, UMed: {unidadMedida}");
+        }
+        StateHasChanged();
+    }
+
+    private void CerrarSelectorProducto()
+    {
+        // Método para cerrar el selector si es necesario
+    }
+
+    /// <summary>
+    /// Calcula automáticamente la fecha de próximo control basándose en la fecha de último control y la frecuencia
+    /// </summary>
+    private void CalcularProximoControl()
+    {
+        if (Modelo == null || !Modelo.FechUlt_Con.HasValue || string.IsNullOrWhiteSpace(Modelo.Frecuen))
+        {
+            return;
+        }
+
+        DateTime fechaUltimoControl = Modelo.FechUlt_Con.Value;
+        DateTime fechaProximoControl;
+
+        // Extraer el número de la frecuencia (formato: "1 - Semanal", "2 - Mensual", etc.)
+        string frecuencia = Modelo.Frecuen.Trim();
+        
+        if (frecuencia.StartsWith("1 -") || frecuencia.Contains("Semanal"))
+        {
+            // Semanal: +7 días
+            fechaProximoControl = fechaUltimoControl.AddDays(7);
+        }
+        else if (frecuencia.StartsWith("2 -") || frecuencia.Contains("Mensual"))
+        {
+            // Mensual: +1 mes
+            fechaProximoControl = fechaUltimoControl.AddMonths(1);
+        }
+        else if (frecuencia.StartsWith("3 -") || frecuencia.Contains("Trimestral"))
+        {
+            // Trimestral: +3 meses
+            fechaProximoControl = fechaUltimoControl.AddMonths(3);
+        }
+        else if (frecuencia.StartsWith("4 -") || frecuencia.Contains("Semestral"))
+        {
+            // Semestral: +6 meses
+            fechaProximoControl = fechaUltimoControl.AddMonths(6);
+        }
+        else if (frecuencia.StartsWith("5 -") || frecuencia.Contains("Anual"))
+        {
+            // Anual: +12 meses
+            fechaProximoControl = fechaUltimoControl.AddMonths(12);
+        }
+        else
+        {
+            // Si no se reconoce la frecuencia, no calcular
+            return;
+        }
+
+        Modelo.FechPro_Con = fechaProximoControl;
+        Console.WriteLine($"Fecha próximo control calculada: {fechaProximoControl:dd/MM/yyyy} (Frecuencia: {frecuencia})");
+        StateHasChanged();
+    }
+
+    // ==================== MÉTODOS PARA GALERÍA DE IMÁGENES ====================
+
+    private async Task CargarImagenes()
+    {
+        if (string.IsNullOrWhiteSpace(Modelo.Cod_Mod)) return;
+        
+        try
+        {
+            cargandoImagenes = true;
+            var responseHttp = await repository.Get<List<GalimMod>>($"api/galimmod/modelo/{Modelo.Cod_Mod}");
+            
+            if (!responseHttp.Error && responseHttp.Response != null)
+            {
+                imagenes = responseHttp.Response;
+                Console.WriteLine($"Imágenes cargadas: {imagenes.Count}");
+            }
+            else
+            {
+                imagenes = new List<GalimMod>();
+                Console.WriteLine("No se encontraron imágenes o hubo un error");
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error al cargar imágenes: {ex.Message}");
+            await sweetAlertService.FireAsync("Error", "Error al cargar las imágenes", SweetAlertIcon.Error);
+            imagenes = new List<GalimMod>();
+        }
+        finally
+        {
+            cargandoImagenes = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task SubirImagen(InputFileChangeEventArgs e)
+    {
+        try
+        {
+            var file = e.File;
+            if (file == null)
+            {
+                await sweetAlertService.FireAsync("Advertencia", "No se seleccionó ningún archivo", SweetAlertIcon.Warning);
+                return;
+            }
+
+            // Validar que el modelo tenga Cod_Mod
+            if (string.IsNullOrWhiteSpace(Modelo?.Cod_Mod))
+            {
+                Console.WriteLine("ERROR: Modelo.Cod_Mod está vacío o nulo");
+                await sweetAlertService.FireAsync("Error", "El modelo no tiene código asignado. Guarde el modelo primero.", SweetAlertIcon.Error);
+                return;
+            }
+
+            Console.WriteLine($"SubirImagen - Cod_Mod: '{Modelo.Cod_Mod}'");
+
+            // Validar tamaño (máximo 5MB)
+            const long maxFileSize = 5 * 1024 * 1024;
+            if (file.Size > maxFileSize)
+            {
+                await sweetAlertService.FireAsync("Error", "El archivo es demasiado grande. Tamaño máximo: 5MB", SweetAlertIcon.Error);
+                return;
+            }
+
+            // Validar extensión
+            var extensionesPermitidas = new[] { ".jpg", ".jpeg", ".png", ".gif", ".bmp" };
+            var extension = Path.GetExtension(file.Name).ToLowerInvariant();
+            if (!extensionesPermitidas.Contains(extension))
+            {
+                await sweetAlertService.FireAsync("Error", "Tipo de archivo no permitido. Solo se permiten imágenes (jpg, png, gif, bmp)", SweetAlertIcon.Error);
+                return;
+            }
+
+            cargandoImagenes = true;
+            StateHasChanged();
+
+            // Crear contenido multipart
+            using var content = new MultipartFormDataContent();
+            var fileContent = new StreamContent(file.OpenReadStream(maxFileSize));
+            fileContent.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue(file.ContentType);
+            content.Add(fileContent, "file", file.Name);
+            content.Add(new StringContent(Modelo.Cod_Mod), "codMod");
+            content.Add(new StringContent(""), "descripcion");
+
+            Console.WriteLine($"Enviando POST a api/Galimmod/upload con codMod: '{Modelo.Cod_Mod}'");
+
+            // Enviar al servidor usando PostFormData (método correcto para multipart/form-data)
+            var responseHttp = await repository.PostFormData<GalimMod>("api/Galimmod/upload", content);
+
+            Console.WriteLine($"Respuesta recibida - Error: {responseHttp.Error}");
+            
+            if (responseHttp.Error)
+            {
+                var errorMessage = await responseHttp.GetErrorMessageAsync();
+                Console.WriteLine($"Error del servidor: {errorMessage}");
+                await sweetAlertService.FireAsync("Error", errorMessage, SweetAlertIcon.Error);
+            }
+            else
+            {
+                Console.WriteLine($"Imagen subida exitosamente. ID: {responseHttp.Response?.Id}");
+                await sweetAlertService.FireAsync("Éxito", "Imagen subida correctamente", SweetAlertIcon.Success);
+                // Recargar imágenes
+                await CargarImagenes();
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error al subir imagen: {ex.Message}");
+            await sweetAlertService.FireAsync("Error", $"Error al subir la imagen: {ex.Message}", SweetAlertIcon.Error);
+        }
+        finally
+        {
+            cargandoImagenes = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task ActualizarDescripcion(GalimMod imagen)
+    {
+        try
+        {
+            var responseHttp = await repository.Put($"api/galimmod/{imagen.Id}", imagen.Descripcion);
+            
+            if (responseHttp.Error)
+            {
+                await sweetAlertService.FireAsync("Error", "Error al actualizar la descripción", SweetAlertIcon.Error);
+            }
+            else
+            {
+                Console.WriteLine($"Descripción actualizada para imagen {imagen.Id}");
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error al actualizar descripción: {ex.Message}");
+            await sweetAlertService.FireAsync("Error", "Error al actualizar la descripción", SweetAlertIcon.Error);
+        }
+    }
+
+    private async Task EliminarImagen(int id)
+    {
+        var result = await sweetAlertService.FireAsync(new SweetAlertOptions
+        {
+            Title = "¿Eliminar imagen?",
+            Text = "Esta acción no se puede deshacer",
+            Icon = SweetAlertIcon.Warning,
+            ShowCancelButton = false,
+            ConfirmButtonText = "Sí, eliminar",
+            CancelButtonText = "Cancelar"
+        });
+
+        if (result.IsConfirmed)
+        {
+            try
+            {
+                var responseHttp = await repository.Delete($"api/galimmod/{id}");
+                
+                if (!responseHttp.Error)
+                {
+                    await sweetAlertService.FireAsync("Eliminado", "Imagen eliminada correctamente", SweetAlertIcon.Success);
+                    await CargarImagenes();
+                }
+                else
+                {
+                    var message = await responseHttp.GetErrorMessageAsync();
+                    await sweetAlertService.FireAsync("Error", message, SweetAlertIcon.Error);
+                }
+            }
+            catch (Exception ex)
+            {
+                await sweetAlertService.FireAsync("Error", $"Error al eliminar imagen: {ex.Message}", SweetAlertIcon.Error);
+            }
+        }
+    }
+}

@@ -1,0 +1,865 @@
+@page "/capacidad-planeamiento"
+@using IMPLANPROD.Shared.DTOs
+@using IMPLANPROD.Shared.Entities
+@using IMPLANPROD.Client.Shared.Components
+@inject IRepository repository
+@inject NavigationManager NavigationManager
+@inject SweetAlertService sweetAlertService
+
+<PageTitle>Planeamiento de Capacidad</PageTitle>
+
+<div class="bg-primary bg-opacity-10 p-3 rounded-3 mb-3">
+    <h3 class="m-0 text-primary">
+        <i class="fas fa-chart-line me-2"></i>
+        Planeamiento de Capacidad (Equipos y M.Obra)
+    </h3>
+</div>
+
+<div class="row">
+    <!-- Columna Izquierda: Selección y Programa -->
+    <div class="col-md-8">
+        <!-- Selección de Programa -->
+        <div class="card mb-3">
+            <div class="card-header bg-secondary text-white">
+                <i class="fas fa-list me-2"></i>Selección de Programa
+            </div>
+            <div class="card-body">
+                <div class="d-flex gap-2 mb-2">
+                    <button class="btn btn-sm btn-primary" @onclick="NuevoPrograma" disabled="@isCalculando">
+                        <i class="fas fa-plus"></i> Nuevo
+                    </button>
+                    <button class="btn btn-sm btn-success" @onclick="CalcularCapacidad" disabled="@(programaSeleccionado == null || isCalculando)">
+                        <i class="fas fa-calculator"></i> Calcular
+                    </button>
+                    <button class="btn btn-sm btn-warning" @onclick="GenerarDesdePedidos" disabled="@isCalculando">
+                        <i class="fas fa-shopping-cart"></i> Desde Pedidos
+                    </button>
+                    <button class="btn btn-sm btn-info" @onclick="GenerarDesdeRemitos" disabled="@isCalculando">
+                        <i class="fas fa-file-invoice"></i> Desde Remitos
+                    </button>
+                    <button class="btn btn-sm btn-danger" @onclick="EliminarPrograma" disabled="@(programaSeleccionado == null || isCalculando)">
+                        <i class="fas fa-trash"></i> Eliminar
+                    </button>
+                </div>
+
+                @if (programas == null)
+                {
+                    <div class="spinner-border text-primary" role="status">
+                        <span class="visually-hidden">Cargando...</span>
+                    </div>
+                }
+                else if (programas.Count == 0)
+                {
+                    <div class="alert alert-info">No hay programas de fabricación creados</div>
+                }
+                else
+                {
+                    <select class="form-select" size="5" @onchange="SeleccionarPrograma">
+                        @foreach (var programa in programas)
+                        {
+                            <option value="@programa.Id" selected="@(programaSeleccionado?.Id == programa.Id)">
+                                @programa.NumeroPrograma - @programa.Descripcion (@programa.FechaCreacion?.ToString("dd/MM/yyyy"))
+                            </option>
+                        }
+                    </select>
+                }
+            </div>
+        </div>
+
+        <!-- Programa de Fabricación (Detalles) -->
+        <div class="card mb-3">
+            <div class="card-header bg-secondary text-white d-flex justify-content-between align-items-center">
+                <span>
+                    <i class="fas fa-box me-2"></i>Programa de Fabricación - Detalle
+                </span>
+                @if (detallesPrograma != null && detallesPrograma.Count > 0)
+                {
+                    <span class="badge bg-light text-dark">
+                        @detallesPrograma.Count @(detallesPrograma.Count == 1 ? "registro" : "registros")
+                    </span>
+                }
+            </div>
+            <div class="card-body">
+                @if (programaSeleccionado != null && detallesPrograma != null)
+                {
+                    <div class="table-responsive" style="max-height:400px; overflow-y:auto;">
+                        <table class="table table-sm table-striped">
+                            <thead>
+                                <tr>
+                                    <th>Código</th>
+                                    <th>Descripción Producto</th>
+                                    <th>Cantidad</th>
+                                    <th>Acciones</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var detalle in detallesPrograma)
+                                {
+                                    <tr>
+                                        <td>@detalle.CodigoExterno</td>
+                                        <td>@detalle.Descripcion</td>
+                                        <td>@detalle.Cantidad.ToString("N2")</td>
+                                        <td>
+                                            <button class="btn btn-sm btn-danger" @onclick="() => EliminarDetalle(detalle.Id)" disabled="@isCalculando">
+                                                <i class="fas fa-trash"></i>
+                                            </button>
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                    <button class="btn btn-sm btn-success mt-2" @onclick="AgregarProducto" disabled="@isCalculando">
+                        <i class="fas fa-plus"></i> Agregar Producto
+                    </button>
+                }
+                else
+                {
+                    <div class="alert alert-secondary">Seleccione un programa para ver los detalles</div>
+                }
+            </div>
+        </div>
+    </div>
+
+    <!-- Columna Derecha: Resúmenes -->
+    <div class="col-md-4">
+        <!-- Resumen de Cálculo - Máquinas -->
+        <div class="card mb-3">
+            <div class="card-header bg-info text-white">
+                <i class="fas fa-cogs me-2"></i>Resumen: Máquinas/Equipos
+            </div>
+            <div class="card-body">
+                @if (isCalculando)
+                {
+                    <div class="spinner-border text-info" role="status">
+                        <span class="visually-hidden">Calculando...</span>
+                    </div>
+                }
+                else if (capacidadMaquinas != null && capacidadMaquinas.Count > 0)
+                {
+                    <div class="table-responsive" style="max-height:400px; overflow-y:auto;">
+                        <table class="table table-sm">
+                            <thead>
+                                <tr>
+                                    <th>Máquina</th>
+                                    <th>Tiempo (hh:mm:ss)</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var maquina in capacidadMaquinas)
+                                {
+                                    <tr>
+                                        <td><small>@maquina.DescripcionMaquina</small></td>
+                                        <td><strong>@maquina.TiempoFormateado</strong></td>
+                                    </tr>
+                                }
+                                <tr class="table-primary">
+                                    <td><strong>TOTAL:</strong></td>
+                                    <td><strong>@FormatearTiempo(totalTiempoMaquinas)</strong></td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                }
+                else
+                {
+                    <div class="alert alert-secondary">No hay información calculada</div>
+                }
+            </div>
+        </div>
+
+        <!-- Resumen de Cálculo - Mano de Obra -->
+        <div class="card mb-3">
+            <div class="card-header bg-warning text-dark">
+                <i class="fas fa-users me-2"></i>Resumen: M.O.D.
+            </div>
+            <div class="card-body">
+                @if (isCalculando)
+                {
+                    <div class="spinner-border text-warning" role="status">
+                        <span class="visually-hidden">Calculando...</span>
+                    </div>
+                }
+                else if (capacidadManoObra != null && capacidadManoObra.Count > 0)
+                {
+                    <div class="table-responsive" style="max-height:400px; overflow-y:auto;">
+                        <table class="table table-sm">
+                            <thead>
+                                <tr>
+                                    <th>Cat</th>
+                                    <th>Categoría</th>
+                                    <th>Tiempo (hh:mm:ss)</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var mod in capacidadManoObra)
+                                {
+                                    <tr>
+                                        <td>@mod.Categoria</td>
+                                        <td><small>@mod.DescripcionCategoria</small></td>
+                                        <td><strong>@mod.TiempoFormateado</strong></td>
+                                    </tr>
+                                }
+                                <tr class="table-warning">
+                                    <td colspan="2"><strong>TOTAL:</strong></td>
+                                    <td><strong>@FormatearTiempo(totalTiempoManoObra)</strong></td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                }
+                else
+                {
+                    <div class="alert alert-secondary">No hay información calculada</div>
+                }
+            </div>
+        </div>
+
+        <!-- Último Cálculo -->
+        @if (ultimoCalculo.HasValue)
+        {
+            <div class="alert alert-light">
+                <small><i class="fas fa-clock me-1"></i>Último cálculo: @ultimoCalculo.Value.ToString("dd/MM/yyyy HH:mm:ss")</small>
+            </div>
+        }
+    </div>
+</div>
+
+<!-- Modal: Nuevo Programa -->
+@if (mostrarModalNuevoPrograma)
+{
+    <div class="modal show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5)">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Nuevo Programa de Fabricación</h5>
+                    <button type="button" class="btn-close" @onclick="CerrarModalNuevoPrograma"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label">Descripción del Programa</label>
+                        <input type="text" class="form-control" @bind="nuevoProgramaDescripcion" placeholder="Ej: Programa Mayo 2024" />
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" @onclick="CerrarModalNuevoPrograma">Cancelar</button>
+                    <button type="button" class="btn btn-primary" @onclick="CrearProgramaAsync">Crear</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+<!-- Modal: Generar desde Pedidos -->
+@if (mostrarModalPedidos)
+{
+    <div class="modal show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5)">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Generar desde Pedidos Pendientes</h5>
+                    <button type="button" class="btn-close" @onclick="CerrarModalPedidos"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label">Descripción del Programa</label>
+                        <input type="text" class="form-control" @bind="filtroPedidos.DescripcionPrograma" />
+                    </div>
+                    
+                    <!-- Selector de Cliente (Opcional) -->
+                    <div class="mb-3">
+                        <label class="form-label">Cliente (Opcional)</label>
+                        <div class="input-group">
+                            <input type="text" class="form-control" 
+                                   value="@(clienteSeleccionadoPedidos != null ? $"{clienteSeleccionadoPedidos.NumeCli} - {clienteSeleccionadoPedidos.RazonSocial}" : "Todos los clientes")" 
+                                   readonly />
+                            <button class="btn btn-outline-primary" type="button" @onclick="AbrirSelectorClientesPedidos">
+                                <i class="fas fa-search"></i> Buscar
+                            </button>
+                            @if (clienteSeleccionadoPedidos != null)
+                            {
+                                <button class="btn btn-outline-danger" type="button" @onclick="LimpiarClientePedidos" title="Quitar filtro de cliente">
+                                    <i class="fas fa-times"></i>
+                                </button>
+                            }
+                        </div>
+                        <small class="text-muted">Si no selecciona cliente, se considerarán pedidos de todos los clientes</small>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">Fecha Desde <span class="text-danger">*</span></label>
+                        <input type="date" class="form-control" @bind="filtroPedidos.FechaDesde" required />
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Fecha Hasta <span class="text-danger">*</span></label>
+                        <input type="date" class="form-control" @bind="filtroPedidos.FechaHasta" required />
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" @onclick="CerrarModalPedidos">Cancelar</button>
+                    <button type="button" class="btn btn-primary" @onclick="CrearDesdePedidosAsync" disabled="@isGenerating">
+                        @if (isGenerating)
+                        {
+                            <span class="spinner-border spinner-border-sm me-2"></span>
+                        }
+                        Generar
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+<!-- Modal: Generar desde Remitos -->
+@if (mostrarModalRemitos)
+{
+    <div class="modal show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5)">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Generar desde Remitos</h5>
+                    <button type="button" class="btn-close" @onclick="CerrarModalRemitos"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label">Descripción del Programa</label>
+                        <input type="text" class="form-control" @bind="filtroRemitos.DescripcionPrograma" />
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Fecha Desde</label>
+                        <input type="date" class="form-control" @bind="filtroRemitos.FechaDesde" />
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Fecha Hasta</label>
+                        <input type="date" class="form-control" @bind="filtroRemitos.FechaHasta" />
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" @onclick="CerrarModalRemitos">Cancelar</button>
+                    <button type="button" class="btn btn-primary" @onclick="CrearDesdeRemitosAsync" disabled="@isGenerating">
+                        @if (isGenerating)
+                        {
+                            <span class="spinner-border spinner-border-sm me-2"></span>
+                        }
+                        Generar
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@* Modal: Agregar Observaciones al Producto *@
+@if (mostrarModalObservaciones)
+{
+    <div class="modal show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5)">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Agregar Observaciones</h5>
+                    <button type="button" class="btn-close" @onclick="CerrarModalObservaciones"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label">Producto</label>
+                        <input type="text" class="form-control" value="@productoTemporal?.Codigo - @productoTemporal?.Descripcion" readonly />
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Cantidad</label>
+                        <input type="number" class="form-control" value="@cantidadTemporal" readonly />
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Observaciones (máx. 64 caracteres)</label>
+                        <input type="text" class="form-control" @bind="observacionesTemporal" maxlength="64" placeholder="Ingrese observaciones opcionales..." />
+                        <small class="text-muted">@observacionesTemporal.Length / 64 caracteres</small>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" @onclick="CerrarModalObservaciones">Cancelar</button>
+                    <button type="button" class="btn btn-primary" @onclick="GuardarProductoConObservaciones">Guardar</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@* Componente SelectorProductos *@
+<SelectorProductos @ref="selectorProductosRef"
+                   PermitirCantidad="true"
+                   PermitirPrecio="false"
+                   CantidadDefault="1"
+                   OnProductoSeleccionadoCantidad="OnProductoSeleccionado"
+                   OnClose="OnCloseSelectorProductos" />
+
+@* Componente SelectorClientes para filtro de pedidos *@
+<SelectorClientes @ref="selectorClientesPedidosRef"
+                  OnClienteSeleccionado="OnClienteSeleccionadoPedidos" />
+
+@code {
+    // Datos de programas
+    private List<ProfabriDTO>? programas;
+    private ProfabriDTO? programaSeleccionado;
+    private List<DeprofabDTO>? detallesPrograma;
+
+    // Datos de capacidad
+    private List<CapacidadMaquinaDTO>? capacidadMaquinas;
+    private List<CapacidadManoObraDTO>? capacidadManoObra;
+    private TimeSpan totalTiempoMaquinas;
+    private TimeSpan totalTiempoManoObra;
+    private DateTime? ultimoCalculo;
+
+    // Estados
+    private bool isCalculando = false;
+    private bool isGenerating = false;
+
+    // Modales
+    private bool mostrarModalNuevoPrograma = false;
+    private string nuevoProgramaDescripcion = string.Empty;
+    private bool mostrarModalPedidos = false;
+    private bool mostrarModalRemitos = false;
+    private FiltroGeneracionDTO filtroPedidos = new() { FechaDesde = DateTime.Today, FechaHasta = DateTime.Today.AddDays(30) };
+    private FiltroGeneracionDTO filtroRemitos = new() { FechaDesde = DateTime.Today.AddDays(-30), FechaHasta = DateTime.Today };
+
+    // SelectorProductos y modal de observaciones
+    private SelectorProductos? selectorProductosRef;
+    private bool mostrarModalObservaciones = false;
+    private IMPLANPROD.Shared.Entities.Master? productoTemporal;
+    private decimal cantidadTemporal;
+    private string observacionesTemporal = string.Empty;
+
+    // SelectorClientes para filtro de pedidos
+    private SelectorClientes? selectorClientesPedidosRef;
+    private SelectorClientes.ClienteSeleccionado? clienteSeleccionadoPedidos;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await CargarProgramasAsync();
+    }
+
+    private async Task CargarProgramasAsync()
+    {
+        var response = await repository.Get<List<ProfabriDTO>>("api/profabri");
+        if (!response.Error)
+        {
+            programas = response.Response!;
+        }
+    }
+
+    private async Task SeleccionarPrograma(ChangeEventArgs e)
+    {
+        if (int.TryParse(e.Value?.ToString(), out int programaId))
+        {
+            var nuevoPrograma = programas?.FirstOrDefault(p => p.Id == programaId);
+            
+            // Solo cargar si es un programa diferente al actual
+            if (nuevoPrograma != null && (programaSeleccionado == null || programaSeleccionado.Id != nuevoPrograma.Id))
+            {
+                programaSeleccionado = nuevoPrograma;
+                
+                // Limpiar las 3 tablas antes de cargar
+                LimpiarTablas();
+                
+                // Cargar detalles y resúmenes del programa
+                await CargarDetallesProgramaAsync(programaId);
+            }
+        }
+    }
+
+    private void LimpiarTablas()
+    {
+        // Limpiar tabla de detalles del programa
+        detallesPrograma = null;
+        
+        // Limpiar tabla de resumen de máquinas
+        capacidadMaquinas = null;
+        totalTiempoMaquinas = TimeSpan.Zero;
+        
+        // Limpiar tabla de resumen de M.O.D.
+        capacidadManoObra = null;
+        totalTiempoManoObra = TimeSpan.Zero;
+        
+        // Limpiar fecha de último cálculo
+        ultimoCalculo = null;
+    }
+
+    private async Task CargarDetallesProgramaAsync(int programaId)
+    {
+        var response = await repository.Get<ProgramaCapacidadDTO>($"api/profabri/{programaId}");
+        if (!response.Error && response.Response != null)
+        {
+            // Cargar detalles del programa
+            detallesPrograma = response.Response.Detalles;
+            
+            // Cargar resúmenes si existen (si el programa ya fue calculado)
+            capacidadMaquinas = response.Response.CapacidadMaquinas;
+            capacidadManoObra = response.Response.CapacidadManoObra;
+            totalTiempoMaquinas = response.Response.TotalTiempoMaquinas;
+            totalTiempoManoObra = response.Response.TotalTiempoManoObra;
+            
+            // Mostrar fecha de último cálculo si existe
+            if (capacidadMaquinas?.Any() == true || capacidadManoObra?.Any() == true)
+            {
+                ultimoCalculo = DateTime.Now; // Podríamos obtener esto del servidor si guardamos la fecha
+            }
+        }
+    }
+
+    private async Task CalcularCapacidad()
+    {
+        if (programaSeleccionado == null) return;
+
+        isCalculando = true;
+        try
+        {
+            var request = new CalculoCapacidadRequest { ProgramaId = programaSeleccionado.Id };
+            var response = await repository.Post<CalculoCapacidadRequest, ProgramaCapacidadDTO>("api/profabri/calcular-capacidad", request);
+
+            if (!response.Error && response.Response != null)
+            {
+                capacidadMaquinas = response.Response.CapacidadMaquinas;
+                capacidadManoObra = response.Response.CapacidadManoObra;
+                totalTiempoMaquinas = response.Response.TotalTiempoMaquinas;
+                totalTiempoManoObra = response.Response.TotalTiempoManoObra;
+                ultimoCalculo = DateTime.Now;
+
+                await sweetAlertService.FireAsync("Éxito", "Capacidad calculada correctamente", SweetAlertIcon.Success);
+            }
+            else
+            {
+                await sweetAlertService.FireAsync("Error", await response.GetErrorMessageAsync(), SweetAlertIcon.Error);
+            }
+        }
+        finally
+        {
+            isCalculando = false;
+        }
+    }
+
+    private void NuevoPrograma()
+    {
+        nuevoProgramaDescripcion = string.Empty;
+        mostrarModalNuevoPrograma = true;
+    }
+
+    private async Task CrearProgramaAsync()
+    {
+        if (string.IsNullOrWhiteSpace(nuevoProgramaDescripcion))
+        {
+            await sweetAlertService.FireAsync("Error", "Debe ingresar una descripción", SweetAlertIcon.Error);
+            return;
+        }
+
+        var nuevoPrograma = new ProfabriDTO
+            {
+                Descripcion = nuevoProgramaDescripcion,
+                CodiEmpr = 1,
+                Status = 0
+            };
+
+        var response = await repository.Post<ProfabriDTO, ProfabriDTO>("api/profabri", nuevoPrograma);
+        if (!response.Error)
+        {
+            await sweetAlertService.FireAsync("Éxito", "Programa creado correctamente", SweetAlertIcon.Success);
+            await CargarProgramasAsync();
+            CerrarModalNuevoPrograma();
+        }
+        else
+        {
+            await sweetAlertService.FireAsync("Error", await response.GetErrorMessageAsync(), SweetAlertIcon.Error);
+        }
+    }
+
+    private void CerrarModalNuevoPrograma() => mostrarModalNuevoPrograma = false;
+
+    private void GenerarDesdePedidos()
+    {
+        // Resetear filtro y cliente seleccionado
+        filtroPedidos = new FiltroGeneracionDTO
+            {
+                FechaDesde = DateTime.Today,
+                FechaHasta = DateTime.Today.AddDays(30),
+                TipoGeneracion = "PEDIDOS",
+                ClienteId = null  // Sin cliente por defecto (todos)
+            };
+        clienteSeleccionadoPedidos = null;
+        mostrarModalPedidos = true;
+    }
+
+    private async Task CrearDesdePedidosAsync()
+    {
+        isGenerating = true;
+        try
+        {
+            // Asignar el cliente seleccionado al filtro (si hay)
+            filtroPedidos.ClienteId = clienteSeleccionadoPedidos?.NumeCli;
+            
+            var response = await repository.Post<FiltroGeneracionDTO, ProfabriDTO>("api/profabri/generar-desde-pedidos", filtroPedidos);
+            if (!response.Error)
+            {
+                await sweetAlertService.FireAsync("Éxito", "Programa generado desde pedidos correctamente", SweetAlertIcon.Success);
+                await CargarProgramasAsync();
+                CerrarModalPedidos();
+            }
+            else
+            {
+                await sweetAlertService.FireAsync("Error", await response.GetErrorMessageAsync(), SweetAlertIcon.Error);
+            }
+        }
+        finally
+        {
+            isGenerating = false;
+        }
+    }
+
+    private void CerrarModalPedidos()
+    {
+        mostrarModalPedidos = false;
+        clienteSeleccionadoPedidos = null;
+    }
+
+    private async Task AbrirSelectorClientesPedidos()
+    {
+        await selectorClientesPedidosRef!.AbrirModal();
+    }
+
+    private void OnClienteSeleccionadoPedidos(SelectorClientes.ClienteSeleccionado cliente)
+    {
+        clienteSeleccionadoPedidos = cliente;
+        StateHasChanged();
+    }
+
+    private void LimpiarClientePedidos()
+    {
+        clienteSeleccionadoPedidos = null;
+        filtroPedidos.ClienteId = null;
+    }
+
+    private void GenerarDesdeRemitos()
+    {
+        filtroRemitos = new FiltroGeneracionDTO
+            {
+                FechaDesde = DateTime.Today.AddDays(-30),
+                FechaHasta = DateTime.Today,
+                TipoGeneracion = "REMITOS"
+            };
+        mostrarModalRemitos = true;
+    }
+
+    private async Task CrearDesdeRemitosAsync()
+    {
+        isGenerating = true;
+        try
+        {
+            var response = await repository.Post<FiltroGeneracionDTO, ProfabriDTO>("api/profabri/generar-desde-remitos", filtroRemitos);
+            if (!response.Error)
+            {
+                await sweetAlertService.FireAsync("Éxito", "Programa generado desde remitos correctamente", SweetAlertIcon.Success);
+                await CargarProgramasAsync();
+                CerrarModalRemitos();
+            }
+            else
+            {
+                await sweetAlertService.FireAsync("Error", await response.GetErrorMessageAsync(), SweetAlertIcon.Error);
+            }
+        }
+        finally
+        {
+            isGenerating = false;
+        }
+    }
+
+    private void CerrarModalRemitos() => mostrarModalRemitos = false;
+
+    private async Task EliminarPrograma()
+    {
+        if (programaSeleccionado == null) return;
+
+        var result = await sweetAlertService.FireAsync(new SweetAlertOptions
+            {
+                Title = "Confirmar eliminación",
+                Text = $"¿Está seguro de eliminar el programa {programaSeleccionado.NumeroPrograma}?",
+                Icon = SweetAlertIcon.Warning,
+                ShowCancelButton = true,
+                ConfirmButtonText = "Sí, eliminar",
+                CancelButtonText = "Cancelar"
+            });
+
+        if (result.IsConfirmed)
+        {
+            var response = await repository.Delete($"api/profabri/{programaSeleccionado.Id}");
+            if (!response.Error)
+            {
+                await sweetAlertService.FireAsync("Éxito", "Programa eliminado correctamente", SweetAlertIcon.Success);
+                programaSeleccionado = null;
+                detallesPrograma = null;
+                capacidadMaquinas = null;
+                capacidadManoObra = null;
+                await CargarProgramasAsync();
+            }
+            else
+            {
+                await sweetAlertService.FireAsync("Error", await response.GetErrorMessageAsync(), SweetAlertIcon.Error);
+            }
+        }
+    }
+
+    private async Task EliminarDetalle(int detalleId)
+    {
+        // Buscar el producto a eliminar para mostrarlo en el mensaje
+        var productoAEliminar = detallesPrograma?.FirstOrDefault(d => d.Id == detalleId);
+        if (productoAEliminar == null) return;
+
+        // Mostrar mensaje de confirmación
+        var result = await sweetAlertService.FireAsync(new SweetAlertOptions
+        {
+            Title = "¿Eliminar producto?",
+            Html = $"Se eliminará el producto:<br><strong>{productoAEliminar.CodigoExterno} - {productoAEliminar.Descripcion}</strong><br><br>" +
+                   "⚠️ Al eliminar este producto se recalculará automáticamente:<br>" +
+                   "• <strong>Resumen: Máquinas/Equipos</strong><br>" +
+                   "• <strong>Resumen: M.O.D.</strong>",
+            Icon = SweetAlertIcon.Warning,
+            ShowCancelButton = true,
+            ConfirmButtonText = "Sí, eliminar",
+            CancelButtonText = "Cancelar",
+            ConfirmButtonColor = "#d33"
+        });
+
+        if (!result.IsConfirmed) return;
+
+        var response = await repository.Delete($"api/profabri/detalle/{detalleId}");
+        if (!response.Error)
+        {
+            if (programaSeleccionado != null)
+            {
+                // Recargar detalles del programa
+                await CargarDetallesProgramaAsync(programaSeleccionado.Id);
+                
+                // Verificar si quedan productos en el programa
+                if (detallesPrograma == null || detallesPrograma.Count == 0)
+                {
+                    // No quedan productos: limpiar CAPANECE, RECALMAQ y RECALMOD
+                    await LimpiarDatosCapacidadPrograma(programaSeleccionado.NumeroPrograma);
+                    
+                    // Limpiar las tablas visuales
+                    capacidadMaquinas = null;
+                    capacidadManoObra = null;
+                    totalTiempoMaquinas = TimeSpan.Zero;
+                    totalTiempoManoObra = TimeSpan.Zero;
+                    ultimoCalculo = null;
+                    
+                    await sweetAlertService.FireAsync("Información", "Producto eliminado. Se limpiaron los datos de capacidad porque el programa quedó vacío.", SweetAlertIcon.Info);
+                }
+                else
+                {
+                    // Quedan productos: recalcular capacidad automáticamente
+                    await sweetAlertService.FireAsync("Éxito", "Producto eliminado. Recalculando capacidad...", SweetAlertIcon.Success);
+                    await CalcularCapacidad();
+                }
+            }
+        }
+        else
+        {
+            await sweetAlertService.FireAsync("Error", await response.GetErrorMessageAsync(), SweetAlertIcon.Error);
+        }
+    }
+
+    private async Task LimpiarDatosCapacidadPrograma(int numeroPrograma)
+    {
+        try
+        {
+            // Llamar al endpoint que limpia CAPANECE, RECALMAQ y RECALMOD
+            var response = await repository.Delete($"api/profabri/limpiar-capacidad/{numeroPrograma}");
+            if (response.Error)
+            {
+                // Silencioso - los datos se limpiaron en cliente de todos modos
+                Console.WriteLine($"Advertencia al limpiar datos de capacidad: {await response.GetErrorMessageAsync()}");
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error al limpiar datos de capacidad: {ex.Message}");
+        }
+    }
+
+    private async Task AgregarProducto()
+    {
+        if (programaSeleccionado == null)
+        {
+            await sweetAlertService.FireAsync("Error", "Debe seleccionar un programa primero", SweetAlertIcon.Error);
+            return;
+        }
+
+        // Abrir el selector de productos
+        await selectorProductosRef!.AbrirModal();
+    }
+
+    private void OnProductoSeleccionado(SelectorProductos.SeleccionProducto seleccion)
+    {
+        // Guardar temporalmente el producto y cantidad seleccionados
+        productoTemporal = seleccion.Producto;
+        cantidadTemporal = seleccion.Cantidad;
+        observacionesTemporal = string.Empty;
+
+        // Abrir modal para ingresar observaciones
+        mostrarModalObservaciones = true;
+    }
+
+    private void OnCloseSelectorProductos()
+    {
+        // No hacemos nada cuando se cierra el selector sin seleccionar
+    }
+
+    private void CerrarModalObservaciones()
+    {
+        mostrarModalObservaciones = false;
+        productoTemporal = null;
+        cantidadTemporal = 0;
+        observacionesTemporal = string.Empty;
+    }
+
+    private async Task GuardarProductoConObservaciones()
+    {
+        if (productoTemporal == null || programaSeleccionado == null) return;
+
+        try
+        {
+            var nuevoDetalle = new DeprofabDTO
+            {
+                NumeroPrograma = programaSeleccionado.NumeroPrograma,
+                CodigoProducto = productoTemporal.Codint,
+                CodigoExterno = productoTemporal.Codigo,
+                Descripcion = productoTemporal.Descripcion ?? string.Empty,
+                Cantidad = cantidadTemporal,
+                Observaciones = observacionesTemporal
+            };
+
+            var response = await repository.Post<DeprofabDTO, DeprofabDTO>($"api/profabri/{programaSeleccionado.Id}/detalle", nuevoDetalle);
+            if (!response.Error)
+            {
+                await sweetAlertService.FireAsync("Éxito", "Producto agregado correctamente", SweetAlertIcon.Success);
+                
+                // Recargar detalles del programa
+                await CargarDetallesProgramaAsync(programaSeleccionado.Id);
+                
+                // Cerrar modal
+                CerrarModalObservaciones();
+            }
+            else
+            {
+                await sweetAlertService.FireAsync("Error", await response.GetErrorMessageAsync(), SweetAlertIcon.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            await sweetAlertService.FireAsync("Error", $"Error al agregar producto: {ex.Message}", SweetAlertIcon.Error);
+        }
+    }
+
+    private string FormatearTiempo(TimeSpan tiempo)
+    {
+        int horas = (int)tiempo.TotalHours;
+        int minutos = tiempo.Minutes;
+        int segundos = tiempo.Seconds;
+        return $"{horas:D2}:{horas:D2}:{segundos:D2}";
+    }
+}

@@ -1,0 +1,679 @@
+@page "/reportes/generador"
+@using System.Reflection
+@using System.Text.Json
+@using IMPLANPROD.Shared
+@using IMPLANPROD.Shared.DTOs
+@inject IRepository repository
+@inject NavigationManager Navigation
+@inject IServiceProvider ServiceProvider
+
+<!--
+Componente generador de reportes dinámico.
+Permite seleccionar tablas, campos, definir uniones (joins), condiciones, formato de columnas y ver una vista previa del reporte.
+Todos los comentarios y la documentación están en español para máxima claridad y mantenibilidad.
+-->
+
+<h3>Generador de Reportes</h3>
+
+<div class="mb-3">
+    <label>Seleccionar tabla principal:</label>
+    @if (!TablasCargadas)
+    {
+        <div class="text-info">Cargando tablas...</div>
+    }
+    else if (!string.IsNullOrEmpty(MensajeErrorTablas))
+    {
+        <div class="text-danger">@MensajeErrorTablas</div>
+    }
+    else if (Tablas == null || !Tablas.Any())
+    {
+        <div class="text-warning">No hay tablas disponibles.</div>
+    }
+    else
+    {
+        <select @onchange="OnTablaPrincipalChanged" class="form-select">
+            <option value="">-- Seleccionar --</option>
+            @foreach (var tabla in Tablas)
+            {
+                <option value="@tabla">@tabla</option>
+            }
+        </select>
+        <!-- Debug: Mostrar contenido de Tablas -->
+        <div class="small text-muted">Tablas cargadas: @string.Join(", ", Tablas)</div>
+    }
+</div>
+
+@if (!string.IsNullOrEmpty(TablaPrincipal))
+{
+    <div class="mb-3">
+        <label>Seleccionar campos:</label>
+        <div>
+            @foreach (var campo in CamposTablaPrincipal)
+            {
+                <div class="form-check form-check-inline">
+                    <input class="form-check-input" type="checkbox" @bind="campo.Seleccionado" />
+                    <label class="form-check-label">@campo.Nombre (@campo.Tipo)</label>
+                </div>
+            }
+        </div>
+    </div>
+    <!-- Espacio para agregar joins con otras tablas -->
+    <div class="mb-3">
+        <label>Agregar joins con otras tablas:</label>
+        @foreach (var join in Joins)
+        {
+            <div class="mb-2 border rounded p-2">
+                <select @bind="join.Tabla" class="form-select mb-1">
+                    <option value="">-- Seleccionar tabla --</option>
+                    @foreach (var tabla in Tablas)
+                    {
+                        <option value="@tabla">@tabla</option>
+                    }
+                </select>
+                <button class="btn btn-sm btn-info ms-2 mb-1" @onclick="async () => await OnTablaJoinChanged(join)">Cargar campos</button>
+                @* El usuario debe pulsar este botón tras seleccionar la tabla para cargar los campos de la tabla unida. *@
+                @if (!string.IsNullOrEmpty(join.Tabla))
+                {
+                    <label>Tipo de join:</label>
+                    <select class="form-select mb-1" @bind="join.TipoJoin">
+                        <option value="INNER">INNER JOIN</option>
+                        <option value="LEFT">LEFT JOIN</option>
+                        <option value="RIGHT">RIGHT JOIN</option>
+                    </select>
+                    <label>Campo de la tabla principal:</label>
+                    <select class="form-select mb-1" @bind="join.CampoPrincipal">
+                        <option value="">-- Seleccionar campo --</option>
+                        @foreach (var campo in CamposTablaPrincipal)
+                        {
+                            <option value="@campo.Nombre">@campo.Nombre</option>
+                        }
+                    </select>
+                    <label>Campo de la tabla unida:</label>
+                    <select class="form-select mb-1" @bind="join.CampoForanea">
+                        <option value="">-- Seleccionar campo --</option>
+                        @foreach (var campo in join.CamposForanea)
+                        {
+                            <option value="@campo">@campo</option>
+                        }
+                    </select>
+                    <label>Campos de la tabla del join para mostrar en la vista previa:</label>
+                    <div class="mb-1">
+                        @foreach (var campo in join.CamposForanea)
+                        {
+                            <div class="form-check form-check-inline">
+                                <input class="form-check-input" type="checkbox" value="@campo" @onchange="e => OnCampoJoinSeleccionadoChanged(join, campo, e.Value)
+                " checked="@join.CamposSeleccionados.Contains(campo)" />
+                                <label class="form-check-label">@campo</label>
+                            </div>
+                        }
+                    </div>
+                }
+            </div>
+        }
+        <button class="btn btn-secondary" @onclick="AgregarJoin">Agregar join</button>
+    </div>
+    <!-- Espacio para condiciones y filtros -->
+    <div class="mb-3">
+        <label>Condiciones / Filtros:</label>
+        @foreach (var filtro in Filtros)
+        {
+            <div class="input-group mb-1">
+                <select @bind="filtro.Campo" class="form-select">
+                    <option value="">-- Campo --</option>
+                    @foreach (var campo in CamposTablaPrincipal)
+                    {
+                        <option value="@campo.Nombre">@campo.Nombre</option>
+                    }
+                </select>
+                <select @bind="filtro.Operador" class="form-select">
+                    <option value="=">=</option>
+                    <option value=">">&gt;</option>
+                    <option value="<">&lt;</option>
+                    <option value="LIKE">LIKE</option>
+                </select>
+                <input class="form-control" @bind="filtro.Valor" placeholder="Valor" />
+                <button class="btn btn-danger" @onclick="() => EliminarFiltro(filtro)">X</button>
+            </div>
+        }
+        <button class="btn btn-secondary" @onclick="AgregarFiltro">Agregar filtro</button>
+    </div>
+    <!-- Espacio para formato de columnas -->
+    <div class="mb-3">
+        <label>Formato de columnas:</label>
+        <!-- Mostrar una fila para cada campo seleccionado de la tabla principal -->
+        @foreach (var campo in CamposTablaPrincipal.Where(c => c.Seleccionado))
+        {
+            <div class="input-group mb-1">
+                <span class="input-group-text">@campo.Nombre</span>
+                <!-- Selector de formato sugerido según el tipo de campo -->
+                <select class="form-select" @bind="campo.Formato">
+                    <option value="">Sin formato</option>
+                    @if (campo.TipoFormato == "Decimal")
+                    {
+                        <option value="decimal">Decimal</option>
+                    }
+                    @if (campo.TipoFormato == "Entero")
+                    {
+                        <option value="entero">Entero</option>
+                    }
+                    @if (campo.TipoFormato == "Texto")
+                    {
+                        <option value="texto">Texto</option>
+                    }
+                    @if (campo.TipoFormato == "DateTime")
+                    {
+                        <option value="fecha">Fecha</option>
+                    }
+                </select>
+                <!-- Mostrar información de formato según el tipo -->
+                @if (campo.TipoFormato == "Decimal" && campo.Decimales != null)
+                {
+                    <span class="input-group-text">Decimales: @campo.Decimales</span>
+                }
+                @if ((campo.TipoFormato == "Texto" || campo.TipoFormato == "Entero") && campo.LongitudMaxima != null)
+                {
+                    <span class="input-group-text">Longitud máx: @campo.LongitudMaxima</span>
+                }
+                <input class="form-control" @bind="campo.Alias" placeholder="Alias (opcional)" />
+            </div>
+        }
+        <!-- Mostrar una fila para cada campo seleccionado de cada tabla unida (join) -->
+        @foreach (var join in Joins)
+        {
+            if (join.CamposSeleccionados != null)
+            {
+                foreach (var campoJoin in join.CamposSeleccionados)
+                {
+                    <div class="input-group mb-1">
+                        <span class="input-group-text">@campoJoin <span class="badge bg-secondary ms-1">@join.Tabla</span></span>
+                        <!-- Selector de formato genérico para campos de joins -->
+                        <select class="form-select" @bind="join.FormatosCampos[campoJoin]">
+                            <option value="">Sin formato</option>
+                            <option value="decimal">Decimal</option>
+                            <option value="entero">Entero</option>
+                            <option value="texto">Texto</option>
+                            <option value="fecha">Fecha</option>
+                        </select>
+                        <input class="form-control" @bind="join.AliasCampos[campoJoin]" placeholder="Alias (opcional)" />
+                    </div>
+                }
+            }
+        }
+        <!-- Fin de filas de formato para campos de joins -->
+    </div>
+    <!-- Input para editar/ver la consulta SQL generada -->
+    <div class="mb-3">
+        <label for="consultaSqlInput">Consulta SQL generada:</label>
+        <textarea id="consultaSqlInput" class="form-control font-monospace" rows="5"
+        @bind-value="ConsultaSQLBinding"
+        @bind-value:event="oninput"
+        placeholder="La consulta SQL se generará aquí automáticamente, pero puedes editarla si lo deseas."></textarea>
+        <!--
+        Usamos @bind-value con una propiedad get/set (ConsultaSQLBinding) para detectar ediciones manuales y marcar ConsultaSQLManual=true.
+        Así evitamos el error de duplicidad de eventos y la consulta se actualiza en tiempo real.
+        -->
+        <!--
+        Usamos @bind-value y @bind-value:event="oninput" para que el textarea actualice ConsultaSQL en tiempo real.
+        El evento @oninput llama a OnConsultaSqlInput, que marca ConsultaSQLManual=true si el usuario edita manualmente.
+        -->
+        <small class="text-muted">Puedes editar la consulta manualmente. Si lo haces, dejará de actualizarse automáticamente.</small>
+    </div>
+    <!-- Vista previa del reporte -->
+    <div class="mb-3">
+        <button class="btn btn-primary mt-2" @onclick="VistaPrevia">Vista previa</button>
+        @* Bloque de depuración para mostrar el último SQL ejecutado *@
+        <div class="small text-muted">Consulta ejecutada: @ConsultaEjecutada</div>
+
+        <!-- Bloque de alerta para mostrar mensajes de error de la vista previa, SIEMPRE visible si hay error -->
+        @if (!string.IsNullOrEmpty(MensajeErrorVistaPrevia))
+        {
+            <div class="alert alert-danger">@MensajeErrorVistaPrevia</div>
+        }
+        @if (VistaPreviaDatos != null && VistaPreviaDatos.Any())
+        {
+            <table class="table table-bordered table-sm">
+                <thead>
+                    <tr>
+                        @foreach (var col in VistaPreviaColumnas)
+                        {
+                            <th>@col</th>
+                        }
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var fila in VistaPreviaDatos)
+                    {
+                        <tr>
+                            @foreach (var col in VistaPreviaColumnas)
+                            {
+                                <td>@fila[col]</td>
+                            }
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        }
+    </div>
+}
+
+@code {
+
+    // Lista de tablas obtenidas del backend
+    // Diccionario que asocia nombre de tabla física con nombre de entidad (clase), obtenido dinámicamente del backend
+    Dictionary<string, string> TablaEntidadMapeo = new();
+    List<string> Tablas = new();
+    string? TablaPrincipal;
+    List<CampoDTO> CamposTablaPrincipal = new();
+    string MensajeErrorTablas = null;
+    bool TablasCargadas = false;
+
+    string MensajeErrorVistaPrevia = null;
+    // Joins y filtros
+    List<JoinDTO> Joins = new();
+    List<FiltroDTO> Filtros = new();
+
+    // Vista previa
+    List<string> VistaPreviaColumnas;
+    List<Dictionary<string, object>> VistaPreviaDatos;
+
+    // Variable para mostrar el payload serializado en modo depuración
+    string PayloadDebugJson = string.Empty;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            // Consumimos el endpoint que devuelve el mapeo dinámico tabla-entidad
+            var responseMapeo = await repository.Get<Dictionary<string, string>>("/api/metadata-reportes/tablas-mapeo");
+            if (responseMapeo.Response != null && responseMapeo.Response.Any())
+            {
+                TablaEntidadMapeo = responseMapeo.Response;
+                Tablas = TablaEntidadMapeo.Keys.ToList(); // Mostramos los nombres físicos de las tablas
+                MensajeErrorTablas = null;
+            }
+            else
+            {
+                MensajeErrorTablas = "No se encontraron tablas o hubo un error en la respuesta.";
+                Tablas = new List<string>();
+            }
+        }
+        catch (Exception ex)
+        {
+            MensajeErrorTablas = $"Error al cargar las tablas: {ex.Message}";
+            Tablas = new List<string>();
+        }
+        TablasCargadas = true;
+    }
+
+    /// <summary>
+    /// Evento que se dispara al cambiar la tabla principal seleccionada.
+    /// Utiliza el mapeo dinámico para obtener el nombre real de la entidad (clase) asociada a la tabla seleccionada.
+    /// Luego consulta los campos de la entidad y los ordena alfabéticamente por nombre para su presentación.
+    /// </summary>
+    // async Task OnTablaPrincipalChanged(ChangeEventArgs e)
+    // {
+    //     TablaPrincipal = e.Value?.ToString();
+    //     if (!string.IsNullOrEmpty(TablaPrincipal) && TablaEntidadMapeo.TryGetValue(TablaPrincipal, out var nombreEntidad))
+    //     {
+    //         // Usar el nombre de la entidad real para consultar los campos
+    //         var responseCampos = await repository.Get<List<CampoDTO>>($"/api/metadata-reportes/campos?tabla={nombreEntidad}");
+    //         // Ordenamos los campos alfabéticamente por nombre
+    //         // Mapeo completo de las propiedades para que el selector de formato funcione correctamente
+    //         CamposTablaPrincipal = responseCampos.Response
+    //             .Select(c => new CampoDTO {
+    //                 Nombre = c.Nombre,
+    //                 Tipo = c.Tipo,
+    //                 TipoFormato = c.TipoFormato,
+    //                 Decimales = c.Decimales,
+    //                 LongitudMaxima = c.LongitudMaxima
+    //             })
+    //             .OrderBy(c => c.Nombre)
+    //             .ToList();
+    //     }
+    //     else
+    //     {
+    //         CamposTablaPrincipal.Clear();
+    //     }
+    // }
+
+    async Task AgregarJoin()
+    {
+        var nuevoJoin = new JoinDTO();
+        Joins.Add(nuevoJoin);
+        StateHasChanged();
+    }
+
+    /// <summary>
+    /// Evento que se dispara al cambiar la tabla de un join. Carga los campos de la tabla seleccionada desde el backend.
+    /// </summary>
+    async Task OnTablaJoinChanged(JoinDTO join)
+    {
+        if (!string.IsNullOrEmpty(join.Tabla) && TablaEntidadMapeo.TryGetValue(join.Tabla, out var nombreEntidad))
+        {
+            var responseCampos = await repository.Get<List<CampoDTO>>($"/api/metadata-reportes/campos?tabla={nombreEntidad}");
+            join.CamposForanea = responseCampos.Response?.Select(c => c.Nombre).ToList() ?? new List<string>();
+            // Limpiar selección previa
+            join.CampoForanea = null;
+        }
+        else
+        {
+            join.CamposForanea = new List<string>();
+            join.CampoForanea = null;
+        }
+        StateHasChanged();
+    }
+
+    void AgregarFiltro()
+    {
+        Filtros.Add(new FiltroDTO());
+    }
+
+    /// <summary>
+    /// Maneja la selección/deselección de campos de la tabla del join para la vista previa
+    /// </summary>
+    /// <summary>
+    /// Maneja la selección/deselección de campos en los joins y gestiona los diccionarios de formato y alias.
+    /// </summary>
+    void OnCampoJoinSeleccionadoChanged(JoinDTO join, string campo, object checkedValue)
+    {
+        bool seleccionado = checkedValue is bool b && b;
+        if (seleccionado)
+        {
+            if (!join.CamposSeleccionados.Contains(campo))
+                join.CamposSeleccionados.Add(campo);
+            // Inicializa la entrada en los diccionarios si no existe
+            if (!join.FormatosCampos.ContainsKey(campo))
+                join.FormatosCampos[campo] = string.Empty;
+            if (!join.AliasCampos.ContainsKey(campo))
+                join.AliasCampos[campo] = string.Empty;
+        }
+        else
+        {
+            join.CamposSeleccionados.Remove(campo);
+            // Limpia la entrada de los diccionarios para evitar referencias huérfanas
+            if (join.FormatosCampos.ContainsKey(campo))
+                join.FormatosCampos.Remove(campo);
+            if (join.AliasCampos.ContainsKey(campo))
+                join.AliasCampos.Remove(campo);
+        }
+    }
+
+    void EliminarFiltro(FiltroDTO filtro)
+    {
+        Filtros.Remove(filtro);
+    }
+
+    /// <summary>
+    /// Ejecuta la consulta SQL escrita en el input y obtiene la vista previa de resultados.
+    /// </summary>
+    /// <summary>
+    /// Ejecuta la consulta SQL para vista previa, validando primero en el frontend que sea segura.
+    /// </summary>
+    async Task VistaPrevia()
+    {
+        // Validaciones en el frontend para mayor seguridad y mejor experiencia de usuario
+        MensajeErrorVistaPrevia = string.Empty;
+        var sql = ConsultaSQL?.Trim() ?? string.Empty;
+        if (string.IsNullOrWhiteSpace(sql))
+        {
+            MensajeErrorVistaPrevia = "La consulta SQL no puede estar vacía.";
+            VistaPreviaColumnas = new List<string>();
+            VistaPreviaDatos = new List<Dictionary<string, object>>();
+            return;
+        }
+        // Validación: solo se permite SELECT
+        if (!sql.StartsWith("SELECT", StringComparison.OrdinalIgnoreCase))
+        {
+            MensajeErrorVistaPrevia = "Solo se permiten consultas SELECT para vista previa.";
+            VistaPreviaColumnas = new List<string>();
+            VistaPreviaDatos = new List<Dictionary<string, object>>();
+            return;
+        }
+        // Validación robusta de palabras prohibidas usando expresión regular (insensible a mayúsculas/minúsculas)
+        var palabrasProhibidas = new[] {"INSERT", "UPDATE", "DELETE", "DROP", "ALTER", "TRUNCATE", ";"};
+        foreach (var palabra in palabrasProhibidas)
+        {
+            // Expresión regular para buscar la palabra como palabra completa, sin importar posición ni mayúsculas
+            var regex = new System.Text.RegularExpressions.Regex($@"\b{palabra}\b", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+            if (regex.IsMatch(sql))
+            {
+                MensajeErrorVistaPrevia = $"La consulta contiene la palabra prohibida '{palabra}'. Solo se permite SELECT.";
+                VistaPreviaColumnas = new List<string>();
+                VistaPreviaDatos = new List<Dictionary<string, object>>();
+                return;
+            }
+        }
+        // Guardar el SQL ejecutado para depuración
+        ConsultaEjecutada = ConsultaSQL;
+        // Armar el payload para el backend (solo el SQL)
+        var payload = new SqlPreviewDTO { Sql = ConsultaSQL };
+        // Llamar al backend usando el patrón repository y el endpoint de vista previa
+        var response = await repository.Post<SqlPreviewDTO, List<Dictionary<string, object>>>(
+            "/api/metadata-reportes/preview-sql", payload);
+        VistaPreviaColumnas = (response.Response != null && response.Response.Any())
+            ? response.Response.First().Keys.ToList()
+            : new List<string>();
+        VistaPreviaDatos = response.Response ?? new List<Dictionary<string, object>>();
+    }
+
+    /// <summary>
+    /// Evento que detecta si el usuario editó manualmente el textarea de la consulta SQL.
+    /// Si el usuario edita, se deja de actualizar automáticamente.
+    /// </summary>
+    /// <summary>
+    /// Método que se ejecuta cuando el usuario edita el textarea de la consulta SQL.
+    /// Marca el modo manual para evitar que la consulta se sobreescriba automáticamente.
+    /// </summary>
+    void OnConsultaSqlInput(ChangeEventArgs e)
+    {
+        ConsultaSQLManual = true;
+    }
+
+    /// <summary>
+    /// Método para construir la consulta SQL según las selecciones actuales.
+    /// Usa alias de tabla y respeta el orden SELECT ... FROM ... JOIN ... WHERE ...
+    /// </summary>
+    void ConstruirConsultaSQL()
+    {
+        if (ConsultaSQLManual) return; // Si el usuario editó manualmente, no sobrescribir
+        if (string.IsNullOrEmpty(TablaPrincipal))
+        {
+            ConsultaSQL = "SELECT ...";
+            return;
+        }
+        // Asignar alias a las tablas (t0, t1, t2, ...)
+        var aliasPrincipal = "t0";
+        var aliasJoins = new List<string>();
+        for (int i = 0; i < Joins.Count; i++) aliasJoins.Add($"t{i + 1}");
+        // Campos SELECT
+        var campos = CamposTablaPrincipal.Where(c => c.Seleccionado)
+            .Select(c => $"{aliasPrincipal}.{c.Nombre}").ToList();
+        for (int i = 0; i < Joins.Count; i++)
+        {
+            var join = Joins[i];
+            campos.AddRange(join.CamposSeleccionados.Select(campo => $"{aliasJoins[i]}.{campo}"));
+        }
+        var select = "SELECT " + (campos.Any() ? string.Join(", ", campos) : "*");
+        // FROM
+        var from = $"FROM {TablaPrincipal} {aliasPrincipal}";
+        // JOINS
+        var joinsSql = new List<string>();
+        for (int i = 0; i < Joins.Count; i++)
+        {
+            var join = Joins[i];
+            if (!string.IsNullOrEmpty(join.Tabla) && !string.IsNullOrEmpty(join.CampoPrincipal) && !string.IsNullOrEmpty(join.CampoForanea))
+            {
+                var tipoJoin = join.TipoJoin ?? "INNER";
+                joinsSql.Add($"{tipoJoin} JOIN {join.Tabla} {aliasJoins[i]} ON {aliasPrincipal}.{join.CampoPrincipal} = {aliasJoins[i]}.{join.CampoForanea}");
+            }
+        }
+        // WHERE y filtros
+        var filtrosSql = new List<string>();
+        foreach (var filtro in Filtros)
+        {
+            if (!string.IsNullOrEmpty(filtro.Campo) && !string.IsNullOrEmpty(filtro.Operador) && !string.IsNullOrEmpty(filtro.Valor))
+            {
+                // Buscar a qué tabla pertenece el campo
+                var alias = aliasPrincipal;
+                if (CamposTablaPrincipal.Any(c => c.Nombre == filtro.Campo))
+                    alias = aliasPrincipal;
+                else
+                {
+                    for (int i = 0; i < Joins.Count; i++)
+                        if (Joins[i].CamposSeleccionados.Contains(filtro.Campo) || Joins[i].CamposForanea.Contains(filtro.Campo))
+                            alias = aliasJoins[i];
+                }
+                filtrosSql.Add($"{alias}.{filtro.Campo} {filtro.Operador} '{filtro.Valor}'");
+            }
+        }
+        var where = filtrosSql.Any() ? $"WHERE {string.Join(" AND ", filtrosSql)}" : string.Empty;
+        // Armar la consulta final
+        ConsultaSQL = $"{select} {from} {(joinsSql.Any() ? string.Join(" ", joinsSql) : "")} {where}".Trim();
+    }
+
+    // DTOs auxiliares
+    /// <summary>
+    /// DTO que representa un campo de una entidad, incluyendo información de formato
+    /// </summary>
+    public class CampoDTO
+    {
+        public string Nombre { get; set; }
+        public string Tipo { get; set; }
+        public string TipoFormato { get; set; } // "Decimal", "Texto", "Entero", etc.
+        public int? Decimales { get; set; } // Solo para decimales
+        public int? LongitudMaxima { get; set; } // Para texto y enteros
+        public bool Seleccionado { get; set; }
+        public string Formato { get; set; } // Formato personalizado elegido por el usuario
+        public string Alias { get; set; }
+    }
+    public class JoinDTO
+    {
+        public string Tabla { get; set; }
+        /// <summary>
+        /// Campo seleccionado de la tabla principal para la unión
+        /// </summary>
+        public string CampoPrincipal { get; set; }
+        /// <summary>
+        /// Campo seleccionado de la tabla unida (foránea)
+        /// </summary>
+        public string CampoForanea { get; set; }
+        /// <summary>
+        /// Lista de campos de la tabla foránea (cargada dinámicamente)
+        /// </summary>
+        public List<string> CamposForanea { get; set; } = new List<string>();
+        /// <summary>
+        /// Tipo de join: LEFT, RIGHT, INNER
+        /// </summary>
+        public string TipoJoin { get; set; } = "INNER";
+        /// <summary>
+        /// Lista de campos seleccionados de la tabla del join para mostrar en la vista previa
+        /// </summary>
+        public List<string> CamposSeleccionados { get; set; } = new List<string>();
+        /// <summary>
+        /// Diccionario para almacenar el formato seleccionado por cada campo del join
+        /// </summary>
+        public Dictionary<string, string> FormatosCampos { get; set; } = new Dictionary<string, string>();
+        /// <summary>
+        /// Diccionario para almacenar el alias personalizado de cada campo del join
+        /// </summary>
+        public Dictionary<string, string> AliasCampos { get; set; } = new Dictionary<string, string>();
+    }
+    public class FiltroDTO
+    {
+        public string Campo { get; set; }
+        public string Operador { get; set; } = "=";
+        public string Valor { get; set; }
+    }
+
+    /// <summary>
+    /// DTO para enviar el SQL directo al backend
+    /// </summary>
+    public class SqlPreviewDTO
+    {
+        public string Sql { get; set; }
+    }
+}
+
+@code {
+    // Variables para la consulta SQL
+    string ConsultaSQL { get; set; } = "SELECT ...";
+    string ConsultaEjecutada { get; set; } = string.Empty;
+    bool ConsultaSQLManual { get; set; } = false;
+
+    /// <summary>
+    /// Propiedad auxiliar para el binding del textarea de SQL.
+    /// Si el usuario edita el textarea, se marca el modo manual.
+    /// </summary>
+    string ConsultaSQLBinding
+    {
+        get => ConsultaSQL;
+        set
+        {
+            if (ConsultaSQL != value)
+            {
+                ConsultaSQLManual = true; // El usuario editó manualmente
+                ConsultaSQL = value;
+            }
+        }
+    }
+
+    // Lógica para actualizar la consulta SQL cuando cambian selecciones
+    protected override void OnParametersSet()
+    {
+        ConstruirConsultaSQL();
+    }
+    protected override void OnAfterRender(bool firstRender)
+    {
+        if (firstRender)
+            ConstruirConsultaSQL();
+    }
+    // Llamar a ConstruirConsultaSQL desde los eventos de cambio de selección
+    /// <summary>
+    /// Evento que se dispara al cambiar la tabla principal seleccionada.
+    /// Utiliza el mapeo dinámico para obtener el nombre real de la entidad (clase) asociada a la tabla seleccionada.
+    /// Luego consulta los campos de la entidad y los ordena alfabéticamente por nombre para su presentación.
+    /// </summary>
+    async Task OnTablaPrincipalChanged(ChangeEventArgs e)
+    {
+        TablaPrincipal = e.Value?.ToString();
+        ConsultaSQLManual = false;
+        if (!string.IsNullOrEmpty(TablaPrincipal) && TablaEntidadMapeo.TryGetValue(TablaPrincipal, out var nombreEntidad))
+        {
+            // Usar el nombre de la entidad real para consultar los campos
+            var responseCampos = await repository.Get<List<CampoDTO>>($"/api/metadata-reportes/campos?tabla={nombreEntidad}");
+            // Ordenamos los campos alfabéticamente por nombre
+            // Mapeo completo de las propiedades para que el selector de formato funcione correctamente
+            CamposTablaPrincipal = responseCampos.Response
+                ?.Select(c => new CampoDTO
+                {
+                    Nombre = c.Nombre,
+                    Tipo = c.Tipo,
+                    TipoFormato = c.TipoFormato,
+                    Decimales = c.Decimales,
+                    LongitudMaxima = c.LongitudMaxima
+                })
+                .OrderBy(c => c.Nombre)
+                .ToList();
+        }
+        else
+        {
+            CamposTablaPrincipal.Clear();
+        }
+        ConstruirConsultaSQL();
+    }
+    void OnCamposSeleccionadosChanged()
+    {
+        ConsultaSQLManual = false;
+        ConstruirConsultaSQL();
+    }
+    void OnJoinsChanged()
+    {
+        ConsultaSQLManual = false;
+        ConstruirConsultaSQL();
+    }
+    void OnFiltrosChanged()
+    {
+        ConsultaSQLManual = false;
+        ConstruirConsultaSQL();
+    }
+}

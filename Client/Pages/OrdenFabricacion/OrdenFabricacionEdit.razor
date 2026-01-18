@@ -1,0 +1,82 @@
+@page "/orden-fabricacion-edit/{Id:int}"
+@inject NavigationManager navigationManager
+@inject IRepository repository
+@inject SweetAlertService sweetAlertService
+
+<div class="bg-primary bg-opacity-10 p-3 rounded-3 mb-3">
+    <h3 class="m-0 text-primary">Editar Orden de Fabricación</h3>
+</div>
+
+@if (ordenFabricacion == null)
+{
+    <div class="d-flex justify-content-center">
+        <div class="spinner-border text-primary" role="status">
+            <span class="visually-hidden">Cargando...</span>
+        </div>
+    </div>
+}
+else
+{
+    <OrdenFabricacionForm @ref="ordenFabricacionForm" ordenFabricacion="ordenFabricacion" OnValidSubmit="EditAsync" ReturnAction="Return" IsEdit="true" />
+}
+
+@code {
+    [Parameter]
+    public int Id { get; set; }
+
+    private OrdeFabr? ordenFabricacion;
+    private OrdenFabricacionForm? ordenFabricacionForm;
+
+    /// <summary>
+    /// Método que se ejecuta cuando se inicializa el componente
+    /// </summary>
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadOrdenFabricacion();
+    }
+
+    /// <summary>
+    /// Carga los datos de la orden de fabricación a editar
+    /// </summary>
+    private async Task LoadOrdenFabricacion()
+    {
+        var httpResponse = await repository.Get<OrdeFabr>($"api/ordefabr/{Id}");
+
+        if (httpResponse.Error)
+        {
+            var mensajeError = await httpResponse.GetErrorMessageAsync();
+            await sweetAlertService.FireAsync("Error", mensajeError, SweetAlertIcon.Error);
+            navigationManager.NavigateTo("/orden-fabricacion-index");
+            return;
+        }
+
+        ordenFabricacion = httpResponse.Response;
+    }
+
+    /// <summary>
+    /// Método para actualizar una orden de fabricación existente
+    /// </summary>
+    private async Task EditAsync()
+    {
+        var httpResponse = await repository.Put($"api/ordefabr/{Id}", ordenFabricacion);
+
+        if (httpResponse.Error)
+        {
+            var mensajeError = await httpResponse.GetErrorMessageAsync();
+            await sweetAlertService.FireAsync("Error", mensajeError, SweetAlertIcon.Error);
+            return;
+        }
+
+        await sweetAlertService.FireAsync("Éxito", "Orden de fabricación actualizada correctamente", SweetAlertIcon.Success);
+        Return();
+    }
+
+    /// <summary>
+    /// Método para volver a la página de listado
+    /// </summary>
+    private void Return()
+    {
+        ordenFabricacionForm!.FormPostedSuccessfully = true;
+        navigationManager.NavigateTo("/ordenfabricacion");
+    }
+}

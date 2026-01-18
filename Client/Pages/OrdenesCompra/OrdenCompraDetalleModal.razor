@@ -1,0 +1,617 @@
+@using IMPLANPROD.Shared.Entities
+@using IMPLANPROD.Client.Repositories
+@using IMPLANPROD.Client.Services
+@using IMPLANPROD.Client.Pages.Reportes
+@inject IRepository repository
+@inject SweetAlertService sweetAlertService
+
+@if (IsVisible)
+{
+    <div class="modal fade show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5);">
+        <div class="modal-dialog modal-xl">
+            <div class="modal-content">
+                <!-- Header del Modal -->
+                <div class="modal-header bg-primary text-white">
+                    <h5 class="modal-title">
+                        <i class="fas fa-file-invoice"></i>
+                        Detalle Orden de Compra N° @(ordenCompra?.NumeOcom ?? 0)
+                    </h5>
+                    <button type="button" class="btn-close btn-close-white" @onclick="CerrarModal"></button>
+                </div>
+
+                <!-- Body del Modal -->
+                <div class="modal-body p-0">
+                    @if (cargando)
+                    {
+                        <div class="text-center p-4">
+                            <div class="spinner-border text-primary" role="status">
+                                <span class="visually-hidden">Cargando...</span>
+                            </div>
+                            <p class="mt-2">Cargando detalles...</p>
+                        </div>
+                    }
+                    else if (ordenCompra != null)
+                    {
+                        <!-- Información del Encabezado -->
+                        <div class="bg-light p-3 border-bottom">
+                            <div class="row">
+                                <div class="col-md-4">
+                                    <h6 class="text-primary mb-1">
+                                        <i class="fas fa-truck"></i> Proveedor
+                                    </h6>
+                                    <p class="mb-0"><strong>@ordenCompra.NproOcom - @ordenCompra.RaSoProv</strong></p>
+                                </div>
+                                <div class="col-md-4">
+                                    <h6 class="text-primary mb-1">
+                                        <i class="fas fa-calendar"></i> Fecha Creación
+                                    </h6>
+                                    <p class="mb-0">@ordenCompra.FGenOcom?.ToString("dd/MM/yyyy HH:mm")</p>
+                                </div>
+                                <div class="col-md-4">
+                                    <h6 class="text-primary mb-1">
+                                        <i class="fas fa-info-circle"></i> Estado
+                                    </h6>
+                                    <p class="mb-0">
+                                        @if (ordenCompra.StatOcom == 0)
+                                        {
+                                            <span class="badge bg-success">Activa</span>
+                                        }
+                                        else if (ordenCompra.StatOcom == -1)
+                                        {
+                                            <span class="badge bg-warning">Pendiente</span>
+                                        }
+                                        else if (ordenCompra.StatOcom == 9)
+                                        {
+                                            <span class="badge bg-danger">Anulada</span>
+                                        }
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Tabs para organizar el contenido -->
+                        <ul class="nav nav-tabs" role="tablist">
+                            <li class="nav-item" role="presentation">
+                                <button class="nav-link active" id="detalle-tab" data-bs-toggle="tab" data-bs-target="#detalle" type="button" role="tab">
+                                    <i class="fas fa-list"></i> Detalle de la Orden
+                                </button>
+                            </li>
+                            <li class="nav-item" role="presentation">
+                                <button class="nav-link" id="pendientes-tab" data-bs-toggle="tab" data-bs-target="#pendientes" type="button" role="tab">
+                                    <i class="fas fa-clock"></i> Órdenes Pendientes del Proveedor
+                                </button>
+                            </li>
+                            <li class="nav-item ms-auto" role="presentation">
+                                <button class="btn btn-outline-primary btn-sm me-2" @onclick="@(() => ImprimirDetalleOrden())" title="Imprimir Detalle de la Orden">
+                                    <i class="fas fa-print"></i> Imprimir Detalle
+                                </button>
+                                <button class="btn btn-outline-success btn-sm" @onclick="@(() => ImprimirOrdenesPendientes())" title="Imprimir Órdenes Pendientes">
+                                    <i class="fas fa-print"></i> Imprimir Pendientes
+                                </button>
+                            </li>
+                        </ul>
+
+                        <div class="tab-content">
+                            <!-- Tab 1: Detalle de la Orden -->
+                            <div class="tab-pane fade show active" id="detalle" role="tabpanel">
+                                <div class="p-3">
+                                    <!-- Información General -->
+                                    <div class="row mb-3">
+                                        <div class="col-md-6">
+                                            <div class="card">
+                                                <div class="card-header bg-secondary text-white">
+                                                    <h6 class="mb-0"><i class="fas fa-info"></i> Información General</h6>
+                                                </div>
+                                                <div class="card-body">
+                                                    <div class="row">
+                                                        <div class="col-6">
+                                                            <strong>Fecha Emisión:</strong><br>
+                                                            @ordenCompra.FemiOcom?.ToString("dd/MM/yyyy")
+                                                        </div>
+                                                        <div class="col-6">
+                                                            <strong>Referencia:</strong><br>
+                                                            @ordenCompra.RefeOcom
+                                                        </div>
+                                                    </div>
+                                                    <div class="row mt-2">
+                                                        <div class="col-6">
+                                                            <strong>Moneda:</strong><br>
+                                                            @ordenCompra.MoneEmis
+                                                        </div>
+                                                        <div class="col-6">
+                                                            <strong>Total:</strong><br>
+                                                            @ordenCompra.TotalOcom?.ToString("C2")
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-6">
+                                            <div class="card">
+                                                <div class="card-header bg-secondary text-white">
+                                                    <h6 class="mb-0"><i class="fas fa-file-alt"></i> Observaciones</h6>
+                                                </div>
+                                                <div class="card-body">
+                                                    @if (!string.IsNullOrEmpty(ordenCompra.ObseOcom))
+                                                    {
+                                                        <p class="mb-0">@ordenCompra.ObseOcom</p>
+                                                    }
+                                                    else
+                                                    {
+                                                        <p class="text-muted mb-0">Sin observaciones</p>
+                                                    }
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <!-- Tabla de Items de la Orden -->
+                                    <div class="card">
+                                        <div class="card-header bg-primary text-white">
+                                            <h6 class="mb-0"><i class="fas fa-list"></i> Items de la Orden</h6>
+                                        </div>
+                                        <div class="card-body p-0">
+                                            <div style="max-height: 400px; overflow-y: auto;">
+                                                @if (detalleItems != null && detalleItems.Any())
+                                                {
+                                                    <table class="table table-striped table-hover mb-0">
+                                                        <thead class="table-dark sticky-top">
+                                                            <tr>
+                                                                <th>Item</th>
+                                                                <th>Código</th>
+                                                                <th>Descripción</th>
+                                                                <th class="text-end">Cantidad</th>
+                                                                <th class="text-end">Recibido</th>
+                                                                <th class="text-end">Pendiente</th>
+                                                                <th class="text-end">Precio Unit.</th>
+                                                                <th class="text-end">Total</th>
+                                                            </tr>
+                                                        </thead>
+                                                        <tbody>
+                                                            @foreach (var item in detalleItems)
+                                                            {
+                                                                <tr>
+                                                                    <td>@item.NuOrdItem</td>
+                                                                    <td>@item.CodExte</td>
+                                                                    <td>@item.Descritem</td>
+                                                                    <td class="text-end">@item.CantOcom?.ToString("N2")</td>
+                                                                    <td class="text-end">@item.CantRec?.ToString("N2")</td>
+                                                                    <td class="text-end">@((item.CantOcom - item.CantRec)?.ToString("N2"))</td>
+                                                                    <td class="text-end">@item.PreUnit?.ToString("C2")</td>
+                                                                    <td class="text-end">@item.INetItem?.ToString("C2")</td>
+                                                                </tr>
+                                                            }
+                                                        </tbody>
+                                                    </table>
+                                                }
+                                                else
+                                                {
+                                                    <div class="text-center p-4">
+                                                        <p class="text-muted">No se encontraron items para esta orden</p>
+                                                    </div>
+                                                }
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Tab 2: Órdenes Pendientes del Proveedor -->
+                            <div class="tab-pane fade" id="pendientes" role="tabpanel">
+                                <div class="p-3">
+                                    <div class="card">
+                                        <div class="card-header bg-warning text-dark">
+                                            <h6 class="mb-0">
+                                                <i class="fas fa-clock"></i> 
+                                                Órdenes Pendientes del Proveedor: @ordenCompra.RaSoProv
+                                            </h6>
+                                        </div>
+                                        <div class="card-body p-0">
+                                            <div style="max-height: 500px; overflow-y: auto;">
+                                                @if (ordenesPendientes != null && ordenesPendientes.Any())
+                                                {
+                                                    <table class="table table-striped table-hover mb-0">
+                                                        <thead class="table-dark sticky-top">
+                                                            <tr>
+                                                                <th style="cursor: pointer;" @onclick="(() => OrdenarPendientes(nameof(Ocomdeta.NumeOcom)))">
+                                                                    N° Orden 
+                                                                    @if (campoOrdenPendientes == nameof(Ocomdeta.NumeOcom))
+                                                                    {
+                                                                        <i class="fas @(ordenAscendentePendientes ? "fa-sort-up" : "fa-sort-down")"></i>
+                                                                    }
+                                                                    else
+                                                                    {
+                                                                        <i class="fas fa-sort text-muted"></i>
+                                                                    }
+                                                                </th>
+                                                                <th style="cursor: pointer;" @onclick="(() => OrdenarPendientes(nameof(Ocomdeta.NuOrdItem)))">
+                                                                    Item 
+                                                                    @if (campoOrdenPendientes == nameof(Ocomdeta.NuOrdItem))
+                                                                    {
+                                                                        <i class="fas @(ordenAscendentePendientes ? "fa-sort-up" : "fa-sort-down")"></i>
+                                                                    }
+                                                                    else
+                                                                    {
+                                                                        <i class="fas fa-sort text-muted"></i>
+                                                                    }
+                                                                </th>
+                                                                <th style="cursor: pointer;" @onclick="(() => OrdenarPendientes(nameof(Ocomdeta.CodExte)))">
+                                                                    Código 
+                                                                    @if (campoOrdenPendientes == nameof(Ocomdeta.CodExte))
+                                                                    {
+                                                                        <i class="fas @(ordenAscendentePendientes ? "fa-sort-up" : "fa-sort-down")"></i>
+                                                                    }
+                                                                    else
+                                                                    {
+                                                                        <i class="fas fa-sort text-muted"></i>
+                                                                    }
+                                                                </th>
+                                                                <th style="cursor: pointer;" @onclick="(() => OrdenarPendientes(nameof(Ocomdeta.Descritem)))">
+                                                                    Descripción 
+                                                                    @if (campoOrdenPendientes == nameof(Ocomdeta.Descritem))
+                                                                    {
+                                                                        <i class="fas @(ordenAscendentePendientes ? "fa-sort-up" : "fa-sort-down")"></i>
+                                                                    }
+                                                                    else
+                                                                    {
+                                                                        <i class="fas fa-sort text-muted"></i>
+                                                                    }
+                                                                </th>
+                                                                <th class="text-end" style="cursor: pointer;" @onclick="(() => OrdenarPendientes(nameof(Ocomdeta.CantOcom)))">
+                                                                    Cantidad 
+                                                                    @if (campoOrdenPendientes == nameof(Ocomdeta.CantOcom))
+                                                                    {
+                                                                        <i class="fas @(ordenAscendentePendientes ? "fa-sort-up" : "fa-sort-down")"></i>
+                                                                    }
+                                                                    else
+                                                                    {
+                                                                        <i class="fas fa-sort text-muted"></i>
+                                                                    }
+                                                                </th>
+                                                                <th class="text-end" style="cursor: pointer;" @onclick="(() => OrdenarPendientes(nameof(Ocomdeta.CantRec)))">
+                                                                    Recibido 
+                                                                    @if (campoOrdenPendientes == nameof(Ocomdeta.CantRec))
+                                                                    {
+                                                                        <i class="fas @(ordenAscendentePendientes ? "fa-sort-up" : "fa-sort-down")"></i>
+                                                                    }
+                                                                    else
+                                                                    {
+                                                                        <i class="fas fa-sort text-muted"></i>
+                                                                    }
+                                                                </th>
+                                                                <th class="text-end" style="cursor: pointer;" @onclick="(() => OrdenarPendientes(pendienteField))">
+                                                                    Pendiente 
+                                                                    @if (campoOrdenPendientes == pendienteField)
+                                                                    {
+                                                                        <i class="fas @(ordenAscendentePendientes ? "fa-sort-up" : "fa-sort-down")"></i>
+                                                                    }
+                                                                    else
+                                                                    {
+                                                                        <i class="fas fa-sort text-muted"></i>
+                                                                    }
+                                                                </th>
+                                                                <th style="cursor: pointer;" @onclick="(() => OrdenarPendientes(nameof(Ocomdeta.FemiOcom)))">
+                                                                    Fecha Emisión 
+                                                                    @if (campoOrdenPendientes == nameof(Ocomdeta.FemiOcom))
+                                                                    {
+                                                                        <i class="fas @(ordenAscendentePendientes ? "fa-sort-up" : "fa-sort-down")"></i>
+                                                                    }
+                                                                    else
+                                                                    {
+                                                                        <i class="fas fa-sort text-muted"></i>
+                                                                    }
+                                                                </th>
+                                                            </tr>
+                                                        </thead>
+                                                        <tbody>
+                                                            @foreach (var item in ordenesPendientes)
+                                                            {
+                                                                <tr>
+                                                                    <td><strong>@item.NumeOcom</strong></td>
+                                                                    <td>@item.NuOrdItem</td>
+                                                                    <td>@item.CodExte</td>
+                                                                    <td>@item.Descritem</td>
+                                                                    <td class="text-end">@item.CantOcom?.ToString("N2")</td>
+                                                                    <td class="text-end">@item.CantRec?.ToString("N2")</td>
+                                                                    <td class="text-end">
+                                                                        <span class="badge bg-warning text-dark">
+                                                                            @((item.CantOcom - item.CantRec)?.ToString("N2"))
+                                                                        </span>
+                                                                    </td>
+                                                                    <td>@item.FemiOcom?.ToString("dd/MM/yyyy")</td>
+                                                                </tr>
+                                                            }
+                                                        </tbody>
+                                                    </table>
+                                                }
+                                                else
+                                                {
+                                                    <div class="text-center p-4">
+                                                        <p class="text-muted">No hay órdenes pendientes para este proveedor</p>
+                                                    </div>
+                                                }
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    }
+                </div>
+
+                <!-- Footer del Modal -->
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" @onclick="CerrarModal">
+                        <i class="fas fa-times"></i> Cerrar
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+<!-- Componentes de impresión -->
+@if (detalleItems != null && detalleItems.Any())
+{
+    <ImpresionLista TItem="Ocomdeta"
+                    Datos="detalleItems"
+                    Titulo="@TituloDetalleOrden"
+                    UrlExportarExcel="api/excel/exportar-detalle-orden"
+                    Encabezados="encabezadosDetalleOrden"
+                    ModoDirecto="false"
+                    MostrarModal="mostrarModalImpresionDetalle"
+                    OnCerrar="CerrarModalImpresionDetalle" />
+}
+
+@if (ordenesPendientes != null && ordenesPendientes.Any())
+{
+    <ImpresionLista TItem="Ocomdeta"
+                    Datos="ordenesPendientes"
+                    Titulo="@TituloOrdenesPendientes"
+                    UrlExportarExcel="api/excel/exportar-ordenes-pendientes"
+                    Encabezados="encabezadosOrdenesPendientes"
+                    ModoDirecto="false"
+                    MostrarModal="mostrarModalImpresionPendientes"
+                    OnCerrar="CerrarModalImpresionPendientes" />
+}
+
+@code {
+    [Parameter] public bool IsVisible { get; set; }
+    [Parameter] public EventCallback OnCerrar { get; set; }
+    [Parameter] public int OrdenId { get; set; }
+
+    private Ocomenca? ordenCompra;
+    private List<Ocomdeta>? detalleItems;
+    private List<Ocomdeta>? ordenesPendientes;
+    private bool cargando = false;
+
+    // Variables para ordenamiento de órdenes pendientes
+    private string campoOrdenPendientes = string.Empty;
+    private bool ordenAscendentePendientes = true;
+    private const string pendienteField = "Pendiente";
+
+    // Variables para impresión
+    private bool mostrarModalImpresionDetalle = false;
+    private bool mostrarModalImpresionPendientes = false;
+    
+    // Títulos para los reportes
+    private string TituloDetalleOrden => $"Detalle de Orden de Compra N° {ordenCompra?.NumeOcom ?? 0}";
+    private string TituloOrdenesPendientes => $"Órdenes Pendientes - Proveedor: {ordenCompra?.RaSoProv}";
+
+    // Encabezados para las tablas de impresión
+    private Dictionary<string, string> encabezadosDetalleOrden = new()
+    {
+        { nameof(Ocomdeta.NuOrdItem), "Item" },
+        { nameof(Ocomdeta.CodExte), "Código" },
+        { nameof(Ocomdeta.Descritem), "Descripción" },
+        { nameof(Ocomdeta.CantOcom), "Cantidad" },
+        { nameof(Ocomdeta.CantRec), "Recibido" },
+        { nameof(Ocomdeta.PreUnit), "Precio Unit." },
+        { nameof(Ocomdeta.INetItem), "Total" }
+    };
+
+    private Dictionary<string, string> encabezadosOrdenesPendientes = new()
+    {
+        { nameof(Ocomdeta.NumeOcom), "N° Orden" },
+        { nameof(Ocomdeta.NuOrdItem), "Item" },
+        { nameof(Ocomdeta.CodExte), "Código" },
+        { nameof(Ocomdeta.Descritem), "Descripción" },
+        { nameof(Ocomdeta.CantOcom), "Cantidad" },
+        { nameof(Ocomdeta.CantRec), "Recibido" },
+        { nameof(Ocomdeta.FemiOcom), "Fecha Emisión" }
+    };
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (IsVisible && OrdenId > 0 && (ordenCompra == null || ordenCompra.OCOMENCA_ID != OrdenId))
+        {
+            await CargarDatosOrden();
+        }
+    }
+
+    private async Task CargarDatosOrden()
+    {
+        cargando = true;
+        StateHasChanged();
+
+        try
+        {
+            // Cargar datos de la orden
+            var responseOrden = await repository.Get<Ocomenca>($"api/ocomenca/{OrdenId}");
+            if (!responseOrden.Error && responseOrden.Response != null)
+            {
+                ordenCompra = responseOrden.Response;
+
+                // Cargar detalle de items de la orden (solo items activos con StatOcom < 10)
+                var responseDetalle = await repository.Get<List<Ocomdeta>>($"api/ocomdeta/orden/{OrdenId}");
+                if (!responseDetalle.Error)
+                {
+                    detalleItems = (responseDetalle.Response ?? new List<Ocomdeta>())
+                        .Where(i => i.StatOcom < 10)
+                        .ToList();
+                }
+
+                // Cargar órdenes pendientes del proveedor (solo items activos con StatOcom < 10)
+                if (ordenCompra.NproOcom.HasValue)
+                {
+                    var responsePendientes = await repository.Get<List<Ocomdeta>>($"api/ocomdeta/pendientes-proveedor/{ordenCompra.NproOcom}");
+                    if (!responsePendientes.Error)
+                    {
+                        ordenesPendientes = (responsePendientes.Response ?? new List<Ocomdeta>())
+                            .Where(i => i.StatOcom < 10)
+                            .ToList();
+                    }
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            await sweetAlertService.FireAsync("Error", $"Error al cargar los datos: {ex.Message}", SweetAlertIcon.Error);
+        }
+        finally
+        {
+            cargando = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task CerrarModal()
+    {
+        IsVisible = false;
+        ordenCompra = null;
+        detalleItems = null;
+        ordenesPendientes = null;
+        await OnCerrar.InvokeAsync();
+    }
+
+    /// <summary>
+    /// Ordena la lista de órdenes pendientes por el campo especificado
+    /// </summary>
+    private void OrdenarPendientes(string campo)
+    {
+        if (ordenesPendientes == null || !ordenesPendientes.Any())
+            return;
+
+        // Si es el mismo campo, cambiar dirección
+        if (campoOrdenPendientes == campo)
+        {
+            ordenAscendentePendientes = !ordenAscendentePendientes;
+        }
+        else
+        {
+            // Nuevo campo, ordenar ascendente por defecto
+            campoOrdenPendientes = campo;
+            ordenAscendentePendientes = true;
+        }
+
+        // Aplicar ordenamiento según el campo
+        ordenesPendientes = campo switch
+        {
+            nameof(Ocomdeta.NumeOcom) => ordenAscendentePendientes 
+                ? ordenesPendientes.OrderBy(x => x.NumeOcom).ToList()
+                : ordenesPendientes.OrderByDescending(x => x.NumeOcom).ToList(),
+                
+            nameof(Ocomdeta.NuOrdItem) => ordenAscendentePendientes 
+                ? ordenesPendientes.OrderBy(x => x.NuOrdItem).ToList()
+                : ordenesPendientes.OrderByDescending(x => x.NuOrdItem).ToList(),
+                
+            nameof(Ocomdeta.CodExte) => ordenAscendentePendientes 
+                ? ordenesPendientes.OrderBy(x => x.CodExte).ToList()
+                : ordenesPendientes.OrderByDescending(x => x.CodExte).ToList(),
+                
+            nameof(Ocomdeta.Descritem) => ordenAscendentePendientes 
+                ? ordenesPendientes.OrderBy(x => x.Descritem).ToList()
+                : ordenesPendientes.OrderByDescending(x => x.Descritem).ToList(),
+                
+            nameof(Ocomdeta.CantOcom) => ordenAscendentePendientes 
+                ? ordenesPendientes.OrderBy(x => x.CantOcom ?? 0).ToList()
+                : ordenesPendientes.OrderByDescending(x => x.CantOcom ?? 0).ToList(),
+                
+            nameof(Ocomdeta.CantRec) => ordenAscendentePendientes 
+                ? ordenesPendientes.OrderBy(x => x.CantRec ?? 0).ToList()
+                : ordenesPendientes.OrderByDescending(x => x.CantRec ?? 0).ToList(),
+                
+            "Pendiente" => ordenAscendentePendientes 
+                ? ordenesPendientes.OrderBy(x => (x.CantOcom ?? 0) - (x.CantRec ?? 0)).ToList()
+                : ordenesPendientes.OrderByDescending(x => (x.CantOcom ?? 0) - (x.CantRec ?? 0)).ToList(),
+                
+            nameof(Ocomdeta.FemiOcom) => ordenAscendentePendientes 
+                ? ordenesPendientes.OrderBy(x => x.FemiOcom ?? DateTime.MinValue).ToList()
+                : ordenesPendientes.OrderByDescending(x => x.FemiOcom ?? DateTime.MinValue).ToList(),
+                
+            _ => ordenesPendientes
+        };
+
+        StateHasChanged();
+    }
+
+    /// <summary>
+    /// Abre el modal de impresión para el detalle de la orden
+    /// </summary>
+    private async Task ImprimirDetalleOrden()
+    {
+        try
+        {
+            Console.WriteLine("[ImprimirDetalleOrden] Método ejecutado");
+            
+            if (detalleItems == null || !detalleItems.Any())
+            {
+                Console.WriteLine("[ImprimirDetalleOrden] No hay datos para imprimir");
+                await sweetAlertService.FireAsync("Sin datos", "No hay items para imprimir en el detalle de la orden.", SweetAlertIcon.Warning);
+                return;
+            }
+            
+            Console.WriteLine($"[ImprimirDetalleOrden] Abriendo modal de impresión. Items: {detalleItems.Count}");
+            mostrarModalImpresionDetalle = true;
+            StateHasChanged();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[ImprimirDetalleOrden] Error: {ex.Message}");
+            await sweetAlertService.FireAsync("Error", $"Error al abrir impresión: {ex.Message}", SweetAlertIcon.Error);
+        }
+    }
+
+    /// <summary>
+    /// Abre el modal de impresión para las órdenes pendientes
+    /// </summary>
+    private async Task ImprimirOrdenesPendientes()
+    {
+        try
+        {
+            Console.WriteLine("[ImprimirOrdenesPendientes] Método ejecutado");
+            
+            if (ordenesPendientes == null || !ordenesPendientes.Any())
+            {
+                Console.WriteLine("[ImprimirOrdenesPendientes] No hay datos para imprimir");
+                await sweetAlertService.FireAsync("Sin datos", "No hay órdenes pendientes para imprimir.", SweetAlertIcon.Warning);
+                return;
+            }
+            
+            Console.WriteLine($"[ImprimirOrdenesPendientes] Abriendo modal de impresión. Items: {ordenesPendientes.Count}");
+            mostrarModalImpresionPendientes = true;
+            StateHasChanged();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[ImprimirOrdenesPendientes] Error: {ex.Message}");
+            await sweetAlertService.FireAsync("Error", $"Error al abrir impresión: {ex.Message}", SweetAlertIcon.Error);
+        }
+    }
+
+    /// <summary>
+    /// Cierra el modal de impresión del detalle
+    /// </summary>
+    private void CerrarModalImpresionDetalle()
+    {
+        mostrarModalImpresionDetalle = false;
+    }
+
+    /// <summary>
+    /// Cierra el modal de impresión de órdenes pendientes
+    /// </summary>
+    private void CerrarModalImpresionPendientes()
+    {
+        mostrarModalImpresionPendientes = false;
+    }
+}

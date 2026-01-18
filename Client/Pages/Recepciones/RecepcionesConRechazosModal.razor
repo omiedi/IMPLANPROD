@@ -1,0 +1,389 @@
+@using IMPLANPROD.Shared.Entities
+@using IMPLANPROD.Client.Repositories
+@using IMPLANPROD.Client.Services
+@using IMPLANPROD.Client.Shared.Components
+@inject IRepository repository
+@inject SweetAlertService sweetAlertService
+@inject IJSRuntime JS
+@inject HttpClient Http
+
+<div class="modal fade show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5);">
+    <div class="modal-dialog modal-xl modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header bg-danger text-white">
+                <h5 class="modal-title">
+                    <i class="fas fa-exclamation-triangle me-2"></i>
+                    Recepciones con Rechazos
+                </h5>
+                <button type="button" class="btn-close btn-close-white" @onclick="Cerrar"></button>
+            </div>
+            <div class="modal-body">
+                <!-- Filtros -->
+                <div class="card mb-3">
+                    <div class="card-header">
+                        <h6 class="mb-0"><i class="fas fa-filter"></i> Filtros por Rango de Fechas</h6>
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-md-3">
+                                <label class="form-label">Fecha Desde:</label>
+                                <input type="date" class="form-control" @bind="fechaDesde" />
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label">Fecha Hasta:</label>
+                                <input type="date" class="form-control" @bind="fechaHasta" />
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label">Proveedor (opcional):</label>
+                                <div class="input-group">
+                                    <input type="text" class="form-control" @bind="proveedorSeleccionado" readonly placeholder="Todos los proveedores..." />
+                                    <button class="btn btn-outline-secondary" @onclick="LimpiarProveedor" disabled="@(string.IsNullOrEmpty(proveedorSeleccionado))">
+                                        <i class="fas fa-times"></i>
+                                    </button>
+                                    <button class="btn btn-outline-primary" @onclick="AbrirSelectorProveedor" title="Seleccionar Proveedor">
+                                        <i class="fas fa-truck"></i>
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="col-md-2 d-flex align-items-end">
+                                <button class="btn btn-primary me-2" @onclick="CargarDatosAsync" disabled="@cargando">
+                                    @if (cargando)
+                                    {
+                                        <span class="spinner-border spinner-border-sm me-1"></span>
+                                    }
+                                    <i class="fas fa-search"></i> Buscar
+                                </button>
+                                <button class="btn btn-outline-secondary" @onclick="LimpiarFiltros">
+                                    <i class="fas fa-eraser"></i> Limpiar
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Resultados -->
+                @if (recepciones == null)
+                {
+                    <div class="alert alert-info text-center">
+                        <i class="fas fa-info-circle"></i> Seleccione el rango de fechas y haga clic en "Buscar" para ver los resultados.
+                    </div>
+                }
+                else if (cargando)
+                {
+                    <div class="text-center">
+                        <div class="spinner-border" role="status">
+                            <span class="visually-hidden">Cargando...</span>
+                        </div>
+                    </div>
+                }
+                else if (!recepciones.Any())
+                {
+                    <div class="alert alert-warning text-center">
+                        <i class="fas fa-exclamation-triangle"></i> No se encontraron recepciones con rechazos en el rango de fechas seleccionado.
+                    </div>
+                }
+                else
+                {
+                    <!-- Botones de acción -->
+                    <div class="d-flex justify-content-between mb-3">
+                        <div>
+                            <span class="badge bg-danger fs-6">Total: @recepciones.Count recepciones con rechazos</span>
+                            <span class="badge bg-warning text-dark fs-6 ms-2">
+                                Total Rechazado: @recepciones.Sum(r => r.CanToRech ?? 0).ToString("N2")
+                            </span>
+                        </div>
+                        <div>
+                            <button class="btn btn-outline-success" @onclick="ImprimirAsync" disabled="@imprimiendo">
+                                @if (imprimiendo)
+                                {
+                                    <span class="spinner-border spinner-border-sm me-1"></span>
+                                }
+                                <i class="fas fa-print"></i> Imprimir
+                            </button>
+                            <button class="btn btn-success ms-2" @onclick="ExportarExcelAsync" disabled="@exportando">
+                                @if (exportando)
+                                {
+                                    <span class="spinner-border spinner-border-sm me-1"></span>
+                                }
+                                <i class="fas fa-file-excel"></i> Exportar a Excel
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Tabla -->
+                    <div class="table-responsive" style="max-height: 500px;">
+                        <table class="table table-striped table-hover table-sm">
+                            <thead class="table-dark sticky-top">
+                                <tr>
+                                    <th>N° Boleta</th>
+                                    <th>Descripción</th>
+                                    <th>Lote</th>
+                                    <th>Fecha Recep.</th>
+                                    <th>Cód. Int.</th>
+                                    <th>Unidad</th>
+                                    <th class="text-end">Cantidad</th>
+                                    <th class="text-end bg-success text-white">Aprob.</th>
+                                    <th class="text-end bg-danger text-white">Rech.</th>
+                                    <th class="text-end bg-warning">Falta</th>
+                                    <th>N° Prov.</th>
+                                    <th>Remito</th>
+                                    <th>Observaciones</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var recep in recepciones)
+                                {
+                                    <tr>
+                                        <td>@recep.NumeBoRe?.ToString("N0")</td>
+                                        <td>@recep.Descrip</td>
+                                        <td>@recep.IdenLote</td>
+                                        <td>@recep.FechRecep?.ToString("dd/MM/yyyy")</td>
+                                        <td>@recep.CodInte</td>
+                                        <td>@recep.Unidad</td>
+                                        <td class="text-end">@recep.CantNom?.ToString("N2")</td>
+                                        <td class="text-end bg-success bg-opacity-10">@recep.CanToApro?.ToString("N2")</td>
+                                        <td class="text-end bg-danger bg-opacity-10"><strong>@recep.CanToRech?.ToString("N2")</strong></td>
+                                        <td class="text-end bg-warning bg-opacity-10">@recep.CanToFalta?.ToString("N2")</td>
+                                        <td>@recep.NumProv</td>
+                                        <td>@recep.NumRemProv</td>
+                                        <td><small>@recep.Observa</small></td>
+                                    </tr>
+                                }
+                            </tbody>
+                            <tfoot class="table-secondary">
+                                <tr>
+                                    <th colspan="6" class="text-end">TOTALES:</th>
+                                    <th class="text-end">@recepciones.Sum(r => r.CantNom ?? 0).ToString("N2")</th>
+                                    <th class="text-end">@recepciones.Sum(r => r.CanToApro ?? 0).ToString("N2")</th>
+                                    <th class="text-end"><strong>@recepciones.Sum(r => r.CanToRech ?? 0).ToString("N2")</strong></th>
+                                    <th class="text-end">@recepciones.Sum(r => r.CanToFalta ?? 0).ToString("N2")</th>
+                                    <th colspan="3"></th>
+                                </tr>
+                            </tfoot>
+                        </table>
+                    </div>
+                }
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" @onclick="Cerrar">Cerrar</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Área de impresión -->
+<div id="areaImpresionRechazos" style="display: none;">
+    <div style="padding: 20px; font-family: Arial, sans-serif;">
+        <div style="text-align: center; margin-bottom: 20px;">
+            <img src="/Images/logoempresa.png" alt="Logo Empresa" style="max-height: 60px; margin-bottom: 10px;" />
+            <h3>RECEPCIONES CON RECHAZOS</h3>
+            <p>Fecha: @DateTime.Now.ToString("dd/MM/yyyy HH:mm")</p>
+            @if (fechaDesde.HasValue || fechaHasta.HasValue || !string.IsNullOrEmpty(proveedorSeleccionado))
+            {
+                <p>
+                    @if (fechaDesde.HasValue) { <span>Desde: @fechaDesde.Value.ToString("dd/MM/yyyy")</span> }
+                    @if (fechaHasta.HasValue) { <span class="ms-3">Hasta: @fechaHasta.Value.ToString("dd/MM/yyyy")</span> }
+                    @if (!string.IsNullOrEmpty(proveedorSeleccionado)) { <span class="ms-3">Proveedor: @proveedorSeleccionado</span> }
+                </p>
+            }
+        </div>
+
+        @if (recepciones != null && recepciones.Any())
+        {
+            <table style="width: 100%; border-collapse: collapse; font-size: 9px;">
+                <thead>
+                    <tr style="background-color: #212529; color: white;">
+                        <th style="border: 1px solid #000; padding: 4px;">N° Boleta</th>
+                        <th style="border: 1px solid #000; padding: 4px;">Descripción</th>
+                        <th style="border: 1px solid #000; padding: 4px;">Lote</th>
+                        <th style="border: 1px solid #000; padding: 4px;">Fecha</th>
+                        <th style="border: 1px solid #000; padding: 4px;">Cód.</th>
+                        <th style="border: 1px solid #000; padding: 4px;">UM</th>
+                        <th style="border: 1px solid #000; padding: 4px; text-align: right;">Cant.</th>
+                        <th style="border: 1px solid #000; padding: 4px; text-align: right; background-color: #28a745;">Aprob.</th>
+                        <th style="border: 1px solid #000; padding: 4px; text-align: right; background-color: #dc3545;">Rech.</th>
+                        <th style="border: 1px solid #000; padding: 4px; text-align: right; background-color: #ffc107;">Falta</th>
+                        <th style="border: 1px solid #000; padding: 4px;">Prov.</th>
+                        <th style="border: 1px solid #000; padding: 4px;">Remito</th>
+                        <th style="border: 1px solid #000; padding: 4px;">Observaciones</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var recep in recepciones)
+                    {
+                        <tr>
+                            <td style="border: 1px solid #000; padding: 2px;">@recep.NumeBoRe?.ToString("N0")</td>
+                            <td style="border: 1px solid #000; padding: 2px;">@recep.Descrip</td>
+                            <td style="border: 1px solid #000; padding: 2px;">@recep.IdenLote</td>
+                            <td style="border: 1px solid #000; padding: 2px;">@recep.FechRecep?.ToString("dd/MM/yyyy")</td>
+                            <td style="border: 1px solid #000; padding: 2px;">@recep.CodInte</td>
+                            <td style="border: 1px solid #000; padding: 2px;">@recep.Unidad</td>
+                            <td style="border: 1px solid #000; padding: 2px; text-align: right;">@recep.CantNom?.ToString("N2")</td>
+                            <td style="border: 1px solid #000; padding: 2px; text-align: right;">@recep.CanToApro?.ToString("N2")</td>
+                            <td style="border: 1px solid #000; padding: 2px; text-align: right;"><strong>@recep.CanToRech?.ToString("N2")</strong></td>
+                            <td style="border: 1px solid #000; padding: 2px; text-align: right;">@recep.CanToFalta?.ToString("N2")</td>
+                            <td style="border: 1px solid #000; padding: 2px;">@recep.NumProv</td>
+                            <td style="border: 1px solid #000; padding: 2px;">@recep.NumRemProv</td>
+                            <td style="border: 1px solid #000; padding: 2px; font-size: 8px;">@recep.Observa</td>
+                        </tr>
+                    }
+                </tbody>
+                <tfoot>
+                    <tr style="background-color: #f0f0f0; font-weight: bold;">
+                        <td colspan="6" style="border: 1px solid #000; padding: 4px; text-align: right;">TOTALES:</td>
+                        <td style="border: 1px solid #000; padding: 4px; text-align: right;">@recepciones.Sum(r => r.CantNom ?? 0).ToString("N2")</td>
+                        <td style="border: 1px solid #000; padding: 4px; text-align: right;">@recepciones.Sum(r => r.CanToApro ?? 0).ToString("N2")</td>
+                        <td style="border: 1px solid #000; padding: 4px; text-align: right;"><strong>@recepciones.Sum(r => r.CanToRech ?? 0).ToString("N2")</strong></td>
+                        <td style="border: 1px solid #000; padding: 4px; text-align: right;">@recepciones.Sum(r => r.CanToFalta ?? 0).ToString("N2")</td>
+                        <td colspan="3" style="border: 1px solid #000; padding: 4px;"></td>
+                    </tr>
+                </tfoot>
+            </table>
+        }
+    </div>
+</div>
+
+@code {
+    [Parameter] public EventCallback OnCerrar { get; set; }
+
+    private List<Bolrecep>? recepciones;
+    private DateTime? fechaDesde;
+    private DateTime? fechaHasta;
+    private string proveedorSeleccionado = string.Empty;
+    private int? numeroProveedorSeleccionado;
+    private bool cargando = false;
+    private bool imprimiendo = false;
+    private bool exportando = false;
+    private SelectorProveedores selectorProveedores = null!;
+
+    private void LimpiarFiltros()
+    {
+        fechaDesde = null;
+        fechaHasta = null;
+        proveedorSeleccionado = string.Empty;
+        numeroProveedorSeleccionado = null;
+        recepciones = null;
+    }
+
+    private void LimpiarProveedor()
+    {
+        proveedorSeleccionado = string.Empty;
+        numeroProveedorSeleccionado = null;
+    }
+
+    private async Task AbrirSelectorProveedor()
+    {
+        await selectorProveedores.AbrirModal();
+    }
+
+    private void OnProveedorSeleccionado(SelectorProveedores.ProveedorSeleccionado proveedor)
+    {
+        numeroProveedorSeleccionado = proveedor.NumeCli;
+        proveedorSeleccionado = proveedor.RazonSocial;
+        StateHasChanged();
+    }
+
+    private async Task CargarDatosAsync()
+    {
+        try
+        {
+            cargando = true;
+            StateHasChanged();
+
+            var queryParams = new List<string>();
+            
+            if (fechaDesde.HasValue)
+                queryParams.Add($"fechaDesde={fechaDesde.Value:yyyy-MM-dd}");
+            
+            if (fechaHasta.HasValue)
+                queryParams.Add($"fechaHasta={fechaHasta.Value:yyyy-MM-dd}");
+
+            if (numeroProveedorSeleccionado.HasValue)
+                queryParams.Add($"numeroProveedor={numeroProveedorSeleccionado.Value}");
+
+            var query = queryParams.Any() ? "?" + string.Join("&", queryParams) : "";
+            var url = $"api/bolrecep/con-rechazos{query}";
+
+            var response = await repository.Get<List<Bolrecep>>(url);
+            if (!response.Error)
+            {
+                recepciones = response.Response;
+            }
+            else
+            {
+                await sweetAlertService.FireAsync("Error", "Error al cargar las recepciones con rechazos", SweetAlertIcon.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            await sweetAlertService.FireAsync("Error", $"Error al cargar datos: {ex.Message}", SweetAlertIcon.Error);
+        }
+        finally
+        {
+            cargando = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task ImprimirAsync()
+    {
+        try
+        {
+            imprimiendo = true;
+            StateHasChanged();
+
+            await Task.Delay(100);
+            await JS.InvokeVoidAsync("imprimirElemento", "areaImpresionRechazos");
+        }
+        catch (Exception ex)
+        {
+            await sweetAlertService.FireAsync("Error", $"Error al imprimir: {ex.Message}", SweetAlertIcon.Error);
+        }
+        finally
+        {
+            imprimiendo = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task ExportarExcelAsync()
+    {
+        try
+        {
+            exportando = true;
+            StateHasChanged();
+
+            var response = await Http.PostAsJsonAsync("api/excel/exportar-recepciones-rechazos", recepciones);
+
+            if (!response.IsSuccessStatusCode)
+            {
+                var errorContent = await response.Content.ReadAsStringAsync();
+                await sweetAlertService.FireAsync("Error", $"Error al generar el archivo: {response.StatusCode}", SweetAlertIcon.Error);
+                return;
+            }
+
+            var fileBytes = await response.Content.ReadAsByteArrayAsync();
+            var nombreArchivo = $"Recepciones_Rechazos_{DateTime.Now:yyyyMMdd_HHmmss}.xlsx";
+            await JS.InvokeVoidAsync("descargarArchivo", nombreArchivo, Convert.ToBase64String(fileBytes));
+
+            await sweetAlertService.FireAsync("Éxito", "Archivo Excel generado correctamente", SweetAlertIcon.Success);
+        }
+        catch (Exception ex)
+        {
+            await sweetAlertService.FireAsync("Error", $"Error al exportar: {ex.Message}", SweetAlertIcon.Error);
+        }
+        finally
+        {
+            exportando = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task Cerrar()
+    {
+        await OnCerrar.InvokeAsync();
+    }
+}
+
+<!-- Componente selector de proveedores -->
+<SelectorProveedores @ref="selectorProveedores" OnProveedorSeleccionado="OnProveedorSeleccionado" />

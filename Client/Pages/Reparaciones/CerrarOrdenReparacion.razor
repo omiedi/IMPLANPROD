@@ -1,0 +1,418 @@
+@page "/cerrar-orden-reparacion"
+@inject IRepository repository
+@inject NavigationManager navigationManager
+@inject SweetAlertService sweetAlertService
+
+<div class="container-fluid mt-4">
+    <div class="card shadow-sm">
+        <div class="card-header bg-primary text-white">
+            <h4 class="mb-0">
+                <i class="fas fa-check-circle"></i> Cerrar Orden de Reparación
+            </h4>
+        </div>
+        <div class="card-body">
+            @if (cargando)
+            {
+                <div class="text-center py-5">
+                    <div class="spinner-border text-primary" role="status">
+                        <span class="visually-hidden">Cargando...</span>
+                    </div>
+                    <p class="mt-3">Cargando órdenes de reparación...</p>
+                </div>
+            }
+            else if (ordenesEnCurso == null || !ordenesEnCurso.Any())
+            {
+                <div class="alert alert-warning" role="alert">
+                    <i class="fas fa-exclamation-triangle"></i>
+                    <strong>No Hay Órdenes de Reparación en Curso que Puedan Cerrarse</strong>
+                </div>
+            }
+            else
+            {
+                <div class="row mb-4">
+                    <div class="col-md-12">
+                        <h5 class="mb-3">Seleccione una Orden de Reparación para Cerrar</h5>
+                        <div class="table-responsive">
+                            <table class="table table-hover table-striped">
+                                <thead class="table-dark">
+                                    <tr>
+                                        <th style="width: 15%">Nro. O.R.</th>
+                                        <th style="width: 15%">Referencia</th>
+                                        <th style="width: 15%">Nro. Reparación</th>
+                                        <th style="width: 15%">Cliente</th>
+                                        <th style="width: 25%">Razón Social</th>
+                                        <th style="width: 15%" class="text-center">Acciones</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var orden in ordenesEnCurso)
+                                    {
+                                        <tr>
+                                            <td>
+                                                <strong class="text-primary">
+                                                    @((int)orden.NuOrdRep!)
+                                                </strong>
+                                            </td>
+                                            <td>@(orden.RefOrdRep ?? "-")</td>
+                                            <td>
+                                                <span class="badge bg-info">
+                                                    @orden.NumRepa
+                                                </span>
+                                            </td>
+                                            <td>@(orden.Nume_Cli?.ToString() ?? "-")</td>
+                                            <td>@(orden.Raso_Cli ?? "-")</td>
+                                            <td class="text-center">
+                                                <button class="btn btn-success btn-sm" 
+                                                        @onclick="() => SeleccionarOrden(orden)">
+                                                    <i class="fas fa-check"></i> Seleccionar
+                                                </button>
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                @if (ordenSeleccionada != null)
+                {
+                    <div class="card border-success mb-3">
+                        <div class="card-header bg-success text-white">
+                            <h5 class="mb-0">
+                                <i class="fas fa-info-circle"></i> Orden Seleccionada
+                            </h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <p><strong>Nro. Orden de Reparación:</strong> @((int)ordenSeleccionada.NuOrdRep!)</p>
+                                    <p><strong>Referencia:</strong> @(ordenSeleccionada.RefOrdRep ?? "-")</p>
+                                </div>
+                                <div class="col-md-6">
+                                    <p><strong>Nro. Reparación/Talón:</strong> @ordenSeleccionada.NumRepa</p>
+                                    <p><strong>Cliente:</strong> @(ordenSeleccionada.Raso_Cli ?? "-")</p>
+                                </div>
+                            </div>
+
+                            @if (cargandoRepuestos)
+                            {
+                                <div class="text-center py-3">
+                                    <div class="spinner-border spinner-border-sm text-primary" role="status"></div>
+                                    <span class="ms-2">Cargando repuestos...</span>
+                                </div>
+                            }
+                            else if (repuestosConsumir != null && repuestosConsumir.Any())
+                            {
+                                <hr />
+                                <h6 class="mb-3"><i class="fas fa-cogs"></i> Repuestos a Consumir</h6>
+                                <div class="table-responsive">
+                                    <table class="table table-sm table-bordered">
+                                        <thead class="table-light">
+                                            <tr>
+                                                <th>Código Interno</th>
+                                                <th>Cantidad</th>
+                                                <th>Precio Unit.</th>
+                                                <th>Importe</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            @foreach (var repuesto in repuestosConsumir)
+                                            {
+                                                <tr>
+                                                    <td>@repuesto.Cod_Inte</td>
+                                                    <td>@(repuesto.Cant_Sol?.ToString("N2") ?? "0.00")</td>
+                                                    <td>@(repuesto.PrUn_Neto?.ToString("C2") ?? "-")</td>
+                                                    <td>@(repuesto.Impo_Neto?.ToString("C2") ?? "-")</td>
+                                                </tr>
+                                            }
+                                        </tbody>
+                                    </table>
+                                </div>
+                            }
+
+                            <hr />
+                            
+                            <div class="row mb-3">
+                                <div class="col-md-6">
+                                    <label for="depositoSelect" class="form-label">
+                                        <strong><i class="fas fa-warehouse"></i> Seleccionar Depósito *</strong>
+                                    </label>
+                                    <select id="depositoSelect" 
+                                            class="form-select @(depositoSeleccionadoId == null ? "" : "is-valid")" 
+                                            @bind="depositoSeleccionadoId">
+                                        <option value="">-- Seleccione un depósito --</option>
+                                        @if (depositosDisponibles != null)
+                                        {
+                                            @foreach (var deposito in depositosDisponibles)
+                                            {
+                                                <option value="@deposito.Id">@deposito.CodigoDepo - @deposito.Descripcion</option>
+                                            }
+                                        }
+                                    </select>
+                                    @if (mostrarErrorDeposito)
+                                    {
+                                        <div class="text-danger mt-2">
+                                            <small><i class="fas fa-exclamation-circle"></i> Debe seleccionar un depósito</small>
+                                        </div>
+                                    }
+                                </div>
+                            </div>
+
+                            <div class="d-flex justify-content-end gap-2">
+                                <button class="btn btn-secondary" @onclick="CancelarSeleccion">
+                                    <i class="fas fa-times"></i> Cancelar
+                                </button>
+                                <button class="btn btn-primary" @onclick="CerrarOrden">
+                                    <i class="fas fa-check-circle"></i> Cerrar Orden de Reparación
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                }
+            }
+        </div>
+    </div>
+</div>
+
+@code {
+    private List<OrdenReparacionDTO>? ordenesEnCurso;
+    private OrdenReparacionDTO? ordenSeleccionada;
+    private List<RepuestoConsumirDTO>? repuestosConsumir;
+    private List<DepositoDTO>? depositosDisponibles;
+    private int? depositoSeleccionadoId;
+    private bool cargando = true;
+    private bool cargandoRepuestos = false;
+    private bool mostrarErrorDeposito = false;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await Task.WhenAll(
+            CargarOrdenesEnCurso(),
+            CargarDepositosDisponibles()
+        );
+    }
+
+    private async Task CargarOrdenesEnCurso()
+    {
+        try
+        {
+            cargando = true;
+            var response = await repository.Get<List<OrdenReparacionDTO>>("api/repara/ordenes-en-curso");
+            
+            if (!response.Error && response.Response != null)
+            {
+                ordenesEnCurso = response.Response;
+            }
+            else
+            {
+                ordenesEnCurso = new List<OrdenReparacionDTO>();
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error al cargar órdenes en curso: {ex.Message}");
+            ordenesEnCurso = new List<OrdenReparacionDTO>();
+            
+            await sweetAlertService.FireAsync(new SweetAlertOptions
+            {
+                Title = "Error",
+                Text = "Error al cargar las órdenes de reparación",
+                Icon = SweetAlertIcon.Error
+            });
+        }
+        finally
+        {
+            cargando = false;
+        }
+    }
+
+    private async Task SeleccionarOrden(OrdenReparacionDTO orden)
+    {
+        ordenSeleccionada = orden;
+        depositoSeleccionadoId = null;
+        mostrarErrorDeposito = false;
+        await CargarRepuestosConsumir(orden.NumRepa);
+        StateHasChanged();
+    }
+
+    private void CancelarSeleccion()
+    {
+        ordenSeleccionada = null;
+        repuestosConsumir = null;
+        depositoSeleccionadoId = null;
+        mostrarErrorDeposito = false;
+        StateHasChanged();
+    }
+
+    private async Task CerrarOrden()
+    {
+        if (ordenSeleccionada == null) return;
+
+        // Validar que se haya seleccionado un depósito
+        if (depositoSeleccionadoId == null)
+        {
+            mostrarErrorDeposito = true;
+            await sweetAlertService.FireAsync(new SweetAlertOptions
+            {
+                Title = "Depósito Requerido",
+                Text = "Debe seleccionar un depósito antes de cerrar la orden de reparación",
+                Icon = SweetAlertIcon.Warning
+            });
+            return;
+        }
+
+        mostrarErrorDeposito = false;
+
+        var depositoSeleccionado = depositosDisponibles?.FirstOrDefault(d => d.Id == depositoSeleccionadoId);
+        var depositoNombre = depositoSeleccionado != null 
+            ? $"{depositoSeleccionado.CodigoDepo} - {depositoSeleccionado.Descripcion}" 
+            : "Depósito seleccionado";
+
+        var result = await sweetAlertService.FireAsync(new SweetAlertOptions
+        {
+            Title = "Confirmar Cierre",
+            Html = $"¿Está seguro que desea cerrar la Orden de Reparación <strong>Nro. {(int)ordenSeleccionada.NuOrdRep!}</strong>?<br/>" +
+                   $"<small>Nro. Reparación/Talón: {ordenSeleccionada.NumRepa}</small><br/>" +
+                   $"<small>Depósito: {depositoNombre}</small><br/>" +
+                   $"<small>Repuestos a consumir: {repuestosConsumir?.Count ?? 0}</small>",
+            Icon = SweetAlertIcon.Warning,
+            ShowCancelButton = true,
+            ConfirmButtonText = "Sí, cerrar",
+            CancelButtonText = "Cancelar"
+        });
+
+        if (result.IsConfirmed)
+        {
+            try
+            {
+                // Llamar al endpoint para cerrar la orden
+                var requestData = new
+                {
+                    ReparacionId = ordenSeleccionada.Id,
+                    DepositoId = depositoSeleccionadoId.Value
+                };
+
+                var response = await repository.Post<object, object>("api/repara/cerrar-orden", requestData);
+
+                if (!response.Error)
+                {
+                    await sweetAlertService.FireAsync(new SweetAlertOptions
+                    {
+                        Title = "¡Éxito!",
+                        Html = $"La Orden de Reparación <strong>Nro. {(int)ordenSeleccionada.NuOrdRep!}</strong> ha sido cerrada exitosamente.<br/>" +
+                               $"<small>Nro. Reparación/Talón: {ordenSeleccionada.NumRepa}</small>",
+                        Icon = SweetAlertIcon.Success
+                    });
+
+                    // Limpiar selección y recargar lista
+                    ordenSeleccionada = null;
+                    repuestosConsumir = null;
+                    depositoSeleccionadoId = null;
+                    await CargarOrdenesEnCurso();
+                }
+                else
+                {
+                    var errorMessage = await response.GetErrorMessageAsync();
+                    await sweetAlertService.FireAsync(new SweetAlertOptions
+                    {
+                        Title = "Error",
+                        Text = errorMessage,
+                        Icon = SweetAlertIcon.Error
+                    });
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error al cerrar orden: {ex.Message}");
+                await sweetAlertService.FireAsync(new SweetAlertOptions
+                {
+                    Title = "Error",
+                    Text = "Ocurrió un error al cerrar la orden de reparación",
+                    Icon = SweetAlertIcon.Error
+                });
+            }
+        }
+    }
+
+    private async Task CargarRepuestosConsumir(int numRepa)
+    {
+        try
+        {
+            cargandoRepuestos = true;
+            var response = await repository.Get<List<RepuestoConsumirDTO>>($"api/repara/repuestos-consumir/{numRepa}");
+            
+            if (!response.Error && response.Response != null)
+            {
+                repuestosConsumir = response.Response;
+            }
+            else
+            {
+                repuestosConsumir = new List<RepuestoConsumirDTO>();
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error al cargar repuestos: {ex.Message}");
+            repuestosConsumir = new List<RepuestoConsumirDTO>();
+        }
+        finally
+        {
+            cargandoRepuestos = false;
+        }
+    }
+
+    private async Task CargarDepositosDisponibles()
+    {
+        try
+        {
+            var response = await repository.Get<List<DepositoDTO>>("api/repara/depositos-disponibles");
+            
+            if (!response.Error && response.Response != null)
+            {
+                depositosDisponibles = response.Response;
+            }
+            else
+            {
+                depositosDisponibles = new List<DepositoDTO>();
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error al cargar depósitos: {ex.Message}");
+            depositosDisponibles = new List<DepositoDTO>();
+        }
+    }
+
+    // DTOs
+    private class OrdenReparacionDTO
+    {
+        public int Id { get; set; }
+        public int NumRepa { get; set; }
+        public decimal? NuOrdRep { get; set; }
+        public string? RefOrdRep { get; set; }
+        public short? Status { get; set; }
+        public DateTime? FechRecep { get; set; }
+        public int? Nume_Cli { get; set; }
+        public string? Raso_Cli { get; set; }
+    }
+
+    private class RepuestoConsumirDTO
+    {
+        public int Id { get; set; }
+        public int Cod_Inte { get; set; }
+        public decimal? Cant_Sol { get; set; }
+        public decimal? PrUn_Neto { get; set; }
+        public decimal? Impo_Neto { get; set; }
+        public string? IdenLote { get; set; }
+        public int? Origen { get; set; }
+    }
+
+    private class DepositoDTO
+    {
+        public int Id { get; set; }
+        public int CodigoDepo { get; set; }
+        public string? Descripcion { get; set; }
+        public string? DescripAbreviada { get; set; }
+    }
+}

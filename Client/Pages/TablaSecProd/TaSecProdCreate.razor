@@ -1,0 +1,36 @@
+@page "/TablaSecProd/Secprod/create"
+@inject IRepository repository
+@inject NavigationManager navigationManager
+@inject SweetAlertService sweetAlertService
+@inject IModalService Modal
+
+<h3>Nuevo Sector productivo</h3>
+
+<TaSecProdForm @ref="secprodForm" SecProd="secprod" OnValidSubmit="Create" ReturnAction="Return" IsEdit="false" />
+
+@code {
+    private SecProd secprod = new();
+    private TaSecProdForm? secprodForm;
+    [CascadingParameter]
+    BlazoredModalInstance BlazoredModal { get; set; } = default!;
+
+    private async Task Create()
+    {
+        var responseHttp = await repository.Post("/api/secprod", secprod);
+        if (responseHttp.Error)
+        {
+            var mensajeError = await responseHttp.GetErrorMessageAsync();
+            await sweetAlertService.FireAsync("Error", mensajeError, SweetAlertIcon.Error);
+            return;
+        }
+
+        await BlazoredModal.CloseAsync(ModalResult.Ok());
+        Return();
+    }
+
+    private void Return()
+    {
+        secprodForm!.FormPostedSuccessfully = true;
+        navigationManager.NavigateTo("/TablaSecProd/Secprod");
+    }
+}

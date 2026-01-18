@@ -1,0 +1,555 @@
+@page "/remitos"
+<PageTitle>Consulta de Remitos</PageTitle>
+@using IMPLANPROD.Shared.Entities
+@using IMPLANPROD.Shared.DTOs
+@using IMPLANPROD.Client.Repositories
+@using IMPLANPROD.Client.Shared.Components
+@using IMPLANPROD.Client.Pages.Reportes
+@using IMPLANPROD.Client.Helpers
+@inject IRepository repository
+@inject SweetAlertService sweetAlertService
+@inject NavigationManager navigationManager
+
+<div class="container-fluid">
+    <!-- Título de la página -->
+    <div class="mb-4">
+        <h2 class="text-center fw-bold text-primary">
+            <i class="fas fa-file-invoice me-2"></i>
+            REMITOS A CLIENTES
+        </h2>
+        <hr class="border-primary border-2 opacity-50" />
+    </div>
+
+    <div class="row mb-3">
+        <div class="col-12">
+            <div class="card shadow">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0">
+                        <i class="fas fa-search me-2"></i>Consulta de Remitos
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="row mb-4">
+                        <div class="col-md-2">
+                            <label class="form-label fw-bold">Mes:</label>
+                            <select class="form-select" @bind="mesSeleccionado">
+                                <option value="1">Enero</option>
+                                <option value="2">Febrero</option>
+                                <option value="3">Marzo</option>
+                                <option value="4">Abril</option>
+                                <option value="5">Mayo</option>
+                                <option value="6">Junio</option>
+                                <option value="7">Julio</option>
+                                <option value="8">Agosto</option>
+                                <option value="9">Septiembre</option>
+                                <option value="10">Octubre</option>
+                                <option value="11">Noviembre</option>
+                                <option value="12">Diciembre</option>
+                            </select>
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label fw-bold">Año:</label>
+                            <input type="number" class="form-control" @bind="anioSeleccionado" min="2000" max="2099" />
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label fw-bold">Cliente (Opcional):</label>
+                            <div class="input-group">
+                                <input type="text"
+                                       class="form-control"
+                                       @bind="clienteSeleccionado"
+                                       readonly
+                                       placeholder="Todos los clientes" />
+                                @if (!string.IsNullOrEmpty(clienteSeleccionado))
+                                {
+                                    <button type="button" class="btn btn-outline-secondary" @onclick="LimpiarCliente" title="Limpiar Cliente">
+                                        <i class="fas fa-times"></i>
+                                    </button>
+                                }
+                                <button type="button" class="btn btn-outline-primary" @onclick="AbrirSelectorClientes" title="Seleccionar Cliente">
+                                    <i class="fas fa-users"></i>
+                                </button>
+                            </div>
+                        </div>
+                        <div class="col-md-2 d-flex align-items-end">
+                            <button class="btn btn-primary w-100" @onclick="CargarRemitos" disabled="@cargandoRemitos">
+                                @if (cargandoRemitos)
+                                {
+                                    <span class="spinner-border spinner-border-sm me-2"></span>
+                                }
+                                <i class="fas fa-search me-2"></i>Buscar
+                            </button>
+                        </div>
+                        <div class="col-md-2 d-flex align-items-end">
+                            <button class="btn btn-secondary w-100" @onclick="Volver">
+                                <i class="fas fa-arrow-left me-2"></i>Volver
+                            </button>
+                        </div>
+                    </div>
+
+                    @if (remitos.Any())
+                    {
+                        <div class="alert alert-info">
+                            <i class="fas fa-info-circle me-2"></i>
+                            <strong>Período:</strong> @ObtenerNombreMes(mesSeleccionado) de @anioSeleccionado
+                            <span class="ms-3">
+                                <strong>Remitos encontrados:</strong> @remitos.Count
+                            </span>
+                        </div>
+                    }
+
+                    @if (cargandoRemitos)
+                    {
+                        <div class="text-center py-5">
+                            <div class="spinner-border text-primary" role="status">
+                                <span class="visually-hidden">Cargando remitos...</span>
+                            </div>
+                            <p class="mt-3">Cargando remitos del período seleccionado...</p>
+                        </div>
+                    }
+                    else if (remitos.Any())
+                    {
+                        <div class="d-flex justify-content-end mb-3">
+                            <button class="btn btn-outline-success" @onclick="ConfirmarImpresionAsync" disabled="@isPrinting">
+                                <i class="oi oi-print"></i> Imprimir/Exp.Excel
+                            </button>
+                            @if (isPrinting)
+                            {
+                                <div class="ms-2 d-flex align-items-center">
+                                    <div class="spinner-border text-success" role="status">
+                                        <span class="visually-hidden">Preparando impresión...</span>
+                                    </div>
+                                </div>
+                            }
+                        </div>
+
+                        <div class="table-responsive">
+                            <table class="table table-hover table-striped">
+                                <thead class="table-dark">
+                                <tr>
+                                    <th>Remito</th>
+                                    <th>Cliente</th>
+                                    <th>Razón Social</th>
+                                    <th>Fecha</th>
+                                    <th>Estado</th>
+                                    <th style="width: 100px;">Acciones</th>
+                                </tr>
+                                </thead>
+                                <tbody>
+                                @foreach (var remito in remitos)
+                                {
+                                    <tr>
+                                        <td><strong>@remito.DoPriLar</strong></td>
+                                        <td>@remito.NumeClie</td>
+                                        <td>@remito.RazonSocial</td>
+                                        <td>@remito.FechMov.ToString("dd/MM/yyyy")</td>
+                                        <td>
+                                            @if (!string.IsNullOrEmpty(remito.ReferCor) && remito.ReferCor.StartsWith("(Anul)"))
+                                            {
+                                                <span class="badge bg-danger">Anulado</span>
+                                            }
+                                            else
+                                            {
+                                                <span class="badge bg-success">Vigente</span>
+                                            }
+                                        </td>
+                                        <td>
+                                            <button class="btn btn-sm btn-outline-primary" 
+                                                    @onclick="() => ImprimirRemito(remito)"
+                                                    title="Imprimir Remito"
+                                                    disabled="@imprimiendoRemito">
+                                                <i class="fas fa-print"></i>
+                                            </button>
+                                        </td>
+                                    </tr>
+                                }
+                                </tbody>
+                            </table>
+                        </div>
+                    }
+                    else if (!cargandoRemitos && mesSeleccionado > 0 && anioSeleccionado > 0)
+                    {
+                        <div class="alert alert-warning text-center">
+                            <i class="fas fa-exclamation-triangle me-2"></i>
+                            No se encontraron remitos para el período seleccionado.
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="alert alert-secondary text-center">
+                            <i class="fas fa-info-circle me-2"></i>
+                            Seleccione un mes y año, luego haga clic en "Buscar" para ver los remitos disponibles.
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<SelectorClientes @ref="selectorClientes" OnClienteSeleccionado="OnClienteSeleccionado" />
+
+<!-- Componente de Impresión de Remito -->
+<ImpresionRemito @ref="impresionRemito"
+                 NCI="@nciImpresion"
+                 NumeroRemito="@numeroRemitoImpresion"
+                 Fecha="@fechaImpresion"
+                 RazonSocial="@razonSocialImpresion"
+                 Domicilio="@domicilioImpresion"
+                 CUIT="@cuitImpresion"
+                 CondicionIVA="@condicionIVAImpresion"
+                 Localidad="@localidadImpresion"
+                 OrdenCompra="@ordenCompraImpresion"
+                 OrdenVenta="@ordenVentaImpresion"
+                 Items="@itemsImpresion"
+                 Observaciones="@observacionesImpresion"
+                 ValorDeclarado="@valorDeclaradoImpresion"
+                 Bultos="@bultosImpresion" />
+
+@if (remitos.Any())
+{
+    <ImpresionLista TItem="RemitoAnularDTO"
+                    Datos="remitos"
+                    Titulo="@TituloReporte"
+                    UrlExportarExcel="api/excel/exportar-remitos"
+                    Encabezados="encabezadosRemitos"
+                    ModoDirecto="false"
+                    MostrarModal="mostrarModalImpresion"
+                    OnCerrar="ResetearImpresion" />
+}
+
+@code {
+    private SelectorClientes selectorClientes = null!;
+    private ImpresionRemito impresionRemito = null!;
+    private int mesSeleccionado = DateTime.Now.Month;
+    private int anioSeleccionado = DateTime.Now.Year;
+    private bool cargandoRemitos = false;
+    private List<RemitoAnularDTO> remitos = new();
+    private int? numeroClienteSeleccionado = null;
+    private string clienteSeleccionado = string.Empty;
+    private bool isPrinting = false;
+    private bool mostrarModalImpresion = false;
+    private string TituloReporte => "Listado de Remitos";
+    
+    // Variables para impresión de remito individual
+    private bool imprimiendoRemito = false;
+    private string nciImpresion = "";
+    private string numeroRemitoImpresion = "";
+    private string fechaImpresion = "";
+    private string razonSocialImpresion = "";
+    private string domicilioImpresion = "";
+    private string cuitImpresion = "";
+    private string condicionIVAImpresion = "";
+    private string localidadImpresion = "";
+    private string ordenCompraImpresion = "";
+    private string ordenVentaImpresion = "";
+    private List<ImpresionRemito.ItemRemito> itemsImpresion = new();
+    private string observacionesImpresion = "";
+    private string valorDeclaradoImpresion = "";
+    private int bultosImpresion = 1;
+
+    private Dictionary<string, string> encabezadosRemitos = new()
+    {
+        { "DoPriCor", "Remito" },
+        { "NumeClie", "Cliente" },
+        { "RazonSocial", "Razón Social" },
+        { "FechMov", "Fecha" },
+        { "ReferCor", "Referencia" }
+    };
+
+    private async Task CargarRemitos()
+    {
+        try
+        {
+            cargandoRemitos = true;
+            StateHasChanged();
+
+            string url = $"api/movistock/remitos-mes-todos/{anioSeleccionado}/{mesSeleccionado}";
+            if (numeroClienteSeleccionado.HasValue)
+            {
+                url += $"?numeroCliente={numeroClienteSeleccionado.Value}";
+            }
+
+            var response = await repository.Get<List<RemitoAnularDTO>>(url);
+
+            if (!response.Error && response.Response != null)
+            {
+                remitos = response.Response;
+            }
+            else
+            {
+                var errorMsg = await response.GetErrorMessageAsync();
+                await sweetAlertService.FireAsync("Error", $"Error al cargar remitos: {errorMsg}", SweetAlertIcon.Error);
+                remitos = new List<RemitoAnularDTO>();
+            }
+        }
+        catch (Exception ex)
+        {
+            await sweetAlertService.FireAsync("Error", $"Error al cargar remitos: {ex.Message}", SweetAlertIcon.Error);
+            remitos = new List<RemitoAnularDTO>();
+        }
+        finally
+        {
+            cargandoRemitos = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task ConfirmarImpresionAsync()
+    {
+        if (remitos == null || !remitos.Any())
+        {
+            await sweetAlertService.FireAsync("Información", "No hay remitos para imprimir.", SweetAlertIcon.Info);
+            return;
+        }
+
+        isPrinting = true;
+        StateHasChanged();
+
+        try
+        {
+            var cantidadTotal = remitos.Count;
+
+            var result = await sweetAlertService.FireAsync(new SweetAlertOptions
+            {
+                Title = "Confirmar impresión",
+                Text = $"Se van a imprimir/exportar {cantidadTotal} remitos del período actual.\n¿Desea continuar?",
+                Icon = SweetAlertIcon.Warning,
+                ShowCancelButton = true,
+                ConfirmButtonText = "Sí, continuar",
+                CancelButtonText = "Cancelar"
+            });
+
+            if (result.IsConfirmed)
+            {
+                mostrarModalImpresion = true;
+            }
+        }
+        catch (Exception ex)
+        {
+            await sweetAlertService.FireAsync("Error", ex.Message, SweetAlertIcon.Error);
+        }
+        finally
+        {
+            isPrinting = false;
+            StateHasChanged();
+        }
+    }
+
+    private void ResetearImpresion()
+    {
+        mostrarModalImpresion = false;
+        StateHasChanged();
+    }
+
+    private async Task AbrirSelectorClientes()
+    {
+        await selectorClientes.AbrirModal();
+    }
+
+    private void OnClienteSeleccionado(SelectorClientes.ClienteSeleccionado cliente)
+    {
+        numeroClienteSeleccionado = cliente.NumeCli;
+        clienteSeleccionado = $"{cliente.NumeCli} - {cliente.RazonSocial}";
+        StateHasChanged();
+    }
+
+    private void LimpiarCliente()
+    {
+        numeroClienteSeleccionado = null;
+        clienteSeleccionado = string.Empty;
+        StateHasChanged();
+    }
+
+    private string ObtenerNombreMes(int mes)
+    {
+        return mes switch
+        {
+            1 => "Enero",
+            2 => "Febrero",
+            3 => "Marzo",
+            4 => "Abril",
+            5 => "Mayo",
+            6 => "Junio",
+            7 => "Julio",
+            8 => "Agosto",
+            9 => "Septiembre",
+            10 => "Octubre",
+            11 => "Noviembre",
+            12 => "Diciembre",
+            _ => string.Empty
+        };
+    }
+
+    /// <summary>
+    /// Imprime un remito existente
+    /// </summary>
+    private async Task ImprimirRemito(RemitoAnularDTO remito)
+    {
+        try
+        {
+            imprimiendoRemito = true;
+            StateHasChanged();
+
+            Console.WriteLine($"[RemitosIndex] Preparando impresión del remito: {remito.DoPriLar}");
+
+            // IMPORTANTE: Limpiar todas las variables antes de preparar la impresión
+            LimpiarVariablesImpresion();
+
+            // Preparar número de remito
+            numeroRemitoImpresion = remito.DoPriLar ?? "";
+            
+            // Preparar fecha
+            fechaImpresion = remito.FechMov.ToString("dd/MM/yy");
+            
+            // Preparar datos del cliente
+            razonSocialImpresion = remito.RazonSocial ?? "";
+            
+            // Obtener datos completos del cliente
+            if (remito.NumeClie > 0)
+            {
+                var responseCliente = await repository.Get<Deudor12>($"api/Deudor12/numero/{remito.NumeClie}");
+                if (!responseCliente.Error && responseCliente.Response != null)
+                {
+                    var cliente = responseCliente.Response;
+                    domicilioImpresion = cliente.Domi_Cli ?? "";
+                    localidadImpresion = cliente.Loca_Cli ?? "";
+                    
+                    // Formatear CUIT con guiones
+                    cuitImpresion = FormatearCUIT(cliente.Cuit_Cli ?? "");
+                    
+                    // Obtener condición de IVA desde TipoIvaEnum usando Piva_Cli
+                    condicionIVAImpresion = TipoIvaHelper.ObtenerDescripcionIvaPorCodigo(cliente.Piva_Cli);
+                    Console.WriteLine($"[RemitosIndex] Condición IVA: Código={cliente.Piva_Cli}, Descripción={condicionIVAImpresion}");
+                }
+            }
+            
+            // Obtener detalles del remito (productos)
+            // IMPORTANTE: Buscar por DoPriLar (número largo), Nume_Cli y FechMov
+            // porque los números de remito pueden reinicializarse y repetirse en diferentes fechas
+            var fechaFormateada = remito.FechMov.ToString("yyyy-MM-dd");
+            Console.WriteLine($"[RemitosIndex] Buscando movimientos: DoPriLar={remito.DoPriLar}, NumeCli={remito.NumeClie}, Fecha={fechaFormateada}");
+            
+            var responseMovisto = await repository.Get<List<Movisto>>(
+                $"api/movisto/por-remito?doPriLar={remito.DoPriLar}&numeCli={remito.NumeClie}&fechMov={fechaFormateada}");
+            
+            if (responseMovisto.Error)
+            {
+                Console.WriteLine($"[RemitosIndex] Error al obtener movimientos: {await responseMovisto.GetErrorMessageAsync()}");
+            }
+            else if (responseMovisto.Response != null && responseMovisto.Response.Any())
+            {
+                Console.WriteLine($"[RemitosIndex] Se encontraron {responseMovisto.Response.Count} movimientos");
+                
+                foreach (var movimiento in responseMovisto.Response)
+                {
+                    Console.WriteLine($"[RemitosIndex] Procesando movimiento: Cod_Inte={movimiento.Cod_Inte}, CantSalid={movimiento.CantSalid}");
+                    
+                    if (movimiento.Cod_Inte.HasValue)
+                    {
+                        // Obtener datos del producto desde Master
+                        var responseProducto = await repository.Get<Master>($"api/master/xCodint{movimiento.Cod_Inte.Value}");
+                        if (!responseProducto.Error && responseProducto.Response != null)
+                        {
+                            var producto = responseProducto.Response;
+                            itemsImpresion.Add(new ImpresionRemito.ItemRemito
+                            {
+                                Cantidad = movimiento.CantSalid ?? 0,
+                                Codigo = producto.Codigo ?? "",
+                                Descripcion = producto.Descripcion ?? ""
+                            });
+                            Console.WriteLine($"[RemitosIndex] Producto agregado: {producto.Codigo} - {producto.Descripcion}");
+                        }
+                        else
+                        {
+                            Console.WriteLine($"[RemitosIndex] Error al obtener producto Cod_Inte={movimiento.Cod_Inte.Value}");
+                        }
+                    }
+                }
+                
+                Console.WriteLine($"[RemitosIndex] Total items agregados: {itemsImpresion.Count}");
+            }
+            else
+            {
+                Console.WriteLine("[RemitosIndex] No se encontraron movimientos para este remito");
+            }
+            
+            // Preparar observaciones y otros datos
+            observacionesImpresion = remito.ReferCor ?? "";
+            ordenCompraImpresion = ""; // No disponible en RemitoAnularDTO
+            ordenVentaImpresion = ""; // No disponible en RemitoAnularDTO
+            valorDeclaradoImpresion = ""; // No disponible en RemitoAnularDTO
+            bultosImpresion = 1; // Valor por defecto
+            nciImpresion = ""; // Vacío según especificación
+            
+            Console.WriteLine($"[RemitosIndex] Datos preparados para impresión: {numeroRemitoImpresion}");
+            
+            // Forzar actualización del componente
+            StateHasChanged();
+            
+            // Esperar un momento para que se actualice el DOM
+            await Task.Delay(100);
+            
+            // Imprimir
+            await impresionRemito.Imprimir();
+            
+            Console.WriteLine("[RemitosIndex] Impresión iniciada");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[RemitosIndex] Error al preparar impresión: {ex.Message}");
+            await sweetAlertService.FireAsync("Error", $"Error al preparar la impresión: {ex.Message}", SweetAlertIcon.Error);
+        }
+        finally
+        {
+            imprimiendoRemito = false;
+            StateHasChanged();
+        }
+    }
+
+    /// <summary>
+    /// Limpia todas las variables de impresión para evitar que se mezclen datos entre remitos
+    /// </summary>
+    private void LimpiarVariablesImpresion()
+    {
+        nciImpresion = "";
+        numeroRemitoImpresion = "";
+        fechaImpresion = "";
+        razonSocialImpresion = "";
+        domicilioImpresion = "";
+        cuitImpresion = "";
+        condicionIVAImpresion = "";
+        localidadImpresion = "";
+        ordenCompraImpresion = "";
+        ordenVentaImpresion = "";
+        itemsImpresion = new List<ImpresionRemito.ItemRemito>();
+        observacionesImpresion = "";
+        valorDeclaradoImpresion = "";
+        bultosImpresion = 1;
+        
+        Console.WriteLine("[RemitosIndex] Variables de impresión limpiadas");
+    }
+
+    /// <summary>
+    /// Formatea el CUIT con guiones (XX-XXXXXXXX-X)
+    /// </summary>
+    private string FormatearCUIT(string cuit)
+    {
+        if (string.IsNullOrWhiteSpace(cuit))
+            return "";
+
+        // Remover cualquier guión existente y espacios
+        string cuitLimpio = cuit.Replace("-", "").Replace(" ", "").Trim();
+
+        // Si ya tiene el formato correcto o no tiene 11 dígitos, devolver como está
+        if (cuitLimpio.Length != 11 || !cuitLimpio.All(char.IsDigit))
+            return cuit;
+
+        // Formatear: XX-XXXXXXXX-X
+        return $"{cuitLimpio.Substring(0, 2)}-{cuitLimpio.Substring(2, 8)}-{cuitLimpio.Substring(10, 1)}";
+    }
+
+    private void Volver()
+    {
+        navigationManager.NavigateTo("/remitos/cliente");
+    }
+}

@@ -1,0 +1,82 @@
+@inject SweetAlertService sweetAlertService
+@inject IRepository repository
+
+<EditForm Model="Tatimat" OnValidSubmit="OnValidSubmit">
+    <DataAnnotationsValidator />
+
+    <div class="mb-3">
+        <label>Código:</label>
+        <div>
+            <InputNumber class="form-control" @bind-Value="@Tatimat.CodigoTatimat" disabled="@IsEdit" />
+            <ValidationMessage For="@(() => Tatimat.CodigoTatimat)" />
+        </div>
+    </div>
+    <div class="mb-3">
+        <label>Descripción:</label>
+        <div>
+            <InputText class="form-control" @bind-Value="@Tatimat.Descripcion" />
+            <ValidationMessage For="@(() => Tatimat.Descripcion)" />
+        </div>
+    </div>
+
+    <div class="mb-3">
+        <label>Depósito:</label>
+        <div>
+            <InputSelect class="form-control" @bind-Value="@Tatimat.Deposito">
+                <option value="0">Seleccione un depósito...</option>
+                @if (depositos != null)
+                {
+                    @foreach (var deposito in depositos)
+                    {
+                        <option value="@deposito.Key">@deposito.Value</option>
+                    }
+                }
+            </InputSelect>
+            <ValidationMessage For="@(() => Tatimat.Deposito)" />
+        </div>
+    </div>
+
+    <div class="mb-3">
+        <label>Referencia:</label>
+        <div>
+            <InputText class="form-control" @bind-Value="@Tatimat.Referencia" />
+            <ValidationMessage For="@(() => Tatimat.Referencia)" />
+        </div>
+    </div>
+
+    <button class="btn btn-primary" type="submit">Guardar Cambios</button>
+    <button class="btn btn-success" @onclick="ReturnAction">Regresar</button>
+
+</EditForm>
+
+@code {
+    [EditorRequired]
+    [Parameter]
+    public Tatimat Tatimat { get; set; } = null!;
+
+    [EditorRequired]
+    [Parameter]
+    public EventCallback OnValidSubmit { get; set; }
+
+    [EditorRequired]
+    [Parameter]
+    public EventCallback ReturnAction { get; set; }
+
+    [Parameter]
+    public bool IsEdit { get; set; }
+
+    public bool FormPostedSuccessfully { get; set; }
+
+    private Dictionary<int, string> depositos;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var response = await repository.Get<Dictionary<int, string>>("api/tadeposi/combo");
+        if (response.Error)
+        {
+            await sweetAlertService.FireAsync("Error", response.HttpResponseMessage.ReasonPhrase, SweetAlertIcon.Error);
+            return;
+        }
+        depositos = response.Response;
+    }
+}

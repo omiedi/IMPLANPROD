@@ -1,0 +1,181 @@
+@using IMPLANPROD.Shared.DTOs
+@using IMPLANPROD.Shared.Entities
+@inject IRepository repository
+@inject SweetAlertService sweetAlertService
+
+@if (Visible)
+{
+    <div class="modal fade show" style="display: block" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header bg-info text-white">
+                    <h5 class="modal-title">Transferencia de Stock - @Repuesto?.Codigo</h5>
+                    <button type="button" class="btn-close btn-close-white" @onclick="OnClose"></button>
+                </div>
+                <div class="modal-body">
+                    <EditForm Model="transferencia" OnValidSubmit="OnValidSubmit">
+                        <DataAnnotationsValidator />
+
+                        <div class="mb-3">
+                            <label class="form-label">Depósito Origen</label>
+                            <select class="form-select" @bind="@transferencia.DepositoOrigen" @bind:after="CargarStockOrigen">
+                                <option value="0">Seleccione un depósito...</option>
+                                @foreach (var deposito in depositos)
+                                {
+                                    <option value="@deposito">@deposito</option>
+                                }
+                            </select>
+                            <ValidationMessage For="@(() => transferencia.DepositoOrigen)" />
+                            @if (transferencia.DepositoOrigen > 0)
+                            {
+                                <div class="form-text">
+                                    Stock disponible en depósito @transferencia.DepositoOrigen: @transferencia.StockOrigen.ToString("N2")
+                                </div>
+                            }
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label">Depósito Destino</label>
+                            <select class="form-select" @bind="transferencia.DepositoDestino">
+                                <option value="0">Seleccione un depósito...</option>
+                                @foreach (var deposito in depositos.Where(d => d != transferencia.DepositoOrigen))
+                                {
+                                    <option value="@deposito">@deposito</option>
+                                }
+                            </select>
+                            <ValidationMessage For="@(() => transferencia.DepositoDestino)" />
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label">Cantidad a Transferir</label>
+                            <InputNumber class="form-control" @bind-Value="transferencia.CantidadTransferir" />
+                            <ValidationMessage For="@(() => transferencia.CantidadTransferir)" />
+                            @if (transferencia.CantidadTransferir > transferencia.StockOrigen)
+                            {
+                                <div class="text-danger">La cantidad a transferir no puede ser mayor al stock disponible (@transferencia.StockOrigen.ToString("N2"))</div>
+                            }
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label">Referencia</label>
+                            <InputText class="form-control" @bind-Value="transferencia.Referencia" maxlength="32" />
+                            <ValidationMessage For="@(() => transferencia.Referencia)" />
+                        </div>
+
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-secondary" @onclick="OnClose" disabled="@procesando">Cancelar</button>
+                            <button type="submit" class="btn btn-primary"
+                            disabled="@(procesando || transferencia.CantidadTransferir > transferencia.StockOrigen)">
+                                @if (procesando)
+                                {
+                                    <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
+                                    <span> Procesando...</span>
+                                }
+                                else
+                                {
+                                    <span>Transferir</span>
+                                }
+                            </button>
+                        </div>
+                    </EditForm>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="modal-backdrop fade show"></div>
+}
+
+@code {
+    private StockTransferenciaDTO transferencia = new();
+    private bool procesando = false;
+
+    private List<int> depositos = new();
+
+    [Parameter] public ProductoConSaldoDTO? Repuesto { get; set; }
+    [Parameter] public EventCallback OnClose { get; set; }
+    [Parameter] public EventCallback OnSave { get; set; }
+    [Parameter] public bool Visible { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        await CargarDepositos();
+        if (Repuesto != null)
+        {
+            transferencia.CodigoRepuesto = Repuesto.Cod_inte;
+            transferencia.CodExt = Repuesto.Codigo;
+            transferencia.Descripcion = Repuesto.Descripcion;
+        }
+    }
+
+    private async Task CargarDepositos()
+    {
+        var response = await repository.Get<List<int>>("api/tadeposi/SoloCodigos");
+        if (!response.Error)
+        {
+            depositos = response.Response;
+        }
+    }
+
+    private async Task CargarStockOrigen()
+    {
+        if (transferencia.DepositoOrigen == 0 || Repuesto?.Cod_inte == null) return;
+
+        try
+        {
+            // var response = await repository.Get<List<StockDepositoDTO>>($"api/movisto/stock/{Repuesto.Cod_inte}");
+            int codint = 0;
+            codint = Repuesto.Cod_inte;
+            var response = await repository.Get<List<StockDepositoDTO>>($"api/stockajustes/stock/{codint}");
+
+            if (!response.Error)
+            {
+                transferencia.StockOrigen = response.Response?
+                    .FirstOrDefault(s => s.Deposito == transferencia.DepositoOrigen)?.Stock ?? 0;
+            }
+        }
+        catch
+        {
+            transferencia.StockOrigen = 0;
+        }
+    }
+
+    private async Task OnValidSubmit()
+    {
+        if (procesando) return;
+        procesando = true;
+        
+        if (transferencia.CantidadTransferir > transferencia.StockOrigen)
+        {
+            await sweetAlertService.FireAsync("Error", "La cantidad a transferir no puede ser mayor al stock disponible", SweetAlertIcon.Error);
+            procesando = false;
+            return;
+        }
+
+        if (transferencia.DepositoOrigen == transferencia.DepositoDestino)
+        {
+            await sweetAlertService.FireAsync("Error", "El depósito origen y destino no pueden ser el mismo", SweetAlertIcon.Error);
+            procesando = false;
+            return;
+        }
+
+        try
+        {
+            var response = await repository.Post("api/stockTransferencia/transferencia", transferencia);
+            if (response.Error)
+            {
+                var mensaje = await response.HttpResponseMessage.Content.ReadAsStringAsync();
+                await sweetAlertService.FireAsync("Error", mensaje, SweetAlertIcon.Error);
+                return;
+            }
+
+            await sweetAlertService.FireAsync("Éxito", "Transferencia realizada correctamente", SweetAlertIcon.Success);
+            await OnSave.InvokeAsync();
+            procesando = false;
+        }
+        catch (Exception ex)
+        {
+            await sweetAlertService.FireAsync("Error", "No se pudo realizar la transferencia", SweetAlertIcon.Error);
+            procesando = false;
+        }
+    }
+}

@@ -1,0 +1,818 @@
+@page "/entrega-orden-reparacion"
+@using IMPLANPROD.Client.Services
+@using IMPLANPROD.Client.Shared.Components
+@inject IRepository repository
+@inject NavigationManager navigationManager
+@inject SweetAlertService sweetAlertService
+@inject RemitosConfigService remitosConfigService
+
+<div class="container-fluid mt-4">
+    <div class="card shadow-sm">
+        <div class="card-header bg-success text-white">
+            <h4 class="mb-0">
+                <i class="fas fa-shipping-fast"></i> Entrega de Orden de Reparación
+            </h4>
+        </div>
+        <div class="card-body">
+            <!-- Instructivos colapsables -->
+            <div class="row mb-4">
+                <div class="col-md-6">
+                    <div class="card border-primary">
+                        <div class="card-header bg-primary text-white" style="cursor: pointer;" @onclick="() => mostrarInstructivoUsuario = !mostrarInstructivoUsuario">
+                            <h6 class="mb-0">
+                                <i class="fas fa-user"></i> Instructivo para Usuario
+                                <i class="fas @(mostrarInstructivoUsuario ? "fa-chevron-up" : "fa-chevron-down") float-end"></i>
+                            </h6>
+                        </div>
+                        @if (mostrarInstructivoUsuario)
+                        {
+                            <div class="card-body">
+                                <h6 class="text-primary"><i class="fas fa-info-circle"></i> ¿Qué hace esta función?</h6>
+                                <p>Permite registrar la entrega de órdenes de reparación que ya están cerradas (Status = 3), generar el remito de entrega con numeración compartida con remitos de cliente, y crear el movimiento de stock correspondiente.</p>
+                                
+                                <h6 class="text-primary mt-3"><i class="fas fa-list-ol"></i> Pasos a seguir:</h6>
+                                <ol>
+                                    <li><strong>Seleccionar orden:</strong> Haga clic en "Seleccionar" en la orden que desea entregar</li>
+                                    <li><strong>Verificar datos:</strong> Revise cliente, fecha y depósito de salida (campos obligatorios)</li>
+                                    <li><strong>Completar formulario:</strong> Ingrese datos de transporte (opcional: transportista, conductor, patente, etc.)</li>
+                                    <li><strong>Confirmar entrega:</strong> Haga clic en "Registrar Entrega"</li>
+                                    <li><strong>Obtener remito:</strong> El sistema genera automáticamente el número de remito (ej: RT-X-0001-00000123)</li>
+                                </ol>
+
+                                <div class="alert alert-warning mt-3" role="alert">
+                                    <i class="fas fa-exclamation-triangle"></i> <strong>IMPORTANTE - Validaciones:</strong>
+                                    <ul class="mb-0 mt-2">
+                                        <li><strong>Cliente válido:</strong> Debe tener número de cliente asociado</li>
+                                        <li><strong>Fecha:</strong> No puede ser mayor a hoy + 1 día</li>
+                                        <li><strong>Depósito:</strong> Debe seleccionar un depósito de salida</li>
+                                        <li>El sistema valida estos campos antes de grabar</li>
+                                    </ul>
+                                </div>
+
+                                <div class="alert alert-info mt-3" role="alert">
+                                    <i class="fas fa-info-circle"></i> <strong>INFORMACIÓN:</strong>
+                                    <ul class="mb-0 mt-2">
+                                        <li>Solo se muestran órdenes cerradas (Status = 3)</li>
+                                        <li>Se genera remito con numeración compartida (CODIMOVI='RT')</li>
+                                        <li>Se crea movimiento de stock en MOVISTO</li>
+                                        <li>Configuración automática desde FLEXCRL (prefijo, código, depósito)</li>
+                                        <li>Los campos de cliente se cargan automáticamente</li>
+                                    </ul>
+                                </div>
+
+                                <h6 class="text-primary mt-3"><i class="fas fa-question-circle"></i> ¿Cuándo usar esta función?</h6>
+                                <ul>
+                                    <li>Cuando la reparación está completada y cerrada (Status = 3)</li>
+                                    <li>Al momento de despachar el equipo al cliente</li>
+                                    <li>Para generar remito de entrega con número oficial</li>
+                                    <li>Para registrar movimiento de salida de stock</li>
+                                    <li>Para documentar datos de transporte (opcional)</li>
+                                </ul>
+
+                                <h6 class="text-danger mt-3"><i class="fas fa-ban"></i> NO usar si:</h6>
+                                <ul>
+                                    <li>La orden no está cerrada (Status ≠ 3)</li>
+                                    <li>No tiene cliente válido asociado</li>
+                                    <li>No hay depósito de salida configurado</li>
+                                    <li>La orden ya fue entregada anteriormente</li>
+                                </ul>
+                            </div>
+                        }
+                    </div>
+                </div>
+
+                <div class="col-md-6">
+                    <InstructivoDesarrollador>
+                                <h6 class="text-info"><i class="fas fa-cogs"></i> Arquitectura</h6>
+                                <p><strong>Frontend:</strong> <code>EntregaOrdenReparacion.razor</code></p>
+                                <p><strong>Backend:</strong> <code>ReparaController.cs</code></p>
+                                <p><strong>Servicios:</strong> <code>RemitosConfigService</code> (configuración FLEXCRL)</p>
+                                <p><strong>Endpoints:</strong></p>
+                                <ul>
+                                    <li><code>GET /api/repara/ordenes-cerradas</code> - Lista órdenes Status = 3</li>
+                                    <li><code>GET /api/repara/datos-cliente/{id}</code> - Datos del cliente</li>
+                                    <li><code>GET /api/repara/orden-completa/{id}</code> - Observaciones y serie</li>
+                                    <li><code>POST /api/repara/registrar-entrega</code> - Graba remito y movimiento</li>
+                                    <li><code>GET /api/movistock/ultimo-numero-remito</code> - Siguiente número</li>
+                                    <li><code>GET /api/flexcrl/{clabus}/{probus}</code> - Configuración</li>
+                                </ul>
+
+                                <h6 class="text-info mt-3"><i class="fas fa-database"></i> Tablas afectadas:</h6>
+                                <ul>
+                                    <li><strong>REPARA:</strong> SELECT WHERE NuOrdRep > 0 AND Status = 3</li>
+                                    <li><strong>DEUDOR12:</strong> SELECT datos del cliente</li>
+                                    <li><strong>MOVISTO:</strong> INSERT movimiento con CODIMOVI='RT'</li>
+                                    <li><strong>FLEXCRL:</strong> SELECT configuración (PREFIREM, CODREFAC, CODGENER, DEPOEXPE)</li>
+                                    <li><strong>TADEPOSI:</strong> SELECT depósitos activos</li>
+                                </ul>
+
+                                <h6 class="text-info mt-3"><i class="fas fa-code-branch"></i> Lógica VB6 replicada:</h6>
+                                <pre class="bg-light p-2 rounded"><code>' Selección de órdenes cerradas
+CONDI$ = "NuOrdRep &gt; 0 And Status = 3"
+Call CARGALISEL("PREPAEMI", "REPARA", "NuOrdRep/I10;RefOrdRep/A128", CONDI$)
+
+' Configuración desde FLEXCRL
+CMO$ = TRIM$(Control$("" , "CODREFAC"))
+If Len(CMO$) &lt;&gt; 2 Then CMO$ = "RT"
+PREFIREM$ = Control$("" , "PREFIREM")
+If PREFIREM$ = "" Then PREFIREM$ = "0001"
+Ci% = CODINT%(Control$("REPARA", "CODGENER"))
+
+' Construcción del remito
+REMI$ = TRIM$(Text11.TEXT) 'RT.NNNNNNN
+NROO&amp; = Val(Mid$(REMI$, 4))
+NROREMI$ = CMO$ + "-X-" + PREFIREM$ + "-" + Format(NROO&amp;, "00000000")
+
+' LOTE = NumeroSerie
+LOTE$ = SAFETEXT$(VALOBADA("REPARA", "NumeroSerie", CONDI$))
+
+' Grabación en MOVISTO
+Call MOVISTOK(FF%, Ci%, LOTE$, CMO$, DOSEC$, REMI$, DOSEC$, REMI$, "", 0, 0, 0, NC, DEPO%, -1)</code></pre>
+
+                                <h6 class="text-info mt-3"><i class="fas fa-shield-alt"></i> Validaciones implementadas:</h6>
+                                <ul>
+                                    <li><strong>Cliente válido:</strong> Nume_Cli &gt; 0 (método ValidarDatosEntrega)</li>
+                                    <li><strong>Fecha:</strong> despacho.Fecha &lt;= DateTime.Today.AddDays(1)</li>
+                                    <li><strong>Depósito:</strong> despacho.Deposito &gt; 0 y existe en TADEPOSI</li>
+                                    <li><strong>Número de remito:</strong> int.TryParse(despacho.NumeroDocumento)</li>
+                                    <li><strong>Orden existe:</strong> REPARA.NumRepa y NuOrdRep válidos</li>
+                                    <li><strong>Transacción atómica:</strong> Rollback automático en caso de error</li>
+                                </ul>
+
+                                <h6 class="text-info mt-3"><i class="fas fa-exchange-alt"></i> Flujo de datos:</h6>
+                                <ol>
+                                    <li><strong>OnInitializedAsync:</strong> Carga depósitos, prefijo, código movimiento, depósito expedición</li>
+                                    <li>GET <code>/api/repara/ordenes-cerradas</code> → Lista órdenes Status = 3</li>
+                                    <li><strong>Al seleccionar:</strong> Carga datos cliente y orden completa</li>
+                                    <li><strong>Usuario completa:</strong> Formulario de despacho (opcional)</li>
+                                    <li><strong>ValidarDatosEntrega:</strong> Valida cliente, fecha, depósito</li>
+                                    <li><strong>ObtenerUltimoNumeroRemitoAsync:</strong> Siguiente número disponible</li>
+                                    <li>POST <code>/api/repara/registrar-entrega</code> → Graba MOVISTO</li>
+                                    <li><strong>Backend:</strong> Obtiene código general, construye remito, crea movimiento</li>
+                                    <li><strong>Confirmación:</strong> Muestra remito completo (RT-X-0001-00000123)</li>
+                                </ol>
+
+                                <h6 class="text-info mt-3"><i class="fas fa-database"></i> Campos grabados en MOVISTO:</h6>
+                                <ul>
+                                    <li><strong>CodiMovi:</strong> "RT" (código movimiento desde FLEXCRL)</li>
+                                    <li><strong>DOPRINUM:</strong> Número de remito (123)</li>
+                                    <li><strong>FechMov:</strong> Fecha del remito</li>
+                                    <li><strong>Cod_Inte:</strong> Código general desde FLEXCRL (CLABUS='REPARA', PROBUS='CODGENER')</li>
+                                    <li><strong>Nume_Clie:</strong> Número de cliente</li>
+                                    <li><strong>DepoMovi:</strong> Depósito de salida</li>
+                                    <li><strong>CantSalid:</strong> 1 (cantidad de salida)</li>
+                                    <li><strong>IdenLote:</strong> NumeroSerie de la orden</li>
+                                    <li><strong>DoPriCor/DoPriLar:</strong> RT.25 / RT-X-0001-00000025</li>
+                                    <li><strong>DoSecCor/DoSecLar:</strong> RT.25 / RT-X-0001-00000025</li>
+                                    <li><strong>ReferCor:</strong> "" (vacío)</li>
+                                    <li><strong>DeLaRemi:</strong> "Entrega O.R. {NuOrdRep} - {Observaciones}"</li>
+                                </ul>
+
+                                <h6 class="text-info mt-3"><i class="fas fa-cog"></i> Configuración FLEXCRL:</h6>
+                                <ul>
+                                    <li><strong>PREFIREM</strong> (CLABUS="", PROBUS="PREFIREM"): Prefijo de remito (default: 0001)</li>
+                                    <li><strong>CODREFAC</strong> (CLABUS="", PROBUS="CODREFAC"): Código de movimiento (default: RT)</li>
+                                    <li><strong>CODGENER</strong> (CLABUS="REPARA", PROBUS="CODGENER"): Código general de producto</li>
+                                    <li><strong>DEPOEXPE</strong> (CLABUS="", PROBUS="DEPOEXPE"): Depósito de expedición</li>
+                                </ul>
+
+                                <div class="alert alert-success mt-3" role="alert">
+                                    <i class="fas fa-check-circle"></i> <strong>Numeración compartida:</strong>
+                                    Los remitos de entrega de O.R. comparten la misma secuencia numérica que los remitos de cliente (CODIMOVI='RT'), garantizando trazabilidad única.
+                                </div>
+
+                                <div class="alert alert-info mt-3" role="alert">
+                                    <i class="fas fa-lightbulb"></i> <strong>Nota técnica:</strong>
+                                    El formulario FOREMI09 del VB6 se replica como modal Bootstrap. La función MOVISTOK se replica en el endpoint registrar-entrega con transacción atómica.
+                                </div>
+                    </InstructivoDesarrollador>
+                </div>
+            </div>
+            <!-- Fin instructivos -->
+
+            @if (cargando)
+            {
+                <div class="text-center py-5">
+                    <div class="spinner-border text-success" role="status">
+                        <span class="visually-hidden">Cargando...</span>
+                    </div>
+                    <p class="mt-3">Cargando órdenes cerradas...</p>
+                </div>
+            }
+            else if (ordenesCerradas == null || !ordenesCerradas.Any())
+            {
+                <div class="alert alert-warning" role="alert">
+                    <i class="fas fa-exclamation-triangle"></i>
+                    <strong>No Hay Presupuestos Pendientes para Emitir Orden de Reparación</strong>
+                </div>
+            }
+            else
+            {
+                <div class="row mb-4">
+                    <div class="col-md-12">
+                        <h5 class="mb-3">Índice de Reparaciones Pendientes de Entrega</h5>
+                        <div class="table-responsive">
+                            <table class="table table-hover table-striped">
+                                <thead class="table-dark">
+                                    <tr>
+                                        <th style="width: 15%">Nro. O.R.</th>
+                                        <th style="width: 20%">Referencia</th>
+                                        <th style="width: 15%">Nro. Reparación</th>
+                                        <th style="width: 15%">Cliente</th>
+                                        <th style="width: 20%">Razón Social</th>
+                                        <th style="width: 15%" class="text-center">Acciones</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var orden in ordenesCerradas)
+                                    {
+                                        <tr>
+                                            <td>
+                                                <strong class="text-success">
+                                                    @((int)orden.NuOrdRep!)
+                                                </strong>
+                                            </td>
+                                            <td>@(orden.RefOrdRep ?? "-")</td>
+                                            <td>
+                                                <span class="badge bg-info">
+                                                    @orden.NumRepa
+                                                </span>
+                                            </td>
+                                            <td>@(orden.Nume_Cli?.ToString() ?? "-")</td>
+                                            <td>@(orden.Raso_Cli ?? "-")</td>
+                                            <td class="text-center">
+                                                <button class="btn btn-success btn-sm" 
+                                                        @onclick="() => SeleccionarOrden(orden)">
+                                                    <i class="fas fa-check"></i> Seleccionar
+                                                </button>
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            }
+        </div>
+    </div>
+</div>
+
+<!-- Modal de Despacho de Materiales -->
+@if (mostrarModal && ordenSeleccionada != null)
+{
+    <div class="modal fade show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5);">
+        <div class="modal-dialog modal-xl">
+            <div class="modal-content">
+                <div class="modal-header bg-success text-white">
+                    <h5 class="modal-title">
+                        <i class="fas fa-shipping-fast"></i> Despacho de Materiales - O.R. @((int)ordenSeleccionada.NuOrdRep!)
+                    </h5>
+                    <button type="button" class="btn-close btn-close-white" @onclick="CerrarModal"></button>
+                </div>
+                <div class="modal-body">
+                    @if (cargandoDatos)
+                    {
+                        <div class="text-center py-4">
+                            <div class="spinner-border text-success" role="status"></div>
+                            <p class="mt-2">Cargando datos...</p>
+                        </div>
+                    }
+                    else
+                    {
+                        <!-- Datos del Cliente (solo lectura) -->
+                        <div class="row mb-3">
+                            <div class="col-md-12">
+                                <h6 class="text-success"><i class="fas fa-user"></i> Datos del Cliente</h6>
+                            </div>
+                        </div>
+                        <div class="row mb-3">
+                            <div class="col-md-2">
+                                <label class="form-label">Cuenta:</label>
+                                <input type="text" class="form-control" value="@(datosCliente?.Nume_Cli ?? 0)" readonly />
+                            </div>
+                            <div class="col-md-5">
+                                <label class="form-label">Razón Social:</label>
+                                <input type="text" class="form-control" value="@(datosCliente?.Raso_Cli ?? "")" readonly />
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label">Fecha:</label>
+                                <input type="date" class="form-control" @bind="despacho.Fecha" />
+                            </div>
+                            <div class="col-md-2">
+                                <label class="form-label">Nro Remito:</label>
+                                <div class="input-group">
+                                    <span class="input-group-text">@prefijoRemito.ToString("D4")-</span>
+                                    <input type="text" class="form-control" @bind="despacho.NumeroDocumento" placeholder="Auto" readonly />
+                                </div>
+                            </div>
+                        </div>
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <label class="form-label">Domicilio:</label>
+                                <input type="text" class="form-control" value="@(datosCliente?.Domi_Cli ?? "")" readonly />
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label">Cod. Postal:</label>
+                                <input type="text" class="form-control" value="@(datosCliente?.Cpos_Cli ?? "")" readonly />
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label">Localidad:</label>
+                                <input type="text" class="form-control" value="@(datosCliente?.Loca_Cli ?? "")" readonly />
+                            </div>
+                        </div>
+
+                        <hr />
+
+                        <!-- Descripción (Observaciones + Número de Serie) -->
+                        <div class="row mb-3">
+                            <div class="col-md-12">
+                                <label class="form-label"><strong>Descripción:</strong></label>
+                                <textarea class="form-control" rows="4" readonly>@descripcionCompleta</textarea>
+                            </div>
+                        </div>
+
+                        <hr />
+
+                        <!-- Datos de Transporte -->
+                        <div class="row mb-3">
+                            <div class="col-md-12">
+                                <h6 class="text-success"><i class="fas fa-truck"></i> Datos de Transporte</h6>
+                            </div>
+                        </div>
+                        <div class="row mb-3">
+                            <div class="col-md-4">
+                                <label class="form-label">Orden de Compra:</label>
+                                <input type="text" class="form-control" @bind="despacho.OrdenCompra" />
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label">Número de Bultos:</label>
+                                <input type="number" class="form-control" @bind="despacho.NumeroBultos" />
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label">Conductor:</label>
+                                <input type="text" class="form-control" @bind="despacho.Conductor" />
+                            </div>
+                        </div>
+                        <div class="row mb-3">
+                            <div class="col-md-3">
+                                <label class="form-label">DNI:</label>
+                                <input type="text" class="form-control" @bind="despacho.DNI" />
+                            </div>
+                            <div class="col-md-5">
+                                <label class="form-label">Transportista:</label>
+                                <input type="text" class="form-control" @bind="despacho.Transportista" />
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label">C.U.I.T.:</label>
+                                <input type="text" class="form-control" @bind="despacho.CUIT" />
+                            </div>
+                        </div>
+                        <div class="row mb-3">
+                            <div class="col-md-3">
+                                <label class="form-label">Patente:</label>
+                                <input type="text" class="form-control" @bind="despacho.Patente" />
+                            </div>
+                            <div class="col-md-9">
+                                <label class="form-label">Domicilio:</label>
+                                <input type="text" class="form-control" @bind="despacho.DomicilioTransporte" />
+                            </div>
+                        </div>
+
+                        <hr />
+
+                        <!-- Valor Declarado y Observaciones -->
+                        <div class="row mb-3">
+                            <div class="col-md-4">
+                                <label class="form-label">Valor Declarado:</label>
+                                <input type="number" step="0.01" class="form-control" @bind="despacho.ValorDeclarado" />
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label"><span class="text-danger">*</span> Depósito de Salida:</label>
+                                <select class="form-select" @bind="despacho.Deposito">
+                                    <option value="0">-- Seleccione depósito --</option>
+                                    @foreach (var deposito in depositos)
+                                    {
+                                        <option value="@deposito.CodigoDepo">@deposito.CodigoDepo - @deposito.Descripcion</option>
+                                    }
+                                </select>
+                            </div>
+                        </div>
+                        <div class="row mb-3">
+                            <div class="col-md-12">
+                                <label class="form-label">Observaciones:</label>
+                                <textarea class="form-control" rows="3" @bind="despacho.Observaciones"></textarea>
+                            </div>
+                        </div>
+                    }
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" @onclick="CerrarModal">
+                        <i class="fas fa-times"></i> Cancelar
+                    </button>
+                    <button type="button" class="btn btn-success" @onclick="RegistrarEntrega" disabled="@cargandoDatos">
+                        <i class="fas fa-save"></i> Registrar Entrega
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private List<OrdenReparacionDTO>? ordenesCerradas;
+    private OrdenReparacionDTO? ordenSeleccionada;
+    private ClienteDTO? datosCliente;
+    private DespachoDTO despacho = new();
+    private string descripcionCompleta = "";
+    
+    private bool cargando = true;
+    private bool cargandoDatos = false;
+    private bool mostrarModal = false;
+    
+    // Variables para controlar la visibilidad de los instructivos
+    private bool mostrarInstructivoUsuario = false;
+    
+    // Configuración de remito y depósito
+    private int prefijoRemito = 0;
+    private int depositoSeleccionado = 0;
+    private string codigoMovimiento = "RT"; // Valor por defecto
+    private List<Tadeposi> depositos = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await CargarDepositos();
+        await CargarPrefijoDefecto();
+        await CargarCodigoMovimientoDefecto();
+        await CargarDepositoExpedicionDefecto();
+        await CargarOrdenesCerradas();
+    }
+
+    /// <summary>
+    /// Carga el prefijo por defecto desde la configuración
+    /// </summary>
+    private async Task CargarPrefijoDefecto()
+    {
+        try
+        {
+            prefijoRemito = await remitosConfigService.ObtenerPrefijoRemitosNumericoAsync();
+            Console.WriteLine($"[EntregaOrdenReparacion] Prefijo por defecto cargado: {prefijoRemito}");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[EntregaOrdenReparacion] Error al cargar prefijo por defecto: {ex.Message}");
+            prefijoRemito = 0;
+        }
+    }
+
+    /// <summary>
+    /// Carga el código de movimiento por defecto desde la configuración
+    /// </summary>
+    private async Task CargarCodigoMovimientoDefecto()
+    {
+        try
+        {
+            codigoMovimiento = await remitosConfigService.ObtenerCodigoMovimientoAsync();
+            Console.WriteLine($"[EntregaOrdenReparacion] Código de movimiento cargado: {codigoMovimiento}");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[EntregaOrdenReparacion] Error al cargar código de movimiento: {ex.Message}");
+            codigoMovimiento = "RT"; // Valor por defecto
+        }
+    }
+
+    /// <summary>
+    /// Carga la lista de depósitos activos
+    /// </summary>
+    private async Task CargarDepositos()
+    {
+        try
+        {
+            var response = await repository.Get<List<Tadeposi>>("api/tadeposi/activos");
+            if (!response.Error && response.Response != null)
+            {
+                depositos = response.Response;
+                Console.WriteLine($"[EntregaOrdenReparacion] Depósitos cargados: {depositos.Count}");
+            }
+            else
+            {
+                Console.WriteLine("[EntregaOrdenReparacion] Error al cargar depósitos");
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[EntregaOrdenReparacion] Error al cargar depósitos: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// Carga el depósito de expedición por defecto desde la configuración FLEXCRL
+    /// </summary>
+    private async Task CargarDepositoExpedicionDefecto()
+    {
+        try
+        {
+            string probusParam = "DEPOEXPE";
+            string clabusParam = "empty";
+            
+            var response = await repository.Get<FLEXCRL>($"api/flexcrl/{clabusParam}/{probusParam}");
+            
+            if (!response.Error && response.Response != null)
+            {
+                var config = response.Response;
+                if (int.TryParse(config.VALCONTROL, out var depositoConfig) && depositoConfig > 0)
+                {
+                    var depositoExiste = depositos.Any(d => d.CodigoDepo == depositoConfig);
+                    if (depositoExiste)
+                    {
+                        depositoSeleccionado = depositoConfig;
+                        Console.WriteLine($"[EntregaOrdenReparacion] Depósito de expedición por defecto cargado: {depositoSeleccionado}");
+                    }
+                    else
+                    {
+                        Console.WriteLine($"[EntregaOrdenReparacion] Depósito configurado ({depositoConfig}) no existe en depósitos activos");
+                        depositoSeleccionado = 0;
+                    }
+                }
+                else
+                {
+                    Console.WriteLine("[EntregaOrdenReparacion] No hay depósito de expedición configurado o valor inválido");
+                    depositoSeleccionado = 0;
+                }
+            }
+            else
+            {
+                Console.WriteLine("[EntregaOrdenReparacion] No se encontró configuración de depósito de expedición");
+                depositoSeleccionado = 0;
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[EntregaOrdenReparacion] Error al cargar depósito de expedición: {ex.Message}");
+            depositoSeleccionado = 0;
+        }
+    }
+
+    /// <summary>
+    /// Carga las órdenes de reparación cerradas (NuOrdRep > 0 And Status = 3)
+    /// </summary>
+    private async Task CargarOrdenesCerradas()
+    {
+        try
+        {
+            cargando = true;
+            var response = await repository.Get<List<OrdenReparacionDTO>>("api/repara/ordenes-cerradas");
+            
+            if (!response.Error && response.Response != null)
+            {
+                ordenesCerradas = response.Response;
+            }
+            else
+            {
+                ordenesCerradas = new List<OrdenReparacionDTO>();
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error al cargar órdenes cerradas: {ex.Message}");
+            ordenesCerradas = new List<OrdenReparacionDTO>();
+            
+            await sweetAlertService.FireAsync(new SweetAlertOptions
+            {
+                Title = "Error",
+                Text = "Error al cargar las órdenes cerradas",
+                Icon = SweetAlertIcon.Error
+            });
+        }
+        finally
+        {
+            cargando = false;
+        }
+    }
+
+    /// <summary>
+    /// Selecciona una orden y carga sus datos para el formulario de despacho
+    /// </summary>
+    private async Task SeleccionarOrden(OrdenReparacionDTO orden)
+    {
+        ordenSeleccionada = orden;
+        mostrarModal = true;
+        cargandoDatos = true;
+
+        try
+        {
+            // Cargar datos del cliente
+            var responseCliente = await repository.Get<ClienteDTO>($"api/repara/datos-cliente/{orden.Nume_Cli}");
+            if (!responseCliente.Error && responseCliente.Response != null)
+            {
+                datosCliente = responseCliente.Response;
+            }
+
+            // Cargar datos completos de la orden
+            var responseOrden = await repository.Get<OrdenCompletaDTO>($"api/repara/orden-completa/{orden.NumRepa}");
+            if (!responseOrden.Error && responseOrden.Response != null)
+            {
+                var ordenCompleta = responseOrden.Response;
+                
+                // Construir descripción: Observaciones + S/No. + NumeroSerie + Ref: + Referen2
+                descripcionCompleta = $"{ordenCompleta.Observa ?? ""}\r\n";
+                descripcionCompleta += $"S/No. {ordenCompleta.NumeroSerie ?? ""} - Ref: {ordenCompleta.Referen2 ?? ""}";
+            }
+
+            // Inicializar datos del despacho
+            despacho = new DespachoDTO
+            {
+                Fecha = DateTime.Now,
+                NumRepa = orden.NumRepa,
+                NuOrdRep = (int)orden.NuOrdRep!,
+                Deposito = depositoSeleccionado > 0 ? depositoSeleccionado : 0,
+                CodigoMovimiento = codigoMovimiento,
+                Prefijo = prefijoRemito
+            };
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error al cargar datos de la orden: {ex.Message}");
+            await sweetAlertService.FireAsync(new SweetAlertOptions
+            {
+                Title = "Error",
+                Text = "Error al cargar los datos de la orden",
+                Icon = SweetAlertIcon.Error
+            });
+        }
+        finally
+        {
+            cargandoDatos = false;
+        }
+    }
+
+    /// <summary>
+    /// Cierra el modal de despacho
+    /// </summary>
+    private void CerrarModal()
+    {
+        mostrarModal = false;
+        ordenSeleccionada = null;
+        datosCliente = null;
+        despacho = new();
+        descripcionCompleta = "";
+    }
+
+    /// <summary>
+    /// Registra la entrega de la orden de reparación
+    /// </summary>
+    private async Task RegistrarEntrega()
+    {
+        // Validaciones antes de grabar
+        if (!await ValidarDatosEntrega())
+        {
+            return;
+        }
+
+        try
+        {
+            // Obtener el siguiente número de remito disponible
+            var ultimoNumero = await remitosConfigService.ObtenerUltimoNumeroRemitoAsync();
+            var siguienteNumero = ultimoNumero + 1;
+            
+            Console.WriteLine($"[EntregaOrdenReparacion] Último número de remito: {ultimoNumero}, Siguiente: {siguienteNumero}");
+            
+            // Asignar el número de remito al despacho
+            despacho.NumeroDocumento = siguienteNumero.ToString();
+            
+            var response = await repository.Post<DespachoDTO, object>("api/repara/registrar-entrega", despacho);
+
+            if (!response.Error)
+            {
+                // Construir número de remito completo para mostrar al usuario
+                var remitoCompleto = $"{codigoMovimiento}-X-{prefijoRemito.ToString("D4")}-{siguienteNumero.ToString("D8")}";
+                
+                await sweetAlertService.FireAsync(new SweetAlertOptions
+                {
+                    Title = "¡Éxito!",
+                    Text = $"La entrega de la O.R. Nro. {despacho.NuOrdRep} ha sido registrada exitosamente.\n\nRemito: {remitoCompleto}",
+                    Icon = SweetAlertIcon.Success
+                });
+
+                CerrarModal();
+                await CargarOrdenesCerradas();
+            }
+            else
+            {
+                var errorMessage = await response.GetErrorMessageAsync();
+                await sweetAlertService.FireAsync(new SweetAlertOptions
+                {
+                    Title = "Error",
+                    Text = errorMessage,
+                    Icon = SweetAlertIcon.Error
+                });
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error al registrar entrega: {ex.Message}");
+            await sweetAlertService.FireAsync(new SweetAlertOptions
+            {
+                Title = "Error",
+                Text = "Ocurrió un error al registrar la entrega",
+                Icon = SweetAlertIcon.Error
+            });
+        }
+    }
+
+    /// <summary>
+    /// Valida los datos antes de registrar la entrega
+    /// </summary>
+    private async Task<bool> ValidarDatosEntrega()
+    {
+        // 1. Validar que tenga número de cliente válido
+        if (datosCliente == null || datosCliente.Nume_Cli <= 0)
+        {
+            await sweetAlertService.FireAsync(new SweetAlertOptions
+            {
+                Title = "Error de Validación",
+                Text = "No hay un cliente válido asociado a esta orden",
+                Icon = SweetAlertIcon.Error
+            });
+            return false;
+        }
+
+        // 2. Validar que la fecha no sea mayor a hoy + 1
+        var fechaMaxima = DateTime.Today.AddDays(1);
+        if (despacho.Fecha.Date > fechaMaxima)
+        {
+            await sweetAlertService.FireAsync(new SweetAlertOptions
+            {
+                Title = "Error de Validación",
+                Text = $"La fecha no puede ser mayor a {fechaMaxima:dd/MM/yyyy}",
+                Icon = SweetAlertIcon.Error
+            });
+            return false;
+        }
+
+        // 3. Validar que tenga informado el número de depósito de salida
+        if (!despacho.Deposito.HasValue || despacho.Deposito.Value <= 0)
+        {
+            await sweetAlertService.FireAsync(new SweetAlertOptions
+            {
+                Title = "Error de Validación",
+                Text = "Debe seleccionar un depósito de salida",
+                Icon = SweetAlertIcon.Error
+            });
+            return false;
+        }
+
+        return true;
+    }
+
+    // DTOs
+    private class OrdenReparacionDTO
+    {
+        public int Id { get; set; }
+        public int NumRepa { get; set; }
+        public decimal? NuOrdRep { get; set; }
+        public string? RefOrdRep { get; set; }
+        public short? Status { get; set; }
+        public DateTime? FechRecep { get; set; }
+        public int? Nume_Cli { get; set; }
+        public string? Raso_Cli { get; set; }
+    }
+
+    private class ClienteDTO
+    {
+        public int Nume_Cli { get; set; }
+        public string? Raso_Cli { get; set; }
+        public string? Domi_Cli { get; set; }
+        public string? Cpos_Cli { get; set; }
+        public string? Loca_Cli { get; set; }
+    }
+
+    private class OrdenCompletaDTO
+    {
+        public string? Observa { get; set; }
+        public string? NumeroSerie { get; set; }
+        public string? Referen2 { get; set; }
+    }
+
+    private class DespachoDTO
+    {
+        public DateTime Fecha { get; set; }
+        public string? NumeroDocumento { get; set; }
+        public int NumRepa { get; set; }
+        public int NuOrdRep { get; set; }
+        public string? OrdenCompra { get; set; }
+        public int? NumeroBultos { get; set; }
+        public string? Conductor { get; set; }
+        public string? DNI { get; set; }
+        public string? Transportista { get; set; }
+        public string? CUIT { get; set; }
+        public string? Patente { get; set; }
+        public string? DomicilioTransporte { get; set; }
+        public decimal? ValorDeclarado { get; set; }
+        public int? Deposito { get; set; }
+        public string? Observaciones { get; set; }
+        public string? CodigoMovimiento { get; set; }
+        public int? Prefijo { get; set; }
+    }
+}

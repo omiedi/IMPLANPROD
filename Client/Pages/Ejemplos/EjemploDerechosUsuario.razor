@@ -1,0 +1,360 @@
+@page "/ejemplos/derechos-usuario"
+@using IMPLANPROD.Client.Services
+@inject DerechosUsuarioClientService derechosService
+@inject NavigationManager navigationManager
+
+<h3>🔐 Ejemplo de Verificación de Derechos de Usuario</h3>
+
+<div class="card mt-3">
+    <div class="card-header">
+        <h5>Ejemplo 1: Verificación con Mensajes</h5>
+    </div>
+    <div class="card-body">
+        <p>Este ejemplo muestra mensajes automáticos al usuario cuando no tiene permisos.</p>
+        <button class="btn btn-primary" @onclick="EjemploConMensajes">
+            Aprobar Pedido (con mensajes)
+        </button>
+    </div>
+</div>
+
+<div class="card mt-3">
+    <div class="card-header">
+        <h5>Ejemplo 2: Verificación Sin Mensajes (NOMESS)</h5>
+    </div>
+    <div class="card-body">
+        <p>Este ejemplo verifica permisos sin mostrar alertas automáticas.</p>
+        <button class="btn btn-secondary" @onclick="EjemploSinMensajes">
+            Modificar Pedido (sin mensajes)
+        </button>
+        @if (!string.IsNullOrEmpty(mensajePersonalizado))
+        {
+            <div class="alert alert-info mt-2">
+                @mensajePersonalizado
+            </div>
+        }
+    </div>
+</div>
+
+<div class="card mt-3">
+    <div class="card-header">
+        <h5>Ejemplo 3: Deshabilitar Botones Según Permisos</h5>
+    </div>
+    <div class="card-body">
+        <p>Los botones se habilitan/deshabilitan según los permisos del usuario.</p>
+        <div class="btn-group">
+            <button class="btn btn-success" 
+                    disabled="@(!puedeAprobar)" 
+                    @onclick="AprobarAccion">
+                @if (puedeAprobar)
+                {
+                    <i class="fas fa-check"></i>
+                    <text> Aprobar</text>
+                }
+                else
+                {
+                    <i class="fas fa-lock"></i>
+                    <text> Sin Permisos</text>
+                }
+            </button>
+            
+            <button class="btn btn-warning" 
+                    disabled="@(!puedeModificar)" 
+                    @onclick="ModificarAccion">
+                @if (puedeModificar)
+                {
+                    <i class="fas fa-edit"></i>
+                    <text> Modificar</text>
+                }
+                else
+                {
+                    <i class="fas fa-lock"></i>
+                    <text> Sin Permisos</text>
+                }
+            </button>
+            
+            <button class="btn btn-danger" 
+                    disabled="@(!puedeEliminar)" 
+                    @onclick="EliminarAccion">
+                @if (puedeEliminar)
+                {
+                    <i class="fas fa-trash"></i>
+                    <text> Eliminar</text>
+                }
+                else
+                {
+                    <i class="fas fa-lock"></i>
+                    <text> Sin Permisos</text>
+                }
+            </button>
+        </div>
+    </div>
+</div>
+
+<div class="card mt-3">
+    <div class="card-header">
+        <h5>Ejemplo 4: Verificación en OnInitializedAsync</h5>
+    </div>
+    <div class="card-body">
+        @if (cargando)
+        {
+            <div class="spinner-border text-primary" role="status">
+                <span class="visually-hidden">Cargando...</span>
+            </div>
+            <span class="ms-2">Verificando permisos...</span>
+        }
+        else if (!tieneAccesoPagina)
+        {
+            <div class="alert alert-danger">
+                <i class="fas fa-exclamation-triangle"></i>
+                No tiene acceso a esta página. Será redirigido en @segundosRestantes segundos...
+            </div>
+        }
+        else
+        {
+            <div class="alert alert-success">
+                <i class="fas fa-check-circle"></i>
+                Tiene acceso completo a esta página.
+            </div>
+        }
+    </div>
+</div>
+
+<div class="card mt-3">
+    <div class="card-header">
+        <h5>Ejemplo 5: Métodos Simplificados</h5>
+    </div>
+    <div class="card-body">
+        <button class="btn btn-info" @onclick="EjemploMetodosSimplificados">
+            Verificar con Métodos Simplificados
+        </button>
+        @if (!string.IsNullOrEmpty(resultadoSimplificado))
+        {
+            <div class="alert alert-primary mt-2">
+                @resultadoSimplificado
+            </div>
+        }
+    </div>
+</div>
+
+<div class="card mt-3 bg-light">
+    <div class="card-body">
+        <h6>📝 Notas de Implementación:</h6>
+        <ul>
+            <li><strong>Nivel 0</strong>: Sin acceso - Se muestra mensaje de error</li>
+            <li><strong>Nivel 1</strong>: Solo lectura - Se muestra advertencia</li>
+            <li><strong>Nivel 2</strong>: Lectura y escritura - Acceso completo</li>
+            <li>Si la aplicación no existe en INDI_APLI, se crea automáticamente</li>
+            <li>Use <code>mostrarMensaje: false</code> para verificaciones silenciosas</li>
+            <li><strong>Importante</strong>: El usuario debe cerrar sesión y volver a iniciar sesión después de configurar derechos</li>
+        </ul>
+    </div>
+</div>
+
+@code {
+    private bool cargando = true;
+    private bool tieneAccesoPagina = false;
+    private bool puedeAprobar = false;
+    private bool puedeModificar = false;
+    private bool puedeEliminar = false;
+    private string mensajePersonalizado = string.Empty;
+    private string resultadoSimplificado = string.Empty;
+    private int segundosRestantes = 5;
+
+    protected override async Task OnInitializedAsync()
+    {
+        // Ejemplo 4: Verificar acceso a la página al inicializar
+        var nivelAcceso = await derechosService.VerificarDerechoAsync(
+            "VERPAGINA",
+            "VER PÁGINA DE EJEMPLOS",
+            mostrarMensaje: false // No mostrar mensaje automático
+        );
+
+        tieneAccesoPagina = nivelAcceso >= 1; // Al menos lectura
+        cargando = false;
+
+        // Si no tiene acceso, redirigir después de 5 segundos
+        if (!tieneAccesoPagina)
+        {
+            _ = Task.Run(async () =>
+            {
+                for (int i = 5; i > 0; i--)
+                {
+                    segundosRestantes = i;
+                    await InvokeAsync(StateHasChanged);
+                    await Task.Delay(1000);
+                }
+                navigationManager.NavigateTo("/");
+            });
+        }
+
+        // Ejemplo 3: Verificar permisos para botones (sin mensajes)
+        puedeAprobar = await derechosService.TieneAccesoEscrituraAsync(
+            "APROPEDI",
+            "APROBAR PEDIDOS",
+            mostrarMensaje: false
+        );
+
+        puedeModificar = await derechosService.TieneAccesoEscrituraAsync(
+            "MODPEDIDO",
+            "MODIFICAR PEDIDOS",
+            mostrarMensaje: false
+        );
+
+        puedeEliminar = await derechosService.TieneAccesoEscrituraAsync(
+            "ELIMREG",
+            "ELIMINAR REGISTROS",
+            mostrarMensaje: false
+        );
+    }
+
+    /// <summary>
+    /// Ejemplo 1: Verificación con mensajes automáticos
+    /// Replica: if (deracce("APROPEDI","APROBAR PEDIDOS PENDIENTES") < 2) { return; }
+    /// </summary>
+    private async Task EjemploConMensajes()
+    {
+        Console.WriteLine("=== Ejemplo 1: Verificación con mensajes ===");
+
+        // Verificar derechos (muestra mensajes automáticos)
+        var nivelAcceso = await derechosService.VerificarDerechoAsync(
+            "APROPEDI",
+            "APROBAR PEDIDOS PENDIENTES"
+            // mostrarMensaje: true es el valor por defecto
+        );
+
+        if (nivelAcceso < 2)
+        {
+            Console.WriteLine("Usuario no tiene permisos de escritura. Abortando operación.");
+            return; // El servicio ya mostró el mensaje apropiado
+        }
+
+        // Usuario tiene permisos, continuar con la operación
+        Console.WriteLine("✅ Usuario tiene permisos. Procesando aprobación...");
+        // Aquí iría la lógica de aprobación
+    }
+
+    /// <summary>
+    /// Ejemplo 2: Verificación sin mensajes (equivalente a "NOMESS" en VB6)
+    /// Replica: if (deracce("MODPEDIDO","MODIFICAR PEDIDOS","NOMESS") < 2) { return; }
+    /// </summary>
+    private async Task EjemploSinMensajes()
+    {
+        Console.WriteLine("=== Ejemplo 2: Verificación sin mensajes (NOMESS) ===");
+
+        mensajePersonalizado = string.Empty;
+
+        // Verificar sin mostrar mensajes automáticos
+        var nivelAcceso = await derechosService.VerificarDerechoAsync(
+            "MODPEDIDO",
+            "MODIFICAR PEDIDOS",
+            mostrarMensaje: false // Equivalente a "NOMESS"
+        );
+
+        if (nivelAcceso < 2)
+        {
+            // Manejar el error de forma personalizada
+            mensajePersonalizado = nivelAcceso == 0 
+                ? "❌ No tiene permisos para modificar pedidos." 
+                : "⚠️ Solo tiene permisos de lectura. No puede modificar.";
+            
+            Console.WriteLine($"Sin permisos. Nivel: {nivelAcceso}");
+            return;
+        }
+
+        // Usuario tiene permisos
+        mensajePersonalizado = "✅ Modificación procesada exitosamente.";
+        Console.WriteLine("✅ Usuario tiene permisos. Procesando modificación...");
+    }
+
+    /// <summary>
+    /// Ejemplo 3: Acción de aprobar
+    /// </summary>
+    private async Task AprobarAccion()
+    {
+        Console.WriteLine("=== Acción: Aprobar ===");
+        
+        // Verificar nuevamente antes de la acción crítica
+        var nivel = await derechosService.VerificarDerechoAsync(
+            "APROPEDI",
+            "APROBAR PEDIDOS"
+        );
+
+        if (nivel >= 2)
+        {
+            Console.WriteLine("✅ Aprobación procesada");
+        }
+    }
+
+    /// <summary>
+    /// Ejemplo 3: Acción de modificar
+    /// </summary>
+    private async Task ModificarAccion()
+    {
+        Console.WriteLine("=== Acción: Modificar ===");
+        
+        var nivel = await derechosService.VerificarDerechoAsync(
+            "MODPEDIDO",
+            "MODIFICAR PEDIDOS"
+        );
+
+        if (nivel >= 2)
+        {
+            Console.WriteLine("✅ Modificación procesada");
+        }
+    }
+
+    /// <summary>
+    /// Ejemplo 3: Acción de eliminar
+    /// </summary>
+    private async Task EliminarAccion()
+    {
+        Console.WriteLine("=== Acción: Eliminar ===");
+        
+        var nivel = await derechosService.VerificarDerechoAsync(
+            "ELIMREG",
+            "ELIMINAR REGISTROS"
+        );
+
+        if (nivel >= 2)
+        {
+            Console.WriteLine("✅ Eliminación procesada");
+        }
+    }
+
+    /// <summary>
+    /// Ejemplo 5: Uso de métodos simplificados
+    /// </summary>
+    private async Task EjemploMetodosSimplificados()
+    {
+        Console.WriteLine("=== Ejemplo 5: Métodos simplificados ===");
+
+        resultadoSimplificado = string.Empty;
+
+        // Método 1: TieneAccesoEscrituraAsync
+        var puedeEscribir = await derechosService.TieneAccesoEscrituraAsync(
+            "TESTAPP",
+            "APLICACIÓN DE PRUEBA",
+            mostrarMensaje: false
+        );
+
+        // Método 2: TieneAccesoLecturaAsync
+        var puedeLeer = await derechosService.TieneAccesoLecturaAsync(
+            "TESTAPP",
+            "APLICACIÓN DE PRUEBA",
+            mostrarMensaje: false
+        );
+
+        var textoEscribir = puedeEscribir ? "Sí" : "No";
+        var textoLeer = puedeLeer ? "Sí" : "No";
+        
+        resultadoSimplificado = $@"
+Resultados de verificación:
+• Puede escribir: {textoEscribir}
+• Puede leer: {textoLeer}
+
+Estos métodos retornan bool en lugar de int (0,1,2).
+        ";
+
+        Console.WriteLine(resultadoSimplificado);
+    }
+}

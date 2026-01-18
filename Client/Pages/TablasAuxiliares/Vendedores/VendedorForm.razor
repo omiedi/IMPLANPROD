@@ -1,0 +1,60 @@
+@inject SweetAlertService sweetAlertService
+
+@using CurrieTechnologies.Razor.SweetAlert2
+
+<!-- Formulario para crear/editar un vendedor -->
+<EditForm Model="Vendedor" OnValidSubmit="OnValidSubmit">
+    <DataAnnotationsValidator />
+
+    <div class="mb-3">
+        <label>Número:</label>
+        <div>
+            <InputNumber class="form-control" @bind-Value="@Vendedor.NumVendedor" disabled="@IsEdit" />
+            <ValidationMessage For="@(() => Vendedor.NumVendedor)" />
+        </div>
+    </div>
+    <div class="mb-3">
+        <label>Nombre:</label>
+        <div>
+            <InputText class="form-control" @bind-Value="@Vendedor.NombreVendedor" />
+            <ValidationMessage For="@(() => Vendedor.NombreVendedor)" />
+        </div>
+    </div>
+    <div class="mb-3">
+        <label>Comisión Venta (%):</label>
+        <div>
+            <InputNumber class="form-control" @bind-Value="@Vendedor.ComVenta" step="0.01" />
+            <ValidationMessage For="@(() => Vendedor.ComVenta)" />
+        </div>
+    </div>
+    <div class="mb-3">
+        <label>Comisión Cobranza (%):</label>
+        <div>
+            <InputNumber class="form-control" @bind-Value="@Vendedor.ComCobranza" step="0.01" />
+            <ValidationMessage For="@(() => Vendedor.ComCobranza)" />
+        </div>
+    </div>
+
+    <button class="btn btn-primary" type="submit">Guardar Cambios</button>
+    <button class="btn btn-success" type="button" @onclick="ReturnAction">Regresar</button>
+
+</EditForm>
+
+@code {
+    [EditorRequired]
+    [Parameter]
+    public Vendedor Vendedor { get; set; } = null!;
+
+    [EditorRequired]
+    [Parameter]
+    public EventCallback OnValidSubmit { get; set; }
+
+    [EditorRequired]
+    [Parameter]
+    public EventCallback ReturnAction { get; set; }
+
+    [Parameter]
+    public bool IsEdit { get; set; }
+
+    public bool FormPostedSuccessfully { get; set; }
+}

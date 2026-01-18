@@ -1,0 +1,81 @@
+@page "/TablaMonedas/Tamoned/BajaIndex"
+@inject IRepository repository
+@inject NavigationManager navigationManager
+@inject SweetAlertService sweetAlertService
+
+<div class="bg-primary text-white text-center p-3 mb-4">
+    <h1>Monedas Inactivas</h1>
+</div>
+<div class="mb-3">
+    <a class="btn btn-success" href="/TablaMonedas/Tamoned/Index">Volver</a>
+</div>
+<GenericList MyList="tamoneds">
+    <Body>
+        <table class="table table-striped">
+            <thead>
+                <tr>
+                    <th>Código</th>
+                    <th>Descripción</th>
+                    <th>Cotización</th>
+                    <th>Estado</th>
+                    <th>Acciones</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var item in tamoneds!)
+                {
+                    <tr>
+                        <td>@item.CodigoMoneda</td>
+                        <td>@item.Descripcion</td>
+                        <td>@item.Cotizacion</td>
+                        <td>@(item.Status == 0 ? "Activo" : "Inactivo")</td>
+                        <td>
+                            <button class="btn btn-success" @onclick=@(() => CambiaStatusAsync(item.Id, 0))><i class="oi oi-check" /> Activar</button>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </Body>
+</GenericList>
+
+@code {
+    public List<Tamoned>? tamoneds { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        var responseHppt = await repository.Get<List<Tamoned>>($"api/tamoneds/GetAllInactivos");
+        if (responseHppt.Error)
+        {
+            if (responseHppt.HttpResponseMessage.StatusCode == System.Net.HttpStatusCode.NotFound)
+            {
+                navigationManager.NavigateTo("/");
+                return;
+            }
+            var message = await responseHppt.GetErrorMessageAsync();
+            await sweetAlertService.FireAsync("Error", message, SweetAlertIcon.Error);
+            return;
+        }
+        tamoneds = responseHppt.Response;
+    }
+
+    private async Task CambiaStatusAsync(int id, int status)
+    {
+        var responseHttp = await repository.Put($"api/tamoneds/cambiaStatus/{id}/{status}", "");
+        if (responseHttp.Error)
+        {
+            if (responseHttp.HttpResponseMessage.StatusCode != System.Net.HttpStatusCode.NotFound)
+            {
+                var message = await responseHttp.GetErrorMessageAsync();
+                await sweetAlertService.FireAsync("Error", message, SweetAlertIcon.Error);
+                return;
+            }
+        }
+        await LoadAsync();
+    }
+}

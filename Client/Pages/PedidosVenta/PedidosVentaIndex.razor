@@ -1,0 +1,648 @@
+@page "/pedidos-venta"
+@using IMPLANPROD.Shared.Entities
+@using IMPLANPROD.Client.Repositories
+@using IMPLANPROD.Client.Shared.Components
+@using IMPLANPROD.Client.Services
+@using IMPLANPROD.Client.Pages.Reportes
+@inject IRepository repository
+@inject NavigationManager navigationManager
+@inject SweetAlertService sweetAlertService
+@inject FiltrosPedidosService filtrosService
+@inject IJSRuntime JS
+
+<PageTitle>Pedidos de Venta</PageTitle>
+
+<div class="container-fluid">
+    <!-- Título de la página -->
+    <div class="mb-4">
+        <h2 class="text-center fw-bold text-primary">
+            <i class="fas fa-file-invoice-dollar me-2"></i>
+            PEDIDOS DE VENTA
+        </h2>
+        <hr class="border-primary border-2 opacity-50" />
+    </div>
+
+    <div class="row mb-3">
+        <div class="col-auto">
+            <button class="btn btn-info me-2" @onclick="AbrirGraficos">
+                <i class="fas fa-chart-bar"></i> Gráficos
+            </button>
+            <button class="btn btn-primary" @onclick="CrearNuevoPedido">
+                <i class="fas fa-plus"></i> Nuevo Pedido
+            </button>
+        </div>
+    </div>
+
+    <!-- Filtros de búsqueda -->
+    <div class="card mb-3">
+        <div class="card-body">
+            <div class="row">
+                <div class="col-md-3">
+                    <label class="form-label">Buscar Cliente:</label>
+                    <div class="input-group">
+                        <input type="text" class="form-control" @bind="clienteSeleccionado" @bind:event="oninput" placeholder="Cliente seleccionado..." readonly />
+                        <button class="btn btn-outline-secondary" @onclick="LimpiarCliente">
+                            <i class="fas fa-times"></i>
+                        </button>
+                        <button class="btn btn-outline-primary" @onclick="AbrirSelectorClientes" title="Seleccionar Cliente">
+                            <i class="fas fa-users"></i>
+                        </button>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Buscar:</label>
+                    <input type="text" class="form-control" @bind="Filter" @bind:event="oninput" placeholder="N° OC, Referencia..." />
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">Estado:</label>
+                    <select class="form-select" @bind="filtroEstado" @bind:event="oninput">
+                        <option value="">Todos</option>
+                        <option value="0">Activos</option>
+                        <option value="-1">Pendientes</option>
+                        <option value="9">Anulados</option>
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">Fecha Desde:</label>
+                    <input type="date" class="form-control" @bind="fechaDesde" @bind:event="oninput" />
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">Fecha Hasta:</label>
+                    <input type="date" class="form-control" @bind="fechaHasta" @bind:event="oninput" />
+                </div>
+            </div>
+            <div class="row mt-3">
+                <div class="col-12 text-end">
+                    <button class="btn btn-primary" @onclick="ApplyFilterAsync">
+                        <i class="fas fa-filter"></i> Filtrar
+                    </button>
+                    <button class="btn btn-outline-secondary ms-2" @onclick="CleanFilterAsync">
+                        <i class="fas fa-eraser"></i> Limpiar Filtros
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+    <!-- Paginación estándar -->
+    <Pagination CurrentPage="currentPage"
+                TotalPages="totalPages"
+                SelectedPage="SelectedPageAsync" />
+
+    <!-- Tabla de pedidos -->
+    <div class="card">
+        <div class="card-body">
+            @if (pedidos == null)
+            {
+                <div class="text-center">
+                    <div class="spinner-border" role="status">
+                        <span class="visually-hidden">Cargando...</span>
+                    </div>
+                </div>
+            }
+            else if (!pedidos.Any())
+            {
+                <div class="alert alert-info text-center">
+                    <i class="fas fa-info-circle"></i> No se encontraron pedidos de venta.
+                </div>
+            }
+            else
+            {
+                <!-- Botón de impresión -->
+                <div class="d-flex justify-content-end mb-3">
+                    <button class="btn btn-outline-success" @onclick="ConfirmarImpresionAsync" disabled="@isPrinting">
+                        <i class="oi oi-print"></i> Imprimir/Exp.Excel
+                    </button>
+                    @if (isPrinting)
+                    {
+                        <div class="ms-2 d-flex align-items-center">
+                            <div class="spinner-border text-success" role="status">
+                                <span class="visually-hidden">Preparando impresión...</span>
+                            </div>
+                        </div>
+                    }
+                </div>
+
+                <div class="table-responsive">
+                    <table class="table table-striped table-hover">
+                        <thead class="table-dark">
+                            <tr>
+                                <th>N° Pedido</th>
+                                <th>Fecha Emisión</th>
+                                <th>Cliente</th>
+                                <th>N° OC</th>
+                                <th>Estado</th>
+                                <th>Fecha Entrega</th>
+                                <th>Vendedor</th>
+                                <th>Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var pedido in pedidos)
+                            {
+                                <tr>
+                                    <td>
+                                        <strong>@pedido.NroPed</strong>
+                                        @if (!string.IsNullOrEmpty(pedido.Referencia))
+                                        {
+                                            <br><small class="text-muted">@pedido.Referencia</small>
+                                        }
+                                    </td>
+                                    <td>@pedido.FechEmis?.ToString("dd/MM/yyyy")</td>
+                                    <td>
+                                        <strong>@pedido.RasoClie</strong>
+                                        @if (pedido.NroClie.HasValue)
+                                        {
+                                            <br><small class="text-muted">Cliente: @pedido.NroClie</small>
+                                        }
+                                    </td>
+                                    <td>@pedido.NroOcom</td>
+                                    <td>
+                                        @if (pedido.Status == 1)
+                                        {
+                                            <span class="badge bg-success">Activo</span>
+                                        }
+                                        else if (pedido.Status == -1)
+                                        {
+                                            <span class="badge bg-warning">Pend. de aprobar</span>
+                                        }
+                                        else if (pedido.Status == 9)
+                                        {
+                                            <span class="badge bg-danger">Anulado</span>
+                                        }
+                                        else
+                                        {
+                                            <span class="badge bg-secondary">@pedido.Status</span>
+                                        }
+                                    </td>
+                                    <td>@pedido.FeSolEnt?.ToString("dd/MM/yyyy")</td>
+                                    <td>
+                                        @pedido.VenRep
+                                        @if (pedido.Vended.HasValue)
+                                        {
+                                            <br><small class="text-muted">Cod: @pedido.Vended</small>
+                                        }
+                                    </td>
+                                    <td>
+                                        <div class="btn-group" role="group">
+                                            <button class="btn btn-sm btn-outline-primary" @onclick="(() => EditarPedido(pedido.NroPed ?? 0))" title="Editar">
+                                                <i class="fas fa-edit"></i>
+                                            </button>
+                                            <button class="btn btn-sm btn-outline-info" @onclick="(() => VerAnotaciones(pedido.NroPed ?? 0))" title="Anotador de Pedidos">
+                                                <i class="fas fa-eye"></i>
+                                            </button>
+                                            <button class="btn btn-sm btn-outline-warning" @onclick="(() => VerAuditoria(pedido.NroPed ?? 0))" title="Auditoría del Pedido">
+                                                <i class="fas fa-history"></i>
+                                            </button>
+                                            @if (pedido.Status != -8)
+                                            {
+                                                <button class="btn btn-sm btn-outline-danger" @onclick="(() => AnularPedido(pedido))" title="Anular">
+                                                    <i class="fas fa-times"></i>
+                                                </button>
+                                            }
+                                        </div>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+
+            }
+        </div>
+    </div>
+</div>
+
+<!-- Componente de impresión -->
+@if (pedidos != null && pedidos.Any())
+{
+    <ImpresionLista TItem="Pedenca"
+                    Datos="pedidos"
+                    Titulo="@TituloReporte"
+                    UrlExportarExcel="api/excel/exportar-pedidos"
+                    Encabezados="encabezadosPedidos"
+                    ModoDirecto="false"
+                    MostrarModal="mostrarModalImpresion"
+                    OnCerrar="ResetearImpresion" />
+}
+
+<!-- Componente selector de clientes -->
+<SelectorClientes @ref="selectorClientes" OnClienteSeleccionado="OnClienteSeleccionado" />
+
+@code {
+    private List<Pedenca>? pedidos;
+    private string filtroEstado = string.Empty;
+    private DateTime? fechaDesde;
+    private DateTime? fechaHasta;
+    private string clienteSeleccionado = string.Empty;
+    private int? clienteSeleccionadoId;
+    
+    // Variables para impresión
+    private bool isPrinting = false;
+    private bool mostrarModalImpresion = false;
+    private string TituloReporte => "Listado de Pedidos de Venta";
+    
+    /// <summary>
+    /// Referencia al componente selector de clientes
+    /// </summary>
+    private SelectorClientes? selectorClientes;
+    
+    [Parameter]
+    [SupplyParameterFromQuery]
+    public string Page { get; set; } = string.Empty;
+
+    [Parameter]
+    [SupplyParameterFromQuery]
+    public string Filter { get; set; } = string.Empty;
+
+    private int currentPage = 1;
+    private int totalPages;
+
+    /// <summary>
+    /// Método que se ejecuta al inicializar el componente
+    /// Restaura filtros guardados o configura filtros por defecto
+    /// </summary>
+    protected override async Task OnInitializedAsync()
+    {
+        // Restaurar filtros guardados
+        RestaurarFiltros();
+        
+        // Si no hay filtros guardados, configurar fechas por defecto: últimos 15 días
+        if (fechaDesde == null && fechaHasta == null && !filtrosService.TieneFiltrosActivos())
+        {
+            fechaHasta = DateTime.Today;
+            fechaDesde = DateTime.Today.AddDays(-15);
+        }
+        
+        await LoadAsync();
+    }
+
+    /// <summary>
+    /// Carga la lista de pedidos desde el backend siguiendo el patrón estándar
+    /// Incluye filtros de fecha por defecto
+    /// </summary>
+    private async Task LoadAsync(int page = 1)
+    {
+        if (!string.IsNullOrWhiteSpace(Page))
+        {
+            page = Convert.ToInt32(Page);
+        }
+
+        string url1 = string.Empty;
+        string url2 = string.Empty;
+
+        // Construir parámetros de filtro incluyendo fechas y cliente
+        var parametros = new List<string>();
+        
+        if (!string.IsNullOrEmpty(Filter))
+        {
+            parametros.Add($"filter={Filter}");
+        }
+        
+        if (clienteSeleccionadoId.HasValue)
+        {
+            parametros.Add($"clienteId={clienteSeleccionadoId.Value}");
+        }
+        
+        if (!string.IsNullOrEmpty(filtroEstado))
+        {
+            parametros.Add($"estado={filtroEstado}");
+        }
+        
+        if (fechaDesde.HasValue)
+        {
+            parametros.Add($"fechaDesde={fechaDesde.Value:yyyy-MM-dd}");
+        }
+        
+        if (fechaHasta.HasValue)
+        {
+            parametros.Add($"fechaHasta={fechaHasta.Value:yyyy-MM-dd}");
+        }
+
+        string queryParams = parametros.Count > 0 ? "&" + string.Join("&", parametros) : "";
+
+        url1 = $"api/pedenca?page={page}{queryParams}";
+        url2 = $"api/pedenca/totalPages?{string.Join("&", parametros)}".TrimEnd('?');
+
+        var responseHttp = await repository.Get<List<Pedenca>>(url1);
+        var responseHttp2 = await repository.Get<int>(url2);
+        pedidos = responseHttp.Response!;
+        totalPages = responseHttp2.Response!;
+    }
+
+    /// <summary>
+    /// Limpia los filtros de búsqueda y restablece fechas por defecto
+    /// </summary>
+    private async Task CleanFilterAsync()
+    {
+        Filter = string.Empty;
+        filtroEstado = string.Empty;
+        clienteSeleccionado = string.Empty;
+        clienteSeleccionadoId = null;
+        // Restablecer fechas por defecto: últimos 15 días
+        fechaHasta = DateTime.Today;
+        fechaDesde = DateTime.Today.AddDays(-15);
+        await ApplyFilterAsync();
+    }
+
+    /// <summary>
+    /// Aplica los filtros de búsqueda
+    /// </summary>
+    private async Task ApplyFilterAsync()
+    {
+        currentPage = 1;
+        await LoadAsync(currentPage);
+        await SelectedPageAsync(currentPage);
+    }
+
+    /// <summary>
+    /// Cambia la página actual de la paginación
+    /// </summary>
+    private async Task SelectedPageAsync(int page)
+    {
+        currentPage = page;
+        await LoadAsync(page);
+    }
+
+    /// <summary>
+    /// Navega a la página de creación de nuevo pedido
+    /// </summary>
+    private void CrearNuevoPedido()
+    {
+        navigationManager.NavigateTo("/pedidos-venta/crear");
+    }
+
+    /// <summary>
+    /// Navega a la página de edición de pedido
+    /// Guarda los filtros actuales antes de navegar
+    /// </summary>
+    private void EditarPedido(int nroPedido)
+    {
+        GuardarFiltros();
+        navigationManager.NavigateTo($"/pedidos-venta/editar/{nroPedido}");
+    }
+
+    /// <summary>
+    /// Navega a la página de anotaciones del pedido
+    /// Guarda los filtros actuales antes de navegar
+    /// </summary>
+    private void VerAnotaciones(int nroPedido)
+    {
+        GuardarFiltros();
+        navigationManager.NavigateTo($"/anotaciones-pedido/{nroPedido}");
+    }
+
+    /// <summary>
+    /// Anula un pedido existente
+    /// </summary>
+    private async Task AnularPedido(Pedenca pedido)
+    {
+        var result = await sweetAlertService.FireAsync(new SweetAlertOptions
+        {
+            Title = "Confirmar Anulación",
+            Text = $"¿Está seguro que desea anular el pedido {pedido.NroPed}?",
+            Icon = SweetAlertIcon.Warning,
+            ShowCancelButton = true,
+            ConfirmButtonText = "Sí, anular",
+            CancelButtonText = "Cancelar"
+        });
+
+        if (result.IsConfirmed)
+        {
+            var responseHttp = await repository.Delete($"api/pedenca/{pedido.NroPed}");
+            if (responseHttp.Error)
+            {
+                var message = await responseHttp.GetErrorMessageAsync();
+                await sweetAlertService.FireAsync("Error", message, SweetAlertIcon.Error);
+                return;
+            }
+
+            await sweetAlertService.FireAsync("Anulado", "El pedido ha sido anulado exitosamente.", SweetAlertIcon.Success);
+            await LoadAsync();
+        }
+    }
+
+    /// <summary>
+    /// Abre el modal selector de clientes
+    /// </summary>
+    private async Task AbrirSelectorClientes()
+    {
+        if (selectorClientes != null)
+        {
+            await selectorClientes.AbrirModal();
+        }
+    }
+
+    /// <summary>
+    /// Maneja la selección de un cliente desde el selector
+    /// </summary>
+    private async Task OnClienteSeleccionado(SelectorClientes.ClienteSeleccionado cliente)
+    {
+        // Establecer el cliente seleccionado
+        clienteSeleccionado = $"{cliente.NumeCli} - {cliente.RazonSocial}";
+        clienteSeleccionadoId = cliente.NumeCli;
+        
+        // Aplicar el filtro automáticamente
+        await ApplyFilterAsync();
+    }
+
+    /// <summary>
+    /// Limpia la selección de cliente
+    /// </summary>
+    private async Task LimpiarCliente()
+    {
+        clienteSeleccionado = string.Empty;
+        clienteSeleccionadoId = null;
+        
+        // Aplicar el filtro automáticamente
+        await ApplyFilterAsync();
+    }
+
+    /// <summary>
+    /// Guarda los filtros actuales en el servicio
+    /// </summary>
+    private void GuardarFiltros()
+    {
+        filtrosService.GuardarEstado(
+            Filter,
+            clienteSeleccionado,
+            clienteSeleccionadoId,
+            filtroEstado,
+            fechaDesde,
+            fechaHasta,
+            currentPage
+        );
+    }
+
+    /// <summary>
+    /// Restaura los filtros desde el servicio
+    /// </summary>
+    private void RestaurarFiltros()
+    {
+        if (filtrosService.TieneFiltrosActivos())
+        {
+            Filter = filtrosService.Filter;
+            clienteSeleccionado = filtrosService.ClienteSeleccionado;
+            clienteSeleccionadoId = filtrosService.ClienteSeleccionadoId;
+            filtroEstado = filtrosService.FiltroEstado;
+            fechaDesde = filtrosService.FechaDesde;
+            fechaHasta = filtrosService.FechaHasta;
+            currentPage = filtrosService.PaginaActual;
+        }
+    }
+
+    /// <summary>
+    /// Diccionario de encabezados para el reporte de pedidos
+    /// </summary>
+    Dictionary<string, string> encabezadosPedidos = new()
+    {
+        { "NroPed", "N° Pedido" },
+        { "FechEmis", "Fecha Emisión" },
+        { "RasoClie", "Cliente" },
+        { "NroClie", "N° Cliente" },
+        { "NroOcom", "N° OC" },
+        { "Status", "Estado" },
+        { "FeSolEnt", "Fecha Entrega" },
+        { "VenRep", "Vendedor" },
+        { "Vended", "Cod. Vendedor" },
+        { "Referencia", "Referencia" }
+    };
+
+    /// <summary>
+    /// Obtiene TODOS los pedidos que coincidan con los filtros actuales, sin paginación
+    /// Utiliza los mismos filtros que LoadAsync pero sin límite de página
+    /// </summary>
+    private async Task<List<Pedenca>?> ObtenerTodosLosPedidosFiltrados()
+    {
+        try
+        {
+            // Construir parámetros de filtro idénticos a LoadAsync pero sin paginación
+            var parametros = new List<string>();
+            
+            if (!string.IsNullOrEmpty(Filter))
+            {
+                parametros.Add($"filter={Filter}");
+            }
+            
+            if (clienteSeleccionadoId.HasValue)
+            {
+                parametros.Add($"clienteId={clienteSeleccionadoId.Value}");
+            }
+            
+            if (!string.IsNullOrEmpty(filtroEstado))
+            {
+                parametros.Add($"estado={filtroEstado}");
+            }
+            
+            if (fechaDesde.HasValue)
+            {
+                parametros.Add($"fechaDesde={fechaDesde.Value:yyyy-MM-dd}");
+            }
+            
+            if (fechaHasta.HasValue)
+            {
+                parametros.Add($"fechaHasta={fechaHasta.Value:yyyy-MM-dd}");
+            }
+
+            // Agregar parámetro para obtener todos los registros (sin paginación)
+            parametros.Add("page=1");
+            parametros.Add("recordsNumber=999999"); // Número muy alto para obtener todos los registros
+
+            string queryParams = parametros.Count > 0 ? "&" + string.Join("&", parametros) : "";
+            string url = $"api/pedenca?{queryParams.TrimStart('&')}";
+
+            var responseHttp = await repository.Get<List<Pedenca>>(url);
+            
+            if (!responseHttp.Error)
+            {
+                return responseHttp.Response;
+            }
+            else
+            {
+                await sweetAlertService.FireAsync("Error", "No se pudieron obtener los pedidos para impresión", SweetAlertIcon.Error);
+                return new List<Pedenca>();
+            }
+        }
+        catch (Exception ex)
+        {
+            await sweetAlertService.FireAsync("Error", $"Error al obtener pedidos: {ex.Message}", SweetAlertIcon.Error);
+            return new List<Pedenca>();
+        }
+    }
+
+    /// <summary>
+    /// Confirma la impresión del listado de pedidos respetando filtros activos
+    /// Obtiene TODOS los registros que coincidan con los filtros, no solo la página actual
+    /// </summary>
+    private async Task ConfirmarImpresionAsync()
+    {
+        isPrinting = true;
+        StateHasChanged();
+
+        try
+        {
+            // Obtener TODOS los pedidos que coincidan con los filtros actuales (sin paginación)
+            var pedidosCompletos = await ObtenerTodosLosPedidosFiltrados();
+            int cantidadTotal = pedidosCompletos?.Count ?? 0;
+
+            var result = await sweetAlertService.FireAsync(new SweetAlertOptions
+            {
+                Title = "Confirmar impresión",
+                Text = $"Se van a imprimir {cantidadTotal} registros que coinciden con los filtros aplicados (todas las páginas).\n¿Desea continuar?",
+                Icon = SweetAlertIcon.Warning,
+                ShowCancelButton = true,
+                ConfirmButtonText = "Sí, imprimir",
+                CancelButtonText = "Cancelar"
+            });
+
+            if (result.IsConfirmed)
+            {
+                // Actualizar la lista de pedidos para impresión con todos los registros
+                pedidos = pedidosCompletos;
+                mostrarModalImpresion = true;
+            }
+        }
+        catch (Exception ex)
+        {
+            await sweetAlertService.FireAsync("Error", ex.Message, SweetAlertIcon.Error);
+        }
+        finally
+        {
+            isPrinting = false;
+            StateHasChanged();
+        }
+    }
+
+    /// <summary>
+    /// Resetea el estado de impresión y cierra el modal
+    /// Restaura la lista de pedidos original (paginada) después de la impresión
+    /// </summary>
+    private async void ResetearImpresion()
+    {
+        mostrarModalImpresion = false;
+        
+        // Restaurar la vista paginada original después de cerrar el modal de impresión
+        await LoadAsync(currentPage);
+        
+        StateHasChanged();
+    }
+
+    /// <summary>
+    /// Navega a la página de auditoría del pedido seleccionado
+    /// Guarda los filtros actuales antes de navegar
+    /// </summary>
+    private void VerAuditoria(int nroPedido)
+    {
+        GuardarFiltros();
+        navigationManager.NavigateTo($"/pedidos/auditoria/{nroPedido}");
+    }
+
+    /// <summary>
+    /// Navega a la página de gráficos de pedidos de venta
+    /// Guarda los filtros actuales antes de navegar
+    /// </summary>
+    private void AbrirGraficos()
+    {
+        GuardarFiltros();
+        navigationManager.NavigateTo("/graficos-pedidos-venta");
+    }
+}

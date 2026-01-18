@@ -1,0 +1,110 @@
+   Begin VB.Menu archivo 
+      Caption         =   "Archivo"
+      Begin VB.Menu grabarfactura 
+         Caption         =   "Grabar Factura"
+      End
+      Begin VB.Menu s 
+         Caption         =   "-"
+      End
+      Begin VB.Menu reimprimirfactura 
+         Caption         =   "Re-Imprime Factura "
+      End
+      Begin VB.Menu s2 
+         Caption         =   "-"
+      End
+      Begin VB.Menu salir 
+         Caption         =   "Salir"
+      End
+   End
+   Begin VB.Menu edicion 
+      Caption         =   "Edición"
+      Begin VB.Menu AnulacióndComprobantesdeFacturación 
+         Caption         =   "Anulación de Comprobantes de Facturación"
+      End
+      Begin VB.Menu CorregirFechadeEmisión 
+         Caption         =   "Corregir Fecha de Emisión"
+      End
+      Begin VB.Menu CorregirNumerodeDocumento 
+         Caption         =   "Corregir Número de Documento "
+      End
+   End
+   Begin VB.Menu ver 
+      Caption         =   "Ver"
+      Begin VB.Menu resumencuentacorriente 
+         Caption         =   "Resumen de Cuenta Corriente"
+      End
+      Begin VB.Menu remitospendientesdefacturacion 
+         Caption         =   "Remitos Pendientes de Facturación"
+      End
+   End
+   Begin VB.Menu consultasylistados 
+      Caption         =   "Consultas y Listados"
+      Begin VB.Menu listadodelimitesdecreditoydeudas 
+         Caption         =   "Listado de Límites de Crédito y Deudas"
+      End
+      Begin VB.Menu ss 
+         Caption         =   "-"
+      End
+      Begin VB.Menu avancefacturacioncobranza 
+         Caption         =   "Avance de Facturación y Cobranza"
+      End
+      Begin VB.Menu sss 
+         Caption         =   "-"
+      End
+      Begin VB.Menu saldosydeudasdeclientes 
+         Caption         =   "Saldos y Deudas de Clientes"
+      End
+      Begin VB.Menu ssss 
+         Caption         =   "-"
+      End
+      Begin VB.Menu facturaspendientesdecobranza 
+         Caption         =   "Facturas Pendientes de Cobranza"
+      End
+      Begin VB.Menu pendientesacobrarporrangodefecha 
+         Caption         =   "Facturas Pendientes de Cobranza por Rango de Fecha"
+      End
+      Begin VB.Menu pendientesenmonedaextranjera 
+         Caption         =   "Facturas Pendientes en Moneda Extranjera"
+      End
+      Begin VB.Menu s1 
+         Caption         =   "-"
+      End
+      Begin VB.Menu ListadoAplicaciónDiferenciasdeCambio 
+         Caption         =   "Listado Aplicación Diferencias de Cambio "
+      End
+   End
+   Begin VB.Menu utiles 
+      Caption         =   "Útiles"
+      Begin VB.Menu planificacionfinancieras 
+         Caption         =   "Planificación Financiera de Cobranza"
+      End
+      Begin VB.Menu subdiarioyestadisticas 
+         Caption         =   "Sub-Diarios y Estadísticas"
+      End
+   End
+   Begin VB.Menu accesosdirectos 
+      Caption         =   "Accesos Directos"
+      Begin VB.Menu comisionvendedores 
+         Caption         =   "Sistema de Comisiones de Vendedores"
+         Enabled         =   0   'False
+      End
+   End
+   Begin VB.Menu Facturaelectronica 
+      Caption         =   "Fact. Electrónica"
+      Begin VB.Menu solicitartoken 
+         Caption         =   "Genera Archivo TOKEN para Factura Electrónica"
+      End
+      Begin VB.Menu caemanual 
+         Caption         =   "Solicitud de Cae Manual y Reimpresión de Comprobantes"
+      End
+   End
+   Begin VB.Menu config 
+      Caption         =   "Configuración"
+      Begin VB.Menu configuracion 
+         Caption         =   "Configuración General de Ventas"
+      End
+      Begin VB.Menu cuentascontablesdeventas 
+         Caption         =   "Configuración de Cuentas Contables de Resumenes de Ventas"
+      End
+   End
+End

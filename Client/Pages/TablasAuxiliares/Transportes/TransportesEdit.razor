@@ -1,0 +1,65 @@
+@inject IRepository repository
+@inject NavigationManager navigationManager
+@inject SweetAlertService sweetAlertService
+@inject IModalService Modal
+
+@using CurrieTechnologies.Razor.SweetAlert2
+@using Blazored.Modal
+@using Blazored.Modal.Services
+@using IMPLANPROD.Shared.Entities
+
+<div class="modal-body">
+    <h3>Editar Transporte</h3>
+
+    @if (transporte is not null)
+    {
+        <TransportesForm @ref="formRef" transporte="transporte" OnValidSubmit="Edit" OnCancel="CloseOnly" />
+    }
+    else
+    {
+        <p>Cargando...</p>
+    }
+</div>
+
+@code {
+    [Parameter] public int Id { get; set; }
+
+    private Transporte? transporte;
+    private TransportesForm? formRef;
+
+    [CascadingParameter]
+    BlazoredModalInstance BlazoredModal { get; set; } = default!;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var response = await repository.Get<Transporte>($"/api/transportes/{Id}");
+        if (!response.Error && response.Response is not null)
+        {
+            transporte = response.Response;
+        }
+        else
+        {
+            var mensajeError = await response.GetErrorMessageAsync();
+            await sweetAlertService.FireAsync("Error", mensajeError, SweetAlertIcon.Error);
+        }
+    }
+
+    private async Task Edit()
+    {
+        var responseHttp = await repository.Put("/api/transportes", transporte!);
+        if (responseHttp.Error)
+        {
+            var mensajeError = await responseHttp.GetErrorMessageAsync();
+            await sweetAlertService.FireAsync("Error", mensajeError, SweetAlertIcon.Error);
+            return;
+        }
+
+        // Cerrar el modal y dejar que el Index refresque la grilla al recibir Confirmed
+        await BlazoredModal.CloseAsync(ModalResult.Ok());
+    }
+
+    private async Task CloseOnly()
+    {
+        await BlazoredModal.CloseAsync(ModalResult.Cancel());
+    }
+}

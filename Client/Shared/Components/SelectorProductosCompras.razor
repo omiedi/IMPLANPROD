@@ -1,0 +1,731 @@
+@* =============================================================
+   Componente: SelectorProductosCompras
+   Descripción:
+   - Modal especializado para seleccionar productos en órdenes de compra
+   - Incluye campos adicionales para Sector y Destino
+   - Permite ingresar cantidad, precio, sector y destino antes de seleccionar
+   
+   Diferencias con SelectorProductos:
+   - Agrega campo de Sector (texto libre, máx 12 caracteres)
+   - Agrega selector de Destino (desde tabla Plancuen)
+   - Los valores se toman de los inputs por defecto del formulario padre
+   ============================================================= *@
+@using IMPLANPROD.Client.Repositories
+@using IMPLANPROD.Shared.Entities
+@using Microsoft.AspNetCore.Components.Web
+@inject IRepository repository
+@inject SweetAlertService sweetAlertService
+@inject IJSRuntime JSRuntime
+
+<style>
+    /* Estilos locales del componente para mejorar usabilidad en tablas anchas */
+    .selector-prod-container {
+        max-height: 400px;
+        overflow: auto; /* Permite scroll vertical y horizontal */
+    }
+    /* Primera columna fija (celdas de datos) */
+    .sticky-col {
+        position: sticky;
+        left: 0;
+        background-color: white;
+        z-index: 10;
+        border-right: 2px solid #dee2e6;
+    }
+    .sticky-col-header {
+        position: sticky;
+        left: 0;
+        background-color: #212529 !important;
+        z-index: 11;
+        border-right: 2px solid #dee2e6;
+    }
+    /* Anchos específicos para cada columna */
+    .col-codigo { min-width: 120px; width: 120px; }
+    .col-descripcion { min-width: 250px; }
+    .col-um { min-width: 80px; width: 80px; }
+    .col-codint { min-width: 100px; width: 100px; }
+    .col-accion { min-width: 120px; width: 120px; }
+</style>
+
+<!-- Modal -->
+<div class="modal fade @(mostrarModal ? "show d-block" : "")" tabindex="-1" style="@(mostrarModal ? "background-color: rgba(0,0,0,0.5);" : "")" id="selectorProductosModal">
+    <div class="modal-dialog modal-xl">
+        <div class="modal-content">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title">
+                    <i class="fas fa-shopping-cart me-2"></i>
+                    Agregar Item a Orden de Compra
+                </h5>
+                <button type="button" class="btn-close btn-close-white" @onclick="CerrarModalManual"></button>
+            </div>
+            <div class="modal-body">
+                <!-- Pestañas para seleccionar modo -->
+                <ul class="nav nav-tabs mb-3" id="modoTabs" role="tablist">
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link @(modoSeleccion == "producto" ? "active" : "")" 
+                                id="producto-tab" 
+                                type="button" 
+                                @onclick="@(() => CambiarModo("producto"))"
+                                role="tab">
+                            <i class="fas fa-search me-2"></i>Buscar Producto
+                        </button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link @(modoSeleccion == "libre" ? "active" : "")" 
+                                id="libre-tab" 
+                                type="button" 
+                                @onclick="@(() => CambiarModo("libre"))"
+                                role="tab">
+                            <i class="fas fa-edit me-2"></i>Item Libre
+                        </button>
+                    </li>
+                </ul>
+
+                <!-- Alertas de consistencia -->
+                @if (!PuedeAgregarTipoItem(modoSeleccion == "libre"))
+                {
+                    <div class="alert alert-warning">
+                        <i class="fas fa-exclamation-triangle me-2"></i>
+                        @GetMensajeErrorConsistencia(modoSeleccion == "libre")
+                    </div>
+                }
+
+                <!-- Contenido según el modo seleccionado -->
+                @if (modoSeleccion == "producto")
+                {
+                    <!-- Filtro de búsqueda -->
+                    <div class="row mb-3">
+                    <div class="col-md-6">
+                        <div class="input-group">
+                            <span class="input-group-text"><i class="fas fa-search"></i></span>
+                            <input type="text" class="form-control" placeholder="Buscar por código o descripción (mín. 3 caracteres)..." 
+                                   @bind="filtro" @oninput="OnFiltroInput" @onkeypress="OnKeyPressInput" tabindex="1" />
+                            <button class="btn btn-outline-secondary" type="button" @onclick="BuscarProductos" tabindex="2">
+                                Buscar
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Inputs para Cantidad, Precio, Sector y Destino -->
+                <div class="row mb-3">
+                    <div class="col-md-12">
+                        <div class="d-flex flex-wrap gap-2 align-items-end">
+                            <div class="input-group input-group-sm me-2" style="width: 3cm; min-width: 3cm;">
+                                <span class="input-group-text" style="min-width: 1.2cm; justify-content:center;">Cant.</span>
+                                <input type="number" class="form-control text-end" step="0.0001" @bind="cantidadSeleccion" tabindex="3" />
+                            </div>
+                            <div class="input-group input-group-sm me-2" style="width: 5cm; min-width: 5cm;">
+                                <span class="input-group-text" style="min-width: 1.5cm; justify-content:center;">Precio</span>
+                                <input type="number" class="form-control text-end" step="0.0001" @bind="precioSeleccion" tabindex="4" />
+                            </div>
+                            <div class="input-group input-group-sm me-2" style="width: 4cm; min-width: 4cm;">
+                                <span class="input-group-text" style="min-width: 1.5cm; justify-content:center;">Sector</span>
+                                <input type="text" class="form-control" maxlength="12" @bind="sectorSeleccion" tabindex="5" placeholder="Máx 12 chars" />
+                            </div>
+                            <div class="input-group input-group-sm me-2" style="width: 6cm; min-width: 6cm;">
+                                <span class="input-group-text" style="min-width: 1.5cm; justify-content:center;">Destino</span>
+                                <select class="form-select" @bind="destinoSeleccion" tabindex="6">
+                                    <option value="">Seleccionar...</option>
+                                    @if (cuentasDestino != null)
+                                    {
+                                        @foreach (var cuenta in cuentasDestino)
+                                        {
+                                            <option value="@cuenta.CodInCue" selected="@(cuenta.CodInCue == destinoSeleccion)">
+                                                @cuenta.CodExCue - @cuenta.Denocue
+                                            </option>
+                                        }
+                                    }
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="row mb-2">
+                    <div class="col text-muted" style="font-size: .85rem;">
+                        Sugerencia: Los valores de Sector y Destino se toman por defecto del formulario principal, pero puedes modificarlos aquí para este producto específico.
+                    </div>
+                </div>
+                <!-- Lista de productos -->
+                @if (cargando)
+                {
+                    <div class="text-center">
+                        <div class="spinner-border" role="status">
+                            <span class="visually-hidden">Cargando...</span>
+                        </div>
+                        <p class="mt-2">Buscando productos...</p>
+                    </div>
+                }
+                else if (string.IsNullOrWhiteSpace(filtro) || filtro.Length < 3)
+                {
+                    <div class="text-center text-muted py-4">
+                        <i class="fas fa-search fa-3x mb-3"></i>
+                        <p class="mb-0">Ingrese al menos 3 caracteres para buscar productos</p>
+                    </div>
+                }
+                else if (!productos.Any())
+                {
+                    <div class="alert alert-info text-center">
+                        <i class="fas fa-info-circle"></i> No se encontraron productos para la búsqueda: "<strong>@filtro</strong>"
+                    </div>
+                }
+                else
+                {
+                    <!-- Contenedor responsive con scroll vertical y horizontal -->
+                    <div class="table-responsive selector-prod-container">
+                        <table class="table table-striped table-hover">
+                            <thead class="table-dark sticky-top">
+                                <tr>
+                                    <th class="sticky-col-header col-codigo">Código</th>
+                                    <th class="col-descripcion">Descripción</th>
+                                    <th class="col-um">U.M.</th>
+                                    <th class="col-codint">Códint</th>
+                                    <th class="col-accion">Acción</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @for (int i = 0; i < productos.Count; i++)
+                                {
+                                    var p = productos[i];
+                                    <tr tabindex="0">
+                                        <td class="sticky-col col-codigo"><strong>@p.Codigo</strong></td>
+                                        <td class="col-descripcion">@p.Descripcion</td>
+                                        <td class="col-um">@(string.IsNullOrEmpty(p.Umedida) ? "-" : p.Umedida)</td>
+                                        <td class="col-codint"><span class="badge bg-secondary">@p.Codint</span></td>
+                                        <td class="col-accion">
+                                            <button class="btn btn-sm btn-primary" @onclick="(() => Seleccionar(p))" @onclick:stopPropagation="true" tabindex="7">
+                                                <i class="fas fa-check"></i> Seleccionar
+                                            </button>
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                }
+                }
+                else if (modoSeleccion == "libre")
+                {
+                    <!-- Formulario para item libre -->
+                    <div class="row mb-3">
+                        <div class="col-12">
+                            <div class="alert alert-info">
+                                <i class="fas fa-info-circle me-2"></i>
+                                <strong>Item Libre:</strong> Ingresa manualmente los datos del item sin seleccionar un producto del catálogo.
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Campos para item libre -->
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label class="form-label"><strong>Descripción del Item *</strong></label>
+                            <textarea class="form-control" @bind="descripcionLibre" 
+                                      placeholder="Ingresa la descripción del item..." 
+                                      rows="3" maxlength="500" tabindex="1"></textarea>
+                            <div class="form-text">Máximo 500 caracteres</div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="row">
+                                <div class="col-6">
+                                    <label class="form-label"><strong>Cantidad *</strong></label>
+                                    <input type="number" class="form-control" @bind="cantidadLibre" 
+                                           min="0.01" step="0.01" tabindex="2" />
+                                </div>
+                                <div class="col-6">
+                                    <label class="form-label"><strong>Precio Unitario *</strong></label>
+                                    <input type="number" class="form-control" @bind="precioLibre" 
+                                           min="0.01" step="0.01" tabindex="3" />
+                                </div>
+                            </div>
+                            <div class="mt-2">
+                                <small class="text-muted">
+                                    <strong>Total: $@((cantidadLibre * precioLibre).ToString("N2"))</strong>
+                                </small>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Campos adicionales para item libre -->
+                    <div class="row mb-3">
+                        <div class="col-md-4">
+                            <label class="form-label"><strong>Unidad de Medida</strong></label>
+                            <select class="form-select" @bind="unidadMedidaLibre" tabindex="4">
+                                <option value="">Seleccionar...</option>
+                                @if (UnidadesMedida != null)
+                                {
+                                    @foreach (var unidad in UnidadesMedida.Where(u => u.status == 0))
+                                    {
+                                        <option value="@unidad.DescripcionAbreviada">
+                                            @unidad.DescripcionAbreviada - @unidad.Descripcion
+                                        </option>
+                                    }
+                                }
+                            </select>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label"><strong>Sector</strong></label>
+                            <input type="text" class="form-control" @bind="sectorSeleccion" 
+                                   maxlength="12" placeholder="Máx 12 chars" tabindex="5" />
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label"><strong>Destino</strong></label>
+                            <select class="form-select" @bind="destinoSeleccion" tabindex="6">
+                                <option value="">Seleccionar...</option>
+                                @if (cuentasDestino != null)
+                                {
+                                    @foreach (var cuenta in cuentasDestino)
+                                    {
+                                        <option value="@cuenta.CodInCue" selected="@(cuenta.CodInCue == destinoSeleccion)">
+                                            @cuenta.CodExCue - @cuenta.Denocue
+                                        </option>
+                                    }
+                                }
+                            </select>
+                        </div>
+                    </div>
+
+                    <!-- Botón para agregar item libre -->
+                    <div class="row">
+                        <div class="col-12 text-center">
+                            <button type="button" class="btn btn-success btn-lg" 
+                                    @onclick="AgregarItemLibre" 
+                                    disabled="@(!PuedeAgregarItemLibre())"
+                                    tabindex="7">
+                                <i class="fas fa-plus me-2"></i>
+                                Agregar Item Libre
+                            </button>
+                        </div>
+                    </div>
+                }
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" @onclick="CerrarModalManual">
+                    <i class="fas fa-times"></i> Cancelar
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+@if (mostrarModal)
+{
+    <div class="modal-backdrop fade show"></div>
+}
+
+@code {
+    /// <summary>
+    /// Evento que se dispara cuando se selecciona un producto con todos los datos
+    /// </summary>
+    [Parameter] public EventCallback<SeleccionProductoCompras> OnProductoSeleccionadoCompras { get; set; }
+    
+    /// <summary>
+    /// Evento que se dispara cuando se cierra el modal
+    /// </summary>
+    [Parameter] public EventCallback OnClose { get; set; }
+
+    /// <summary>
+    /// Valor por defecto para el sector
+    /// </summary>
+    [Parameter] public string SectorPorDefecto { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Valor por defecto para el destino
+    /// </summary>
+    [Parameter] public int? DestinoPorDefecto { get; set; }
+
+    /// <summary>
+    /// Lista de cuentas de destino disponibles
+    /// </summary>
+    [Parameter] public List<Plancuen>? CuentasDestino { get; set; }
+
+    /// <summary>
+    /// Lista de unidades de medida disponibles
+    /// </summary>
+    [Parameter] public List<UnidadMedidas>? UnidadesMedida { get; set; }
+
+    /// <summary>
+    /// Lista de items existentes para validar consistencia
+    /// </summary>
+    [Parameter] public List<Ocomdeta>? ItemsExistentes { get; set; }
+
+    // Variables internas
+    private bool mostrarModal = false;
+    private bool cargando = false;
+    private string filtro = string.Empty;
+    private List<Master> productos = new();
+    private List<Plancuen>? cuentasDestino;
+
+    // Variables de selección
+    private decimal cantidadSeleccion = 1m;
+    private decimal precioSeleccion = 0m;
+    private string sectorSeleccion = string.Empty;
+    private int? destinoSeleccion;
+
+    // Variables para modo de selección
+    private string modoSeleccion = "producto"; // "producto" o "libre"
+
+    // Variables para item libre
+    private string descripcionLibre = string.Empty;
+    private decimal cantidadLibre = 1m;
+    private decimal precioLibre = 0m;
+    private string unidadMedidaLibre = string.Empty;
+
+    // Variables para debounced search
+    private CancellationTokenSource? buscarCts;
+
+    /// <summary>
+    /// Clase para encapsular la selección de producto con datos adicionales para compras
+    /// </summary>
+    public class SeleccionProductoCompras
+    {
+        public Master Producto { get; set; } = new();
+        public decimal Cantidad { get; set; }
+        public decimal Precio { get; set; }
+        public string Sector { get; set; } = string.Empty;
+        public int? Destino { get; set; }
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        // Copiar las cuentas de destino del parámetro
+        cuentasDestino = CuentasDestino;
+        
+        // Aplicar valores por defecto
+        sectorSeleccion = SectorPorDefecto ?? string.Empty;
+        destinoSeleccion = DestinoPorDefecto;
+    }
+
+    /// <summary>
+    /// Actualiza los valores por defecto (llamado desde el componente padre)
+    /// </summary>
+    public void ActualizarValoresPorDefecto(string sector, int? destino, List<Plancuen>? cuentas)
+    {
+        SectorPorDefecto = sector ?? string.Empty;
+        DestinoPorDefecto = destino;
+        CuentasDestino = cuentas;
+        cuentasDestino = cuentas;
+        
+        // Si el modal está abierto, actualizar los valores de selección
+        if (mostrarModal)
+        {
+            sectorSeleccion = SectorPorDefecto;
+            destinoSeleccion = DestinoPorDefecto;
+            StateHasChanged();
+        }
+    }
+
+    /// <summary>
+    /// Abre el modal y carga productos
+    /// </summary>
+    public async Task AbrirModal()
+    {
+        mostrarModal = true;
+        
+        // Aplicar valores por defecto cada vez que se abre
+        sectorSeleccion = SectorPorDefecto ?? string.Empty;
+        destinoSeleccion = DestinoPorDefecto;
+        
+        // Actualizar la referencia de cuentas de destino
+        cuentasDestino = CuentasDestino;
+        
+        // Inicializar en modo producto por defecto
+        modoSeleccion = "producto";
+        
+        // Limpiar campos de item libre
+        LimpiarCamposItemLibre();
+        
+        Console.WriteLine($"[SelectorProductosCompras] Abriendo modal con valores por defecto:");
+        Console.WriteLine($"  - Sector: '{sectorSeleccion}'");
+        Console.WriteLine($"  - Destino: {destinoSeleccion}");
+        Console.WriteLine($"  - Cuentas disponibles: {cuentasDestino?.Count ?? 0}");
+        Console.WriteLine($"  - Unidades de medida disponibles: {UnidadesMedida?.Count ?? 0}");
+        
+        // No buscar automáticamente al abrir - solo buscar si hay filtro con mínimo 3 caracteres
+        if (!string.IsNullOrWhiteSpace(filtro) && filtro.Length >= 3)
+        {
+            await BuscarProductos();
+        }
+        else
+        {
+            // Limpiar productos para mostrar estado inicial vacío
+            productos.Clear();
+        }
+        
+        StateHasChanged();
+    }
+
+    /// <summary>
+    /// Cierra el modal manualmente
+    /// </summary>
+    private async Task CerrarModalManual()
+    {
+        mostrarModal = false;
+        await OnClose.InvokeAsync();
+        StateHasChanged();
+    }
+
+
+    /// <summary>
+    /// Maneja el evento de presionar tecla en el input de filtro
+    /// </summary>
+    private async Task OnKeyPressInput(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+        {
+            await BuscarProductos();
+        }
+    }
+
+    /// <summary>
+    /// Maneja cambios en el input de búsqueda con debounce y validación de mínimo 3 caracteres
+    /// </summary>
+    private async Task OnFiltroInput(ChangeEventArgs e)
+    {
+        var texto = e.Value?.ToString() ?? string.Empty;
+        filtro = texto;
+        
+        // Cancelar búsquedas pendientes
+        buscarCts?.Cancel();
+        buscarCts = new CancellationTokenSource();
+        var token = buscarCts.Token;
+        
+        try
+        {
+            await Task.Delay(300, token); // Debounce de 300ms
+        }
+        catch (TaskCanceledException)
+        {
+            return; // Se tipeó algo más, abortar
+        }
+
+        if (string.IsNullOrWhiteSpace(filtro) || filtro.Length < 3)
+        {
+            // Menos de 3 caracteres: limpiar resultados
+            productos.Clear();
+            StateHasChanged();
+            return;
+        }
+
+        await BuscarProductos();
+    }
+
+    /// <summary>
+    /// Busca productos según el filtro ingresado
+    /// </summary>
+    private async Task BuscarProductos()
+    {
+        if (string.IsNullOrWhiteSpace(filtro) || filtro.Length < 3)
+        {
+            productos = new List<Master>();
+            StateHasChanged();
+            return;
+        }
+
+        cargando = true;
+        StateHasChanged();
+
+        try
+        {
+            var responseHttp = await repository.Get<List<Master>>($"api/master/search?filter={Uri.EscapeDataString(filtro)}");
+            if (!responseHttp.Error && responseHttp.Response != null)
+            {
+                productos = responseHttp.Response;
+                Console.WriteLine($"[BuscarProductos] Encontrados {productos.Count} productos para '{filtro}'");
+            }
+            else
+            {
+                productos = new List<Master>();
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error al buscar productos: {ex.Message}");
+            productos = new List<Master>();
+        }
+        finally
+        {
+            cargando = false;
+            StateHasChanged();
+        }
+    }
+
+    /// <summary>
+    /// Selecciona un producto y cierra el modal
+    /// </summary>
+    private async Task Seleccionar(Master producto)
+    {
+        // Validar consistencia de tipos de items
+        if (!PuedeAgregarTipoItem(false))
+        {
+            string mensaje = GetMensajeErrorConsistencia(false);
+            await sweetAlertService.FireAsync("Error de Consistencia", mensaje, SweetAlertIcon.Error);
+            return;
+        }
+
+        var seleccion = new SeleccionProductoCompras
+        {
+            Producto = producto,
+            Cantidad = cantidadSeleccion,
+            Precio = precioSeleccion,
+            Sector = sectorSeleccion,
+            Destino = destinoSeleccion
+        };
+
+        mostrarModal = false;
+        await OnProductoSeleccionadoCompras.InvokeAsync(seleccion);
+        StateHasChanged();
+    }
+
+    /// <summary>
+    /// Cambia el modo de selección entre "producto" y "libre"
+    /// </summary>
+    private void CambiarModo(string modo)
+    {
+        modoSeleccion = modo;
+        
+        // Limpiar campos al cambiar de modo
+        if (modo == "libre")
+        {
+            LimpiarCamposItemLibre();
+        }
+        else if (modo == "producto")
+        {
+            filtro = string.Empty;
+            productos = new List<Master>();
+            // Cancelar búsquedas pendientes
+            buscarCts?.Cancel();
+        }
+        
+        StateHasChanged();
+    }
+
+    /// <summary>
+    /// Limpia los campos del formulario de item libre
+    /// </summary>
+    private void LimpiarCamposItemLibre()
+    {
+        descripcionLibre = string.Empty;
+        cantidadLibre = 1m;
+        precioLibre = 0m;
+        unidadMedidaLibre = string.Empty;
+        // Mantener sector y destino por defecto
+        sectorSeleccion = SectorPorDefecto ?? string.Empty;
+        destinoSeleccion = DestinoPorDefecto;
+    }
+
+    /// <summary>
+    /// Verifica si se puede agregar un item libre
+    /// </summary>
+    private bool PuedeAgregarItemLibre()
+    {
+        return !string.IsNullOrWhiteSpace(descripcionLibre) && 
+               cantidadLibre > 0 && 
+               precioLibre > 0 &&
+               PuedeAgregarTipoItem(true); // true = item libre
+    }
+
+    /// <summary>
+    /// Verifica si se puede agregar un item codificado
+    /// </summary>
+    private bool PuedeAgregarItemCodificado()
+    {
+        return PuedeAgregarTipoItem(false); // false = item codificado
+    }
+
+    /// <summary>
+    /// Verifica la consistencia del tipo de items (solo libres O solo codificados)
+    /// </summary>
+    private bool PuedeAgregarTipoItem(bool esItemLibre)
+    {
+        if (ItemsExistentes == null || !ItemsExistentes.Any())
+        {
+            return true; // Si no hay items, se puede agregar cualquier tipo
+        }
+
+        // Verificar si ya hay items libres (código externo vacío)
+        bool hayItemsLibres = ItemsExistentes.Any(i => string.IsNullOrEmpty(i.CodExte));
+        
+        // Verificar si ya hay items codificados (código externo no vacío)
+        bool hayItemsCodificados = ItemsExistentes.Any(i => !string.IsNullOrEmpty(i.CodExte));
+
+        if (esItemLibre)
+        {
+            // Si quiere agregar item libre, no debe haber items codificados
+            return !hayItemsCodificados;
+        }
+        else
+        {
+            // Si quiere agregar item codificado, no debe haber items libres
+            return !hayItemsLibres;
+        }
+    }
+
+    /// <summary>
+    /// Obtiene el mensaje de error de consistencia
+    /// </summary>
+    private string GetMensajeErrorConsistencia(bool esItemLibre)
+    {
+        if (ItemsExistentes == null || !ItemsExistentes.Any())
+        {
+            return string.Empty;
+        }
+
+        bool hayItemsLibres = ItemsExistentes.Any(i => string.IsNullOrEmpty(i.CodExte));
+        bool hayItemsCodificados = ItemsExistentes.Any(i => !string.IsNullOrEmpty(i.CodExte));
+
+        if (esItemLibre && hayItemsCodificados)
+        {
+            return "No se pueden mezclar items libres con items codificados. Ya existen items con código de producto.";
+        }
+        else if (!esItemLibre && hayItemsLibres)
+        {
+            return "No se pueden mezclar items codificados con items libres. Ya existen items sin código de producto.";
+        }
+
+        return string.Empty;
+    }
+
+    /// <summary>
+    /// Agrega un item libre sin producto asociado
+    /// </summary>
+    private async Task AgregarItemLibre()
+    {
+        // Validar campos obligatorios
+        if (string.IsNullOrWhiteSpace(descripcionLibre) || cantidadLibre <= 0 || precioLibre <= 0)
+        {
+            await sweetAlertService.FireAsync("Error", "Por favor completa todos los campos obligatorios.", SweetAlertIcon.Error);
+            return;
+        }
+
+        // Validar consistencia de tipos de items
+        if (!PuedeAgregarTipoItem(true))
+        {
+            string mensaje = GetMensajeErrorConsistencia(true);
+            await sweetAlertService.FireAsync("Error de Consistencia", mensaje, SweetAlertIcon.Error);
+            return;
+        }
+
+        // Crear un producto "virtual" para el item libre
+        var productoLibre = new Master
+        {
+            Codigo = "", // Código vacío para item libre
+            Descripcion = descripcionLibre,
+            Umedida = unidadMedidaLibre,
+            // Otros campos pueden quedar con valores por defecto
+            Codint = 0
+        };
+
+        var seleccion = new SeleccionProductoCompras
+        {
+            Producto = productoLibre,
+            Cantidad = cantidadLibre,
+            Precio = precioLibre,
+            Sector = sectorSeleccion,
+            Destino = destinoSeleccion
+        };
+
+        mostrarModal = false;
+        await OnProductoSeleccionadoCompras.InvokeAsync(seleccion);
+        StateHasChanged();
+    }
+}

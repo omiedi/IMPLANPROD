@@ -1,0 +1,58 @@
+@* 
+    Componente reutilizable para mostrar instructivos desplegables en cualquier pantalla
+    Permite al usuario leer las instrucciones del proceso sin salir de la pantalla
+*@
+
+<div class="card mb-3 border-info">
+    <div class="card-header bg-info text-white" style="cursor: pointer;" @onclick="ToggleInstructivo">
+        <div class="d-flex justify-content-between align-items-center">
+            <h6 class="mb-0">
+                <i class="fas fa-info-circle me-2"></i>
+                @Titulo
+            </h6>
+            <i class="fas @(mostrarInstructivo ? "fa-chevron-up" : "fa-chevron-down")"></i>
+        </div>
+    </div>
+    
+    @if (mostrarInstructivo)
+    {
+        <div class="card-body bg-light">
+            @ChildContent
+        </div>
+    }
+</div>
+
+@code {
+    /// <summary>
+    /// Título del panel de instructivo
+    /// </summary>
+    [Parameter]
+    public string Titulo { get; set; } = "📖 Instructivo del Proceso";
+
+    /// <summary>
+    /// Contenido del instructivo (HTML/Razor)
+    /// </summary>
+    [Parameter]
+    public RenderFragment? ChildContent { get; set; }
+
+    /// <summary>
+    /// Indica si el instructivo está visible por defecto
+    /// </summary>
+    [Parameter]
+    public bool MostrarPorDefecto { get; set; } = false;
+
+    private bool mostrarInstructivo;
+
+    protected override void OnInitialized()
+    {
+        mostrarInstructivo = MostrarPorDefecto;
+    }
+
+    /// <summary>
+    /// Alterna la visibilidad del instructivo
+    /// </summary>
+    private void ToggleInstructivo()
+    {
+        mostrarInstructivo = !mostrarInstructivo;
+    }
+}

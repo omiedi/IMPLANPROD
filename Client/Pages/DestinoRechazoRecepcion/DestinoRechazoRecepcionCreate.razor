@@ -1,0 +1,36 @@
+@page "/DestinoRechazoRecepcion/create"
+@inject IRepository repository
+@inject NavigationManager navigationManager
+@inject SweetAlertService sweetAlertService
+@inject IModalService Modal
+
+<h3>Nuevo Destino de Rechazo</h3>
+
+<DestinoRechazoRecepcionForm @ref="destinoForm" Destino="destino" OnValidSubmit="Create" ReturnAction="Return" IsEdit="false" />
+
+@code {
+    private DestinoRechazoRecepcion destino = new();
+    private DestinoRechazoRecepcionForm? destinoForm;
+    [CascadingParameter]
+    BlazoredModalInstance BlazoredModal { get; set; } = default!;
+
+    private async Task Create()
+    {
+        var responseHttp = await repository.Post("/api/destinorechazorecepcion", destino);
+        if (responseHttp.Error)
+        {
+            var mensajeError = await responseHttp.GetErrorMessageAsync();
+            await sweetAlertService.FireAsync("Error", mensajeError, SweetAlertIcon.Error);
+            return;
+        }
+
+        await BlazoredModal.CloseAsync(ModalResult.Ok());
+        Return();
+    }
+
+    private void Return()
+    {
+        destinoForm!.FormPostedSuccessfully = true;
+        navigationManager.NavigateTo("/DestinoRechazoRecepcion");
+    }
+}

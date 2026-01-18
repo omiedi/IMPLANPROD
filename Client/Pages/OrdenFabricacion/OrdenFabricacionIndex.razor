@@ -1,0 +1,1376 @@
+@page "/ordenfabricacion"
+@page "/ordenfabricacion/{Page:int?}"
+@using IMPLANPROD.Shared.DTOs
+@using IMPLANPROD.Shared.Entities
+@using System.Globalization
+@using System.Web
+@inject IRepository repository
+@inject SweetAlertService sweetAlertService
+@inject NavigationManager navigationManager
+
+<PageTitle>Órdenes de Fabricación</PageTitle>
+
+<div class="container-fluid">
+    <!-- Título de la página -->
+    <div class="mb-4">
+        <h2 class="text-center fw-bold text-primary">
+            <i class="fas fa-industry me-2"></i>
+            ÓRDENES DE FABRICACIÓN
+        </h2>
+        <hr class="border-primary border-2 opacity-50" />
+    </div>
+
+<div class="bg-primary bg-opacity-10 p-3 rounded-3 mb-3 d-flex justify-content-end align-items-center">
+    <div class="dropdown">
+        <button class="btn btn-sm btn-primary dropdown-toggle" type="button" data-bs-toggle="dropdown">
+            Informes
+        </button>
+        <ul class="dropdown-menu dropdown-menu-end">
+            <li>
+                <NavLink class="dropdown-item" href="/AprobarOrdenfabricacion">
+                    Aprobar Ordenes de Fabricación
+                </NavLink>
+            </li>
+            <li>
+                <button class="dropdown-item" type="button" @onclick="AbrirModalConfiguracion">
+                    <i class="oi oi-cog me-2"></i>Configuración
+                </button>
+            </li>
+            @* <li>
+                <NavLink class="dropdown-item" href="/movimientos-stock">
+                    Movimientos Históricos
+                </NavLink>
+            </li> *@
+        </ul>
+    </div>
+</div>
+<div class="row mb-3">
+    <div class="col">
+        <button class="btn btn-primary" @onclick="NuevoOrdenFabricacion">
+            <i class="oi oi-plus"></i> Nueva Orden
+        </button>
+        <button class="btn btn-secondary" @onclick="NuevoOrdenFabricacion">
+            <i class="oi oi-trash"></i> Productos dados de baja
+        </button>
+    </div>
+</div>
+<div style="height: 100px;" class="d-flex justify-content-center align-items-center">
+    @if (isLoading)
+    {
+        <div class="spinner-border" role="status">
+            <span class="visually-hidden">Cargando...</span>
+        </div>
+    }
+    else
+    {
+        <!-- Espacio reservado vacío para mantener altura -->
+        <div style="height: 100%;"></div>
+    }
+</div>
+
+
+<div class="mb-3">
+    <div class="row">
+        <div class="col-md-3">
+            <div class="mb-3">
+                <label>Estado:</label>
+                <select class="form-select" @bind="estadoSeleccionado">
+                    <option value="0">Todas</option>
+                    <option value="1">Abiertas</option>
+                    <option value="3">Cerradas</option>
+                </select>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="mb-3">
+                <label>Fecha desde:</label>
+                <input type="date" class="form-control" @bind="fechaDesde" />
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="mb-3">
+                <label>Fecha hasta:</label>
+                <input type="date" class="form-control" @bind="fechaHasta" />
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="mb-3">
+                <label>Filtro:</label>
+                <div class="input-group">
+                    <input type="text" class="form-control" @bind-value="filter" @bind-value:event="oninput" placeholder="Buscar..." />
+                    <button class="btn btn-outline-primary" type="button" @onclick="ApplyFilterAsync">
+                        <i class="oi oi-magnifying-glass"></i>
+                    </button>
+                    <button class="btn btn-outline-danger" type="button" @onclick="CleanFilterAsync">
+                        <i class="oi oi-ban"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="row">
+        <div class="col-md-12 text-end">
+            <button class="btn btn-primary" @onclick="ConsultarAsync">
+                <i class="oi oi-magnifying-glass"></i> Consultar
+            </button>
+        </div>
+    </div>
+</div>
+
+<Pagination CurrentPage="currentPage"
+            TotalPages="totalPages"
+            SelectedPage="SelectedPageAsync" />
+
+@if (ordenesFabricacion == null || !ordenesFabricacion.Any())
+{
+    @if (!isLoading)
+    {
+        <div class="alert alert-info mt-3">
+            <i class="oi oi-info me-2"></i> No se encontraron registros que coincidan con la búsqueda.
+        </div>
+    }
+}
+else
+{
+    <table class="table table-striped">
+        <thead>
+            <tr>
+                <th>Fecha</th>
+                <th>Ord.Fab</th>
+                <!-- Nuevas columnas para mostrar datos del producto -->
+                <th>Código</th>
+                <th>Descripción</th>
+                <th>Cant.Proy.</th>
+                <th>ID</th>
+                <th>Acciones</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var orden in ordenesFabricacion)
+            {
+                <tr>
+                    <td>@(orden.FechGen.HasValue ? orden.FechGen.Value.ToString("dd/MM/yyyy") : "")</td>
+                    <td>@orden.IdSubOr</td>
+                    <!-- Nuevas columnas con datos del producto -->
+                    <td>@orden.Cod_Exte</td>
+                    <td>@orden.Descrip</td>
+                    <td>@FormatDecimal(orden.CanProy)</td>
+                    <td>@orden.Id_Orfa</td>
+                    <td>
+                        <a class="btn btn-warning btn-sm" href="/orden-fabricacion-edit/@orden.Id">
+                            <i class="oi oi-pencil"></i>
+                        </a>
+                        <button class="btn btn-info btn-sm" @onclick="() => VerAnotaciones(orden.Id)">
+                            <i class="oi oi-eye"></i>
+                        </button>
+                        @* Botón de cierre solo para órdenes abiertas (statuorf < 3) *@
+                        @if (orden.StatuOrf.HasValue && orden.StatuOrf.Value < 3)
+                        {
+                            <button class="btn btn-success btn-sm ms-1"
+                                    @onclick="() => CerrarOrdenFabricacion(orden.Id, orden.IdSubOr)"
+                                    title="Cerrar Orden de Fabricación">
+                                <i class="oi oi-check"></i>
+                            </button>
+                        }
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+}
+
+@* Modal de configuración de Orden de Fabricación *@
+<OrdenFabricacionConfigModal IsVisible="@mostrarModalConfiguracion"
+                             OnCloseRequested="@CerrarModalConfiguracion"
+                             OnConfigurationSaved="@OnConfiguracionGuardada" />
+
+@* Modal de cierre de Orden de Fabricación *@
+@* Este modal se muestra cuando el usuario hace clic en el botón verde de cierre de una orden abierta *@
+@* Permite ingresar datos de cierre como cantidades aprobadas/rechazadas y depósitos *@
+@if (mostrarModalCierre)
+{
+    @* Estructura principal del modal con fondo oscuro *@
+    <div class="modal fade show" style="display: block" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                @* Encabezado del modal con color verde para mantener consistencia visual *@
+                <div class="modal-header bg-success text-white">
+                    <h5 class="modal-title">
+                        <i class="oi oi-check me-2"></i>Cierre de Orden de Fabricación
+                    </h5>
+                    @* Botón de cierre con estilo blanco para contraste con fondo verde *@
+                    <button type="button" class="btn-close btn-close-white" @onclick="CerrarModalCierre"></button>
+                </div>
+                @* Cuerpo principal del modal donde se muestran los datos y controles *@
+                <div class="modal-body">
+                    @* Indicador de carga mientras se obtienen los datos de la orden y configuraciones *@
+                    @if (cargandoDatosCierre)
+                    {
+                        <div class="d-flex justify-content-center align-items-center" style="min-height: 200px;">
+                            <div class="spinner-border text-primary" role="status">
+                                <span class="visually-hidden">Cargando datos...</span>
+                            </div>
+                        </div>
+                    }
+                    @* Contenido principal del modal cuando los datos están cargados *@
+                    else if (ordenParaCierre is not null)
+                    {
+                        @* Sección de datos fijos de la orden - información de solo lectura *@
+                        <!-- Datos fijos de la orden -->
+                        <div class="card mb-3">
+                            @* Encabezado de la sección con color verde pastel *@
+                            <div class="card-header" style="background-color: #c3e6cb; color: #155724;">
+                                <h6 class="card-title mb-0">
+                                    <i class="oi oi-document me-2"></i><strong>Datos de la Orden</strong>
+                                </h6>
+                            </div>
+                            @* Contenido del card con los datos fijos de la orden *@
+                            <div class="card-body">
+                                @* Primera fila: Código del producto y número de orden de fabricación *@
+                                <div class="row">
+                                    <div class="col-md-6">
+                                        @* Código externo del producto (campo Cod_Exte) *@
+                                        <div class="mb-2">
+                                            <strong>Código:</strong> @ordenParaCierre.Cod_Exte
+                                        </div>
+                                        @* Número de orden de fabricación (campo IdSubOr) *@
+                                        <div class="mb-2">
+                                            <strong>O.Fabricación:</strong> @ordenParaCierre.IdSubOr
+                                        </div>
+                                    </div>
+                                    <div class="col-md-6">
+                                        @* Descripción del producto (campo Descrip) *@
+                                        <div class="mb-2">
+                                            <strong>Descripción:</strong> @ordenParaCierre.Descrip
+                                        </div>
+                                        @* Cantidad proyectada original de la orden (campo CanProy) *@
+                                        <div class="mb-2">
+                                            <strong>Cantidad:</strong> @FormatDecimal(ordenParaCierre.CanProy)
+                                        </div>
+                                    </div>
+                                </div>
+                                @* Segunda fila: Cantidades aprobadas y pendientes *@
+                                <div class="row">
+                                    <div class="col-md-6">
+                                        @* Cantidad ya aprobada en cierres anteriores (campo CanApro) *@
+                                        <div class="mb-2">
+                                            <strong>Cant.Aprobadas:</strong> @FormatDecimal(ordenParaCierre.CanApro)
+                                        </div>
+                                    </div>
+                                    <div class="col-md-6">
+                                        @* Cantidad pendiente calculada: CanProy - CanApro *@
+                                        <div class="mb-2">
+                                            <strong>Cant. Pendiente:</strong> @FormatDecimal((ordenParaCierre.CanProy ?? 0) - (ordenParaCierre.CanApro ?? 0))
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        @* Sección de campos editables para el cierre de la orden *@
+                        <!-- Campos editables del modal de cierre -->
+                        <div class="card">
+                            @* Encabezado de la sección de datos editables con color verde pastel *@
+                            <div class="card-header" style="background-color: #c3e6cb; color: #155724;">
+                                <h6 class="card-title mb-0">
+                                    <i class="oi oi-wrench me-2"></i><strong>Datos de Cierre</strong>
+                                </h6>
+                            </div>
+                            @* Contenido del card con los controles editables *@
+                            <div class="card-body">
+                                @* Campo de fecha de cierre - por defecto fecha actual *@
+                                <!-- Fecha -->
+                                <div class="row mb-3">
+                                    <div class="col-md-12">
+                                        <label for="fechaCierre" class="form-label"><strong>Fecha:</strong></label>
+                                        @* Control de fecha que se inicializa con DateTime.Today *@
+                                        <InputDate id="fechaCierre" class="form-control" @bind-Value="fechaCierre" />
+                                    </div>
+                                </div>
+
+                                @* FILA DE SELECCIÓN DE DEPÓSITOS - AMBOS SON OBLIGATORIOS *@
+                                @* Estos depósitos se configuran automáticamente con valores por defecto del sistema *@
+                                @* DEPOCIE para entrada y DEPODEST para salida, obtenidos de la tabla flexcrl *@
+                                <!-- Dep. Entrada y Dep. Salida -->
+                                <div class="row mb-3">
+                                    <div class="col-md-6">
+                                        @* DEPÓSITO DE ENTRADA - DONDE SE ALMACENARÁ EL PRODUCTO TERMINADO *@
+                                        @* Se preselecciona automáticamente con el valor configurado en DEPOCIE *@
+                                        @* Este depósito recibirá el stock del producto fabricado exitosamente *@
+                                        @* El valor por defecto se obtiene de flexcrl con parámetros ("", "DEPOCIE") *@
+                                        <label for="depositoEntrada" class="form-label"><strong>Dep. Entrada:</strong></label>
+                                        @* InputSelect cargado dinámicamente desde api/tadeposi/combo *@
+                                        @* Se inicializa con depositoEntradaSeleccionado = valor de DEPOCIE *@
+                                        <InputSelect id="depositoEntrada" class="form-select" @bind-Value="depositoEntradaSeleccionado">
+                                            <option value="0">Seleccionar depósito...</option>
+                                            @if (depositosDisponibles?.Any() == true)
+                                            {
+                                                @* LISTA DE DEPÓSITOS DISPONIBLES *@
+                                                @* Iteración sobre los depósitos disponibles obtenidos de la API *@
+                                                @* El depósito DEPOCIE aparecerá preseleccionado automáticamente *@
+                                                @foreach (var deposito in depositosDisponibles)
+                                                {
+                                                    <option value="@deposito.Key">@deposito.Value</option>
+                                                }
+                                            }
+                                        </InputSelect>
+                                    </div>
+                                    <div class="col-md-6">
+                                        @* DEPÓSITO DE SALIDA/CONSUMO - DE DONDE SALEN LOS MATERIALES *@
+                                        @* Se preselecciona automáticamente con el valor configurado en DEPODEST *@
+                                        @* Este depósito es donde se encuentran las materias primas consumidas *@
+                                        @* El valor por defecto se obtiene de flexcrl con parámetros ("", "DEPODEST") *@
+                                        <label for="depositoConsumo" class="form-label"><strong>Dep. Salida:</strong></label>
+                                        @* InputSelect con la misma lista de depósitos disponibles *@
+                                        @* Se inicializa con depositoConsumoSeleccionado = valor de DEPODEST *@
+                                        <InputSelect id="depositoConsumo" class="form-select" @bind-Value="depositoConsumoSeleccionado">
+                                            <option value="0">Seleccionar depósito...</option>
+                                            @if (depositosDisponibles?.Any() == true)
+                                            {
+                                                @* LISTA DE DEPÓSITOS PARA CONSISTENCIA *@
+                                                @* Misma lista que el depósito de entrada para mantener coherencia *@
+                                                @* El depósito DEPODEST aparecerá preseleccionado automáticamente *@
+                                                @foreach (var deposito in depositosDisponibles)
+                                                {
+                                                    <option value="@deposito.Key">@deposito.Value</option>
+                                                }
+                                            }
+                                        </InputSelect>
+                                    </div>
+                                </div>
+                                @* FALTA PERSISTIR LOS DATOS DE SCRAP NO SE ESTAN CONSIDERANDO EN LOS CONTROLADORES AUN *@
+                                @* Fila de cantidades - al menos una debe ser mayor a 0 *@
+                                <!-- Cant.Aprobada y Cant.Rechazada -->
+                                <div class="row">
+                                    <div class="col-md-6">
+                                        @* Cantidad aprobada en este cierre - no puede ser negativa *@
+                                        <label for="cantidadAprobada" class="form-label"><strong>Cant.Aprobada:</strong></label>
+                                        @* InputNumber con step decimal para permitir valores con decimales *@
+                                        <InputNumber id="cantidadAprobada" class="form-control" @bind-Value="cantidadAprobada" step="0.01" />
+                                    </div>
+                                    <div class="col-md-6">
+                                        @* Cantidad rechazada en este cierre - controla la visibilidad del depósito scrap *@
+                                        <label for="cantidadRechazada" class="form-label"><strong>Cant.Rechazada:</strong></label>
+                                        @* InputNumber que al cambiar puede mostrar/ocultar el control de depósito scrap *@
+                                        <InputNumber id="cantidadRechazada" class="form-control" @bind-Value="cantidadRechazada" step="0.01" />
+                                    </div>
+                                </div>
+
+                                @* CONTROL CONDICIONAL PARA DEPÓSITO SCRAP *@
+                                @* Este control tiene un comportamiento dinámico muy importante: *@
+                                @* - Solo se muestra cuando cantidadRechazada > 0 *@
+                                @* - Al cambiar cantidadRechazada a 0, el control desaparece automáticamente *@
+                                @* - Al ingresar cantidadRechazada > 0, el control aparece instantáneamente *@
+                                @* - Se preselecciona automáticamente con el valor configurado en DEPSCRAP *@
+                                @* - Es obligatorio seleccionar un depósito scrap si hay cantidad rechazada *@
+                                <!-- Depósito Scrap (solo visible si cantidad rechazada > 0) -->
+                                @if (cantidadRechazada > 0)
+                                {
+                                    @* FILA CONDICIONAL QUE APARECE DINÁMICAMENTE *@
+                                    @* Esta fila se renderiza solo cuando el usuario ingresa cantidad rechazada > 0 *@
+                                    @* El binding bidireccional de cantidadRechazada hace que el control aparezca/desaparezca en tiempo real *@
+                                    <div class="row mt-3">
+                                        <div class="col-md-6">
+                                            @* DEPÓSITO PARA MATERIAL RECHAZADO/SCRAP *@
+                                            @* Este depósito almacenará todo el material que no pasó el control de calidad *@
+                                            @* Es fundamental para la trazabilidad del material defectuoso *@
+                                            <label for="depositoScrap" class="form-label"><strong>Depósito Scrap:</strong></label>
+                                            @* INPUT SELECT CON VALOR POR DEFECTO CONFIGURADO *@
+                                            @* Se inicializa con depositoScrapConfiguracion obtenido de flexcrl.DEPSCRAP *@
+                                            @* El usuario puede cambiar la selección si es necesario usar otro depósito *@
+                                            @* La validación requiere que este campo tenga un valor > 0 cuando cantidadRechazada > 0 *@
+                                            <InputSelect id="depositoScrap" class="form-select" @bind-Value="depositoScrapSeleccionado">
+                                                <option value="0">Seleccionar depósito...</option>
+                                                @if (depositosDisponibles?.Any() == true)
+                                                {
+                                                    @* OPCIONES DE DEPÓSITOS DISPONIBLES *@
+                                                    @* Misma lista que los depósitos de entrada y salida para consistencia *@
+                                                    @* Cargada dinámicamente desde api/tadeposi/combo *@
+                                                    @foreach (var deposito in depositosDisponibles)
+                                                    {
+                                                        <option value="@deposito.Key">@deposito.Value</option>
+                                                    }
+                                                }
+                                            </InputSelect>
+                                        </div>
+                                    </div>
+                                }
+                            </div>
+                        </div>
+                    }
+                </div>
+                @* Footer del modal con botones de acción *@
+                <div class="modal-footer">
+                    @* Botón Cancelar - cierra el modal sin procesar el cierre *@
+                    <button type="button" class="btn btn-secondary" @onclick="CerrarModalCierre">
+                        <i class="oi oi-x me-1"></i>Cancelar
+                    </button>
+                    @* Botón Aceptar - procesa el cierre con validaciones *@
+                    <button type="button"
+                            class="btn btn-success"
+                            @onclick="ProcesarCierreOrden"
+                            disabled="@(cargandoDatosCierre || procesandoCierre)">
+                        @* Spinner durante el procesamiento o icono de check normal *@
+                        @if (procesandoCierre)
+                        {
+                            <span class="spinner-border spinner-border-sm me-2" role="status"></span>
+                        }
+                        else
+                        {
+                            <i class="oi oi-check me-1"></i>
+                        }
+                        Aceptar
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+    @* Fondo oscuro del modal para bloquear interacción con el resto de la página *@
+    <div class="modal-backdrop fade show"></div>
+}
+
+@* Modal de componentes de la fórmula *@
+@* Este modal se muestra después de las validaciones y antes del mensaje final de cierre *@
+@* Muestra los componentes necesarios para fabricar el producto con sus cantidades y stock *@
+@if (mostrarModalComponentes)
+{
+    <div class="modal fade show" style="display: block" tabindex="-1">
+        <div class="modal-dialog modal-xl">
+            <div class="modal-content">
+                @* Encabezado del modal con color azul para diferenciarlo del modal de cierre *@
+                <div class="modal-header bg-info text-white">
+                    <h5 class="modal-title">
+                        <i class="oi oi-list me-2"></i>Componentes de la Fórmula
+                    </h5>
+                    @* Botón de cierre con estilo blanco para contraste con fondo azul *@
+                    <button type="button" class="btn-close btn-close-white" @onclick="CancelarModalComponentes"></button>
+                </div>
+                @* Cuerpo principal del modal con la tabla de componentes *@
+                <div class="modal-body">
+                    @* Indicador de carga mientras se obtienen los datos de los componentes *@
+                    @if (cargandoComponentes)
+                    {
+                        <div class="d-flex justify-content-center align-items-center" style="min-height: 200px;">
+                            <div class="spinner-border text-primary" role="status">
+                                <span class="visually-hidden">Cargando componentes...</span>
+                            </div>
+                        </div>
+                    }
+                    @* Contenido principal del modal cuando los datos están cargados *@
+                    else
+                    {
+                        @* Información de la orden en la parte superior *@
+                        <div class="card mb-3">
+                            <div class="card-header" style="background-color: #bee5eb; color: #0c5460;">
+                                <h6 class="card-title mb-0">
+                                    <i class="oi oi-document me-2"></i><strong>Información de la Orden</strong>
+                                </h6>
+                            </div>
+                            <div class="card-body">
+                                @if (ordenParaCierre != null)
+                                {
+                                    <div class="row">
+                                        <div class="col-md-6">
+                                            <strong>O.Fabricación:</strong> @ordenParaCierre.IdSubOr
+                                        </div>
+                                        <div class="col-md-6">
+                                            <strong>Producto:</strong> @ordenParaCierre.Cod_Exte - @ordenParaCierre.Descrip
+                                        </div>
+                                    </div>
+                                    <div class="row mt-2">
+                                        <div class="col-md-6">
+                                            <strong>Cantidad a Cerrar:</strong> @FormatDecimal(cantidadAprobada + cantidadRechazada)
+                                        </div>
+                                        <div class="col-md-6">
+                                            <strong>Estado:</strong> @(cierraCompleto == 1 ? "Se cerrará completamente" : "Se mantendrá abierta")
+                                        </div>
+                                    </div>
+                                }
+                            </div>
+                        </div>
+
+                        @* Tabla de componentes *@
+                        @if (componentesFormula?.Any() == true)
+                        {
+                            <div class="table-responsive">
+                                <table class="table table-striped table-hover">
+                                    <thead class="table-info">
+                                        <tr>
+                                            <th>Código</th>
+                                            <th>Descripción</th>
+                                            <th>Unidad Medida</th>
+                                            <th class="text-end">Uso Unitario</th>
+                                            <th class="text-end">Cantidad</th>
+                                            <th class="text-end">Stock Actual</th>
+                                            <th class="text-end">Falta</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach (var componente in componentesFormula)
+                                        {
+                                            @* Calcular si falta stock basándose en la cantidad a utilizar (editable) *@
+                                            decimal falta = componente.CantidadAUtilizar - componente.Stock;
+
+                                            <tr class="@(falta > 0 ? "table-warning" : "")">
+                                                <td>@componente.CodXElem</td>
+                                                <td>@componente.Descripcion</td>
+                                                <td>UN</td> @* Por ahora fijo, se puede obtener del master si está disponible *@
+                                                <td class="text-end">@FormatDecimal(componente.UsoBruto)</td>
+                                                <td class="text-end">
+                                                    @* Campo editable para la cantidad a utilizar *@
+                                                    <InputNumber class="form-control text-end"
+                                                                 @bind-Value="componente.CantidadAUtilizar"
+                                                                 step="0.01"
+                                                                 style="width: 120px; display: inline-block;"
+                                                                 @onchange="StateHasChanged" />
+                                                </td>
+                                                <td class="text-end">@FormatDecimal(componente.Stock)</td>
+                                                <td class="text-end @(falta > 0 ? "text-danger fw-bold" : "text-success")">
+                                                    @FormatDecimal(falta)
+                                                </td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="alert alert-info">
+                                <i class="oi oi-info me-2"></i>No se encontraron componentes para esta fórmula.
+                            </div>
+                        }
+                    }
+                </div>
+                @* Footer del modal con botones de acción *@
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" @onclick="CancelarModalComponentes">
+                        <i class="oi oi-x me-1"></i>Cancelar
+                    </button>
+                    <button type="button" class="btn btn-primary" @onclick="ContinuarConCierre">
+                        <i class="oi oi-check me-1"></i>Continuar con el Cierre
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+    @* Fondo oscuro del modal para bloquear interacción con el resto de la página *@
+    <div class="modal-backdrop fade show"></div>
+}
+</div>
+
+@code {
+
+    [Parameter]
+    public string? Page { get; set; }
+
+    private int currentPage = 1;
+    private int totalPages;
+    private int recordsNumber = 10;
+    private List<OrdefabrIndexDTO>? ordenesFabricacion;
+    private string filter = string.Empty;
+    private int estadoSeleccionado = 1; // Por defecto muestra abiertas (StatuOrf < 3)
+    private DateTime? fechaDesde;
+    private DateTime? fechaHasta;
+    private bool isLoading = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        // Leer parámetros de la URL
+        var uri = new Uri(navigationManager.Uri);
+        var queryParams = System.Web.HttpUtility.ParseQueryString(uri.Query);
+        
+        // Aplicar filtros desde parámetros de URL si existen
+        var estadoParam = queryParams["estado"];
+        var fechaDesdeParam = queryParams["fechaDesde"];
+        var fechaHastaParam = queryParams["fechaHasta"];
+        var filtroParam = queryParams["filtro"];
+        
+        if (!string.IsNullOrEmpty(estadoParam) && int.TryParse(estadoParam, out var estado))
+        {
+            estadoSeleccionado = estado;
+        }
+        
+        if (!string.IsNullOrEmpty(fechaDesdeParam) && DateTime.TryParse(fechaDesdeParam, out var fDesde))
+        {
+            fechaDesde = fDesde;
+        }
+        else
+        {
+            ConfigurarFechasIniciales();
+        }
+        
+        if (!string.IsNullOrEmpty(fechaHastaParam) && DateTime.TryParse(fechaHastaParam, out var fHasta))
+        {
+            fechaHasta = fHasta;
+        }
+        else if (!fechaHasta.HasValue)
+        {
+            fechaHasta = DateTime.Today;
+        }
+        
+        if (!string.IsNullOrEmpty(filtroParam))
+        {
+            filter = filtroParam;
+        }
+        
+        await LoadAsync();
+    }
+
+    /// <summary>
+    /// Configura las fechas iniciales según la lógica requerida:
+    /// - Si el día actual es menor a 15, muestra desde el mes anterior
+    /// - Si no, muestra desde el inicio del mes actual
+    /// </summary>
+    private void ConfigurarFechasIniciales()
+    {
+        var hoy = DateTime.Today;
+
+        // Si estamos en los primeros 15 días del mes, mostrar desde el mes anterior
+        if (hoy.Day < 15)
+        {
+            fechaDesde = new DateTime(hoy.Year, hoy.Month, 1).AddMonths(-1);
+        }
+        else
+        {
+            fechaDesde = new DateTime(hoy.Year, hoy.Month, 1);
+        }
+
+        fechaHasta = hoy;
+    }
+
+    /// <summary>
+    /// Formatea un valor decimal para mostrarlo con 2 decimales
+    /// </summary>
+    private string FormatDecimal(decimal? value)
+    {
+        if (!value.HasValue)
+            return "";
+
+        return value.Value.ToString("N2", CultureInfo.CurrentCulture);
+    }
+
+    /// <summary>
+    /// Carga los datos según los filtros aplicados
+    /// </summary>
+    private async Task LoadAsync(int page = 1)
+    {
+        try
+        {
+            isLoading = true;
+
+            // Verificar si hay un parámetro de página en la URL
+            if (!string.IsNullOrWhiteSpace(Page))
+            {
+                page = Convert.ToInt32(Page);
+            }
+
+            currentPage = page;
+
+            // Construir URLs para datos y total de páginas
+            string url1 = $"api/ordefabr?page={page}&statuOrf={estadoSeleccionado}";
+            string url2 = $"api/ordefabr/totalPages?statuOrf={estadoSeleccionado}";
+
+            // Agregar filtros de fecha si están presentes
+            if (fechaDesde.HasValue)
+            {
+                string fechaDesdeStr = fechaDesde.Value.ToString("yyyy-MM-dd");
+                url1 += $"&fechaDesde={fechaDesdeStr}";
+                url2 += $"&fechaDesde={fechaDesdeStr}";
+            }
+
+            if (fechaHasta.HasValue)
+            {
+                string fechaHastaStr = fechaHasta.Value.ToString("yyyy-MM-dd");
+                url1 += $"&fechaHasta={fechaHastaStr}";
+                url2 += $"&fechaHasta={fechaHastaStr}";
+            }
+
+            // Agregar filtro de texto si existe
+            if (!string.IsNullOrWhiteSpace(filter))
+            {
+                url1 += $"&filter={filter}";
+                url2 += $"&filter={filter}";
+            }
+
+            // Realizar las peticiones en paralelo
+            var responseHttp = await repository.Get<List<OrdefabrIndexDTO>>(url1);
+            var responseHttp2 = await repository.Get<int>(url2);
+
+            if (responseHttp.Error)
+            {
+                await sweetAlertService.FireAsync("Error", await responseHttp.GetErrorMessageAsync(), SweetAlertIcon.Error);
+            }
+            else
+            {
+                ordenesFabricacion = responseHttp.Response!;
+                totalPages = responseHttp2.Response!;
+            }
+        }
+        catch (Exception ex)
+        {
+            await sweetAlertService.FireAsync("Error", ex.Message, SweetAlertIcon.Error);
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+    /// <summary>
+    /// Navega al visor de anotaciones para la orden seleccionada
+    /// </summary>
+    /// <param name="id">ID de la orden de fabricación</param>
+    private void VerAnotaciones(int id)
+    {
+        navigationManager.NavigateTo($"/ordenFabricacion/anotaciones/{id}");
+    }
+    /// <summary>
+    /// Navega a la página de creación de una nueva orden de fabricación
+    /// </summary>
+    private void NuevoOrdenFabricacion()
+    {
+        navigationManager.NavigateTo("/orden-fabricacion-create");
+    }
+    // El método GetPagesAsync ya no es necesario porque se obtiene el total de páginas en LoadAsync
+
+    /// <summary>
+    /// Maneja el cambio de página en la paginación
+    /// </summary>
+    private async Task SelectedPageAsync(int page)
+    {
+        await LoadAsync(page);
+    }
+
+    /// <summary>
+    /// Aplica el filtro de texto
+    /// </summary>
+    private async Task ApplyFilterAsync()
+    {
+        await LoadAsync(1);
+    }
+
+    /// <summary>
+    /// Limpia el filtro de texto
+    /// </summary>
+    private async Task CleanFilterAsync()
+    {
+        filter = string.Empty;
+        await LoadAsync(1);
+    }
+
+    /// <summary>
+    /// Consulta los datos según los filtros seleccionados
+    /// </summary>
+    private async Task ConsultarAsync()
+    {
+        await LoadAsync(1);
+    }
+
+    /// <summary>
+    /// Muestra el detalle de una orden de fabricación
+    /// </summary>
+    private async Task VerDetalleAsync(int id)
+    {
+        // Implementar la navegación al detalle cuando se cree la página de detalle
+        navigationManager.NavigateTo($"/ordenfabricacion/detail/{id}");
+    }
+
+    // Variables para el modal de configuración
+    private bool mostrarModalConfiguracion = false;
+
+    // Variables para el modal de cierre de orden de fabricación
+    private bool mostrarModalCierre = false;
+    private bool cargandoDatosCierre = false;
+    private bool procesandoCierre = false;
+    private OrdefabrIndexDTO? ordenParaCierre = null;
+    private int idOrdenParaCierre = 0;
+
+    // Variables editables del modal de cierre
+    private DateTime fechaCierre = DateTime.Today;
+    private int depositoEntradaSeleccionado = 0;
+    private int depositoConsumoSeleccionado = 0;
+    private decimal cantidadAprobada = 0;
+    private decimal cantidadRechazada = 0;
+    private int depositoScrapSeleccionado = 0;
+
+    // Diccionario para almacenar los depósitos disponibles
+    private Dictionary<int, string>? depositosDisponibles;
+
+    // Variable para almacenar la configuración del depósito scrap por defecto
+    private int depositoScrapConfiguracion = 0;
+
+    // Variable para controlar si la orden se cierra completamente (1) o se mantiene abierta (0)
+    private int cierraCompleto = 0;
+
+    // Variables para el modal de componentes
+    private bool mostrarModalComponentes = false;
+    private bool cargandoComponentes = false;
+    private List<FormulaComponenteDTO>? componentesFormula;
+
+    /// <summary>
+    /// Abre el modal de configuración de orden de fabricación
+    /// </summary>
+    private void AbrirModalConfiguracion()
+    {
+        mostrarModalConfiguracion = true;
+    }
+
+    /// <summary>
+    /// Cierra el modal de configuración
+    /// </summary>
+    private void CerrarModalConfiguracion()
+    {
+        mostrarModalConfiguracion = false;
+    }
+
+    /// <summary>
+    /// Se ejecuta cuando se guarda la configuración exitosamente
+    /// </summary>
+    private void OnConfiguracionGuardada()
+    {
+        // Aquí se pueden realizar acciones adicionales si es necesario
+        // Por ejemplo, recargar datos o mostrar notificaciones
+    }
+
+    /////////// *** SECTOR DE CIERRE DE ORDEN DE FABRICACIN *** /////////////////////////////////
+    ///
+    /// <summary>
+    /// Abre el modal de cierre de orden de fabricación
+    /// </summary>
+    /// <param name="id">ID de la orden de fabricación</param>
+    /// <param name="idSubOr">ID de la suborden para mostrar en la confirmación</param>
+    private async Task CerrarOrdenFabricacion(int id, string? idSubOr)
+    {
+        try
+        {
+            // Guardar el ID de la orden para usar en el modal
+            idOrdenParaCierre = id;
+
+            // Mostrar el modal y cargar los datos
+            await AbrirModalCierre();
+        }
+        catch (Exception ex)
+        {
+            await sweetAlertService.FireAsync("Error", $"Error al abrir el modal de cierre: {ex.Message}", SweetAlertIcon.Error);
+        }
+    }
+
+    /// <summary>
+    /// Configura los depósitos por defecto para entrada (DEPOCIE) y salida (DEPODEST)
+    /// </summary>
+    private async Task ConfigurarDepositosPorDefecto()
+    {
+        try
+        {
+            // Cargar configuración del depósito de entrada (DEPOCIE)
+            var responseEntrada = await repository.Get<FLEXCRL>($"api/flexcrl/empty/DEPOCIE");
+            if (!responseEntrada.Error && responseEntrada.Response != null)
+            {
+                if (int.TryParse(responseEntrada.Response.VALCONTROL, out int valorEntrada))
+                {
+                    depositoEntradaSeleccionado = valorEntrada;
+                }
+            }
+
+            // Cargar configuración del depósito de salida (DEPODEST)
+            var responseSalida = await repository.Get<FLEXCRL>($"api/flexcrl/empty/DEPODEST");
+            if (!responseSalida.Error && responseSalida.Response != null)
+            {
+                if (int.TryParse(responseSalida.Response.VALCONTROL, out int valorSalida))
+                {
+                    depositoConsumoSeleccionado = valorSalida;
+                }
+            }
+        }
+        catch (Exception)
+        {
+            // En caso de error, mantener valores por defecto (0)
+            // Los usuarios deberán seleccionar manualmente
+        }
+    }
+    /// <summary>
+    /// Aprueba múltiples órdenes de fabricación
+    /// </summary>
+
+    /// <summary>
+    /// Abre el modal de cierre y carga los datos necesarios
+    /// </summary>
+    private async Task AbrirModalCierre()
+    {
+        mostrarModalCierre = true;
+        cargandoDatosCierre = true;
+        StateHasChanged();
+
+        // Cargar datos básicos
+        await CargarDepositosDisponibles();
+        await CargarDatosOrdenParaCierre();
+        await CargarConfiguracionDepositoScrap();
+
+        // Inicializar valores por defecto
+        fechaCierre = DateTime.Today;
+
+        // Calcular cantidad pendiente e inicializar cantidadAprobada con este valor
+        // Cantidad pendiente = Cantidad Proyectada - Cantidad ya Aprobada
+        decimal cantidadPendiente = 0;
+        if (ordenParaCierre != null)
+        {
+            cantidadPendiente = (ordenParaCierre.CanProy ?? 0) - (ordenParaCierre.CanApro ?? 0);
+            // Asegurar que no sea negativa
+            if (cantidadPendiente < 0) cantidadPendiente = 0;
+        }
+
+        cantidadAprobada = cantidadPendiente; // Inicializar con cantidad pendiente
+        cantidadRechazada = 0;
+        depositoScrapSeleccionado = depositoScrapConfiguracion; // Usar configuración por defecto
+
+        // Configurar depósitos por defecto según configuración del sistema
+        await ConfigurarDepositosPorDefecto();
+
+        cargandoDatosCierre = false;
+        StateHasChanged();
+    }
+
+    /// <summary>
+    /// Cierra el modal de cierre
+    /// </summary>
+    private void CerrarModalCierre()
+    {
+        mostrarModalCierre = false;
+        ordenParaCierre = null;
+    }
+
+    /// <summary>
+    /// Procesa el cierre de la orden de fabricación con validaciones
+    /// </summary>
+    private async Task ProcesarCierreOrden()
+    {
+        try
+        {
+            procesandoCierre = true;
+            StateHasChanged();
+
+            // Validaciones requeridas
+            var validacionExitosa = await ValidarDatosCierre();
+            if (ordenParaCierre is null)
+            {
+                return;
+            }
+            if (!validacionExitosa)
+            {
+                return; // Las validaciones ya muestran el mensaje de error
+            }
+
+            // Validar reservas y determinar si se cierra completamente la orden
+            var validacionReservas = await ValidarReservasYSaldoPendiente();
+            if (!validacionReservas)
+            {
+                return; // La validación de reservas falló o el usuario canceló
+            }
+
+            // Actualizar el modelo ordenParaCierre con las modificaciones del usuario
+            ActualizarModeloOrdenParaCierre();
+
+            // Mostrar modal de componentes antes del mensaje final
+            await MostrarModalComponentes();
+        }
+        catch (Exception ex)
+        {
+            await sweetAlertService.FireAsync("Error", $"Error al procesar el cierre: {ex.Message}", SweetAlertIcon.Error);
+        }
+        finally
+        {
+            procesandoCierre = false;
+            StateHasChanged();
+        }
+    }
+
+    /// <summary>
+    /// Actualiza el modelo ordenParaCierre con las modificaciones realizadas por el usuario en el modal
+    /// </summary>
+    private void ActualizarModeloOrdenParaCierre()
+    {
+        if (ordenParaCierre == null) return;
+
+        // Actualizar las cantidades modificadas por el usuario
+        // La cantidad aprobada total será la suma de la cantidad ya aprobada más la nueva cantidad aprobada
+        //ordenParaCierre.CanApro = (ordenParaCierre.CanApro ?? 0) + cantidadAprobada;
+
+        // Actualizar las nuevas propiedades agregadas al DTO con los valores del modal
+
+        // Depósitos seleccionados por el usuario en los InputSelect
+        ordenParaCierre.DepoEntrada = depositoEntradaSeleccionado > 0 ? depositoEntradaSeleccionado : null;
+        ordenParaCierre.DepoSalida = depositoConsumoSeleccionado > 0 ? depositoConsumoSeleccionado : null;
+        ordenParaCierre.DepoScrap = depositoScrapSeleccionado > 0 ? depositoScrapSeleccionado : null;
+
+        // Cantidades ingresadas por el usuario en este cierre específico
+        ordenParaCierre.CantAprobada = cantidadAprobada > 0 ? cantidadAprobada : null;
+        ordenParaCierre.CantRechazada = cantidadRechazada > 0 ? cantidadRechazada : null;
+
+        // Log para verificar que los valores se están actualizando correctamente 
+        Console.WriteLine($"Modelo actualizado - " +
+                         $"CanApro Total: {ordenParaCierre.CanApro}, " +
+                         $"CantAprobada Este Cierre: {ordenParaCierre.CantAprobada}, " +
+                         $"CantRechazada: {ordenParaCierre.CantRechazada}, " +
+                         $"DepoEntrada: {ordenParaCierre.DepoEntrada}, " +
+                         $"DepoSalida: {ordenParaCierre.DepoSalida}, " +
+                         $"DepoScrap: {ordenParaCierre.DepoScrap}");
+    }
+
+    /// <summary>
+    /// Muestra el modal de componentes con la fórmula del producto
+    /// Si no hay fórmula, continúa directamente con el cierre sin consumir componentes
+    /// </summary>
+    private async Task MostrarModalComponentes()
+    {
+        try
+        {
+            cargandoComponentes = true;
+            mostrarModalComponentes = true;
+            StateHasChanged();
+
+            // Obtener los componentes de la fórmula con stock
+            var responseComponentes = await repository.Get<List<FormulaComponenteDTO>>($"api/formulas/componentes/{ordenParaCierre.Cod_Inte}");
+
+            if (responseComponentes.Error)
+            {
+                // Si no se pudieron obtener los componentes, mostrar advertencia y continuar sin consumir componentes
+                var result = await sweetAlertService.FireAsync(new SweetAlertOptions
+                {
+                    Title = "Sin Fórmula",
+                    Text = "No se pudieron obtener los componentes de la fórmula. Se continuará con el cierre dando de alta solo el producto terminado sin consumir componentes.",
+                    Icon = SweetAlertIcon.Warning,
+                    ShowCancelButton = true,
+                    ConfirmButtonText = "Continuar",
+                    CancelButtonText = "Cancelar"
+                });
+
+                mostrarModalComponentes = false;
+                
+                if (result.IsConfirmed)
+                {
+                    // Continuar con el cierre sin componentes
+                    componentesFormula = new List<FormulaComponenteDTO>();
+                    await ContinuarConCierre();
+                }
+                else
+                {
+                    procesandoCierre = false;
+                    StateHasChanged();
+                }
+                
+                return;
+            }
+
+            componentesFormula = responseComponentes.Response ?? new List<FormulaComponenteDTO>();
+
+            // Si la lista de componentes está vacía, continuar sin consumir componentes
+            if (componentesFormula.Count == 0)
+            {
+                var result = await sweetAlertService.FireAsync(new SweetAlertOptions
+                {
+                    Title = "Sin Componentes",
+                    Text = "El producto no tiene componentes en su fórmula. Se continuará con el cierre dando de alta solo el producto terminado.",
+                    Icon = SweetAlertIcon.Warning,
+                    ShowCancelButton = true,
+                    ConfirmButtonText = "Continuar",
+                    CancelButtonText = "Cancelar"
+                });
+
+                mostrarModalComponentes = false;
+                
+                if (result.IsConfirmed)
+                {
+                    await ContinuarConCierre();
+                }
+                else
+                {
+                    procesandoCierre = false;
+                    StateHasChanged();
+                }
+                
+                return;
+            }
+
+            // Calcular la cantidad total a cerrar para los cálculos
+            // Usar las variables locales del modal, no las propiedades del DTO que son nullable
+            decimal cantidadTotalACerrar = cantidadAprobada + cantidadRechazada;
+
+            // Actualizar las cantidades necesarias basándose en la cantidad a cerrar
+            // e inicializar CantidadAUtilizar con el valor calculado (editable por el usuario)
+            foreach (var componente in componentesFormula)
+            {
+                componente.NecesidadTotal = componente.UsoBruto * cantidadTotalACerrar;
+                // Inicializar la cantidad a utilizar con la cantidad calculada
+                // El usuario podrá modificar este valor en el modal
+                componente.CantidadAUtilizar = componente.NecesidadTotal;
+            }
+        }
+        catch (Exception ex)
+        {
+            await sweetAlertService.FireAsync("Error", $"Error al cargar componentes: {ex.Message}", SweetAlertIcon.Error);
+            mostrarModalComponentes = false;
+            procesandoCierre = false;
+        }
+        finally
+        {
+            cargandoComponentes = false;
+            StateHasChanged();
+        }
+    }
+
+    /// <summary>
+    /// Cancela el modal de componentes y detiene el proceso de cierre
+    /// </summary>
+    private void CancelarModalComponentes()
+    {
+        // Cerrar el modal de componentes sin continuar con el proceso
+        mostrarModalComponentes = false;
+
+        // Restablecer el estado del modal principal de cierre para que el usuario pueda modificar datos si lo desea
+        procesandoCierre = false;
+        StateHasChanged();
+
+        // No se cierra el modal principal de cierre, permitiendo al usuario hacer modificaciones
+        // El usuario puede volver a intentar el cierre o cancelar desde el modal principal
+    }
+
+    /// <summary>
+    /// Continúa con el proceso de cierre después de revisar los componentes
+    /// Procesa la persistencia de datos en las tablas correspondientes
+    /// </summary>
+    private async Task ContinuarConCierre()
+    {
+        try
+        {
+            // Cerrar el modal de componentes
+            mostrarModalComponentes = false;
+            procesandoCierre = true;
+            StateHasChanged();
+
+            // Preparar los datos para el cierre avanzado
+            var datosCierre = new DatosCierreAvanzadoDTO
+                {
+                    IdOrden = idOrdenParaCierre,
+                    IdSubOr = ordenParaCierre?.IdSubOr ?? string.Empty,
+                    CantidadAprobada = cantidadAprobada,
+                    CantidadRechazada = cantidadRechazada,
+                    DepositoEntrada = depositoEntradaSeleccionado > 0 ? depositoEntradaSeleccionado : null,
+                    DepositoSalida = depositoConsumoSeleccionado > 0 ? depositoConsumoSeleccionado : null,
+                    DepositoScrap = depositoScrapSeleccionado > 0 ? depositoScrapSeleccionado : null,
+                    FechaCierre = fechaCierre,
+                    CierraCompleto = cierraCompleto,
+                    ModoCierreCalidad = 0, // Por ahora en modo normal, se puede parametrizar después
+                    Componentes = componentesFormula?.Select(c => new ComponenteCierreDTO
+                    {
+                        CodIElem = c.CodIElem,
+                        CodXElem = c.CodXElem,
+                        Descripcion = c.Descripcion,
+                        UsoBruto = c.UsoBruto,
+                        CantidadAUtilizar = c.CantidadAUtilizar,
+                        Stock = c.Stock
+                    }).ToList() ?? new List<ComponenteCierreDTO>()
+                };
+
+            // Llamar al endpoint de cierre avanzado
+            var response = await repository.Post("api/ordefabr/procesarCierreAvanzado", datosCierre);
+
+            if (response.Error)
+            {
+                await sweetAlertService.FireAsync("Error",
+                    await response.GetErrorMessageAsync(),
+                    SweetAlertIcon.Error);
+                return;
+            }
+
+            // Mostrar mensaje de éxito
+            string mensajeCierre = cierraCompleto == 1 ? "La orden se cerró completamente" : "La orden se mantuvo abierta";
+            await sweetAlertService.FireAsync("Éxito",
+                $"Cierre procesado exitosamente. {mensajeCierre}. Se han actualizado las cantidades y generado las anotaciones correspondientes.",
+                SweetAlertIcon.Success);
+
+            // Cerrar el modal principal de cierre
+            CerrarModalCierre();
+
+            // Recargar la lista de órdenes para reflejar los cambios
+            await LoadAsync();
+        }
+        catch (Exception ex)
+        {
+            await sweetAlertService.FireAsync("Error",
+                $"Error al procesar el cierre: {ex.Message}",
+                SweetAlertIcon.Error);
+        }
+        finally
+        {
+            procesandoCierre = false;
+            StateHasChanged();
+        }
+    }
+
+    /// <summary>
+    /// Valida las reservas y determina si la orden se cierra completamente o se mantiene abierta
+    /// </summary>
+    /// <returns>True si se puede continuar con el cierre, False si se debe cancelar</returns>
+    private async Task<bool> ValidarReservasYSaldoPendiente()
+    {
+        try
+        {
+            if (ordenParaCierre == null)
+            {
+                await sweetAlertService.FireAsync("Error", "No se encontraron datos de la orden para validar.", SweetAlertIcon.Error);
+                return false;
+            }
+
+            // Buscar reservas en la tabla reserva según la orden de fabricación (idsubor)
+            var responseReservas = await repository.Get<List<Reserva>>($"api/reservas/por-of/{ordenParaCierre.IdSubOr}");
+
+            if (responseReservas.Error)
+            {
+                await sweetAlertService.FireAsync("Error", "Error al consultar las reservas de la orden de fabricación.", SweetAlertIcon.Error);
+                return false;
+            }
+
+            // Calcular el saldo pendiente de la OF
+            // Saldo pendiente = Cantidad Proyectada - Cantidad ya Aprobada
+            decimal saldoPendiente = (ordenParaCierre.CanProy ?? 0) - (ordenParaCierre.CanApro ?? 0);
+
+            // Cantidad total a cerrar = cantidad aprobada + cantidad rechazada
+            decimal cantidadACerrar = cantidadAprobada + cantidadRechazada;
+
+            // Validar si la cantidad a cerrar es igual o mayor al saldo pendiente
+            if (cantidadACerrar >= saldoPendiente)
+            {
+                // La cantidad es suficiente para cerrar completamente la orden
+                cierraCompleto = 1;
+
+                // Log para verificación
+                Console.WriteLine($"Cantidad a cerrar ({cantidadACerrar}) >= Saldo pendiente ({saldoPendiente}) - CIERRA% = 1");
+
+                return true;
+            }
+            else
+            {
+                // La cantidad es menor al saldo pendiente, consultar al usuario
+                var resultado = await sweetAlertService.FireAsync(new SweetAlertOptions
+                    {
+                        Title = "Saldo Pendiente",
+                        Text = $"Esta O/F queda con un Saldo Pendiente de {FormatDecimal(saldoPendiente - cantidadACerrar)}.\n¿Qué desea hacer?",
+                        Icon = SweetAlertIcon.Question,
+                        ShowCancelButton = true,
+                        ConfirmButtonText = "Cerrar",
+                        CancelButtonText = "Mantener Abierta",
+                        ConfirmButtonColor = "#d33",
+                        CancelButtonColor = "#3085d6"
+                    });
+
+                if (resultado.IsConfirmed)
+                {
+                    // Usuario eligió cerrar la orden a pesar del saldo pendiente
+                    cierraCompleto = 1;
+                    Console.WriteLine($"Usuario eligió CERRAR - CIERRA% = 1");
+                }
+                else
+                {
+                    // Usuario eligió mantener abierta la orden
+                    cierraCompleto = 0;
+                    Console.WriteLine($"Usuario eligió MANTENER ABIERTA - CIERRA% = 0");
+                }
+
+                return true; // Continuar con el proceso independientemente de la elección
+            }
+        }
+        catch (Exception ex)
+        {
+            await sweetAlertService.FireAsync("Error", $"Error al validar reservas: {ex.Message}", SweetAlertIcon.Error);
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// Carga los depósitos disponibles
+    /// </summary>
+    private async Task CargarDepositosDisponibles()
+    {
+        var response = await repository.Get<Dictionary<int, string>>("api/tadeposi/combo");
+        if (!response.Error)
+        {
+            depositosDisponibles = response.Response;
+        }
+    }
+
+    /// <summary>
+    /// Carga los datos de la orden para el modal
+    /// </summary>
+    private async Task CargarDatosOrdenParaCierre()
+    {
+        var response = await repository.Get<OrdefabrIndexDTO>($"api/ordefabr/{idOrdenParaCierre}");
+        if (!response.Error)
+        {
+            ordenParaCierre = response.Response;
+        }
+    }
+
+    /// <summary>
+    /// Carga la configuración del depósito scrap desde flexcrl
+    /// </summary>
+    private async Task CargarConfiguracionDepositoScrap()
+    {
+        try
+        {
+            // Usar "empty" como placeholder para el parámetro CLABUS vacío
+            var response = await repository.Get<FLEXCRL>($"api/flexcrl/empty/DEPSCRAP");
+            if (!response.Error && response.Response != null)
+            {
+                // Intentar convertir el valor a entero
+                if (int.TryParse(response.Response.VALCONTROL, out int valor))
+                {
+                    depositoScrapConfiguracion = valor;
+                }
+            }
+        }
+        catch (Exception)
+        {
+            // En caso de error, usar valor por defecto
+            depositoScrapConfiguracion = 0;
+        }
+    }
+
+
+
+    /// <summary>
+    /// Valida los datos del modal de cierre según los requisitos especificados
+    /// </summary>
+    /// <returns>True si todas las validaciones pasan, False en caso contrario</returns>
+    private async Task<bool> ValidarDatosCierre()
+    {
+        // Validación 1: Al menos una cantidad debe ser mayor a 0
+        if (cantidadAprobada <= 0 && cantidadRechazada <= 0)
+        {
+            await sweetAlertService.FireAsync("Validación", "Debe ingresar al menos una cantidad aprobada o rechazada mayor a cero.", SweetAlertIcon.Warning);
+            return false;
+        }
+
+        // Validación 2: No debe haber cantidades negativas
+        if (cantidadAprobada < 0 || cantidadRechazada < 0)
+        {
+            await sweetAlertService.FireAsync("Validación", "Las cantidades no pueden ser negativas.", SweetAlertIcon.Warning);
+            return false;
+        }
+
+        // Validación 3: Ambos depósitos deben estar seleccionados
+        if (depositoEntradaSeleccionado <= 0 || depositoConsumoSeleccionado <= 0)
+        {
+            await sweetAlertService.FireAsync("Validación", "Debe seleccionar tanto el depósito de entrada como el de salida.", SweetAlertIcon.Warning);
+            return false;
+        }
+
+        // Validación 4: Si cantidad rechazada > 0, debe seleccionar depósito scrap
+        if (cantidadRechazada > 0 && depositoScrapSeleccionado <= 0)
+        {
+            await sweetAlertService.FireAsync("Validación", "Debe seleccionar un depósito scrap cuando hay cantidad rechazada.", SweetAlertIcon.Warning);
+            return false;
+        }
+
+        return true;
+    }
+}

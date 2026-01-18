@@ -1,0 +1,79 @@
+@page "/Catoper/BajaIndex"
+@inject IRepository repository
+@inject NavigationManager navigationManager
+@inject SweetAlertService sweetAlertService
+
+<div class="bg-primary text-white text-center p-3 mb-4">
+    <h1>Monedas Inactivas</h1>
+</div>
+<div class="mb-3">
+    <a class="btn btn-success" href="/Catoper/Index">Volver</a>
+</div>
+<GenericList MyList="catoper">
+    <Body>
+        <table class="table table-striped">
+            <thead>
+                <tr>
+                    <th>Código</th>
+                    <th>Descripción</th>
+                    <th>Valor hora</th>
+                    <th>Acciones</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var item in catoper!)
+                {
+                    <tr>
+                        <td>@item.CodigoCategoria</td>
+                        <td>@item.Descripcion</td>
+                        <td>@item.ValorHora</td>
+                        <td>
+                            <button class="btn btn-success" @onclick=@(() => CambiaStatusAsync(item.Id, 0))><i class="oi oi-check" /> Activar</button>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </Body>
+</GenericList>
+
+@code {
+    public List<Catoper>? catoper { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        var responseHppt = await repository.Get<List<Catoper>>($"api/catoper/GetAllInactivos");
+        if (responseHppt.Error)
+        {
+            if (responseHppt.HttpResponseMessage.StatusCode == System.Net.HttpStatusCode.NotFound)
+            {
+                navigationManager.NavigateTo("/");
+                return;
+            }
+            var message = await responseHppt.GetErrorMessageAsync();
+            await sweetAlertService.FireAsync("Error", message, SweetAlertIcon.Error);
+            return;
+        }
+        catoper = responseHppt.Response;
+    }
+
+    private async Task CambiaStatusAsync(int id, int status)
+    {
+        var responseHttp = await repository.Put($"api/catoper/cambiaStatus/{id}/{status}", "");
+        if (responseHttp.Error)
+        {
+            if (responseHttp.HttpResponseMessage.StatusCode != System.Net.HttpStatusCode.NotFound)
+            {
+                var message = await responseHttp.GetErrorMessageAsync();
+                await sweetAlertService.FireAsync("Error", message, SweetAlertIcon.Error);
+                return;
+            }
+        }
+        await LoadAsync();
+    }
+}

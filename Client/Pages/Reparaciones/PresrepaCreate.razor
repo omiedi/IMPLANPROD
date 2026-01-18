@@ -1,0 +1,202 @@
+@page "/presupuesto-reparacion/crear"
+@using IMPLANPROD.Shared.Entities
+@using IMPLANPROD.Client.Repositories
+@using IMPLANPROD.Client.Services
+@using IMPLANPROD.Client.Shared.Components
+@using static IMPLANPROD.Client.Shared.Components.SelectorClientes
+@inject IRepository repository
+@inject SweetAlertService sweetAlertService
+@inject NavigationManager navigationManager
+
+<PageTitle>Nuevo Presupuesto de Reparación</PageTitle>
+
+<div class="container-fluid">
+    <div class="mb-4">
+        <h2 class="text-center fw-bold text-success">
+            <i class="fas fa-plus-circle me-2"></i>
+            NUEVO PRESUPUESTO DE REPARACIÓN
+        </h2>
+        <hr class="border-success border-2 opacity-50" />
+    </div>
+
+    @if (cargandoReparacion)
+    {
+        <div class="text-center">
+            <div class="spinner-border" role="status">
+                <span class="visually-hidden">Cargando...</span>
+            </div>
+            <p class="mt-2">Cargando datos de reparación...</p>
+        </div>
+    }
+    else if (repara == null)
+    {
+        <!-- Selector de reparación -->
+        <div class="card mb-3">
+            <div class="card-header bg-info text-white">
+                <h6 class="mb-0">Seleccionar Reparación</h6>
+            </div>
+            <div class="card-body">
+                <div class="alert alert-info">
+                    <i class="fas fa-info-circle"></i> Seleccione una reparación sin presupuesto generado para crear uno nuevo.
+                </div>
+                <button class="btn btn-primary" @onclick="AbrirSelectorReparacion">
+                    <i class="fas fa-search"></i> Buscar Reparación
+                </button>
+            </div>
+        </div>
+    }
+    else
+    {
+        <PresrepaForm @ref="presrepaForm"
+                      repara="@repara"
+                      IsEdit="false"
+                      OnValidSubmit="@Create"
+                      OnCancel="@Cancel" />
+    }
+</div>
+
+<SelectorReparacionSinPresupuesto @ref="selectorReparacion" 
+                                   OnReparacionSeleccionada="@OnReparacionSeleccionada" />
+
+@code {
+    private Repara? repara;
+    private bool cargandoReparacion = false;
+    private SelectorReparacionSinPresupuesto? selectorReparacion;
+    private PresrepaForm? presrepaForm;
+
+    private async Task AbrirSelectorReparacion()
+    {
+        if (selectorReparacion != null)
+        {
+            await selectorReparacion.Abrir();
+        }
+    }
+
+    private async Task OnReparacionSeleccionada(int numRepa)
+    {
+        try
+        {
+            cargandoReparacion = true;
+            
+            var responseHttp = await repository.Get<Repara>($"api/repara/{numRepa}");
+            
+            if (responseHttp.Error)
+            {
+                var message = await responseHttp.GetErrorMessageAsync();
+                await sweetAlertService.FireAsync("Error", $"Error al cargar reparación: {message}", SweetAlertIcon.Error);
+                return;
+            }
+
+            repara = responseHttp.Response;
+
+            // Validar que no tenga orden de reparación emitida
+            if (repara != null && repara.NroPed.HasValue && repara.NroPed > 0)
+            {
+                await sweetAlertService.FireAsync(
+                    "Atención", 
+                    "Imposible Generar / Modificar Presupuesto.\nOrden de Reparación ya Emitida.", 
+                    SweetAlertIcon.Warning);
+                repara = null;
+                return;
+            }
+
+            StateHasChanged();
+        }
+        catch (Exception ex)
+        {
+            await sweetAlertService.FireAsync("Error", $"Error inesperado: {ex.Message}", SweetAlertIcon.Error);
+        }
+        finally
+        {
+            cargandoReparacion = false;
+        }
+    }
+
+    private async Task Create()
+    {
+        if (repara == null || presrepaForm == null)
+        {
+            await sweetAlertService.FireAsync("Error", "No hay datos para guardar", SweetAlertIcon.Error);
+            return;
+        }
+
+        try
+        {
+            // Obtener datos calculados del formulario
+            var (horasMO, valorMO, impMO, impRepu, impTotal, fechaPres) = presrepaForm.ObtenerDatosPresupuesto();
+
+            // Armar string REFEPRE (máximo 64 caracteres)
+            string razonSocial = repara.Raso_Cli ?? "";
+            if (razonSocial.Length > 20)
+                razonSocial = razonSocial.Substring(0, 20);
+
+            string referencia = repara.Referen?.Trim() ?? "";
+            if (referencia.Length > 10)
+                referencia = referencia.Substring(0, 10);
+
+            string refepre = $"{repara.CodRepa} - {razonSocial.Trim()} - R: {referencia} - {fechaPres:dd/MM/yyyy}";
+            
+            // Asegurar que no exceda 64 caracteres
+            if (refepre.Length > 64)
+                refepre = refepre.Substring(0, 64);
+
+            // Actualizar campos en REPARA
+            repara.HoraMObra = horasMO;
+            repara.ValMObra = valorMO;
+            repara.Imp_Mobra = impMO;
+            repara.Imp_Repu = impRepu;
+            repara.Imp_Tot = impTotal;
+            repara.FechPres = fechaPres;
+            repara.Referen2 = refepre;
+
+            // Guardar REPARA en base de datos
+            var responseHttp = await repository.Put($"api/repara", repara);
+            
+            if (responseHttp.Error)
+            {
+                var message = await responseHttp.GetErrorMessageAsync();
+                await sweetAlertService.FireAsync("Error", $"Error al guardar presupuesto: {message}", SweetAlertIcon.Error);
+                return;
+            }
+
+            // Guardar detalle de repuestos en REPUREPA
+            var repuestosParaGuardar = presrepaForm.ObtenerRepuestosParaGuardar();
+            if (repuestosParaGuardar != null && repuestosParaGuardar.Any())
+            {
+                var requestRepuestos = new
+                {
+                    NumRepa = repara.NumRepa,
+                    Repuestos = repuestosParaGuardar.Select(r => new
+                    {
+                        CodigoInterno = r.CodigoInterno,
+                        Cantidad = r.Uso
+                    }).ToList()
+                };
+
+                var responseRepuestos = await repository.Post("api/repurepa/guardar-presupuesto", requestRepuestos);
+                
+                if (responseRepuestos.Error)
+                {
+                    var message = await responseRepuestos.GetErrorMessageAsync();
+                    await sweetAlertService.FireAsync("Advertencia", 
+                        $"Presupuesto guardado pero hubo un error al guardar el detalle de repuestos: {message}", 
+                        SweetAlertIcon.Warning);
+                    navigationManager.NavigateTo("/presupuestos-reparacion");
+                    return;
+                }
+            }
+
+            await sweetAlertService.FireAsync("Éxito", "Presupuesto creado correctamente", SweetAlertIcon.Success);
+            navigationManager.NavigateTo("/presupuestos-reparacion");
+        }
+        catch (Exception ex)
+        {
+            await sweetAlertService.FireAsync("Error", $"Error al crear presupuesto: {ex.Message}", SweetAlertIcon.Error);
+        }
+    }
+
+    private void Cancel()
+    {
+        navigationManager.NavigateTo("/presupuestos-reparacion");
+    }
+}

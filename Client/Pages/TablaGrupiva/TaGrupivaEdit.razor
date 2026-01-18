@@ -1,0 +1,66 @@
+@inject IRepository repository
+@inject NavigationManager navigationManager
+@inject SweetAlertService sweetAlertService
+
+<div class="modal-body">
+    <h3>Editar tasas de iva</h3>
+
+    @if (grupiva is not null)
+    {
+        <TaGrupivaForm @ref="taGrupivaForm" Grupiva="grupiva" OnValidSubmit="Edit" ReturnAction="Return" IsEdit="true" />
+    }
+</div>
+
+@code {
+    private Grupiva? grupiva;
+    private TaGrupivaForm? taGrupivaForm;
+
+    [CascadingParameter]
+    BlazoredModalInstance BlazoredModal { get; set; } = default!;
+
+    [Parameter]
+    public int Id { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        var responseHTTP = await repository.Get<Grupiva>($"api/grupivas/{Id}");
+
+        if (responseHTTP.Error)
+        {
+            if (responseHTTP.HttpResponseMessage.StatusCode == System.Net.HttpStatusCode.NotFound)
+            {
+                navigationManager.NavigateTo("/TaGrupiva/Index");
+            }
+            else
+            {
+                var messageError = await responseHTTP.GetErrorMessageAsync();
+                await sweetAlertService.FireAsync("Error", messageError, SweetAlertIcon.Error);
+            }
+        }
+        else
+        {
+            grupiva = responseHTTP.Response;
+        }
+    }
+
+    private async Task Edit()
+    {
+        var responseHTTP = await repository.Put("api/grupivas", grupiva);
+
+        if (responseHTTP.Error)
+        {
+            var mensajeError = await responseHTTP.GetErrorMessageAsync();
+            await sweetAlertService.FireAsync("Error", mensajeError, SweetAlertIcon.Error);
+            return;
+        }
+
+        await BlazoredModal.CloseAsync(ModalResult.Ok());
+        Return();
+    }
+
+    private void Return()
+    {
+        taGrupivaForm!.FormPostedSuccessfully = true;
+        navigationManager.NavigateTo("/TaGrupiva/Index");
+    }
+}

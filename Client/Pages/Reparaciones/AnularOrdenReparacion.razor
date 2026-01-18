@@ -1,0 +1,581 @@
+@page "/anular-orden-reparacion"
+@using IMPLANPROD.Client.Shared.Components
+@inject IRepository repository
+@inject NavigationManager navigationManager
+@inject SweetAlertService sweetAlertService
+
+<div class="container-fluid mt-4">
+    <div class="card shadow-sm">
+        <div class="card-header bg-danger text-white">
+            <h4 class="mb-0">
+                <i class="fas fa-ban"></i> Anular Orden de Reparación
+            </h4>
+        </div>
+        <div class="card-body">
+            <!-- Instructivos colapsables -->
+            <div class="row mb-4">
+                <div class="col-md-6">
+                    <div class="card border-primary">
+                        <div class="card-header bg-primary text-white" style="cursor: pointer;" @onclick="() => mostrarInstructivoUsuario = !mostrarInstructivoUsuario">
+                            <h6 class="mb-0">
+                                <i class="fas fa-user"></i> Instructivo para Usuario
+                                <i class="fas @(mostrarInstructivoUsuario ? "fa-chevron-up" : "fa-chevron-down") float-end"></i>
+                            </h6>
+                        </div>
+                        @if (mostrarInstructivoUsuario)
+                        {
+                            <div class="card-body">
+                                <h6 class="text-primary"><i class="fas fa-info-circle"></i> ¿Qué hace esta función?</h6>
+                                <p>Permite anular órdenes de reparación que están en curso y que no pueden ser procesadas.</p>
+                                
+                                <h6 class="text-primary mt-3"><i class="fas fa-list-ol"></i> Pasos a seguir:</h6>
+                                <ol>
+                                    <li><strong>Seleccionar orden:</strong> Haga clic en "Seleccionar" en la orden que desea anular</li>
+                                    <li><strong>Revisar información:</strong> Verifique los repuestos y reservas asociadas que se eliminarán</li>
+                                    <li><strong>Confirmar anulación:</strong> Haga clic en "Anular Orden de Reparación"</li>
+                                    <li><strong>Confirmar en el modal:</strong> Lea la advertencia y confirme la operación</li>
+                                </ol>
+
+                                <div class="alert alert-warning mt-3" role="alert">
+                                    <i class="fas fa-exclamation-triangle"></i> <strong>IMPORTANTE:</strong>
+                                    <ul class="mb-0 mt-2">
+                                        <li>Esta operación es <strong>IRREVERSIBLE</strong></li>
+                                        <li>Se eliminarán todos los repuestos asociados</li>
+                                        <li>Se eliminarán todas las reservas de stock</li>
+                                        <li>El estado de la orden cambiará a ANULADO (Status = 9)</li>
+                                    </ul>
+                                </div>
+
+                                <h6 class="text-primary mt-3"><i class="fas fa-question-circle"></i> ¿Cuándo usar esta función?</h6>
+                                <ul>
+                                    <li>Cuando una orden fue creada por error</li>
+                                    <li>Cuando el cliente cancela la reparación antes de iniciarla</li>
+                                    <li>Cuando se necesita liberar reservas de stock</li>
+                                    <li>Cuando la orden no puede ser procesada por razones técnicas</li>
+                                </ul>
+
+                                <h6 class="text-danger mt-3"><i class="fas fa-ban"></i> NO usar si:</h6>
+                                <ul>
+                                    <li>La orden ya está cerrada (Status ≥ 3)</li>
+                                    <li>Ya se consumieron repuestos físicamente</li>
+                                    <li>Se requiere mantener historial de movimientos</li>
+                                </ul>
+                            </div>
+                        }
+                    </div>
+                </div>
+
+                <div class="col-md-6">
+                    <InstructivoDesarrollador>
+                                <h6 class="text-info"><i class="fas fa-cogs"></i> Arquitectura</h6>
+                                <p><strong>Frontend:</strong> <code>AnularOrdenReparacion.razor</code></p>
+                                <p><strong>Backend:</strong> <code>ReparaController.cs</code></p>
+                                <p><strong>Endpoint:</strong> <code>POST /api/repara/anular-orden</code></p>
+
+                                <h6 class="text-info mt-3"><i class="fas fa-database"></i> Tablas afectadas:</h6>
+                                <ul>
+                                    <li><strong>REPARA:</strong> Status → 9 (anulado)</li>
+                                    <li><strong>REPUREPA:</strong> DELETE WHERE NumRepa = X</li>
+                                    <li><strong>RESERVA:</strong> DELETE WHERE IdSubOr = 'OR-XXXXXX'</li>
+                                </ul>
+
+                                <h6 class="text-info mt-3"><i class="fas fa-code-branch"></i> Lógica VB6 replicada:</h6>
+                                <pre class="bg-light p-2 rounded"><code>CONDI$ = "NuOrdRep = " & NOREP&
+Call ACTUREGISTRO("REPARA", "Status", CONDI$, 9, REG&)
+
+CONDI$ = "NumRepa = " & NOREP&
+Call BORRAREGISTROS("REPUREPA", CONDI$, REG&)
+
+NOREX$ = "OR-" + Format(NOREP&, "000000")
+CONDI$ = "IdSubOr ='" & NOREX$ & "'"
+Call BORRAREGISTROS("RESERVA", CONDI$, REG&)</code></pre>
+
+                                <h6 class="text-info mt-3"><i class="fas fa-shield-alt"></i> Validaciones:</h6>
+                                <ul>
+                                    <li>Verifica que la orden existe</li>
+                                    <li>Verifica que Status &lt; 3 (en curso)</li>
+                                    <li>Transacción atómica (rollback automático)</li>
+                                    <li>Logging completo de operaciones</li>
+                                </ul>
+
+                                <h6 class="text-info mt-3"><i class="fas fa-exchange-alt"></i> Flujo de datos:</h6>
+                                <ol>
+                                    <li>GET <code>/api/repara/ordenes-en-curso</code> → Lista órdenes</li>
+                                    <li>GET <code>/api/repara/repuestos-por-reparacion/{numRepa}</code> → Carga repuestos</li>
+                                    <li>GET <code>/api/repara/reservas-por-orden/{idSubOr}</code> → Carga reservas</li>
+                                    <li>POST <code>/api/repara/anular-orden</code> → Ejecuta anulación</li>
+                                </ol>
+
+                                <h6 class="text-info mt-3"><i class="fas fa-bug"></i> Debugging:</h6>
+                                <p>Todos los logs se registran con <code>_logger.LogInformation</code> en el backend.</p>
+                                <p>Verificar en consola del navegador para errores del frontend.</p>
+
+                                <div class="alert alert-info mt-3" role="alert">
+                                    <i class="fas fa-lightbulb"></i> <strong>Nota técnica:</strong>
+                                    El formato de número de orden es <code>OR-{NuOrdRep:D6}</code> (6 dígitos con padding de ceros).
+                                </div>
+                    </InstructivoDesarrollador>
+                </div>
+            </div>
+            <!-- Fin instructivos -->
+            @if (cargando)
+            {
+                <div class="text-center py-5">
+                    <div class="spinner-border text-danger" role="status">
+                        <span class="visually-hidden">Cargando...</span>
+                    </div>
+                    <p class="mt-3">Cargando órdenes de reparación...</p>
+                </div>
+            }
+            else if (ordenesEnCurso == null || !ordenesEnCurso.Any())
+            {
+                <div class="alert alert-warning" role="alert">
+                    <i class="fas fa-exclamation-triangle"></i>
+                    <strong>No Hay Órdenes de Reparación en Curso que Puedan Anularse</strong>
+                </div>
+            }
+            else
+            {
+                <div class="row mb-4">
+                    <div class="col-md-12">
+                        <h5 class="mb-3">Seleccione una Orden de Reparación para Anular</h5>
+                        <div class="table-responsive">
+                            <table class="table table-hover table-striped">
+                                <thead class="table-dark">
+                                    <tr>
+                                        <th style="width: 15%">Nro. O.R.</th>
+                                        <th style="width: 15%">Referencia</th>
+                                        <th style="width: 15%">Nro. Reparación</th>
+                                        <th style="width: 15%">Cliente</th>
+                                        <th style="width: 25%">Razón Social</th>
+                                        <th style="width: 15%" class="text-center">Acciones</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var orden in ordenesEnCurso)
+                                    {
+                                        <tr>
+                                            <td>
+                                                <strong class="text-danger">
+                                                    @((int)orden.NuOrdRep!)
+                                                </strong>
+                                            </td>
+                                            <td>@(orden.RefOrdRep ?? "-")</td>
+                                            <td>
+                                                <span class="badge bg-info">
+                                                    @orden.NumRepa
+                                                </span>
+                                            </td>
+                                            <td>@(orden.Nume_Cli?.ToString() ?? "-")</td>
+                                            <td>@(orden.Raso_Cli ?? "-")</td>
+                                            <td class="text-center">
+                                                <button class="btn btn-danger btn-sm" 
+                                                        @onclick="() => SeleccionarOrden(orden)">
+                                                    <i class="fas fa-ban"></i> Seleccionar
+                                                </button>
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                @if (ordenSeleccionada != null)
+                {
+                    <div class="card border-danger mb-3">
+                        <div class="card-header bg-danger text-white">
+                            <h5 class="mb-0">
+                                <i class="fas fa-exclamation-triangle"></i> Orden Seleccionada para Anular
+                            </h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <p><strong>Nro. Orden de Reparación:</strong> @((int)ordenSeleccionada.NuOrdRep!)</p>
+                                    <p><strong>Referencia:</strong> @(ordenSeleccionada.RefOrdRep ?? "-")</p>
+                                </div>
+                                <div class="col-md-6">
+                                    <p><strong>Nro. Reparación/Talón:</strong> @ordenSeleccionada.NumRepa</p>
+                                    <p><strong>Cliente:</strong> @(ordenSeleccionada.Raso_Cli ?? "-")</p>
+                                </div>
+                            </div>
+
+                            @if (cargandoRepuestos)
+                            {
+                                <div class="text-center py-3">
+                                    <div class="spinner-border spinner-border-sm text-danger" role="status"></div>
+                                    <span class="ms-2">Cargando repuestos...</span>
+                                </div>
+                            }
+                            else if (repuestosAsociados != null && repuestosAsociados.Any())
+                            {
+                                <hr />
+                                <h6 class="mb-3"><i class="fas fa-cogs"></i> Repuestos Asociados (se eliminarán)</h6>
+                                <div class="table-responsive">
+                                    <table class="table table-sm table-bordered">
+                                        <thead class="table-light">
+                                            <tr>
+                                                <th>Código Interno</th>
+                                                <th>Cantidad</th>
+                                                <th>Precio Unit.</th>
+                                                <th>Importe</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            @foreach (var repuesto in repuestosAsociados)
+                                            {
+                                                <tr>
+                                                    <td>@repuesto.Cod_Inte</td>
+                                                    <td>@(repuesto.Cant_Sol?.ToString("N2") ?? "0.00")</td>
+                                                    <td>@(repuesto.PrUn_Neto?.ToString("C2") ?? "-")</td>
+                                                    <td>@(repuesto.Impo_Neto?.ToString("C2") ?? "-")</td>
+                                                </tr>
+                                            }
+                                        </tbody>
+                                    </table>
+                                </div>
+                            }
+
+                            @if (cargandoReservas)
+                            {
+                                <div class="text-center py-3">
+                                    <div class="spinner-border spinner-border-sm text-danger" role="status"></div>
+                                    <span class="ms-2">Cargando reservas...</span>
+                                </div>
+                            }
+                            else if (reservasAsociadas != null && reservasAsociadas.Any())
+                            {
+                                <hr />
+                                <h6 class="mb-3"><i class="fas fa-box"></i> Reservas Asociadas (se eliminarán)</h6>
+                                <div class="table-responsive">
+                                    <table class="table table-sm table-bordered">
+                                        <thead class="table-light">
+                                            <tr>
+                                                <th>Código Interno</th>
+                                                <th>Descripción</th>
+                                                <th>Cantidad Reservada</th>
+                                                <th>Depósito</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            @foreach (var reserva in reservasAsociadas)
+                                            {
+                                                <tr>
+                                                    <td>@reserva.Cod_Inte</td>
+                                                    <td>@(reserva.Descrip ?? "-")</td>
+                                                    <td>@(reserva.CantRes?.ToString("N2") ?? "0.00")</td>
+                                                    <td>@(reserva.Deposito?.ToString() ?? "-")</td>
+                                                </tr>
+                                            }
+                                        </tbody>
+                                    </table>
+                                </div>
+                            }
+
+                            <hr />
+                            
+                            <div class="alert alert-danger" role="alert">
+                                <i class="fas fa-exclamation-triangle"></i>
+                                <strong>ADVERTENCIA:</strong> Esta operación es <strong>IRREVERSIBLE</strong>. 
+                                Se realizarán las siguientes acciones:
+                                <ul class="mt-2 mb-0">
+                                    <li>Se cambiará el estado de la orden de reparación a <strong>ANULADO (Status = 9)</strong></li>
+                                    <li>Se eliminarán <strong>@(repuestosAsociados?.Count ?? 0) repuestos</strong> de la tabla REPUREPA</li>
+                                    <li>Se eliminarán <strong>@(reservasAsociadas?.Count ?? 0) reservas</strong> de la tabla RESERVA</li>
+                                </ul>
+                            </div>
+
+                            <div class="d-flex justify-content-end gap-2">
+                                <button class="btn btn-secondary" @onclick="CancelarSeleccion">
+                                    <i class="fas fa-times"></i> Cancelar
+                                </button>
+                                <button class="btn btn-danger" @onclick="AnularOrden">
+                                    <i class="fas fa-ban"></i> Anular Orden de Reparación
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                }
+            }
+        </div>
+    </div>
+</div>
+
+@code {
+    private List<OrdenReparacionDTO>? ordenesEnCurso;
+    private OrdenReparacionDTO? ordenSeleccionada;
+    private List<RepuestoDTO>? repuestosAsociados;
+    private List<ReservaDTO>? reservasAsociadas;
+    private bool cargando = true;
+    private bool cargandoRepuestos = false;
+    private bool cargandoReservas = false;
+    
+    // Variables para controlar la visibilidad de los instructivos
+    private bool mostrarInstructivoUsuario = false;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await CargarOrdenesEnCurso();
+    }
+
+    /// <summary>
+    /// Carga las órdenes de reparación en curso (NuOrdRep > 0 And Status < 3)
+    /// </summary>
+    private async Task CargarOrdenesEnCurso()
+    {
+        try
+        {
+            cargando = true;
+            var response = await repository.Get<List<OrdenReparacionDTO>>("api/repara/ordenes-en-curso");
+            
+            if (!response.Error && response.Response != null)
+            {
+                ordenesEnCurso = response.Response;
+            }
+            else
+            {
+                ordenesEnCurso = new List<OrdenReparacionDTO>();
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error al cargar órdenes en curso: {ex.Message}");
+            ordenesEnCurso = new List<OrdenReparacionDTO>();
+            
+            await sweetAlertService.FireAsync(new SweetAlertOptions
+            {
+                Title = "Error",
+                Text = "Error al cargar las órdenes de reparación",
+                Icon = SweetAlertIcon.Error
+            });
+        }
+        finally
+        {
+            cargando = false;
+        }
+    }
+
+    /// <summary>
+    /// Selecciona una orden para anular y carga sus datos asociados
+    /// </summary>
+    private async Task SeleccionarOrden(OrdenReparacionDTO orden)
+    {
+        ordenSeleccionada = orden;
+        await Task.WhenAll(
+            CargarRepuestosAsociados(orden.NumRepa),
+            CargarReservasAsociadas(orden.NuOrdRep)
+        );
+        StateHasChanged();
+    }
+
+    /// <summary>
+    /// Cancela la selección actual
+    /// </summary>
+    private void CancelarSeleccion()
+    {
+        ordenSeleccionada = null;
+        repuestosAsociados = null;
+        reservasAsociadas = null;
+        StateHasChanged();
+    }
+
+    /// <summary>
+    /// Anula la orden de reparación seleccionada
+    /// </summary>
+    private async Task AnularOrden()
+    {
+        if (ordenSeleccionada == null) return;
+
+        // Formatear número de orden de reparación (OR-XXXXXX)
+        var numeroOrdenFormateado = $"OR-{((int)ordenSeleccionada.NuOrdRep!):D6}";
+
+        var result = await sweetAlertService.FireAsync(new SweetAlertOptions
+        {
+            Title = "⚠️ CONFIRMAR ANULACIÓN",
+            Html = $"<div class='text-start'>" +
+                   $"<p><strong>¿Está seguro que desea ANULAR la Orden de Reparación?</strong></p>" +
+                   $"<hr>" +
+                   $"<p><strong>Nro. O.R.:</strong> {(int)ordenSeleccionada.NuOrdRep!} ({numeroOrdenFormateado})</p>" +
+                   $"<p><strong>Referencia:</strong> {ordenSeleccionada.RefOrdRep ?? "-"}</p>" +
+                   $"<p><strong>Nro. Reparación:</strong> {ordenSeleccionada.NumRepa}</p>" +
+                   $"<p><strong>Cliente:</strong> {ordenSeleccionada.Raso_Cli ?? "-"}</p>" +
+                   $"<hr>" +
+                   $"<p class='text-danger'><strong>⚠️ ESTA OPERACIÓN ES IRREVERSIBLE</strong></p>" +
+                   $"<p>Se eliminarán:</p>" +
+                   $"<ul>" +
+                   $"<li>{repuestosAsociados?.Count ?? 0} repuestos de REPUREPA</li>" +
+                   $"<li>{reservasAsociadas?.Count ?? 0} reservas de RESERVA</li>" +
+                   $"</ul>" +
+                   $"</div>",
+            Icon = SweetAlertIcon.Warning,
+            ShowCancelButton = true,
+            ConfirmButtonText = "Sí, Anular O/R",
+            CancelButtonText = "Cancelar",
+            ConfirmButtonColor = "#dc3545",
+            Width = "600px"
+        });
+
+        if (result.IsConfirmed)
+        {
+            try
+            {
+                // Llamar al endpoint para anular la orden
+                var requestData = new
+                {
+                    NumRepa = ordenSeleccionada.NumRepa,
+                    NuOrdRep = (int)ordenSeleccionada.NuOrdRep!
+                };
+
+                var response = await repository.Post<object, object>("api/repara/anular-orden", requestData);
+
+                if (!response.Error)
+                {
+                    await sweetAlertService.FireAsync(new SweetAlertOptions
+                    {
+                        Title = "✅ Anulación Completa",
+                        Html = $"<div class='text-start'>" +
+                               $"<p>La Orden de Reparación <strong>Nro. {(int)ordenSeleccionada.NuOrdRep!}</strong> ha sido anulada exitosamente.</p>" +
+                               $"<hr>" +
+                               $"<p><strong>Cambios realizados:</strong></p>" +
+                               $"<ul>" +
+                               $"<li>Estado cambiado a ANULADO (Status = 9)</li>" +
+                               $"<li>{repuestosAsociados?.Count ?? 0} repuestos eliminados</li>" +
+                               $"<li>{reservasAsociadas?.Count ?? 0} reservas eliminadas</li>" +
+                               $"</ul>" +
+                               $"</div>",
+                        Icon = SweetAlertIcon.Success
+                    });
+
+                    // Limpiar selección y recargar lista
+                    ordenSeleccionada = null;
+                    repuestosAsociados = null;
+                    reservasAsociadas = null;
+                    await CargarOrdenesEnCurso();
+                }
+                else
+                {
+                    var errorMessage = await response.GetErrorMessageAsync();
+                    await sweetAlertService.FireAsync(new SweetAlertOptions
+                    {
+                        Title = "Error",
+                        Text = errorMessage,
+                        Icon = SweetAlertIcon.Error
+                    });
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error al anular orden: {ex.Message}");
+                await sweetAlertService.FireAsync(new SweetAlertOptions
+                {
+                    Title = "Error",
+                    Text = "Ocurrió un error al anular la orden de reparación",
+                    Icon = SweetAlertIcon.Error
+                });
+            }
+        }
+    }
+
+    /// <summary>
+    /// Carga los repuestos asociados a la reparación
+    /// </summary>
+    private async Task CargarRepuestosAsociados(int numRepa)
+    {
+        try
+        {
+            cargandoRepuestos = true;
+            var response = await repository.Get<List<RepuestoDTO>>($"api/repara/repuestos-por-reparacion/{numRepa}");
+            
+            if (!response.Error && response.Response != null)
+            {
+                repuestosAsociados = response.Response;
+            }
+            else
+            {
+                repuestosAsociados = new List<RepuestoDTO>();
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error al cargar repuestos: {ex.Message}");
+            repuestosAsociados = new List<RepuestoDTO>();
+        }
+        finally
+        {
+            cargandoRepuestos = false;
+        }
+    }
+
+    /// <summary>
+    /// Carga las reservas asociadas a la orden de reparación
+    /// </summary>
+    private async Task CargarReservasAsociadas(decimal? nuOrdRep)
+    {
+        try
+        {
+            if (!nuOrdRep.HasValue) 
+            {
+                reservasAsociadas = new List<ReservaDTO>();
+                return;
+            }
+
+            cargandoReservas = true;
+            // Formatear número de orden (OR-XXXXXX)
+            var numeroOrdenFormateado = $"OR-{((int)nuOrdRep):D6}";
+            
+            var response = await repository.Get<List<ReservaDTO>>($"api/repara/reservas-por-orden/{numeroOrdenFormateado}");
+            
+            if (!response.Error && response.Response != null)
+            {
+                reservasAsociadas = response.Response;
+            }
+            else
+            {
+                reservasAsociadas = new List<ReservaDTO>();
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error al cargar reservas: {ex.Message}");
+            reservasAsociadas = new List<ReservaDTO>();
+        }
+        finally
+        {
+            cargandoReservas = false;
+        }
+    }
+
+    // DTOs
+    private class OrdenReparacionDTO
+    {
+        public int Id { get; set; }
+        public int NumRepa { get; set; }
+        public decimal? NuOrdRep { get; set; }
+        public string? RefOrdRep { get; set; }
+        public short? Status { get; set; }
+        public DateTime? FechRecep { get; set; }
+        public int? Nume_Cli { get; set; }
+        public string? Raso_Cli { get; set; }
+    }
+
+    private class RepuestoDTO
+    {
+        public int Id { get; set; }
+        public int Cod_Inte { get; set; }
+        public decimal? Cant_Sol { get; set; }
+        public decimal? PrUn_Neto { get; set; }
+        public decimal? Impo_Neto { get; set; }
+    }
+
+    private class ReservaDTO
+    {
+        public int Reserva_Id { get; set; }
+        public int Cod_Inte { get; set; }
+        public string? Descrip { get; set; }
+        public decimal? CantRes { get; set; }
+        public short? Deposito { get; set; }
+        public string? IdSubOr { get; set; }
+    }
+}

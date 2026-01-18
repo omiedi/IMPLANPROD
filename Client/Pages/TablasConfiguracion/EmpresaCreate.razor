@@ -1,0 +1,32 @@
+﻿@page "/empresas/create"
+@inject NavigationManager navigationManager
+@inject IRepository repository
+@inject SweetAlertService sweetAlertService
+<h3>Crear Empresa</h3>
+
+<EmpresaForm @ref="empresaForm" Empresa="empresa" OnValidSubmit="CreateAsync" ReturnAction="Volver" />
+
+@code {
+    private Empresa empresa = new();
+    private EmpresaForm? empresaForm;
+
+    private async Task CreateAsync()
+    {
+        var httpResponse = await repository.Post("api/empresas", empresa);
+
+        if (httpResponse.Error)
+        {
+            var mensajeError = await httpResponse.GetErrorMessageAsync();
+            await sweetAlertService.FireAsync("Error", mensajeError, SweetAlertIcon.Error);
+            return;
+        }
+        Volver();
+    }
+
+
+    private void Volver()
+    {
+        empresaForm!.FormPostedSuccessfully = true;
+        navigationManager.NavigateTo("/empresas");
+    }
+}

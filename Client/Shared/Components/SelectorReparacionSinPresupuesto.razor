@@ -1,0 +1,158 @@
+@using IMPLANPROD.Shared.Entities
+@using IMPLANPROD.Client.Repositories
+@inject IRepository repository
+
+@if (mostrarModal)
+{
+    <div class="modal-backdrop fade show"></div>
+    <div class="modal fade show d-block" tabindex="-1" role="dialog">
+        <div class="modal-dialog modal-xl" role="document">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">
+                        <i class="fas fa-search"></i> Seleccionar Reparación sin Presupuesto
+                    </h5>
+                    <button type="button" class="btn-close" aria-label="Close" @onclick="Cerrar"></button>
+                </div>
+                <div class="modal-body">
+                    <!-- Filtro de búsqueda -->
+                    <div class="mb-3">
+                        <div class="input-group">
+                            <input type="text" 
+                                   class="form-control" 
+                                   placeholder="Buscar por N° Reparación, N° Serie, Cliente, Código..." 
+                                   @bind="filtro"
+                                   @bind:event="oninput"
+                                   @onkeyup="BuscarReparaciones" />
+                            <button class="btn btn-primary" @onclick="BuscarReparaciones">
+                                <i class="fas fa-search"></i> Buscar
+                            </button>
+                        </div>
+                    </div>
+
+                    @if (cargando)
+                    {
+                        <div class="text-center">
+                            <div class="spinner-border" role="status">
+                                <span class="visually-hidden">Cargando...</span>
+                            </div>
+                        </div>
+                    }
+                    else if (reparaciones == null || !reparaciones.Any())
+                    {
+                        <div class="alert alert-info">
+                            <i class="fas fa-info-circle"></i> No se encontraron reparaciones sin presupuesto.
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="table-responsive" style="max-height: 400px; overflow-y: auto;">
+                            <table class="table table-striped table-hover">
+                                <thead class="table-dark sticky-top">
+                                    <tr>
+                                        <th>N° Repa</th>
+                                        <th>Fecha</th>
+                                        <th>Cliente</th>
+                                        <th>Razón Social</th>
+                                        <th>N° Serie</th>
+                                        <th>Cód. Repa</th>
+                                        <th>Acción</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var reparacion in reparaciones)
+                                    {
+                                        <tr>
+                                            <td><strong>@reparacion.NumRepa</strong></td>
+                                            <td>@reparacion.FechRecep?.ToString("dd/MM/yyyy")</td>
+                                            <td>@reparacion.Nume_Cli</td>
+                                            <td>@reparacion.Raso_Cli</td>
+                                            <td>@reparacion.NumeroSerie</td>
+                                            <td>@reparacion.CodRepa</td>
+                                            <td>
+                                                <button class="btn btn-sm btn-success" @onclick="(() => Seleccionar(reparacion.NumRepa))">
+                                                    <i class="fas fa-check"></i> Seleccionar
+                                                </button>
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    }
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" @onclick="Cerrar">
+                        Cerrar
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] public EventCallback<int> OnReparacionSeleccionada { get; set; }
+
+    private bool mostrarModal = false;
+    private bool cargando = false;
+    private string filtro = string.Empty;
+    private List<Repara>? reparaciones;
+
+    public async Task Abrir()
+    {
+        mostrarModal = true;
+        await BuscarReparaciones();
+        StateHasChanged();
+    }
+
+    private void Cerrar()
+    {
+        mostrarModal = false;
+        filtro = string.Empty;
+        reparaciones = null;
+        StateHasChanged();
+    }
+
+    private async Task BuscarReparaciones()
+    {
+        try
+        {
+            cargando = true;
+            StateHasChanged();
+
+            var url = "api/repara/sin-presupuesto";
+            if (!string.IsNullOrWhiteSpace(filtro))
+            {
+                url += $"?filtro={Uri.EscapeDataString(filtro)}";
+            }
+
+            var responseHttp = await repository.Get<List<Repara>>(url);
+
+            if (!responseHttp.Error && responseHttp.Response != null)
+            {
+                reparaciones = responseHttp.Response;
+            }
+            else
+            {
+                reparaciones = new List<Repara>();
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error al buscar reparaciones: {ex.Message}");
+            reparaciones = new List<Repara>();
+        }
+        finally
+        {
+            cargando = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task Seleccionar(int numRepa)
+    {
+        await OnReparacionSeleccionada.InvokeAsync(numRepa);
+        Cerrar();
+    }
+}

@@ -1,0 +1,259 @@
+@inject SweetAlertService sweetAlertService
+@inject IRepository repository
+
+<!-- Formulario para asignar sectores productivos a usuarios -->
+<!-- Utiliza EditForm con validación de DataAnnotations para garantizar integridad de datos -->
+<!-- OnValidSubmit ejecuta el callback cuando el formulario es válido -->
+<EditForm Model="usuariosSectorProd" OnValidSubmit="OnValidSubmit">
+    <DataAnnotationsValidator />
+
+    <!-- Selector de Usuario: Combo desplegable para seleccionar el usuario al cual asignar el sector -->
+    <!-- Utiliza InputSelect con binding bidireccional a IdFlexoftSeleccionado -->
+    <!-- La propiedad IdFlexoftSeleccionado maneja automáticamente la actualización del nombre de usuario -->
+    <div class="mb-3">
+        <label>Usuario:</label>
+        <div>
+            <InputSelect class="form-control"
+                         @bind-Value="IdFlexoftSeleccionado">
+                <option value="0">Seleccione un usuario...</option>
+                @if (usuarios != null)
+                {
+                    @foreach (var usuario in usuarios)
+                    {
+                        <option value="@usuario.Key">@usuario.Value</option>
+                    }
+                }
+            </InputSelect>
+            <ValidationMessage For="@(() => IdFlexoftSeleccionado)" />
+        </div>
+    </div>
+
+    <!-- Selector de Sector Productivo: Combo desplegable para seleccionar el sector a asignar -->
+    <!-- Utiliza InputSelect con binding bidireccional a CodigoSecProdSeleccionado -->
+    <!-- La propiedad CodigoSecProdSeleccionado maneja automáticamente la actualización de la descripción -->
+    <div class="mb-3">
+        <label>Sector Productivo:</label>
+        <div>
+            <InputSelect class="form-control"
+                         @bind-Value="CodigoSecProdSeleccionado">
+                <option value="0">Seleccione un sector productivo...</option>
+                @if (sectoresProductivos != null)
+                {
+                    @foreach (var sector in sectoresProductivos)
+                    {
+                        <option value="@sector.Key">@sector.Value</option>
+                    }
+                }
+            </InputSelect>
+            <ValidationMessage For="@(() => CodigoSecProdSeleccionado)" />
+        </div>
+    </div>
+
+    <button class="btn btn-primary" type="submit">Guardar Cambios</button>
+    <button class="btn btn-success" @onclick="ReturnAction">Regresar</button>
+
+</EditForm>
+
+@code {
+    /// <summary>
+    /// Modelo de datos para la asignación usuario-sector productivo
+    /// </summary>
+    [EditorRequired]
+    [Parameter]
+    public UsuariosSectorProd usuariosSectorProd { get; set; } = null!;
+
+    /// <summary>
+    /// Callback que se ejecuta cuando el formulario es válido
+    /// </summary>
+    [EditorRequired]
+    [Parameter]
+    public EventCallback OnValidSubmit { get; set; }
+
+    /// <summary>
+    /// Callback para regresar a la pantalla anterior
+    /// </summary>
+    [EditorRequired]
+    [Parameter]
+    public EventCallback ReturnAction { get; set; }
+
+    /// <summary>
+    /// Indica si el formulario está en modo edición
+    /// </summary>
+    [Parameter]
+    public bool IsEdit { get; set; }
+
+    /// <summary>
+    /// Indica si el formulario se envió correctamente
+    /// </summary>
+    public bool FormPostedSuccessfully { get; set; }
+
+    /// <summary>
+    /// Diccionario con los usuarios disponibles (IdFlexoft, NombreUsuario)
+    /// </summary>
+    private Dictionary<int, string> usuarios;
+
+    /// <summary>
+    /// Diccionario con los sectores productivos disponibles (CodigoSecProd, Descripcion)
+    /// </summary>
+    private Dictionary<int, string> sectoresProductivos;
+
+    /// <summary>
+    /// Lista completa de usuarios para obtener el nombre
+    /// </summary>
+    private List<Usuario> usuariosCompletos;
+
+    /// <summary>
+    /// Lista completa de sectores productivos para obtener la descripción
+    /// </summary>
+    private List<SecProd> sectoresCompletos;
+
+    /// <summary>
+    /// Inicialización del componente - carga los datos de usuarios y sectores productivos
+    /// </summary>
+    protected override async Task OnInitializedAsync()
+    {
+        await CargarUsuarios();
+        await CargarSectoresProductivos();
+    }
+
+    /// <summary>
+    /// Carga la lista de usuarios desde el backend
+    /// </summary>
+    private async Task CargarUsuarios()
+    {
+        // Cargar combo de usuarios
+        var response = await repository.Get<Dictionary<int, string>>("api/usuarios/combo");
+        if (response.Error)
+        {
+            await sweetAlertService.FireAsync("Error", response.HttpResponseMessage.ReasonPhrase, SweetAlertIcon.Error);
+            return;
+        }
+        usuarios = response.Response;
+
+        // Cargar lista completa de usuarios para obtener nombres
+        var responseCompletos = await repository.Get<List<Usuario>>("api/usuarios/activos");
+        if (!responseCompletos.Error)
+        {
+            usuariosCompletos = responseCompletos.Response;
+        }
+    }
+
+    /// <summary>
+    /// Carga la lista de sectores productivos desde el backend
+    /// </summary>
+    private async Task CargarSectoresProductivos()
+    {
+        // Cargar combo de sectores productivos
+        var response = await repository.Get<Dictionary<int, string>>("api/secprod/combo");
+        if (response.Error)
+        {
+            await sweetAlertService.FireAsync("Error", response.HttpResponseMessage.ReasonPhrase, SweetAlertIcon.Error);
+            return;
+        }
+        sectoresProductivos = response.Response;
+
+        // Cargar lista completa de sectores para obtener descripciones
+        var responseCompletos = await repository.Get<List<SecProd>>("api/secprod/activos");
+        if (!responseCompletos.Error)
+        {
+            sectoresCompletos = responseCompletos.Response;
+        }
+    }
+    /// <summary>
+    /// Propiedad que maneja la selección del usuario en el combo desplegable.
+    /// Actúa como intermediario entre el InputSelect y el modelo usuariosSectorProd.
+    /// Cuando se selecciona un usuario, automáticamente actualiza el nombre correspondiente.
+    /// </summary>
+    private int IdFlexoftSeleccionado
+    {
+        // Getter: Devuelve el ID del usuario actualmente seleccionado
+        get => usuariosSectorProd.IdFlexoft;
+        set
+        {
+            // Setter: Actualiza el ID del usuario en el modelo
+            usuariosSectorProd.IdFlexoft = value;
+
+            // Si se seleccionó un usuario válido (mayor a 0)
+            if (value > 0)
+            {
+                // Busca el usuario completo en la lista para obtener su nombre
+                var usuario = usuariosCompletos?.FirstOrDefault(u => u.IdFlexoft == value);
+                // Actualiza el nombre del usuario en el modelo (para mostrar o guardar)
+                usuariosSectorProd.NombreUsuario = usuario?.NombreUsuario ?? string.Empty;
+            }
+            else
+            {
+                // Si no se seleccionó ningún usuario válido, limpia el nombre
+                usuariosSectorProd.NombreUsuario = string.Empty;
+            }
+        }
+    }
+    /// <summary>
+    /// Maneja el cambio de usuario seleccionado y actualiza el nombre automáticamente
+    /// </summary>
+    /// <param name="e">Evento de cambio</param>
+    private async Task OnUsuarioChanged(ChangeEventArgs e)
+    {
+        if (int.TryParse(e.Value?.ToString(), out int idFlexoft) && idFlexoft > 0)
+        {
+            var usuario = usuariosCompletos?.FirstOrDefault(u => u.IdFlexoft == idFlexoft);
+            if (usuario != null)
+            {
+                usuariosSectorProd.NombreUsuario = usuario.NombreUsuario;
+            }
+        }
+        else
+        {
+            usuariosSectorProd.NombreUsuario = string.Empty;
+        }
+    }
+
+    /// <summary>
+    /// Maneja el cambio de sector productivo seleccionado y actualiza la descripción automáticamente
+    /// </summary>
+    /// <param name="e">Evento de cambio</param>
+    private async Task OnSectorChanged(ChangeEventArgs e)
+    {
+        if (int.TryParse(e.Value?.ToString(), out int codigoSecProd) && codigoSecProd > 0)
+        {
+            var sector = sectoresCompletos?.FirstOrDefault(s => s.CodigoSecProd == codigoSecProd);
+            if (sector != null)
+            {
+                usuariosSectorProd.Descripcion = sector.Descripcion;
+            }
+        }
+        else
+        {
+            usuariosSectorProd.Descripcion = string.Empty;
+        }
+    }
+    /// <summary>
+    /// Propiedad que maneja la selección del sector productivo en el combo desplegable.
+    /// Actúa como intermediario entre el InputSelect y el modelo usuariosSectorProd.
+    /// Cuando se selecciona un sector, automáticamente actualiza la descripción correspondiente.
+    /// </summary>
+    private int CodigoSecProdSeleccionado
+    {
+        // Getter: Devuelve el código del sector productivo actualmente seleccionado
+        get => usuariosSectorProd.CodigoSecProd;
+        set
+        {
+            // Setter: Actualiza el código del sector en el modelo
+            usuariosSectorProd.CodigoSecProd = value;
+
+            // Si se seleccionó un sector válido (mayor a 0)
+            if (value > 0)
+            {
+                // Busca el sector completo en la lista para obtener su descripción
+                var sector = sectoresCompletos?.FirstOrDefault(s => s.CodigoSecProd == value);
+                // Actualiza la descripción del sector en el modelo (para mostrar o guardar)
+                usuariosSectorProd.Descripcion = sector?.Descripcion ?? string.Empty;
+            }
+            else
+            {
+                // Si no se seleccionó ningún sector válido, limpia la descripción
+                usuariosSectorProd.Descripcion = string.Empty;
+            }
+        }
+    }
+}

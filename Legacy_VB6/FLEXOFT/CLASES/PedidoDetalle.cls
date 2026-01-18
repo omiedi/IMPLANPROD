@@ -1,0 +1,40 @@
+VERSION 1.0 CLASS
+BEGIN
+  MultiUse = -1  'True
+  Persistable = 0  'NotPersistable
+  DataBindingBehavior = 0  'vbNone
+  DataSourceBehavior  = 0  'vbNone
+  MTSTransactionMode  = 0  'NotAnMTSObject
+END
+Attribute VB_Name = "PedidoDetalle"
+Attribute VB_GlobalNameSpace = False
+Attribute VB_Creatable = True
+Attribute VB_PredeclaredId = False
+Attribute VB_Exposed = False
+Public CodigoInterno As Long
+Public Descripcion As String
+Public CantidadPedida As Single
+Public CantidadAsignada As Single
+Public CantidadEntregada As Single
+Public CantidadSaldo As Single
+Public Preparado As Single
+Public Despachado As Single
+Public Remito As String
+Public FechaSolicitudEntrega As Integer
+Public FechaUltimaEntrega As Integer
+Public PrecioLista As Double
+Public PrecioUnitario As Double
+Public ImporteTotal As Double
+Public ImporteAnticipo As Double
+Public Color As String
+Public Talle As String
+Public Largo As Single
+Public Ancho As Single
+Public Espesor As Single
+Public Lote As String
+Public FechaPrepardo As Integer
+Public FechaInformado As Integer
+Public FechaRetiro As Integer
+Public Observacion As String
+Public NumeroArmado As Long
+Public ESTADO As Integer

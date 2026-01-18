@@ -1,0 +1,87 @@
+@page "/pedidos-venta/editar/{NroPedido:int}"
+@using IMPLANPROD.Shared.Entities
+@using IMPLANPROD.Client.Repositories
+@inject IRepository repository
+@inject NavigationManager navigationManager
+@inject SweetAlertService sweetAlertService
+
+<PageTitle>Editar Pedido de Venta</PageTitle>
+
+@if (pedido is null)
+{
+    <div class="text-center">
+        <div class="spinner-border" role="status">
+            <span class="visually-hidden">Cargando...</span>
+        </div>
+    </div>
+}
+else
+{
+    <PedidosVentaForm pedido="pedido" 
+                      OnValidSubmit="Edit" 
+                      OnCancel="Return" 
+                      IsEdit="true" />
+}
+
+@code {
+    private Pedenca? pedido;
+
+    [Parameter] public int NroPedido { get; set; }
+
+    /// <summary>
+    /// Método que se ejecuta al inicializar el componente
+    /// Carga el pedido a editar
+    /// </summary>
+    protected override async Task OnInitializedAsync()
+    {
+        await CargarPedido();
+    }
+
+    /// <summary>
+    /// Carga el pedido desde el backend
+    /// </summary>
+    private async Task CargarPedido()
+    {
+        var responseHttp = await repository.Get<Pedenca>($"api/pedenca/{NroPedido}");
+        if (responseHttp.Error)
+        {
+            if (responseHttp.HttpResponseMessage.StatusCode == System.Net.HttpStatusCode.NotFound)
+            {
+                await sweetAlertService.FireAsync("Error", "Pedido no encontrado.", SweetAlertIcon.Error);
+                navigationManager.NavigateTo("/pedidos-venta");
+                return;
+            }
+
+            var message = await responseHttp.GetErrorMessageAsync();
+            await sweetAlertService.FireAsync("Error", message, SweetAlertIcon.Error);
+            return;
+        }
+
+        pedido = responseHttp.Response;
+    }
+
+    /// <summary>
+    /// Actualiza el pedido existente
+    /// </summary>
+    private async Task Edit()
+    {
+        var responseHttp = await repository.Put("api/pedenca", pedido);
+        if (responseHttp.Error)
+        {
+            var message = await responseHttp.GetErrorMessageAsync();
+            await sweetAlertService.FireAsync("Error", message, SweetAlertIcon.Error);
+            return;
+        }
+
+        await sweetAlertService.FireAsync("Confirmación", "Pedido de venta actualizado exitosamente.", SweetAlertIcon.Success);
+        Return();
+    }
+
+    /// <summary>
+    /// Regresa a la lista de pedidos
+    /// </summary>
+    private void Return()
+    {
+        navigationManager.NavigateTo("/pedidos-venta");
+    }
+}

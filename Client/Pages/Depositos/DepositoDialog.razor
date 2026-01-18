@@ -1,0 +1,121 @@
+@using IMPLANPROD.Shared.DTOs
+
+@inject IRepository repository
+@inject SweetAlertService sweetAlertService
+
+<div class="modal fade show" style="display: block; background-color: rgba(0,0,0,0.5)">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Seleccionar Depósito</h5>
+                <button type="button" class="btn-close" @onclick="Cancel"></button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group mb-3">
+                    <input type="text" 
+                           class="form-control" 
+                           placeholder="Buscar depósito..."
+                           @bind-value="searchText"
+                           @bind-value:event="oninput"
+                           @onkeyup="HandleKeyUp" />
+                </div>
+
+                @if (depositos != null)
+                {
+                    <div style="max-height: 400px; overflow-y: auto;">
+                        <table class="table table-hover">
+                            <thead>
+                                <tr>
+                                    <th>Código</th>
+                                    <th>Nombre</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var deposito in depositos)
+                                {
+                                    <tr style="cursor: pointer" @onclick="() => SeleccionarDeposito(deposito)">
+                                        <td>@deposito.Id</td>
+                                        <td>@deposito.Nombre</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                }
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" @onclick="Cancel">Cancelar</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    [CascadingParameter] BlazoredModalInstance BlazoredModal { get; set; } = default!;
+
+    private List<DepositoDTO> depositos;
+    private string searchText = "";
+    private Timer debounceTimer;
+
+    protected override void OnInitialized()
+    {
+        debounceTimer = new Timer(Search, null, Timeout.Infinite, Timeout.Infinite);
+        _ = LoadDepositos();
+    }
+
+    private async Task LoadDepositos()
+    {
+        try
+        {
+            var response = await repository.Get<List<DepositoDTO>>("api/depositos");
+            if (!response.Error)
+            {
+                depositos = response.Response;
+                StateHasChanged();
+            }
+        }
+        catch (Exception ex)
+        {
+            await sweetAlertService.FireAsync("Error", ex.Message, SweetAlertIcon.Error);
+        }
+    }
+
+    private void HandleKeyUp(KeyboardEventArgs e)
+    {
+        debounceTimer.Change(300, Timeout.Infinite);
+    }
+
+    private void Search(object state)
+    {
+        InvokeAsync(() =>
+        {
+            if (string.IsNullOrWhiteSpace(searchText))
+            {
+                LoadDepositos();
+            }
+            else
+            {
+                depositos = depositos?
+                    .Where(d => d.Nombre.Contains(searchText, StringComparison.OrdinalIgnoreCase) ||
+                               d.Id.ToString().Contains(searchText))
+                    .ToList();
+                StateHasChanged();
+            }
+        });
+    }
+
+    private void SeleccionarDeposito(DepositoDTO deposito)
+    {
+        BlazoredModal.CloseAsync(ModalResult.Ok(deposito));
+    }
+
+    private void Cancel()
+    {
+        BlazoredModal.CancelAsync();
+    }
+
+    public void Dispose()
+    {
+        debounceTimer?.Dispose();
+    }
+}

@@ -1,0 +1,163 @@
+/* Estilos generales del contenedor */
+.print-container {
+    max-width: 21cm;
+    margin: 0 auto;
+    padding: 1cm;
+    background: white;
+    font-family: Arial, sans-serif;
+    font-size: 10pt;
+    border: 3px solid black;
+    box-sizing: border-box;
+}
+
+/* Encabezado */
+.header-section {
+    margin-bottom: 10px;
+}
+
+.company-name {
+    font-size: 16pt;
+    font-weight: bold;
+    margin: 0;
+}
+
+.document-header {
+    border: 2px solid black;
+    padding: 5px;
+}
+
+.document-type {
+    font-size: 8pt;
+    text-align: center;
+    margin-bottom: 3px;
+}
+
+.checkbox-container {
+    text-align: center;
+    margin: 5px 0;
+}
+
+.checkbox {
+    display: inline-block;
+    border: 2px solid black;
+    width: 25px;
+    height: 25px;
+    line-height: 25px;
+    text-align: center;
+    font-weight: bold;
+    font-size: 18pt;
+}
+
+.document-title {
+    font-size: 14pt;
+    font-weight: bold;
+    text-align: center;
+    margin: 5px 0;
+}
+
+.document-info {
+    font-size: 9pt;
+    margin-top: 5px;
+}
+
+/* Sección de cliente */
+.client-section {
+    margin-top: 10px;
+    font-size: 9pt;
+}
+
+.checkbox-small {
+    display: inline-block;
+    border: 1px solid black;
+    width: 15px;
+    height: 15px;
+    line-height: 15px;
+    text-align: center;
+    margin-right: 5px;
+}
+
+/* Tabla de detalle */
+.detail-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 10px;
+    font-size: 9pt;
+}
+
+.detail-table th {
+    border: 1px solid black;
+    padding: 5px;
+    background-color: #f0f0f0;
+    font-weight: bold;
+    text-align: center;
+}
+
+.detail-table td {
+    border: 1px solid black;
+    padding: 5px;
+    vertical-align: top;
+}
+
+.detail-table tbody tr {
+    height: 30px;
+}
+
+/* Estilos de impresión */
+@media print {
+    .print-container {
+        max-width: 100%;
+        padding: 0.8cm;
+        margin: 0;
+        border: 3px solid black;
+        box-sizing: border-box;
+        min-height: 27.7cm;
+    }
+
+    .no-print {
+        display: none !important;
+    }
+
+    body {
+        margin: 0;
+        padding: 0;
+    }
+
+    @page {
+        size: A4;
+        margin: 1cm;
+    }
+
+    .detail-table {
+        page-break-inside: avoid;
+    }
+
+    .header-section,
+    .client-section {
+        page-break-inside: avoid;
+    }
+}
+
+/* Ocultar botones en pantalla si es necesario */
+.no-print {
+    margin-top: 20px;
+    text-align: center;
+}
+
+/* Bordes y líneas */
+.border-top {
+    border-top: 1px solid black !important;
+}
+
+.border-bottom {
+    border-bottom: 1px solid black !important;
+}
+
+/* Espaciado */
+.py-2 {
+    padding-top: 8px !important;
+    padding-bottom: 8px !important;
+}
+
+.mt-1 {
+    margin-top: 5px !important;
+}

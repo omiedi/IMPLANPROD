@@ -1,0 +1,35 @@
+@page "/pedidos-venta/crear"
+@using IMPLANPROD.Shared.Entities
+@using IMPLANPROD.Client.Repositories
+@inject IRepository repository
+@inject NavigationManager navigationManager
+@inject SweetAlertService sweetAlertService
+
+<PageTitle>Crear Pedido de Venta</PageTitle>
+
+<PedidosVentaForm pedido="pedido" 
+                  OnCancel="Return" 
+                  IsEdit="false" />
+
+@code {
+    private Pedenca pedido = new();
+
+    /// <summary>
+    /// Método que se ejecuta al inicializar el componente
+    /// </summary>
+    protected override void OnInitialized()
+    {
+        // Inicializar nuevo pedido
+        pedido = new Pedenca();
+    }
+
+    // El guardado se realiza dentro de PedidosVentaForm en modo creación (crear-con-detalle)
+
+    /// <summary>
+    /// Regresa a la lista de pedidos
+    /// </summary>
+    private void Return()
+    {
+        navigationManager.NavigateTo("/pedidos-venta");
+    }
+}

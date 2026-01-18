@@ -1,0 +1,79 @@
+@page "/TaGrupiva/BajaIndex"
+@inject IRepository repository
+@inject NavigationManager navigationManager
+@inject SweetAlertService sweetAlertService
+
+<div class="bg-primary text-white text-center p-3 mb-4">
+    <h1>Monedas Inactivas</h1>
+</div>
+<div class="mb-3">
+    <a class="btn btn-success" href="/TaGrupiva/Index">Volver</a>
+</div>
+<GenericList MyList="grupiva">
+    <Body>
+        <table class="table table-striped">
+            <thead>
+                <tr>
+                    <th>Código</th>
+                    <th>Descripción</th>
+                    <th>Tasa</th>
+                    <th>Acciones</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var item in grupiva!)
+                {
+                    <tr>
+                        <td>@item.CodigoID</td>
+                        <td>@item.Referencia</td>
+                        <td>@item.tasa</td>
+                        <td>
+                            <button class="btn btn-success" @onclick=@(() => CambiaStatusAsync(item.Id, 0))><i class="oi oi-check" /> Activar</button>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </Body>
+</GenericList>
+
+@code {
+    public List<Grupiva>? grupiva { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        var responseHppt = await repository.Get<List<Grupiva>>($"api/grupivas/GetAllInactivos");
+        if (responseHppt.Error)
+        {
+            if (responseHppt.HttpResponseMessage.StatusCode == System.Net.HttpStatusCode.NotFound)
+            {
+                navigationManager.NavigateTo("/");
+                return;
+            }
+            var message = await responseHppt.GetErrorMessageAsync();
+            await sweetAlertService.FireAsync("Error", message, SweetAlertIcon.Error);
+            return;
+        }
+        grupiva = responseHppt.Response;
+    }
+
+    private async Task CambiaStatusAsync(int id, int status)
+    {
+        var responseHttp = await repository.Put($"api/grupivas/cambiaStatus/{id}/{status}", "");
+        if (responseHttp.Error)
+        {
+            if (responseHttp.HttpResponseMessage.StatusCode != System.Net.HttpStatusCode.NotFound)
+            {
+                var message = await responseHttp.GetErrorMessageAsync();
+                await sweetAlertService.FireAsync("Error", message, SweetAlertIcon.Error);
+                return;
+            }
+        }
+        await LoadAsync();
+    }
+}

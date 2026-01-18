@@ -1,0 +1,709 @@
+@using IMPLANPROD.Shared.Entities
+@inject IRepository repository
+@inject SweetAlertService sweetAlertService
+
+@* Modal de configuración de Remitos *@
+@if (IsVisible)
+{
+    <div class="modal fade show" style="display: block" tabindex="-1">
+        <div class="modal-dialog modal-xl">
+            <div class="modal-content">
+                <div class="modal-header bg-success text-white">
+                    <h5 class="modal-title">
+                        <i class="fas fa-cogs me-2"></i>Configuración de Remitos
+                    </h5>
+                    <button type="button" class="btn-close btn-close-white" @onclick="CerrarModal"></button>
+                </div>
+                <div class="modal-body" style="max-height: 70vh; overflow-y: auto;">
+                    @if (cargandoConfiguracion)
+                    {
+                        <div class="d-flex justify-content-center align-items-center" style="min-height: 200px;">
+                            <div class="spinner-border text-success" role="status">
+                                <span class="visually-hidden">Cargando configuración...</span>
+                            </div>
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="row">
+                            <!-- Prefijo de Remitos -->
+                            <div class="col-md-6 mb-3">
+                                <div class="card h-100">
+                                    <div class="card-header bg-primary text-white">
+                                        <h6 class="card-title mb-0">
+                                            <i class="fas fa-hashtag me-2"></i>Prefijo de Remitos
+                                        </h6>
+                                    </div>
+                                    <div class="card-body">
+                                        <label class="form-label fw-bold">Prefijo por defecto:</label>
+                                        <input type="number" 
+                                               class="form-control" 
+                                               @bind="prefijoRemitos"
+                                               min="0"
+                                               max="9999"
+                                               placeholder="Ej: 1" />
+                                        <div class="form-text">
+                                            <i class="fas fa-info-circle me-1"></i>
+                                            Entre 0 y 9999
+                                        </div>
+                                        <div class="alert alert-info mt-2 mb-0 p-2">
+                                            <strong>Vista previa:</strong>
+                                            <span class="badge bg-primary ms-2">@ObtenerPrefijoFormateado()</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Código de Movimiento -->
+                            <div class="col-md-6 mb-3">
+                                <div class="card h-100">
+                                    <div class="card-header bg-success text-white">
+                                        <h6 class="card-title mb-0">
+                                            <i class="fas fa-exchange-alt me-2"></i>Cod. Mov.
+                                        </h6>
+                                    </div>
+                                    <div class="card-body">
+                                        <label class="form-label fw-bold">Código de movimiento:</label>
+                                        <input type="text" 
+                                               class="form-control text-uppercase" 
+                                               @bind="codigoMovimiento"
+                                               maxlength="2"
+                                               placeholder="RT" />
+                                        <div class="form-text">
+                                            <i class="fas fa-info-circle me-1"></i>
+                                            2 caracteres (por defecto: RT)
+                                        </div>
+                                        <div class="alert alert-info mt-2 mb-0 p-2">
+                                            <strong>Valor actual:</strong>
+                                            <span class="badge bg-success ms-2">@(string.IsNullOrWhiteSpace(codigoMovimiento) ? "RT" : codigoMovimiento.ToUpper())</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Tipo de Numeración de Remitos -->
+                            <div class="col-12 mb-3">
+                                <div class="card h-100">
+                                    <div class="card-header bg-info text-white">
+                                        <h6 class="card-title mb-0">
+                                            <i class="fas fa-list-ol me-2"></i>Tipo de Numeración
+                                        </h6>
+                                    </div>
+                                    <div class="card-body">
+                                        <div class="mb-3">
+                                            <label class="form-label fw-bold">Seleccione el tipo de numeración para remitos:</label>
+                                            <div class="row">
+                                                <div class="col-md-6">
+                                                    <div class="form-check">
+                                                        <input class="form-check-input" 
+                                                               type="radio" 
+                                                               name="tipoNumeracion" 
+                                                               id="radioAutonume"
+                                                               value="AUTONUME"
+                                                               checked="@(tipoNumeracionRemitos == "AUTONUME")"
+                                                               @onchange="@(() => tipoNumeracionRemitos = "AUTONUME")" />
+                                                        <label class="form-check-label" for="radioAutonume">
+                                                            <strong>AUTONUME</strong> - Autonumeración
+                                                        </label>
+                                                        <div class="form-text ms-4">
+                                                            El sistema genera automáticamente el número de remito de forma secuencial.
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                                <div class="col-md-6">
+                                                    <div class="form-check">
+                                                        <input class="form-check-input" 
+                                                               type="radio" 
+                                                               name="tipoNumeracion" 
+                                                               id="radioPreimpre"
+                                                               value="PREIMPRE"
+                                                               checked="@(tipoNumeracionRemitos == "PREIMPRE")"
+                                                               @onchange="@(() => tipoNumeracionRemitos = "PREIMPRE")" />
+                                                        <label class="form-check-label" for="radioPreimpre">
+                                                            <strong>PREIMPRE</strong> - Preimpreso
+                                                        </label>
+                                                        <div class="form-text ms-4">
+                                                            Se utiliza numeración preimpresa en formularios físicos.
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <div class="alert alert-secondary mt-3 mb-0">
+                                                <i class="fas fa-info-circle me-2"></i>
+                                                <strong>Tipo seleccionado:</strong> 
+                                                <span class="badge bg-info ms-2">@tipoNumeracionRemitos</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Fecha de Nueva Numeración -->
+                            <div class="col-12 mb-3">
+                                <div class="card h-100">
+                                    <div class="card-header bg-primary text-white">
+                                        <h6 class="card-title mb-0">
+                                            <i class="fas fa-calendar-alt me-2"></i>Fecha de Nueva Numeración
+                                        </h6>
+                                    </div>
+                                    <div class="card-body">
+                                        <div class="row">
+                                            <div class="col-md-6">
+                                                <label class="form-label fw-bold">Fecha de reinicio de numeración:</label>
+                                                <input type="date" 
+                                                       class="form-control" 
+                                                       @bind="fechaNuevaNumeracion" />
+                                                <div class="form-text">
+                                                    <i class="fas fa-info-circle me-1"></i>
+                                                    A partir de esta fecha se considerarán los remitos para la numeración.
+                                                </div>
+                                            </div>
+                                            <div class="col-md-6">
+                                                <div class="alert alert-info h-100 d-flex flex-column justify-content-center">
+                                                    <div class="mb-2">
+                                                        <strong><i class="fas fa-calendar-check me-1"></i>Fecha configurada:</strong>
+                                                        <br>
+                                                        <span class="badge bg-primary fs-6 mt-1">
+                                                            @fechaNuevaNumeracion.ToString("dd/MM/yyyy")
+                                                        </span>
+                                                    </div>
+                                                    <div class="form-text mb-0">
+                                                        <i class="fas fa-lightbulb me-1"></i>
+                                                        <strong>Funcionalidad:</strong> Al configurar una nueva fecha, 
+                                                        el sistema solicitará confirmar el número inicial del primer remito.
+                                                        Los remitos anteriores a esta fecha no se considerarán para la numeración.
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Control de Stock para No Trazables -->
+                            <div class="col-md-6 mb-3">
+                                <div class="card h-100">
+                                    <div class="card-header bg-warning text-dark">
+                                        <h6 class="card-title mb-0">
+                                            <i class="fas fa-boxes me-2"></i>Control de Stock
+                                        </h6>
+                                    </div>
+                                    <div class="card-body">
+                                        <label class="form-label fw-bold">Productos no trazables:</label>
+                                        <div class="form-check">
+                                            <input class="form-check-input" 
+                                                   type="checkbox" 
+                                                   id="noPermitirSinStock"
+                                                   @bind="noPermitirRemitosSinStock" />
+                                            <label class="form-check-label" for="noPermitirSinStock">
+                                                <strong>No permitir sin stock</strong>
+                                            </label>
+                                        </div>
+                                        <div class="form-text mt-2">
+                                            @if (noPermitirRemitosSinStock)
+                                            {
+                                                <span class="text-danger">
+                                                    <i class="fas fa-lock me-1"></i>
+                                                    <strong>Activado:</strong> No pueden salir sin stock
+                                                </span>
+                                            }
+                                            else
+                                            {
+                                                <span class="text-success">
+                                                    <i class="fas fa-unlock me-1"></i>
+                                                    <strong>Desactivado:</strong> Pueden salir sin stock
+                                                </span>
+                                            }
+                                        </div>
+                                        <div class="alert @(noPermitirRemitosSinStock ? "alert-danger" : "alert-success") mt-2 mb-0 p-2">
+                                            <strong>Estado:</strong>
+                                            <span class="badge bg-@(noPermitirRemitosSinStock ? "danger" : "success") ms-2">
+                                                @(noPermitirRemitosSinStock ? "ACTIVADO" : "DESACTIVADO")
+                                            </span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Depósito de Expedición -->
+                            <div class="col-md-6 mb-3">
+                                <div class="card h-100">
+                                    <div class="card-header bg-secondary text-white">
+                                        <h6 class="card-title mb-0">
+                                            <i class="fas fa-warehouse me-2"></i>Depósito de Expedición
+                                        </h6>
+                                    </div>
+                                    <div class="card-body">
+                                        <label class="form-label fw-bold">Depósito por defecto:</label>
+                                        <select class="form-select" @bind="depositoExpedicion">
+                                            <option value="0">-- Seleccione --</option>
+                                            @foreach (var deposito in depositos)
+                                            {
+                                                <option value="@deposito.CodigoDepo">
+                                                    @deposito.CodigoDepo - @deposito.Descripcion
+                                                </option>
+                                            }
+                                        </select>
+                                        <div class="form-text">
+                                            <i class="fas fa-info-circle me-1"></i>
+                                            Para expedición de remitos
+                                        </div>
+                                        @if (depositoExpedicion > 0)
+                                        {
+                                            var depositoSeleccionado = depositos.FirstOrDefault(d => d.CodigoDepo == depositoExpedicion);
+                                            if (depositoSeleccionado != null)
+                                            {
+                                                <div class="alert alert-info mt-2 mb-0 p-2">
+                                                    <strong>Seleccionado:</strong>
+                                                    <span class="badge bg-info ms-2">@depositoSeleccionado.CodigoDepo - @depositoSeleccionado.Descripcion</span>
+                                                </div>
+                                            }
+                                        }
+                                        else
+                                        {
+                                            <div class="alert alert-warning mt-2 mb-0 p-2">
+                                                <i class="fas fa-exclamation-triangle me-1"></i>
+                                                Sin seleccionar
+                                            </div>
+                                        }
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    }
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" @onclick="CerrarModal">
+                        <i class="fas fa-times me-1"></i>Cancelar
+                    </button>
+                    <button type="button" 
+                            class="btn btn-success" 
+                            @onclick="GuardarConfiguracion"
+                            disabled="@(cargandoConfiguracion || guardandoConfiguracion)">
+                        @if (guardandoConfiguracion)
+                        {
+                            <span class="spinner-border spinner-border-sm me-2" role="status"></span>
+                        }
+                        else
+                        {
+                            <i class="fas fa-save me-1"></i>
+                        }
+                        Guardar Configuración
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="modal-backdrop fade show"></div>
+}
+
+@code {
+    /// <summary>
+    /// Parámetros del componente
+    /// </summary>
+    [Parameter] public bool IsVisible { get; set; } = false;
+    [Parameter] public EventCallback OnCloseRequested { get; set; }
+    [Parameter] public EventCallback OnConfigurationSaved { get; set; }
+
+    /// <summary>
+    /// Variables de estado del componente
+    /// </summary>
+    private bool cargandoConfiguracion = false;
+    private bool guardandoConfiguracion = false;
+    private bool noPermitirRemitosSinStock = false;
+    private int prefijoRemitos = 0;
+    private string tipoNumeracionRemitos = "AUTONUME"; // Valor por defecto
+    private int depositoExpedicion = 0; // Depósito de expedición por defecto
+    private string codigoMovimiento = "RT"; // Código de movimiento por defecto
+    private DateTime fechaNuevaNumeracion = new DateTime(1980, 1, 1); // Fecha de nueva numeración por defecto
+    private List<Tadeposi> depositos = new(); // Lista de depósitos disponibles
+
+    // Constantes para los parámetros de FLEXCRL
+    private const string CLABUS_PARAM = ""; // CLABUS vacío para prefijo, stock, depósito y código mov
+    private const string PROBUS_PARAM_NOPERMITIRSINSTOCK = "NOPERMITIRSINSTOCK";
+    private const string PROBUS_PARAM_PREFIJO = "PREFIREM";
+    private const string PROBUS_PARAM_DEPOSITOEXPEDICION = "DEPOEXPE";
+    private const string PROBUS_PARAM_CODIGOMOVIMIENTO = "CODREFAC";
+    private const string PROBUS_PARAM_FENUREFA = "FENUREFA"; // Fecha de nueva numeración
+    
+    // Constantes para tipo de numeración (invertidas: CLABUS tiene valor, PROBUS vacío)
+    private const string CLABUS_PARAM_TIPONUMERACION = "NUREMIFA";
+    private const string PROBUS_PARAM_TIPONUMERACION = "";
+
+    /// <summary>
+    /// Se ejecuta cuando el componente se inicializa
+    /// </summary>
+    protected override async Task OnInitializedAsync()
+    {
+        await CargarDepositos();
+        await CargarConfiguracion();
+    }
+    
+    /// <summary>
+    /// Se ejecuta cuando los parámetros cambian
+    /// </summary>
+    protected override async Task OnParametersSetAsync()
+    {
+        // Solo cargar configuración si el modal se hace visible y no se está cargando
+        if (IsVisible && !cargandoConfiguracion)
+        {
+            await CargarConfiguracion();
+        }
+    }
+
+    /// <summary>
+    /// Carga la configuración actual desde FLEXCRL
+    /// </summary>
+    private async Task CargarConfiguracion()
+    {
+        try
+        {
+            cargandoConfiguracion = true;
+            StateHasChanged();
+
+            Console.WriteLine("[RemitosConfigModal] Cargando configuración de remitos...");
+
+            // Cargar prefijo de remitos
+            await CargarConfiguracionIndividual(
+                PROBUS_PARAM_PREFIJO,
+                "0",
+                valor => prefijoRemitos = int.TryParse(valor, out var prefijo) ? prefijo : 0
+            );
+
+            // Cargar tipo de numeración de remitos (usa CLABUS='NUREMIFA' y PROBUS vacío)
+            await CargarTipoNumeracion();
+
+            // Cargar control de stock para no trazables
+            await CargarConfiguracionIndividual(
+                PROBUS_PARAM_NOPERMITIRSINSTOCK, 
+                "0", 
+                valor => noPermitirRemitosSinStock = valor == "1"
+            );
+
+            // Cargar depósito de expedición
+            await CargarConfiguracionIndividual(
+                PROBUS_PARAM_DEPOSITOEXPEDICION,
+                "0",
+                valor => depositoExpedicion = int.TryParse(valor, out var depo) ? depo : 0
+            );
+
+            // Cargar código de movimiento
+            await CargarConfiguracionIndividual(
+                PROBUS_PARAM_CODIGOMOVIMIENTO,
+                "RT",
+                valor => codigoMovimiento = string.IsNullOrWhiteSpace(valor) ? "RT" : valor.ToUpper().Trim()
+            );
+
+            // Cargar fecha de nueva numeración
+            await CargarConfiguracionIndividual(
+                PROBUS_PARAM_FENUREFA,
+                "1980-01-01",
+                valor => {
+                    if (DateTime.TryParse(valor, out DateTime fecha))
+                    {
+                        fechaNuevaNumeracion = fecha;
+                    }
+                    else
+                    {
+                        fechaNuevaNumeracion = new DateTime(1980, 1, 1);
+                    }
+                }
+            );
+
+            Console.WriteLine($"[RemitosConfigModal] Configuración cargada - Prefijo: {prefijoRemitos}, TipoNumeracion: {tipoNumeracionRemitos}, NoPermitirSinStock: {noPermitirRemitosSinStock}, DepositoExpedicion: {depositoExpedicion}, CodigoMovimiento: {codigoMovimiento}, FechaNuevaNumeracion: {fechaNuevaNumeracion:dd/MM/yyyy}");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[RemitosConfigModal] Error al cargar configuración: {ex.Message}");
+            await sweetAlertService.FireAsync("Error", $"Error al cargar la configuración: {ex.Message}", SweetAlertIcon.Error);
+            // Valor por defecto en caso de error
+            noPermitirRemitosSinStock = false;
+        }
+        finally
+        {
+            cargandoConfiguracion = false;
+            StateHasChanged();
+        }
+    }
+
+    /// <summary>
+    /// Carga el tipo de numeración desde FLEXCRL (CLABUS='NUREMIFA', PROBUS vacío)
+    /// </summary>
+    private async Task CargarTipoNumeracion()
+    {
+        try
+        {
+            // Usar "empty" como placeholder cuando PROBUS está vacío
+            string probusParam = string.IsNullOrEmpty(PROBUS_PARAM_TIPONUMERACION) ? "empty" : PROBUS_PARAM_TIPONUMERACION;
+            var response = await repository.Get<FLEXCRL>($"api/flexcrl/{CLABUS_PARAM_TIPONUMERACION}/{probusParam}");
+            
+            if (response.Error || response.Response == null)
+            {
+                Console.WriteLine($"[RemitosConfigModal] No existe configuración de tipo de numeración, usando valor por defecto: AUTONUME");
+                tipoNumeracionRemitos = "AUTONUME";
+            }
+            else
+            {
+                var valor = response.Response.VALCONTROL ?? "AUTONUME";
+                tipoNumeracionRemitos = (valor == "PREIMPRE" || valor == "AUTONUME") ? valor : "AUTONUME";
+                Console.WriteLine($"[RemitosConfigModal] Tipo de numeración cargado: {tipoNumeracionRemitos}");
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[RemitosConfigModal] Error al cargar tipo de numeración: {ex.Message}");
+            tipoNumeracionRemitos = "AUTONUME";
+        }
+    }
+
+    /// <summary>
+    /// Carga una configuración individual desde FLEXCRL
+    /// </summary>
+    /// <param name="probus">Parámetro PROBUS</param>
+    /// <param name="valorDefecto">Valor por defecto si no existe</param>
+    /// <param name="asignarValor">Acción para asignar el valor cargado</param>
+    private async Task CargarConfiguracionIndividual(string probus, string valorDefecto, Action<string> asignarValor)
+    {
+        try
+        {
+            // Usar "empty" como placeholder cuando CLABUS está vacío para evitar URLs malformadas
+            string clabusParam = string.IsNullOrEmpty(CLABUS_PARAM) ? "empty" : CLABUS_PARAM;
+            var response = await repository.Get<FLEXCRL>($"api/flexcrl/{clabusParam}/{probus}");
+            
+            if (response.Error || response.Response == null)
+            {
+                Console.WriteLine($"[RemitosConfigModal] No existe configuración para {probus}, usando valor por defecto: {valorDefecto}");
+                asignarValor(valorDefecto);
+            }
+            else
+            {
+                var valor = response.Response.VALCONTROL ?? valorDefecto;
+                Console.WriteLine($"[RemitosConfigModal] Configuración {probus} cargada: {valor}");
+                asignarValor(valor);
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[RemitosConfigModal] Error al cargar {probus}: {ex.Message}");
+            asignarValor(valorDefecto);
+        }
+    }
+
+    /// <summary>
+    /// Guarda la configuración usando FLEXCRL
+    /// </summary>
+    private async Task GuardarConfiguracion()
+    {
+        try
+        {
+            guardandoConfiguracion = true;
+            StateHasChanged();
+
+            Console.WriteLine("[RemitosConfigModal] Guardando configuración...");
+
+            // Validar que el prefijo esté en el rango válido
+            if (prefijoRemitos < 0 || prefijoRemitos > 9999)
+            {
+                await sweetAlertService.FireAsync("Error", "El prefijo debe estar entre 0 y 9999", SweetAlertIcon.Error);
+                return;
+            }
+
+            // Confirmar el cambio con el usuario
+            // Validar código de movimiento
+            if (string.IsNullOrWhiteSpace(codigoMovimiento) || codigoMovimiento.Length > 2)
+            {
+                await sweetAlertService.FireAsync("Error", "El código de movimiento debe tener máximo 2 caracteres", SweetAlertIcon.Error);
+                return;
+            }
+
+            // Obtener nombre del depósito seleccionado
+            var nombreDeposito = depositoExpedicion > 0 
+                ? depositos.FirstOrDefault(d => d.CodigoDepo == depositoExpedicion)?.Descripcion ?? "No seleccionado"
+                : "No seleccionado";
+
+            var result = await sweetAlertService.FireAsync(new SweetAlertOptions
+            {
+                Title = "Confirmar Cambios",
+                Text = $"¿Está seguro de guardar la configuración?\n\n" +
+                       $"Prefijo: {ObtenerPrefijoFormateado()}\n" +
+                       $"Código de movimiento: {codigoMovimiento.ToUpper()}\n" +
+                       $"Tipo de numeración: {tipoNumeracionRemitos}\n" +
+                       $"Fecha de nueva numeración: {fechaNuevaNumeracion:dd/MM/yyyy}\n" +
+                       $"Control de stock: {(noPermitirRemitosSinStock ? "Activado" : "Desactivado")}\n" +
+                       $"Depósito de expedición: {depositoExpedicion} - {nombreDeposito}",
+                Icon = SweetAlertIcon.Question,
+                ShowCancelButton = true,
+                ConfirmButtonText = "Sí, guardar",
+                CancelButtonText = "Cancelar"
+            });
+
+            if (!result.IsConfirmed)
+            {
+                Console.WriteLine("[RemitosConfigModal] Guardado cancelado por el usuario");
+                return;
+            }
+
+            // Guardar prefijo de remitos
+            await GuardarConfiguracionControl(PROBUS_PARAM_PREFIJO, prefijoRemitos.ToString());
+
+            // Guardar tipo de numeración de remitos (usa CLABUS='NUREMIFA' y PROBUS vacío)
+            await GuardarTipoNumeracion();
+
+            // Guardar configuración de stock (0 = desactivado, 1 = activado)
+            var valorStockAGuardar = noPermitirRemitosSinStock ? "1" : "0";
+            await GuardarConfiguracionControl(PROBUS_PARAM_NOPERMITIRSINSTOCK, valorStockAGuardar);
+
+            // Guardar depósito de expedición
+            await GuardarConfiguracionControl(PROBUS_PARAM_DEPOSITOEXPEDICION, depositoExpedicion.ToString());
+
+            // Guardar código de movimiento (convertir a mayúsculas y recortar espacios)
+            var codigoMovGuardar = codigoMovimiento.ToUpper().Trim();
+            await GuardarConfiguracionControl(PROBUS_PARAM_CODIGOMOVIMIENTO, codigoMovGuardar);
+
+            // Guardar fecha de nueva numeración
+            await GuardarConfiguracionControl(PROBUS_PARAM_FENUREFA, fechaNuevaNumeracion.ToString("yyyy-MM-dd"));
+            
+            Console.WriteLine($"[RemitosConfigModal] Configuración guardada exitosamente - Prefijo: {prefijoRemitos}, CodigoMov: {codigoMovGuardar}, TipoNumeracion: {tipoNumeracionRemitos}, Stock: {valorStockAGuardar}, DepositoExpedicion: {depositoExpedicion}, FechaNuevaNumeracion: {fechaNuevaNumeracion:dd/MM/yyyy}");
+
+            // Si llegamos aquí, la configuración se guardó exitosamente
+            await sweetAlertService.FireAsync("Éxito", "Configuración guardada exitosamente.", SweetAlertIcon.Success);
+            
+            // Notificar que se guardó la configuración
+            await OnConfigurationSaved.InvokeAsync();
+            
+            // Cerrar el modal
+            await CerrarModal();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[RemitosConfigModal] Error al guardar: {ex.Message}");
+            await sweetAlertService.FireAsync("Error", $"Error inesperado al guardar la configuración: {ex.Message}", SweetAlertIcon.Error);
+        }
+        finally
+        {
+            guardandoConfiguracion = false;
+            StateHasChanged();
+        }
+    }
+
+    /// <summary>
+    /// Guarda el tipo de numeración en FLEXCRL (CLABUS='NUREMIFA', PROBUS vacío)
+    /// </summary>
+    private async Task GuardarTipoNumeracion()
+    {
+        try
+        {
+            Console.WriteLine($"[RemitosConfigModal] Guardando tipo de numeración = {tipoNumeracionRemitos}");
+
+            // Usar "empty" como placeholder cuando PROBUS está vacío (el servidor lo convertirá a "")
+            string probusParam = string.IsNullOrEmpty(PROBUS_PARAM_TIPONUMERACION) ? "empty" : PROBUS_PARAM_TIPONUMERACION;
+
+            // Crear el objeto para enviar al endpoint
+            var configData = new
+            {
+                clabus = CLABUS_PARAM_TIPONUMERACION,
+                probus = probusParam,
+                valcontrol = tipoNumeracionRemitos
+            };
+
+            // Llamar al endpoint para actualizar o crear el control
+            var response = await repository.Put("api/flexcrl", configData);
+
+            if (response.Error)
+            {
+                var errorMessage = await response.GetErrorMessageAsync();
+                throw new Exception($"Error al guardar tipo de numeración: {errorMessage}");
+            }
+
+            Console.WriteLine($"[RemitosConfigModal] Tipo de numeración guardado correctamente");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[RemitosConfigModal] Error en GuardarTipoNumeracion: {ex.Message}");
+            await sweetAlertService.FireAsync("Error", ex.Message, SweetAlertIcon.Error);
+            throw; // Re-lanzar la excepción para que el método padre la maneje
+        }
+    }
+
+    /// <summary>
+    /// Guarda la configuración de un control específico en FLEXCRL
+    /// </summary>
+    /// <param name="probus">Parámetro PROBUS para identificar el tipo de control</param>
+    /// <param name="valor">Valor a guardar</param>
+    private async Task GuardarConfiguracionControl(string probus, string valor)
+    {
+        try
+        {
+            Console.WriteLine($"[RemitosConfigModal] Guardando control {probus} = {valor}");
+
+            // Crear el objeto para enviar al endpoint
+            var configData = new
+            {
+                clabus = CLABUS_PARAM,
+                probus = probus,
+                valcontrol = valor
+            };
+
+            // Llamar al endpoint para actualizar o crear el control
+            var response = await repository.Put("api/flexcrl", configData);
+
+            if (response.Error)
+            {
+                var errorMessage = await response.GetErrorMessageAsync();
+                throw new Exception($"Error al guardar {probus}: {errorMessage}");
+            }
+
+            Console.WriteLine($"[RemitosConfigModal] Control {probus} guardado correctamente");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[RemitosConfigModal] Error en GuardarConfiguracionControl: {ex.Message}");
+            await sweetAlertService.FireAsync("Error", ex.Message, SweetAlertIcon.Error);
+            throw; // Re-lanzar la excepción para que el método padre la maneje
+        }
+    }
+
+    /// <summary>
+    /// Carga la lista de depósitos activos
+    /// </summary>
+    private async Task CargarDepositos()
+    {
+        try
+        {
+            var response = await repository.Get<List<Tadeposi>>("api/tadeposi/activos");
+            if (!response.Error && response.Response != null)
+            {
+                depositos = response.Response;
+                Console.WriteLine($"[RemitosConfigModal] Depósitos cargados: {depositos.Count}");
+            }
+            else
+            {
+                Console.WriteLine("[RemitosConfigModal] Error al cargar depósitos o lista vacía");
+                depositos = new List<Tadeposi>();
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[RemitosConfigModal] Error al cargar depósitos: {ex.Message}");
+            depositos = new List<Tadeposi>();
+        }
+    }
+
+    /// <summary>
+    /// Obtiene el prefijo formateado con 4 dígitos completados con ceros a la izquierda
+    /// </summary>
+    /// <returns>Prefijo formateado (ej: "0001")</returns>
+    private string ObtenerPrefijoFormateado()
+    {
+        return prefijoRemitos.ToString("D4");
+    }
+
+    /// <summary>
+    /// Cierra el modal y notifica al componente padre
+    /// </summary>
+    private async Task CerrarModal()
+    {
+        Console.WriteLine("[RemitosConfigModal] Cerrando modal");
+        await OnCloseRequested.InvokeAsync();
+    }
+}

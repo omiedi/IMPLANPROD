@@ -1,0 +1,61 @@
+﻿@page "/dependencias/edit/{DependenciaId:int}"
+@inject IRepository repository
+@inject NavigationManager navigationManager
+@inject SweetAlertService sweetAlertService
+
+<h3>Editar Filial</h3>
+
+@if (dependencia is null)
+{
+    <div class="spinner" />
+}
+else
+{
+    <DependenciaForm @ref="dependenciaForm" Dependencia="dependencia" OnValidSubmit="EditAsync" ReturnAction="Return" />
+}
+
+@code {
+    private Dependencia? dependencia;
+    private DependenciaForm? dependenciaForm;
+
+    [Parameter]
+    public int DependenciaId { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        var responseHttp = await repository.Get<Dependencia>($"/api/dependencias/{DependenciaId}");
+        if (responseHttp.Error)
+        {
+            if (responseHttp.HttpResponseMessage.StatusCode == HttpStatusCode.NotFound)
+            {
+                navigationManager.NavigateTo("/empresas");
+                return;
+            }
+
+            var message = await responseHttp.GetErrorMessageAsync();
+            await sweetAlertService.FireAsync("Error", message, SweetAlertIcon.Error);
+            return;
+        }
+
+        dependencia = responseHttp.Response;
+    }
+
+    private async Task EditAsync()
+    {
+        var responseHttp = await repository.Put("/api/dependencias", dependencia);
+        if (responseHttp.Error)
+        {
+            var message = await responseHttp.GetErrorMessageAsync();
+            await sweetAlertService.FireAsync("Error", message, SweetAlertIcon.Error);
+            return;
+        }
+
+        Return();
+    }
+
+    private void Return()
+    {
+        dependenciaForm!.FormPostedSuccessfully = true;
+        navigationManager.NavigateTo($"/empresas/detalles/{dependencia!.EmpresaId}");
+    }
+}

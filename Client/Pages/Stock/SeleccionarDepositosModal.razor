@@ -1,0 +1,121 @@
+@using IMPLANPROD.Shared.Entities
+@using Blazored.Modal
+@using Blazored.Modal.Services
+@inject IRepository repository
+@inject SweetAlertService sweetAlertService
+
+<div class="modal-body">
+    <div class="row">
+        <div class="col-12">
+            <h5>Seleccione los depósitos para consultar stock</h5>
+            <div class="list-group" style="max-height: 400px; overflow-y: auto;">
+                @if (depositos != null)
+                {
+                    @foreach (var deposito in depositos)
+                    {
+                        <div class="list-group-item">
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" 
+                                       @bind="depositosSeleccionados[deposito.CodigoDepo]" 
+                                       id="deposito-@deposito.CodigoDepo" />
+                                <label class="form-check-label" for="deposito-@deposito.CodigoDepo">
+                                    @deposito.CodigoDepo - @deposito.Descripcion
+                                </label>
+                            </div>
+                        </div>
+                    }
+                }
+                else
+                {
+                    <div class="alert alert-info">Cargando depósitos...</div>
+                }
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal-footer">
+    <button type="button" class="btn btn-secondary" @onclick="Cancelar">Cancelar</button>
+    <button type="button" class="btn btn-primary" @onclick="Aceptar">Aceptar</button>
+</div>
+
+@code {
+    [CascadingParameter] BlazoredModalInstance Modal { get; set; } = default!;
+    
+    [Parameter] public List<string> DepositosSeleccionados { get; set; } = new List<string>();
+    
+    private List<Tadeposi> depositos = new List<Tadeposi>();
+    private Dictionary<int, bool> depositosSeleccionados = new Dictionary<int, bool>();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await CargarDepositos();
+    }
+
+    private async Task CargarDepositos()
+    {
+        try
+        {
+            var response = await repository.Get<List<Tadeposi>>("api/tadeposi/activos");
+            if (response.Error)
+            {
+                await sweetAlertService.FireAsync("Error", response.HttpResponseMessage.ReasonPhrase, SweetAlertIcon.Error);
+                return;
+            }
+            
+            depositos = response.Response;
+            
+            // Inicializar diccionario de selección
+            foreach (var deposito in depositos)
+            {
+                // Verificar si el depósito estaba seleccionado previamente
+                bool estaSeleccionado = DepositosSeleccionados.Contains(deposito.CodigoDepo.ToString());
+                depositosSeleccionados[deposito.CodigoDepo] = estaSeleccionado;
+            }
+        }
+        catch (Exception ex)
+        {
+            await sweetAlertService.FireAsync("Error", $"Error al cargar depósitos: {ex.Message}", SweetAlertIcon.Error);
+        }
+    }
+
+    private async Task Aceptar()
+    {
+        try
+        {
+            // Obtener los IDs de los depósitos seleccionados
+            var depositosIds = depositosSeleccionados
+                .Where(kvp => kvp.Value)
+                .Select(kvp => kvp.Key.ToString())
+                .ToList();
+                
+            if (depositosIds.Any())
+            {
+                // Guardar selección en el servidor
+                string depositosString = string.Join(",", depositosIds);
+                var response = await repository.Post("api/stock/guardardepositos", depositosString);
+                if (response.Error)
+                {
+                    await sweetAlertService.FireAsync("Error", response.HttpResponseMessage.ReasonPhrase, SweetAlertIcon.Error);
+                    return;
+                }
+                
+                // Cerrar el modal y devolver los depósitos seleccionados
+                await Modal.CloseAsync(ModalResult.Ok<List<string>>(depositosIds));
+            }
+            else
+            {
+                await sweetAlertService.FireAsync("Advertencia", "Debe seleccionar al menos un depósito", SweetAlertIcon.Warning);
+            }
+        }
+        catch (Exception ex)
+        {
+            await sweetAlertService.FireAsync("Error", $"Error al guardar selección: {ex.Message}", SweetAlertIcon.Error);
+        }
+    }
+
+    private async Task Cancelar()
+    {
+        await Modal.CancelAsync();
+    }
+}

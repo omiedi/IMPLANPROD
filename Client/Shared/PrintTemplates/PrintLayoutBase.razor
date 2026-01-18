@@ -1,0 +1,29 @@
+﻿@inherits ComponentBase
+
+<div class="print-layout">
+    <div class="print-header">
+        <div class="company-logo">
+            <img src="/images/logo.png" alt="Logo Empresa" />
+        </div>
+        <div class="print-title">
+            @Title
+        </div>
+    </div>
+
+    <div class="print-content">
+        @ChildContent
+    </div>
+
+    <div class="print-footer">
+        <div class="print-date">Impreso el: @DateTime.Now.ToString("dd/MM/yyyy HH:mm")</div>
+        <div class="page-number">Página 1</div>
+    </div>
+</div>
+
+@code {
+    [Parameter]
+    public string Title { get; set; } = "";
+
+    [Parameter]
+    public RenderFragment ChildContent { get; set; }
+}

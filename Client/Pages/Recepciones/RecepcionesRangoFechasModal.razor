@@ -1,0 +1,335 @@
+@using IMPLANPROD.Shared.Entities
+@using IMPLANPROD.Client.Repositories
+@using IMPLANPROD.Client.Services
+@inject IRepository repository
+@inject SweetAlertService sweetAlertService
+@inject IJSRuntime JS
+@inject HttpClient Http
+
+<div class="modal fade show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5);">
+    <div class="modal-dialog modal-xl modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title">
+                    <i class="fas fa-calendar-alt me-2"></i>
+                    Recepciones por Rango de Fechas
+                </h5>
+                <button type="button" class="btn-close btn-close-white" @onclick="Cerrar"></button>
+            </div>
+            <div class="modal-body">
+                <!-- Filtros -->
+                <div class="card mb-3">
+                    <div class="card-header">
+                        <h6 class="mb-0"><i class="fas fa-filter"></i> Filtros</h6>
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-md-3">
+                                <label class="form-label">Fecha Desde:</label>
+                                <input type="date" class="form-control" @bind="fechaDesde" />
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label">Fecha Hasta:</label>
+                                <input type="date" class="form-control" @bind="fechaHasta" />
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label">Código Desde:</label>
+                                <input type="text" class="form-control" @bind="codigoDesde" placeholder="Código desde..." />
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label">Código Hasta:</label>
+                                <input type="text" class="form-control" @bind="codigoHasta" placeholder="Código hasta..." />
+                            </div>
+                        </div>
+                        <div class="row mt-3">
+                            <div class="col-12 text-end">
+                                <button class="btn btn-primary" @onclick="CargarDatosAsync" disabled="@cargando">
+                                    @if (cargando)
+                                    {
+                                        <span class="spinner-border spinner-border-sm me-1"></span>
+                                    }
+                                    <i class="fas fa-search"></i> Buscar
+                                </button>
+                                <button class="btn btn-outline-secondary ms-2" @onclick="LimpiarFiltros">
+                                    <i class="fas fa-eraser"></i> Limpiar
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Resultados -->
+                @if (recepciones == null)
+                {
+                    <div class="alert alert-info text-center">
+                        <i class="fas fa-info-circle"></i> Seleccione los filtros y haga clic en "Buscar" para ver los resultados.
+                    </div>
+                }
+                else if (cargando)
+                {
+                    <div class="text-center">
+                        <div class="spinner-border" role="status">
+                            <span class="visually-hidden">Cargando...</span>
+                        </div>
+                    </div>
+                }
+                else if (!recepciones.Any())
+                {
+                    <div class="alert alert-warning text-center">
+                        <i class="fas fa-exclamation-triangle"></i> No se encontraron recepciones con los filtros aplicados.
+                    </div>
+                }
+                else
+                {
+                    <!-- Botones de acción -->
+                    <div class="d-flex justify-content-between mb-3">
+                        <div>
+                            <span class="badge bg-primary fs-6">Total: @recepciones.Count registros</span>
+                        </div>
+                        <div>
+                            <button class="btn btn-outline-success" @onclick="ImprimirAsync" disabled="@imprimiendo">
+                                @if (imprimiendo)
+                                {
+                                    <span class="spinner-border spinner-border-sm me-1"></span>
+                                }
+                                <i class="fas fa-print"></i> Imprimir
+                            </button>
+                            <button class="btn btn-success ms-2" @onclick="ExportarExcelAsync" disabled="@exportando">
+                                @if (exportando)
+                                {
+                                    <span class="spinner-border spinner-border-sm me-1"></span>
+                                }
+                                <i class="fas fa-file-excel"></i> Exportar a Excel
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Tabla -->
+                    <div class="table-responsive" style="max-height: 500px;">
+                        <table class="table table-striped table-hover table-sm">
+                            <thead class="table-dark sticky-top">
+                                <tr>
+                                    <th>N° Boleta</th>
+                                    <th>Descripción</th>
+                                    <th>Lote</th>
+                                    <th>Fecha Recep.</th>
+                                    <th>Cód. Int.</th>
+                                    <th>Unidad</th>
+                                    <th class="text-end">Cantidad</th>
+                                    <th>Depósito</th>
+                                    <th>N° Prov.</th>
+                                    <th>Remito</th>
+                                    <th>N° O.C.</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var recep in recepciones)
+                                {
+                                    <tr>
+                                        <td>@recep.NumeBoRe?.ToString("N0")</td>
+                                        <td>@recep.Descrip</td>
+                                        <td>@recep.IdenLote</td>
+                                        <td>@recep.FechRecep?.ToString("dd/MM/yyyy")</td>
+                                        <td>@recep.CodInte</td>
+                                        <td>@recep.Unidad</td>
+                                        <td class="text-end">@recep.CantNom?.ToString("N2")</td>
+                                        <td>@recep.DepoEnt</td>
+                                        <td>@recep.NumProv</td>
+                                        <td>@recep.NumRemProv</td>
+                                        <td>@recep.NumOC</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                }
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" @onclick="Cerrar">Cerrar</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Área de impresión -->
+<div id="areaImpresionRecepciones" style="display: none;">
+    <div style="padding: 20px; font-family: Arial, sans-serif;">
+        <div style="text-align: center; margin-bottom: 20px;">
+            <img src="/Images/logoempresa.png" alt="Logo Empresa" style="max-height: 60px; margin-bottom: 10px;" />
+            <h3>RECEPCIONES POR RANGO DE FECHAS</h3>
+            <p>Fecha: @DateTime.Now.ToString("dd/MM/yyyy HH:mm")</p>
+            @if (fechaDesde.HasValue || fechaHasta.HasValue)
+            {
+                <p>
+                    @if (fechaDesde.HasValue) { <span>Desde: @fechaDesde.Value.ToString("dd/MM/yyyy")</span> }
+                    @if (fechaHasta.HasValue) { <span class="ms-3">Hasta: @fechaHasta.Value.ToString("dd/MM/yyyy")</span> }
+                </p>
+            }
+        </div>
+
+        @if (recepciones != null && recepciones.Any())
+        {
+            <table style="width: 100%; border-collapse: collapse; font-size: 9px;">
+                <thead>
+                    <tr style="background-color: #212529; color: white;">
+                        <th style="border: 1px solid #000; padding: 5px;">N° Boleta</th>
+                        <th style="border: 1px solid #000; padding: 5px;">Descripción</th>
+                        <th style="border: 1px solid #000; padding: 5px;">Lote</th>
+                        <th style="border: 1px solid #000; padding: 5px;">Fecha</th>
+                        <th style="border: 1px solid #000; padding: 5px;">Cód.</th>
+                        <th style="border: 1px solid #000; padding: 5px;">UM</th>
+                        <th style="border: 1px solid #000; padding: 5px; text-align: right;">Cantidad</th>
+                        <th style="border: 1px solid #000; padding: 5px;">Dep.</th>
+                        <th style="border: 1px solid #000; padding: 5px;">Prov.</th>
+                        <th style="border: 1px solid #000; padding: 5px;">Remito</th>
+                        <th style="border: 1px solid #000; padding: 5px;">O.C.</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var recep in recepciones)
+                    {
+                        <tr>
+                            <td style="border: 1px solid #000; padding: 3px;">@recep.NumeBoRe?.ToString("N0")</td>
+                            <td style="border: 1px solid #000; padding: 3px;">@recep.Descrip</td>
+                            <td style="border: 1px solid #000; padding: 3px;">@recep.IdenLote</td>
+                            <td style="border: 1px solid #000; padding: 3px;">@recep.FechRecep?.ToString("dd/MM/yyyy")</td>
+                            <td style="border: 1px solid #000; padding: 3px;">@recep.CodInte</td>
+                            <td style="border: 1px solid #000; padding: 3px;">@recep.Unidad</td>
+                            <td style="border: 1px solid #000; padding: 3px; text-align: right;">@recep.CantNom?.ToString("N2")</td>
+                            <td style="border: 1px solid #000; padding: 3px;">@recep.DepoEnt</td>
+                            <td style="border: 1px solid #000; padding: 3px;">@recep.NumProv</td>
+                            <td style="border: 1px solid #000; padding: 3px;">@recep.NumRemProv</td>
+                            <td style="border: 1px solid #000; padding: 3px;">@recep.NumOC</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        }
+    </div>
+</div>
+
+@code {
+    [Parameter] public EventCallback OnCerrar { get; set; }
+
+    private List<Bolrecep>? recepciones;
+    private DateTime? fechaDesde;
+    private DateTime? fechaHasta;
+    private string? codigoDesde;
+    private string? codigoHasta;
+    private bool cargando = false;
+    private bool imprimiendo = false;
+    private bool exportando = false;
+
+    private void LimpiarFiltros()
+    {
+        fechaDesde = null;
+        fechaHasta = null;
+        codigoDesde = null;
+        codigoHasta = null;
+        recepciones = null;
+    }
+
+    private async Task CargarDatosAsync()
+    {
+        try
+        {
+            cargando = true;
+            StateHasChanged();
+
+            var queryParams = new List<string>();
+            
+            if (fechaDesde.HasValue)
+                queryParams.Add($"fechaDesde={fechaDesde.Value:yyyy-MM-dd}");
+            
+            if (fechaHasta.HasValue)
+                queryParams.Add($"fechaHasta={fechaHasta.Value:yyyy-MM-dd}");
+            
+            if (!string.IsNullOrWhiteSpace(codigoDesde))
+                queryParams.Add($"codigoDesde={Uri.EscapeDataString(codigoDesde)}");
+            
+            if (!string.IsNullOrWhiteSpace(codigoHasta))
+                queryParams.Add($"codigoHasta={Uri.EscapeDataString(codigoHasta)}");
+
+            var query = queryParams.Any() ? "?" + string.Join("&", queryParams) : "";
+            var url = $"api/bolrecep/por-rango-fechas{query}";
+
+            var response = await repository.Get<List<Bolrecep>>(url);
+            if (!response.Error)
+            {
+                recepciones = response.Response;
+            }
+            else
+            {
+                await sweetAlertService.FireAsync("Error", "Error al cargar las recepciones", SweetAlertIcon.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            await sweetAlertService.FireAsync("Error", $"Error al cargar datos: {ex.Message}", SweetAlertIcon.Error);
+        }
+        finally
+        {
+            cargando = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task ImprimirAsync()
+    {
+        try
+        {
+            imprimiendo = true;
+            StateHasChanged();
+
+            await Task.Delay(100);
+            await JS.InvokeVoidAsync("imprimirElemento", "areaImpresionRecepciones");
+        }
+        catch (Exception ex)
+        {
+            await sweetAlertService.FireAsync("Error", $"Error al imprimir: {ex.Message}", SweetAlertIcon.Error);
+        }
+        finally
+        {
+            imprimiendo = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task ExportarExcelAsync()
+    {
+        try
+        {
+            exportando = true;
+            StateHasChanged();
+
+            var response = await Http.PostAsJsonAsync("api/excel/exportar-recepciones-rango", recepciones);
+
+            if (!response.IsSuccessStatusCode)
+            {
+                var errorContent = await response.Content.ReadAsStringAsync();
+                await sweetAlertService.FireAsync("Error", $"Error al generar el archivo: {response.StatusCode}", SweetAlertIcon.Error);
+                return;
+            }
+
+            var fileBytes = await response.Content.ReadAsByteArrayAsync();
+            var nombreArchivo = $"Recepciones_Rango_{DateTime.Now:yyyyMMdd_HHmmss}.xlsx";
+            await JS.InvokeVoidAsync("descargarArchivo", nombreArchivo, Convert.ToBase64String(fileBytes));
+
+            await sweetAlertService.FireAsync("Éxito", "Archivo Excel generado correctamente", SweetAlertIcon.Success);
+        }
+        catch (Exception ex)
+        {
+            await sweetAlertService.FireAsync("Error", $"Error al exportar: {ex.Message}", SweetAlertIcon.Error);
+        }
+        finally
+        {
+            exportando = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task Cerrar()
+    {
+        await OnCerrar.InvokeAsync();
+    }
+}

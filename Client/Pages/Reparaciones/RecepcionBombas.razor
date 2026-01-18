@@ -1,0 +1,698 @@
+@page "/recepcion-bombas"
+@page "/recepcion-bombas/{NumRepa:int}"
+@using IMPLANPROD.Client.Shared.Components
+@using static IMPLANPROD.Client.Shared.Components.SelectorClientes
+@using System.Text.Json
+@inject IRepository repository
+@inject SweetAlertService sweetAlertService
+@inject NavigationManager navigationManager
+
+@code {
+    [Parameter] public int? NumRepa { get; set; }
+    private bool modoSoloLectura = false;
+    private string referenciaTexto = string.Empty;
+}
+
+<div class="container-fluid">
+    <h3><i class="fas fa-tools"></i> Recepción de Bombas para Evaluar Reparación @(modoSoloLectura ? "(Solo Lectura)" : "")</h3>
+
+    <!-- INSTRUCTIVO DESPLEGABLE -->
+    <InstructivoPanel Titulo="📖 Instructivo - Proceso de Reparaciones" MostrarPorDefecto="false">
+        <div class="row">
+            <div class="col-md-12">
+                <h5 class="text-primary"><i class="fas fa-route"></i> Flujo del Proceso de Reparaciones</h5>
+                <hr />
+            </div>
+        </div>
+
+        <div class="row">
+            <div class="col-md-4">
+                <div class="card border-primary h-100">
+                    <div class="card-header bg-primary text-white">
+                        <strong>1️⃣ RECEPCIÓN DE EQUIPO</strong>
+                    </div>
+                    <div class="card-body">
+                        <p><strong>Objetivo:</strong> Registrar el ingreso del equipo a reparar</p>
+                        <p><strong>Datos a capturar:</strong></p>
+                        <ul class="small">
+                            <li>Cliente y datos de contacto</li>
+                            <li>Código de reparación típica (opcional)</li>
+                            <li>Descripción del equipo</li>
+                            <li>Número de serie (obligatorio)</li>
+                            <li>Sitio de ingreso</li>
+                            <li>Referencia y remito</li>
+                        </ul>
+                        <p><strong>Resultado:</strong> Se genera un <span class="badge bg-success">Talón N°</span> de recepción</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-md-4">
+                <div class="card border-info h-100">
+                    <div class="card-header bg-info text-white">
+                        <strong>2️⃣ FICHA DE REPARACIÓN</strong>
+                    </div>
+                    <div class="card-body">
+                        <p><strong>Objetivo:</strong> Documentar el diagnóstico y trabajo realizado</p>
+                        <p><strong>Funcionalidades:</strong></p>
+                        <ul class="small">
+                            <li>📸 Galería de imágenes del equipo</li>
+                            <li>📎 Archivos adjuntos (PDF, DOC, etc.)</li>
+                            <li>📋 Inspección y detalles de reparación</li>
+                            <li>🔧 Repuestos necesarios (ORIGEN=0)</li>
+                            <li>📦 Material suministrado por cliente</li>
+                        </ul>
+                        <p><strong>Importante:</strong> Aquí se define qué repuestos se necesitan</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-md-4">
+                <div class="card border-success h-100">
+                    <div class="card-header bg-success text-white">
+                        <strong>3️⃣ PRESUPUESTO</strong>
+                    </div>
+                    <div class="card-body">
+                        <p><strong>Objetivo:</strong> Generar cotización para el cliente</p>
+                        <p><strong>Componentes del presupuesto:</strong></p>
+                        <ul class="small">
+                            <li>Repuestos de reparación típica (REPUESRE)</li>
+                            <li>Repuestos adicionales</li>
+                            <li>Mano de obra (horas × valor hora)</li>
+                            <li>IVA según configuración</li>
+                        </ul>
+                        <p><strong>Cálculo:</strong></p>
+                        <div class="small">
+                            <code>Total = (Repuestos × Coef.) + Adicionales + M.O. + IVA</code>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="row mt-3">
+            <div class="col-md-12">
+                <div class="alert alert-warning">
+                    <h6><i class="fas fa-exclamation-triangle"></i> Notas Importantes:</h6>
+                    <ul class="mb-0 small">
+                        <li><strong>Código de Reparación:</strong> Puede seleccionar una reparación típica predefinida o dejar en blanco para reparación personalizada</li>
+                        <li><strong>Número de Serie:</strong> Es obligatorio para identificar el equipo</li>
+                        <li><strong>Sitio:</strong> Indica dónde ingresó físicamente el equipo (ej: "Taller Principal", "Depósito", etc.)</li>
+                        <li><strong>Talón N°:</strong> Se asigna automáticamente y es único para cada recepción</li>
+                        <li><strong>Impresión:</strong> Después de grabar puede imprimir el talón de recepción</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </InstructivoPanel>
+
+    <EditForm Model="repara" OnValidSubmit="GuardarReparacion">
+        <DataAnnotationsValidator />
+
+        <!-- ============================================ -->
+        <!-- SECCIÓN: ENCABEZADO DE LA RECEPCIÓN         -->
+        <!-- ============================================ -->
+        <div class="card mb-3 shadow-sm">
+            <div class="card-header text-white" style="background: linear-gradient(135deg, #6c757d 0%, #495057 100%);">
+                <h5 class="card-title mb-0">
+                    <i class="fas fa-file-invoice"></i> ENCABEZADO - Datos de la Recepción
+                </h5>
+            </div>
+            <div class="card-body" style="background-color: #f8f9fa;">
+                <!-- Fila 1: Talón y Fecha -->
+                <div class="row mb-3">
+                    <div class="col-md-3">
+                        <label class="form-label fw-bold"><i class="fas fa-hashtag"></i> Talón Nro:</label>
+                        <input type="text" class="form-control form-control-lg bg-white" @bind="talonNumero" readonly style="font-size: 1.2rem; font-weight: bold; color: #667eea;" />
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label fw-bold"><i class="fas fa-calendar"></i> Fecha Recepción:</label>
+                        <input type="date" class="form-control" @bind="repara.FechRecep" readonly="@modoSoloLectura" />
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label fw-bold"><i class="fas fa-tag"></i> Referencia:</label>
+                        <input type="text" class="form-control" @bind="referenciaTexto" maxlength="128" readonly="@modoSoloLectura" placeholder="Referencia interna..." />
+                    </div>
+                </div>
+
+                <!-- Fila 2: Cliente -->
+                <div class="row mb-3">
+                    <div class="col-md-6">
+                        <label class="form-label fw-bold"><i class="fas fa-user"></i> Cliente:</label>
+                        <div class="input-group">
+                            <button type="button" class="btn btn-outline-primary" @onclick="AbrirSelectorCliente" disabled="@modoSoloLectura">
+                                <i class="fas fa-search"></i>
+                            </button>
+                            <input type="text" class="form-control" @bind="clienteSeleccionado" readonly />
+                        </div>
+                        @if (!string.IsNullOrEmpty(repara.Raso_Cli))
+                        {
+                            <small class="text-muted"><i class="fas fa-building"></i> @repara.Raso_Cli</small>
+                        }
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label fw-bold"><i class="fas fa-phone"></i> Teléfono:</label>
+                        <input type="text" class="form-control" @bind="repara.Tele_Cli" maxlength="24" readonly="@modoSoloLectura" />
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label fw-bold"><i class="fas fa-fax"></i> Fax:</label>
+                        <input type="text" class="form-control" @bind="fax" maxlength="24" readonly="@modoSoloLectura" />
+                    </div>
+                </div>
+
+                @if (clienteActual != null)
+                {
+                    <div class="alert alert-info mb-3">
+                        <div class="row">
+                            <div class="col-md-4">
+                                <div class="small"><strong>Razón Social:</strong> @clienteActual.Raso_Cli</div>
+                                <div class="small"><strong>N° Cliente:</strong> @clienteActual.Nume_Cli</div>
+                                <div class="small"><strong>CUIT:</strong> @clienteActual.Cuit_Cli</div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="small"><strong>Tel:</strong> @clienteActual.Tele_Cli</div>
+                                <div class="small"><strong>Fax:</strong> @clienteActual.Faxi_Cli</div>
+                                <div class="small"><strong>Mail:</strong> @clienteActual.Mail_Cli</div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="small"><strong>Domicilio:</strong> @clienteActual.Domi_Cli</div>
+                                <div class="small"><strong>Localidad:</strong> @clienteActual.Loca_Cli</div>
+                                <div class="small"><strong>País:</strong> @clienteActual.Pais_Cli</div>
+                            </div>
+                        </div>
+                    </div>
+                }
+
+            </div>
+        </div>
+
+        <!-- ============================================ -->
+        <!-- SECCIÓN: DETALLE DEL EQUIPO                  -->
+        <!-- ============================================ -->
+        <div class="card mb-3 shadow-sm">
+            <div class="card-header text-white" style="background: linear-gradient(135deg, #17a2b8 0%, #138496 100%);">
+                <h5 class="card-title mb-0">
+                    <i class="fas fa-cog"></i> DETALLE - Información del Equipo
+                </h5>
+            </div>
+            <div class="card-body" style="background-color: #f8f9fa;">
+                <!-- Código de Reparación -->
+                <div class="row mb-3">
+                    <div class="col-md-4">
+                        <label class="form-label fw-bold"><i class="fas fa-wrench"></i> Código de Reparación Típica:</label>
+                        <div class="input-group">
+                            <button type="button" class="btn btn-outline-primary" @onclick="AbrirSelectorCodigoReparacion" disabled="@modoSoloLectura">
+                                <i class="fas fa-search"></i>
+                            </button>
+                            <input type="text" class="form-control" @bind="codigoReparacionSeleccionado" readonly placeholder="(Opcional)" />
+                        </div>
+                        <small class="text-muted">Seleccione si es una reparación estándar</small>
+                    </div>
+                    <div class="col-md-8">
+                        <label class="form-label fw-bold">Descripción de la Reparación:</label>
+                        <input type="text" class="form-control" @bind="descripcionCodigoReparacion" readonly />
+                    </div>
+                </div>
+
+                <!-- Descripción del Equipo -->
+                <div class="row mb-3">
+                    <div class="col-12">
+                        <label class="form-label fw-bold"><i class="fas fa-align-left"></i> Descripción del Equipo:</label>
+                        <textarea class="form-control" 
+                                  rows="3" 
+                                  @bind="repara.Descripcion"
+                                  maxlength="128"
+                                  readonly="@modoSoloLectura"
+                                  placeholder="Describa el equipo recibido..."
+                                  style="font-family: 'Courier New', monospace;">
+                        </textarea>
+                    </div>
+                </div>
+
+                <!-- Serie, Remito y Sitio -->
+                <div class="row mb-3">
+                    <div class="col-md-4">
+                        <label class="form-label fw-bold"><i class="fas fa-barcode"></i> Número de Serie: <span class="text-danger">*</span></label>
+                        <input type="text" 
+                               class="form-control" 
+                               @bind="repara.NumeroSerie" 
+                               maxlength="32"
+                               readonly="@modoSoloLectura"
+                               placeholder="Obligatorio"
+                               required />
+                        <ValidationMessage For="@(() => repara.NumeroSerie)" />
+                        <small class="text-muted">Identificación única del equipo</small>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label fw-bold"><i class="fas fa-file-alt"></i> Remito N°:</label>
+                        <input type="text" class="form-control" @bind="repara.NumRemito" maxlength="18" readonly="@modoSoloLectura" placeholder="Opcional" />
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label fw-bold"><i class="fas fa-map-marker-alt"></i> Sitio de Ingreso: <span class="text-danger">*</span></label>
+                        <textarea class="form-control" 
+                                  rows="2" 
+                                  @bind="repara.Sitio"
+                                  readonly="@modoSoloLectura"
+                                  placeholder="Ej: Taller Principal"
+                                  required>
+                        </textarea>
+                        <ValidationMessage For="@(() => repara.Sitio)" />
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ============================================ -->
+        <!-- SECCIÓN: PIE - Acciones y Totales           -->
+        <!-- ============================================ -->
+        <div class="card shadow-sm">
+            <div class="card-header text-white" style="background: linear-gradient(135deg, #28a745 0%, #20c997 100%);">
+                <h5 class="card-title mb-0">
+                    <i class="fas fa-check-circle"></i> ACCIONES
+                </h5>
+            </div>
+            <div class="card-body bg-light">
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="alert alert-success mb-0">
+                            <h6><i class="fas fa-info-circle"></i> Estado de la Recepción</h6>
+                            <p class="mb-0">Talón N°: <strong class="fs-5">@talonNumero</strong></p>
+                            @if (ultimaReparacionGuardada > 0)
+                            {
+                                <p class="mb-0 text-success"><i class="fas fa-check"></i> Última recepción guardada: <strong>@ultimaReparacionGuardada</strong></p>
+                            }
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="d-flex justify-content-end gap-2 flex-wrap">
+                            <button type="button" class="btn btn-outline-secondary" @onclick="Limpiar" disabled="@modoSoloLectura">
+                                <i class="fas fa-eraser"></i> Limpiar
+                            </button>
+                            @if (ultimaReparacionGuardada > 0)
+                            {
+                                <button type="button" class="btn btn-info" @onclick="ImprimirUltima">
+                                    <i class="fas fa-print"></i> Imprimir Última
+                                </button>
+                            }
+                            <button type="button" class="btn btn-secondary" @onclick="Salir">
+                                <i class="fas fa-arrow-left"></i> Volver
+                            </button>
+                            <button type="submit" class="btn btn-success btn-lg" disabled="@(guardando || modoSoloLectura)">
+                                @if (guardando)
+                                {
+                                    <span class="spinner-border spinner-border-sm me-2"></span>
+                                }
+                                <i class="fas fa-save"></i> Grabar Recepción
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </EditForm>
+</div>
+
+<!-- Componentes de selección -->
+<SelectorClientes @ref="selectorClientes" OnClienteSeleccionado="@OnClienteSeleccionado" />
+<SelectorCodigoReparacion @ref="selectorCodigoReparacion" OnCodigoSeleccionado="@OnCodigoReparacionSeleccionado" />
+
+@code {
+    // DTO para la respuesta del servidor al crear una reparación
+    public class RespuestaCreacionRepara
+    {
+        public Repara? repara { get; set; }
+        public bool numeroModificado { get; set; }
+        public int numeroPantalla { get; set; }
+        public int numeroAsignado { get; set; }
+    }
+
+    private Repara repara = new Repara();
+    private SelectorClientes? selectorClientes;
+    private SelectorCodigoReparacion? selectorCodigoReparacion;
+    private Deudor12? clienteActual;
+    
+    private string clienteSeleccionado = string.Empty;
+    private string codigoReparacionSeleccionado = string.Empty;
+    private string descripcionCodigoReparacion = string.Empty;
+    private string fax = string.Empty;
+    private string talonNumero = string.Empty;
+    private bool guardando = false;
+    private int ultimaReparacionGuardada = 0;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (NumRepa.HasValue && NumRepa.Value > 0)
+        {
+            modoSoloLectura = true;
+            await CargarReparacion(NumRepa.Value);
+        }
+        else
+        {
+            await InicializarFormulario();
+        }
+    }
+
+    private async Task CargarReparacion(int numRepa)
+    {
+        try
+        {
+            var responseHttp = await repository.Get<Repara>($"api/repara/{numRepa}");
+            
+            if (!responseHttp.Error && responseHttp.Response != null)
+            {
+                repara = responseHttp.Response;
+                clienteSeleccionado = repara.Nume_Cli?.ToString() ?? string.Empty;
+                codigoReparacionSeleccionado = repara.CodRepa ?? string.Empty;
+                descripcionCodigoReparacion = repara.Descripcion ?? string.Empty;
+                talonNumero = repara.NumRepa.ToString() ?? string.Empty;
+
+                if (repara.Nume_Cli.HasValue && repara.Nume_Cli.Value > 0)
+                {
+                    await CargarDatosCliente(repara.Nume_Cli.Value);
+                }
+                else
+                {
+                    clienteActual = null;
+                }
+                
+                // Extraer el texto de referencia del campo concatenado
+                // Formato: "S/Nro.XXX - RAZON SOCIAL - R: REFERENCIA - FECHA"
+                ExtraerReferenciaTexto();
+            }
+            else
+            {
+                await sweetAlertService.FireAsync("Error", "No se pudo cargar la reparación", SweetAlertIcon.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            await sweetAlertService.FireAsync("Error", $"Error al cargar reparación: {ex.Message}", SweetAlertIcon.Error);
+        }
+    }
+
+    private async Task InicializarFormulario()
+    {
+        repara = new Repara
+        {
+            FechRecep = DateTime.Now,
+            Status = 0
+        };
+        LimpiarCampos();
+        await CargarSiguienteNumero();
+    }
+
+    private async Task CargarSiguienteNumero()
+    {
+        try
+        {
+            var responseHttp = await repository.Get<int>("api/repara/siguiente-numero");
+            if (!responseHttp.Error)
+            {
+                repara.NumRepa = responseHttp.Response;
+                talonNumero = responseHttp.Response.ToString();
+            }
+        }
+        catch (Exception ex)
+        {
+            await sweetAlertService.FireAsync("Error", $"Error al obtener número de reparación: {ex.Message}", SweetAlertIcon.Error);
+        }
+    }
+
+    private void LimpiarCampos()
+    {
+        clienteSeleccionado = string.Empty;
+        codigoReparacionSeleccionado = string.Empty;
+        descripcionCodigoReparacion = string.Empty;
+        fax = string.Empty;
+        talonNumero = string.Empty;
+    }
+
+    private async Task AbrirSelectorCliente()
+    {
+        if (selectorClientes != null)
+        {
+            await selectorClientes.AbrirModal();
+        }
+    }
+
+    private async Task AbrirSelectorCodigoReparacion()
+    {
+        if (selectorCodigoReparacion != null)
+        {
+            await selectorCodigoReparacion.Abrir();
+        }
+    }
+
+    private async Task OnClienteSeleccionado(ClienteSeleccionado clienteDto)
+    {
+        // Cargar datos completos del cliente usando el endpoint correcto que busca por Nume_Cli
+        try
+        {
+            var responseHttp = await repository.Get<Deudor12>($"api/deudor12/numero/{clienteDto.NumeCli}");
+            if (!responseHttp.Error && responseHttp.Response != null)
+            {
+                var cliente = responseHttp.Response;
+                clienteActual = cliente;
+                repara.Nume_Cli = cliente.Nume_Cli;
+                repara.Raso_Cli = cliente.Raso_Cli;
+                repara.Domi_Cli = cliente.Domi_Cli;
+                repara.Loca_Cli = cliente.Loca_Cli;
+                repara.Pais_Cli = cliente.Pais_Cli;
+                repara.Tele_Cli = cliente.Tele_Cli;
+                repara.Mail_Cli = cliente.Mail_Cli;
+                repara.Cuit_Cli = cliente.Cuit_Cli;
+                repara.Piva_Cli = cliente.Piva_Cli?.ToString();
+
+                // Cargar el fax del cliente
+                fax = cliente.Faxi_Cli ?? string.Empty;
+
+                // Mostrar número y razón social del cliente seleccionado
+                clienteSeleccionado = $"{cliente.Nume_Cli} - {cliente.Raso_Cli}";
+            }
+        }
+        catch (Exception ex)
+        {
+            await sweetAlertService.FireAsync("Error", $"Error al cargar cliente: {ex.Message}", SweetAlertIcon.Error);
+        }
+        StateHasChanged();
+    }
+
+    private async Task CargarDatosCliente(int numeCli)
+    {
+        try
+        {
+            var responseHttp = await repository.Get<Deudor12>($"api/deudor12/numero/{numeCli}");
+            if (!responseHttp.Error && responseHttp.Response != null)
+            {
+                clienteActual = responseHttp.Response;
+                repara.Raso_Cli = clienteActual.Raso_Cli;
+                repara.Domi_Cli = clienteActual.Domi_Cli;
+                repara.Loca_Cli = clienteActual.Loca_Cli;
+                repara.Pais_Cli = clienteActual.Pais_Cli;
+                repara.Tele_Cli = clienteActual.Tele_Cli;
+                repara.Mail_Cli = clienteActual.Mail_Cli;
+                repara.Cuit_Cli = clienteActual.Cuit_Cli;
+                fax = clienteActual.Faxi_Cli ?? string.Empty;
+
+                clienteSeleccionado = $"{clienteActual.Nume_Cli} - {clienteActual.Raso_Cli}";
+            }
+        }
+        catch
+        {
+            clienteActual = null;
+        }
+    }
+
+    private void OnCodigoReparacionSeleccionado(Indirep codigo)
+    {
+        repara.CodRepa = codigo.Codigo;
+        codigoReparacionSeleccionado = codigo.Codigo;
+        descripcionCodigoReparacion = codigo.Descripcion ?? string.Empty;
+        StateHasChanged();
+    }
+
+    private async Task GuardarReparacion()
+    {
+        // Validaciones según VB6
+        if (string.IsNullOrWhiteSpace(repara.NumeroSerie))
+        {
+            await sweetAlertService.FireAsync("Error", "Falta Número de Serie o Identificación del Equipo.", SweetAlertIcon.Error);
+            return;
+        }
+
+        if (repara.NumeroSerie.Length > 32)
+        {
+            await sweetAlertService.FireAsync("Error", "Exceso Longitud Número de Serie (máximo 32 caracteres)", SweetAlertIcon.Error);
+            return;
+        }
+
+        if (!string.IsNullOrEmpty(repara.Referen2) && repara.Referen2.Length > 64)
+        {
+            await sweetAlertService.FireAsync("Error", "Exceso Longitud Referencia (máximo 64 caracteres)", SweetAlertIcon.Error);
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(repara.Sitio))
+        {
+            await sweetAlertService.FireAsync("Error", "Falta Sitio de Ingreso de la Bomba.", SweetAlertIcon.Error);
+            return;
+        }
+
+        try
+        {
+            guardando = true;
+            
+            // Concatenar campo Referen según lógica VB6
+            // REFEPRE$ = "S/Nro." + Text1 + " - " + Left$(TRIM$(Label12), 30) + " - R: " + TRIM$(Text10) + " - " + TRIM$(Text9)
+            ConcatenarReferencia();
+            
+            var responseHttp = await repository.Post<Repara>("api/repara", repara);
+            
+            if (responseHttp.Error)
+            {
+                var message = await responseHttp.GetErrorMessageAsync();
+                await sweetAlertService.FireAsync("Error", message, SweetAlertIcon.Error);
+                return;
+            }
+
+            // Deserializar la respuesta manualmente
+            var jsonResponse = responseHttp.Response?.ToString();
+            if (!string.IsNullOrEmpty(jsonResponse))
+            {
+                var resultado = JsonSerializer.Deserialize<RespuestaCreacionRepara>(jsonResponse, 
+                    new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+                
+                if (resultado != null)
+                {
+                    // Guardar el número de la reparación creada para poder imprimirla
+                    ultimaReparacionGuardada = resultado.numeroAsignado;
+                    
+                    if (resultado.numeroModificado)
+                    {
+                        await sweetAlertService.FireAsync(
+                            "Advertencia",
+                            $"La recepción se creó con el número {resultado.numeroAsignado} en lugar del número {resultado.numeroPantalla} mostrado en pantalla.\n\n" +
+                            $"El número {resultado.numeroPantalla} ya fue ocupado por otra recepción.",
+                            SweetAlertIcon.Warning);
+                    }
+                    else
+                    {
+                        await sweetAlertService.FireAsync(
+                            "Éxito",
+                            $"Reparación registrada correctamente con el número {resultado.numeroAsignado}",
+                            SweetAlertIcon.Success);
+                    }
+                }
+                else
+                {
+                    await sweetAlertService.FireAsync(
+                        "Éxito",
+                        "Reparación registrada correctamente",
+                        SweetAlertIcon.Success);
+                }
+            }
+            else
+            {
+                await sweetAlertService.FireAsync(
+                    "Éxito",
+                    "Reparación registrada correctamente",
+                    SweetAlertIcon.Success);
+            }
+
+            // Limpiar formulario para nueva recepción
+            await InicializarFormulario();
+        }
+        catch (Exception ex)
+        {
+            await sweetAlertService.FireAsync("Error", $"Error al guardar: {ex.Message}", SweetAlertIcon.Error);
+        }
+        finally
+        {
+            guardando = false;
+        }
+    }
+
+    private async Task Limpiar()
+    {
+        await InicializarFormulario();
+        StateHasChanged();
+    }
+
+    private void Salir()
+    {
+        navigationManager.NavigateTo("/recepcion-bombas-evaluacion");
+    }
+
+    private void ImprimirUltima()
+    {
+        if (ultimaReparacionGuardada > 0)
+        {
+            navigationManager.NavigateTo($"/impresion-recepcion-bombas/{ultimaReparacionGuardada}", true);
+        }
+    }
+
+    private void ConcatenarReferencia()
+    {
+        // Lógica VB6: REFEPRE$ = "S/Nro." + Text1 + " - " + Left$(TRIM$(Label12), 30) + " - R: " + TRIM$(Text10) + " - " + TRIM$(Text9)
+        // Text1 = NumeroSerie
+        // Label12 = Raso_Cli
+        // Text10 = referenciaTexto (campo de referencia)
+        // Text9 = FechRecep
+        
+        var numeroSerie = repara.NumeroSerie?.Trim() ?? string.Empty;
+        var razonSocial = repara.Raso_Cli?.Trim() ?? string.Empty;
+        var referencia = referenciaTexto?.Trim() ?? string.Empty;
+        var fecha = repara.FechRecep?.ToString("dd/MM/yyyy") ?? string.Empty;
+        
+        // Limitar razón social a 30 caracteres como en VB6 (Left$(TRIM$(Label12), 30))
+        if (razonSocial.Length > 30)
+        {
+            razonSocial = razonSocial.Substring(0, 30);
+        }
+        
+        // Concatenar según formato VB6
+        repara.Referen = $"S/Nro.{numeroSerie} - {razonSocial} - R: {referencia} - {fecha}";
+    }
+
+    private void ExtraerReferenciaTexto()
+    {
+        // Extraer el texto de referencia del campo concatenado
+        // Formato: "S/Nro.XXX - RAZON SOCIAL - R: REFERENCIA - FECHA"
+        if (string.IsNullOrEmpty(repara.Referen))
+        {
+            referenciaTexto = string.Empty;
+            return;
+        }
+
+        try
+        {
+            // Buscar el marcador " - R: " para extraer la referencia
+            var marcadorR = " - R: ";
+            var indexR = repara.Referen.IndexOf(marcadorR);
+            
+            if (indexR > 0)
+            {
+                // Extraer desde después de " - R: " hasta el último " - "
+                var textoDesdeR = repara.Referen.Substring(indexR + marcadorR.Length);
+                var ultimoGuion = textoDesdeR.LastIndexOf(" - ");
+                
+                if (ultimoGuion > 0)
+                {
+                    referenciaTexto = textoDesdeR.Substring(0, ultimoGuion).Trim();
+                }
+                else
+                {
+                    referenciaTexto = textoDesdeR.Trim();
+                }
+            }
+            else
+            {
+                referenciaTexto = string.Empty;
+            }
+        }
+        catch
+        {
+            referenciaTexto = string.Empty;
+        }
+    }
+}

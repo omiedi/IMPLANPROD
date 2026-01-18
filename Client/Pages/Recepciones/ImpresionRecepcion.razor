@@ -1,0 +1,304 @@
+@using IMPLANPROD.Shared.DTOs
+@using System.Net.Http.Json
+@inject IJSRuntime JS
+@inject SweetAlertService sweetAlertService
+@inject IRepository repository
+@inject HttpClient httpClient
+
+@* 
+    Componente: ImpresionRecepcion
+    Descripción: Componente para imprimir y exportar a Excel el listado de órdenes pendientes de recepción
+*@
+
+@if (MostrarModal)
+{
+    <div class="modal fade show d-block" tabindex="-1" role="dialog">
+        <div class="modal-dialog modal-xl">
+            <div class="modal-content">
+                <div class="modal-header bg-success bg-opacity-10 p-3 rounded-top">
+                    <h5 class="modal-title text-success m-0">@Titulo</h5>
+                    <button type="button" class="btn-close" @onclick="CerrarModal" aria-label="Cerrar"></button>
+                </div>
+
+                <div class="modal-body">
+                    @* Sección para seleccionar las columnas que se mostrarán en el reporte *@
+                    @if (!ImpresionFinalizada)
+                    {
+                        <h5>Seleccioná las columnas que querés incluir:</h5>
+                        <div class="row mb-3">
+                            @foreach (var col in Encabezados)
+                            {
+                                <div class="col-md-3 col-sm-6">
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="checkbox" @bind="ColumnasSeleccionadas[col.Key]" />
+                                        <label class="form-check-label">@col.Value</label>
+                                    </div>
+                                </div>
+                            }
+                        </div>
+                    }
+
+                    @* Contenedor principal del reporte con scroll vertical y horizontal *@
+                    <div style="max-height: 400px; overflow-y: auto; overflow-x: auto;">
+                        @* Elemento con ID único para la impresión *@
+                        <div id="@IdElemento">
+                            <div class="text-center mb-3">
+                                <img src="images/logoempresa.png" alt="Logo" style="max-height: 80px;" />
+                            </div>
+
+                            <h3 class="mt-4 text-center">@Titulo</h3>
+                            <h5 class="text-center mb-3">Proveedor: @RazonSocial</h5>
+
+                            @* Tabla de datos con formato para impresión *@
+                            <table class="table table-bordered table-sm">
+                                <thead>
+                                    <tr>
+                                        @* Genera encabezados de columna basados en las columnas seleccionadas *@
+                                        @foreach (var col in Encabezados.Where(e => ColumnasSeleccionadas[e.Key]))
+                                        {
+                                            <th>@col.Value</th>
+                                        }
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @* Genera filas de datos para cada elemento en la colección *@
+                                    @foreach (var item in Datos)
+                                    {
+                                        <tr>
+                                            @* Muestra solo las propiedades correspondientes a las columnas seleccionadas *@
+                                            @foreach (var prop in Encabezados.Keys.Where(k => ColumnasSeleccionadas[k]))
+                                            {
+                                                <td>@ObtenerValor(item, prop)</td>
+                                            }
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                @* Pie del modal con botones de acción *@
+                <div class="modal-footer">
+                    <button class="btn btn-secondary" @onclick="CerrarModal">Cerrar</button>
+                    @if (!ImpresionFinalizada)
+                    {
+                        @* Botón para imprimir el reporte *@
+                        <button class="btn btn-success" @onclick="Imprimir">🖨️ Imprimir</button>
+                        @* Botón para exportar a Excel *@
+                        <button class="btn btn-outline-success" @onclick="ExportarExcel" disabled="@exportando">
+                            @if (exportando)
+                            {
+                                <span class="spinner-border spinner-border-sm me-1"></span>
+                            }
+                            <i class="fa fa-file-excel-o"></i> Exportar a Excel
+                        </button>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="modal-backdrop fade show"></div>
+}
+
+@code {
+    /// <summary>
+    /// Lista de órdenes pendientes que se mostrarán en el reporte
+    /// </summary>
+    [Parameter] public List<OrdenCompraPendienteDTO> Datos { get; set; } = new();
+
+    /// <summary>
+    /// Diccionario que mapea nombres de propiedades a sus títulos de columna
+    /// </summary>
+    [Parameter] public Dictionary<string, string> Encabezados { get; set; } = new();
+
+    /// <summary>
+    /// Título que se mostrará en el encabezado del reporte
+    /// </summary>
+    [Parameter] public string Titulo { get; set; } = "Recepción de Orden de Compra";
+
+    /// <summary>
+    /// Razón social del proveedor
+    /// </summary>
+    [Parameter] public string RazonSocial { get; set; } = "";
+
+    /// <summary>
+    /// Controla la visibilidad del modal de impresión
+    /// </summary>
+    [Parameter] public bool MostrarModal { get; set; } = false;
+
+    /// <summary>
+    /// Evento que se dispara cuando se cierra el modal
+    /// </summary>
+    [Parameter] public EventCallback OnCerrar { get; set; }
+
+    /// <summary>
+    /// ID único para el elemento HTML que contiene el reporte
+    /// </summary>
+    private string? IdElemento;
+
+    /// <summary>
+    /// Diccionario que almacena qué columnas están seleccionadas para mostrar
+    /// </summary>
+    private Dictionary<string, bool> ColumnasSeleccionadas = new();
+
+    /// <summary>
+    /// Indica si el proceso de impresión ha finalizado
+    /// </summary>
+    private bool ImpresionFinalizada = false;
+
+    /// <summary>
+    /// Indica si se está exportando a Excel
+    /// </summary>
+    private bool exportando = false;
+
+    protected override void OnInitialized()
+    {
+        // Generar ID único para el elemento de impresión
+        IdElemento = $"reporte-recepcion-{Guid.NewGuid()}";
+
+        // Inicializar todas las columnas como seleccionadas por defecto
+        foreach (var encabezado in Encabezados)
+        {
+            ColumnasSeleccionadas[encabezado.Key] = true;
+        }
+    }
+
+    /// <summary>
+    /// Obtiene el valor de una propiedad de un objeto usando reflexión
+    /// </summary>
+    private string ObtenerValor(OrdenCompraPendienteDTO item, string nombrePropiedad)
+    {
+        try
+        {
+            var propiedad = item.GetType().GetProperty(nombrePropiedad);
+            if (propiedad == null) return "";
+
+            var valor = propiedad.GetValue(item);
+            if (valor == null) return "";
+
+            // Formateo especial para tipos específicos
+            if (valor is DateTime fecha)
+            {
+                return fecha.ToString("dd/MM/yyyy");
+            }
+            else if (valor is decimal numero)
+            {
+                return numero.ToString("N2");
+            }
+            else if (valor is bool booleano)
+            {
+                return booleano ? "Sí" : "No";
+            }
+
+            return valor.ToString() ?? "";
+        }
+        catch
+        {
+            return "";
+        }
+    }
+
+    /// <summary>
+    /// Imprime el reporte usando JavaScript
+    /// </summary>
+    private async Task Imprimir()
+    {
+        try
+        {
+            Console.WriteLine($"[ImpresionRecepcion] 🖨️ Iniciando impresión del elemento: {IdElemento}");
+            
+            // Verificar que el elemento existe antes de intentar imprimir
+            var elementoExiste = await JS.InvokeAsync<bool>("eval", $"document.getElementById('{IdElemento}') !== null");
+            
+            if (!elementoExiste)
+            {
+                Console.WriteLine($"[ImpresionRecepcion] ❌ No se encontró el elemento con ID: {IdElemento}");
+                await sweetAlertService.FireAsync("Error", "No se pudo encontrar el contenido a imprimir", SweetAlertIcon.Error);
+                return;
+            }
+
+            await JS.InvokeVoidAsync("imprimirElemento", IdElemento);
+            Console.WriteLine($"[ImpresionRecepcion] ✅ Impresión iniciada correctamente");
+            
+            ImpresionFinalizada = true;
+            StateHasChanged();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[ImpresionRecepcion] ❌ Error al imprimir: {ex.Message}");
+            Console.WriteLine($"[ImpresionRecepcion] Stack trace: {ex.StackTrace}");
+            await sweetAlertService.FireAsync("Error", $"Error al imprimir: {ex.Message}", SweetAlertIcon.Error);
+        }
+    }
+
+    /// <summary>
+    /// Exporta los datos a Excel
+    /// </summary>
+    private async Task ExportarExcel()
+    {
+        try
+        {
+            exportando = true;
+            StateHasChanged();
+
+            Console.WriteLine($"[ImpresionRecepcion] 📊 Iniciando exportación a Excel");
+
+            // Filtrar solo las columnas seleccionadas
+            var datosParaExportar = Datos.Select(item =>
+            {
+                var dict = new Dictionary<string, object?>();
+                foreach (var col in Encabezados.Keys.Where(k => ColumnasSeleccionadas[k]))
+                {
+                    var propiedad = item.GetType().GetProperty(col);
+                    dict[Encabezados[col]] = propiedad?.GetValue(item);
+                }
+                return dict;
+            }).ToList();
+
+            Console.WriteLine($"[ImpresionRecepcion] 📝 Datos preparados: {datosParaExportar.Count} registros");
+
+            // Llamar al endpoint de exportación usando HttpClient directamente
+            var response = await httpClient.PostAsJsonAsync("api/excel/exportar-recepcion", datosParaExportar);
+
+            if (!response.IsSuccessStatusCode)
+            {
+                var errorContent = await response.Content.ReadAsStringAsync();
+                Console.WriteLine($"[ImpresionRecepcion] ❌ Error en respuesta: {errorContent}");
+                await sweetAlertService.FireAsync("Error", $"Error al generar el archivo: {response.StatusCode}", SweetAlertIcon.Error);
+                return;
+            }
+
+            // Leer el archivo como bytes
+            var fileBytes = await response.Content.ReadAsByteArrayAsync();
+            Console.WriteLine($"[ImpresionRecepcion] 📦 Archivo recibido: {fileBytes.Length} bytes");
+
+            // Descargar el archivo
+            var nombreArchivo = $"Recepcion_{RazonSocial.Replace(" ", "_")}_{DateTime.Now:yyyyMMdd_HHmmss}.xlsx";
+            await JS.InvokeVoidAsync("descargarArchivo", nombreArchivo, Convert.ToBase64String(fileBytes));
+
+            Console.WriteLine($"[ImpresionRecepcion] ✅ Exportación completada exitosamente");
+            await sweetAlertService.FireAsync("Éxito", "Archivo Excel generado correctamente", SweetAlertIcon.Success);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[ImpresionRecepcion] ❌ Error al exportar: {ex.Message}");
+            Console.WriteLine($"[ImpresionRecepcion] Stack trace: {ex.StackTrace}");
+            await sweetAlertService.FireAsync("Error", $"Error al exportar: {ex.Message}", SweetAlertIcon.Error);
+        }
+        finally
+        {
+            exportando = false;
+            StateHasChanged();
+        }
+    }
+
+    /// <summary>
+    /// Cierra el modal y notifica al componente padre
+    /// </summary>
+    private async Task CerrarModal()
+    {
+        ImpresionFinalizada = false;
+        await OnCerrar.InvokeAsync();
+    }
+}

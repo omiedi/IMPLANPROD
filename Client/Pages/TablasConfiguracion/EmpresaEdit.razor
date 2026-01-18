@@ -1,0 +1,61 @@
+﻿@page "/empresas/edit/{Id:int}"
+@inject IRepository repository
+@inject NavigationManager navigationManager
+@inject SweetAlertService sweetAlertService
+
+<h3>Editar Empresa</h3>
+
+@if (empresa is null)
+{
+    <div class="spinner" />
+}
+else
+{
+    <EmpresaForm @ref="empresaForm" Empresa="empresa" OnValidSubmit="EditAsync" ReturnAction="Return" />
+}
+
+@code {
+    private Empresa? empresa;
+    private EmpresaForm? empresaForm;
+
+    [Parameter]
+    public int Id { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        var responseHttp = await repository.Get<Empresa>($"/api/empresas/{Id}");
+        if (responseHttp.Error)
+        {
+            if (responseHttp.HttpResponseMessage.StatusCode == HttpStatusCode.NotFound)
+            {
+                navigationManager.NavigateTo("/empresas");
+                return;
+            }
+
+            var message = await responseHttp.GetErrorMessageAsync();
+            await sweetAlertService.FireAsync("Error", message, SweetAlertIcon.Error);
+            return;
+        }
+
+        empresa = responseHttp.Response;
+    }
+
+    private async Task EditAsync()
+    {
+        var responseHttp = await repository.Put("/api/empresas", empresa);
+        if (responseHttp.Error)
+        {
+            var message = await responseHttp.GetErrorMessageAsync();
+            await sweetAlertService.FireAsync("Error", message, SweetAlertIcon.Error);
+            return;
+        }
+
+        Return();
+    }
+
+    private void Return()
+    {
+        empresaForm!.FormPostedSuccessfully = true;
+        navigationManager.NavigateTo("/empresas");
+    }
+}

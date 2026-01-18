@@ -1,0 +1,66 @@
+@using Microsoft.AspNetCore.Components.Authorization
+@using Blazored.Toast
+@using Blazored.Toast.Services
+@using Blazored.Toast.Configuration
+@inject NavigationManager NavigationManager
+@inject IRepository Repository
+
+<CascadingBlazoredModal Position="ModalPosition.Middle" Size="ModalSize.Large" HideHeader="true"
+                        DisableBackgroundCancel="true" AnimationType="ModalAnimationType.FadeInOut">
+    <CascadingAuthenticationState>
+        <Router AppAssembly="@typeof(App).Assembly">
+            <Found Context="routeData">
+                <AuthorizeRouteView RouteData="@routeData" DefaultLayout="@typeof(MainLayout)">
+                    <NotAuthorized>
+                        @{
+                            // Si la ruta actual no es login y el usuario no está autenticado, redirigir a login
+                            // if (!NavigationManager.Uri.EndsWith("/login", StringComparison.OrdinalIgnoreCase) && 
+                            //     context.User.Identity?.IsAuthenticated != true)
+                            // {
+                            //     NavigationManager.NavigateTo("/login", true);
+                            // }
+                            // else
+                            // {
+                            //     <p>Lo siento, no está autorizado para acceder a esta página.</p>
+                            // }
+                        }
+                    </NotAuthorized>
+                    <Authorizing>
+                        <div class="d-flex justify-content-center align-items-center" style="height: 100vh;">
+                            <div class="spinner-border text-primary" role="status">
+                                <span class="visually-hidden">Cargando...</span>
+                            </div>
+                        </div>
+                    </Authorizing>
+                </AuthorizeRouteView>
+                <FocusOnNavigate RouteData="@routeData" Selector="h1" />
+            </Found>
+            <NotFound>
+                <PageTitle>No encontrado</PageTitle>
+                <LayoutView Layout="@typeof(MainLayout)">
+                    <p role="alert">Lo siento, no hay nada en esta dirección.</p>
+                </LayoutView>
+            </NotFound>
+        </Router>
+    </CascadingAuthenticationState>
+    <BlazoredToasts Position="ToastPosition.BottomRight"
+                    Timeout="5"
+                    IconType="IconType.FontAwesome"
+                    SuccessClass="success-toast-override"
+                    SuccessIcon="fa fa-check"
+                    ErrorIcon="fa fa-times"
+                    InfoIcon="fa fa-info"
+                    WarningIcon="fa fa-warning" />
+</CascadingBlazoredModal>
+
+@code {
+    protected override async Task OnInitializedAsync()
+    {
+        var token = await Repository.GetTokenAsync();
+        if (string.IsNullOrEmpty(token) && 
+            !NavigationManager.Uri.EndsWith("/login", StringComparison.OrdinalIgnoreCase))
+        {
+            // NavigationManager.NavigateTo("/login", true);
+        }
+    }
+}

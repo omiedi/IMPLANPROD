@@ -1,0 +1,36 @@
+@page "/TablasAuxiliares/TipoMaterial/Tatimat/create"
+@inject IRepository repository
+@inject NavigationManager navigationManager
+@inject SweetAlertService sweetAlertService
+@inject IModalService Modal
+
+<h3>Crear Tipo de Material</h3>
+
+<TatimatForm @ref="tatimatForm" Tatimat="tatimat" OnValidSubmit="Create" ReturnAction="Return" IsEdit="false" />
+
+@code {
+    private Tatimat tatimat = new();
+    private TatimatForm? tatimatForm;
+    [CascadingParameter]
+    BlazoredModalInstance BlazoredModal { get; set; } = default!;
+
+    private async Task Create()
+    {
+        var responseHttp = await repository.Post("/api/tipomaterial", tatimat);
+        if (responseHttp.Error)
+        {
+            var mensajeError = await responseHttp.GetErrorMessageAsync();
+            await sweetAlertService.FireAsync("Error", mensajeError, SweetAlertIcon.Error);
+            return;
+        }
+
+        await BlazoredModal.CloseAsync(ModalResult.Ok());
+        Return();
+    }
+
+    private void Return()
+    {
+        tatimatForm!.FormPostedSuccessfully = true;
+        navigationManager.NavigateTo("/TablasAuxiliares/TipoMaterial/Tatimat");
+    }
+}

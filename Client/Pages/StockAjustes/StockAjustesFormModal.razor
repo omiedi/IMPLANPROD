@@ -1,0 +1,205 @@
+@* Componente modal para realizar ajustes de stock
+   Este componente permite realizar ajustes de ingreso o salida de stock por depósito *@
+
+@using IMPLANPROD.Shared.Entities
+@using IMPLANPROD.Shared.DTOs
+@inject IRepository repository
+@inject SweetAlertService sweetAlertService
+
+@if (Visible)
+{
+    <div class="modal fade show" style="display: block" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header bg-primary text-white">
+                    <h5 class="modal-title">Ajuste de Stock - @Repuesto?.Descripcion </h5>
+                    <button type="button" class="btn-close btn-close-white" @onclick="OnClose"></button>
+                </div>
+                <div class="modal-body">
+                    <EditForm Model="ajuste" OnValidSubmit="OnValidSubmit">
+                        <DataAnnotationsValidator />
+
+                        <div class="mb-3">
+                            <label class="form-label">Depósito: @StockDeposito?.Deposito</label>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label">Stock Actual: @stockActual.ToString("N2")</label>
+                        </div>
+
+                        <div class="row mb-3">
+                            <div class="col-6">
+                                <div class="form-group">
+                                    <label class="form-label">Ingreso</label>
+                                    <div class="input-group">
+                                        <InputNumber class="form-control" @bind-Value="ajuste.Ingreso"
+                                                   disabled="@(ajuste.Salida > 0)"
+                                                   @onblur="CalcularNuevoStock"
+                                                   @oninput="CalcularNuevoStock" />
+                                        <button class="btn btn-outline-secondary" type="button"
+                                                disabled="@(ajuste.Salida > 0)"
+                                                @onclick="() => LimpiarCampo(true)">
+                                            <i class="oi oi-x"></i>
+                                        </button>
+                                    </div>
+                                    <ValidationMessage For="@(() => ajuste.Ingreso)" />
+                                </div>
+                            </div>
+                            <div class="col-6">
+                                <div class="form-group">
+                                    <label class="form-label">Salida</label>
+                                    <div class="input-group">
+                                        <InputNumber class="form-control" @bind-Value="ajuste.Salida"
+                                                   disabled="@(ajuste.Ingreso > 0)"
+                                                   @onblur="CalcularNuevoStock"
+                                                   @oninput="CalcularNuevoStock" />
+                                        <button class="btn btn-outline-secondary" type="button"
+                                                disabled="@(ajuste.Ingreso > 0)"
+                                                @onclick="() => LimpiarCampo(false)">
+                                            <i class="oi oi-x"></i>
+                                        </button>
+                                    </div>
+                                    <ValidationMessage For="@(() => ajuste.Salida)" />
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label">Stock Resultante</label>
+                            @if (stockResultante < 0)
+                            {
+                                <div class="text-danger">¡Atención! El stock quedará en negativo</div>
+                            }
+                            else if (stockResultante != stockActual)
+                            {
+                                <div class="text-info">El stock se ajustará de @stockActual.ToString("N2") a @stockResultante.ToString("N2")</div>
+                            }
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label">Referencia</label>
+                            <InputText class="form-control" @bind-Value="ajuste.Referencia" maxlength="32" />
+                            <ValidationMessage For="@(() => ajuste.Referencia)" />
+                        </div>
+
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-secondary" @onclick="OnClose" disabled="@procesando">Cancelar</button>
+                            <button type="submit" class="btn btn-primary" disabled="@procesando">
+                                @if (procesando)
+                                {
+                                    <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
+                                    <span> Procesando...</span>
+                                }
+                                else
+                                {
+                                    <span>Guardar</span>
+                                }
+                            </button>
+                        </div>
+                    </EditForm>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+<div class="modal-backdrop fade show"></div>
+
+@code {
+    private decimal stockResultante;
+    private decimal stockActual;
+    private StockAjusteDTO ajuste = new() { Referencia = "Ajuste de Stock" };
+    private bool procesando = false;
+
+    [Parameter] public ProductoConSaldoDTO? Repuesto { get; set; }
+    [Parameter] public StockDepositoDTO? StockDeposito { get; set; }
+    [Parameter] public EventCallback OnClose { get; set; }
+    [Parameter] public EventCallback OnSave { get; set; }
+    [Parameter] public bool Visible { get; set; }
+
+    protected override void OnInitialized()
+    {
+        stockActual = StockDeposito?.Stock ?? 0;
+        stockResultante = stockActual;
+        ajuste = new StockAjusteDTO
+        {
+            CodInte = Repuesto?.Cod_inte,
+            CodExte = Repuesto?.Codigo ?? string.Empty,
+            Descripcion = Repuesto?.Descripcion ?? string.Empty,
+            Deposito = StockDeposito?.Deposito,
+            Ingreso = 0,
+            Salida = 0,
+            Referencia = "Ajuste de Stock"
+        };
+    }
+
+    private void LimpiarCampo(bool esIngreso)
+    {
+        if (esIngreso)
+        {
+            ajuste.Ingreso = 0;
+        }
+        else
+        {
+            ajuste.Salida = 0;
+        }
+        CalcularNuevoStock();
+    }
+
+    private void CalcularNuevoStock()
+    {
+        stockResultante = stockActual + ajuste.Ingreso - ajuste.Salida;
+    }
+
+    private async Task OnValidSubmit()
+    {
+        if (ajuste.Ingreso == 0 && ajuste.Salida == 0)
+        {
+            await sweetAlertService.FireAsync("Error", "Debe ingresar una cantidad de ingreso o salida", SweetAlertIcon.Error);
+            return;
+        }
+        
+        procesando = true;
+        StateHasChanged();
+
+        if (stockResultante < 0)
+        {
+            var confirmacion = await sweetAlertService.FireAsync(new SweetAlertOptions
+            {
+                Title = "¡Atención!",
+                Text = "El stock quedará en negativo. ¿Desea continuar?",
+                Icon = SweetAlertIcon.Warning,
+                ShowCancelButton = true,
+                ConfirmButtonText = "Sí, continuar",
+                CancelButtonText = "Cancelar"
+            });
+
+            if (!confirmacion.IsConfirmed)
+            {
+                return;
+            }
+        }
+
+        try
+        {
+            var response = await repository.Post("api/stockajustes/ajuste", ajuste);
+            if (response.Error)
+            {
+                var mensaje = await response.HttpResponseMessage.Content.ReadAsStringAsync();
+                await sweetAlertService.FireAsync("Error", mensaje, SweetAlertIcon.Error);
+                procesando = false;
+                StateHasChanged();
+                return;
+            }
+
+            await sweetAlertService.FireAsync("Éxito", "Ajuste guardado correctamente", SweetAlertIcon.Success);
+            await OnSave.InvokeAsync();
+            await OnClose.InvokeAsync();
+        }
+        catch (Exception ex)
+        {
+            await sweetAlertService.FireAsync("Error", "No se pudo guardar el ajuste", SweetAlertIcon.Error);
+            procesando = false;
+            StateHasChanged();
+        }
+    }
+}

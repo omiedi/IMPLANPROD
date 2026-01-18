@@ -1,0 +1,775 @@
+@page "/recepcion-bombas-evaluacion"
+@using IMPLANPROD.Shared.Entities
+@using IMPLANPROD.Client.Repositories
+@using IMPLANPROD.Client.Shared.Components
+@using IMPLANPROD.Client.Services
+@inject IRepository repository
+@inject NavigationManager navigationManager
+@inject SweetAlertService sweetAlertService
+
+<PageTitle>Recepción de Bombas para Evaluación</PageTitle>
+
+<div class="container-fluid">
+    <!-- Título de la página -->
+    <div class="mb-4">
+        <h2 class="text-center fw-bold text-primary">
+            <i class="fas fa-clipboard-check me-2"></i>
+            RECEPCIÓN DE BOMBAS PARA EVALUACIÓN
+        </h2>
+        <hr class="border-primary border-2 opacity-50" />
+    </div>
+
+    <!-- Botones de acción -->
+    <div class="mb-3">
+        <div class="d-flex gap-2">
+            <button class="btn btn-success" @onclick="NuevaRecepcion">
+                <i class="fas fa-plus"></i> Nueva Recepción
+            </button>
+            <button class="btn btn-info" @onclick="AbrirConfiguracionCodGenerico">
+                <i class="fas fa-cog"></i> Configuración
+            </button>
+            <button class="btn btn-secondary" @onclick="AbrirConfiguracionRTip">
+                <i class="fas fa-cog"></i>  Reparaciones tipícas
+            </button>
+        </div>
+    </div>
+
+    @if (mostrarModalConfiguracion)
+    {
+        <div class="modal-backdrop fade show"></div>
+        <div class="modal fade show d-block" tabindex="-1" role="dialog">
+            <div class="modal-dialog modal-lg" role="document">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title">
+                            <i class="fas fa-cog"></i> Configuración
+                        </h5>
+                        <button type="button" class="btn-close" aria-label="Close" @onclick="CerrarModalConfiguracion"></button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="alert alert-info">
+                            <strong>Parámetro:</strong> Código genérico<br />
+@*                             <strong>Equivalente VB6:</strong> Control$("REPARA", "CODGENER")<br />
+                            <strong>Tabla:</strong> FLEXCRL
+ *@                        </div>
+
+                        @if (cargandoConfiguracion)
+                        {
+                            <div class="text-center">
+                                <div class="spinner-border" role="status">
+                                    <span class="visually-hidden">Cargando...</span>
+                                </div>
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="row mb-3">
+                                <div class="col-md-12">
+                                    <label class="form-label fw-bold">Código genérico (MASTER.CODIGO)</label>
+                                    <div class="input-group">
+                                        <input class="form-control" value="@codigoGenerico" readonly />
+                                        <button class="btn btn-outline-primary" type="button" @onclick="AbrirSelectorProductoCodGenerico">
+                                            <i class="fas fa-search"></i> Buscar
+                                        </button>
+                                    </div>
+                                    @if (!string.IsNullOrWhiteSpace(descripcionCodigoGenerico))
+                                    {
+                                        <small class="text-muted">@descripcionCodigoGenerico</small>
+                                    }
+                                </div>
+                            </div>
+
+                            <div class="row mb-3">
+                                <div class="col-md-6">
+                                    <label class="form-label fw-bold">C-H Mano de obra:</label>
+                                    <input type="text" class="form-control" @bind="valorHora" maxlength="50" />
+                                    <small class="text-muted">REPARA - VALHORA</small>
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label fw-bold">Coefic. Presupuesto</label>
+                                    <input type="text" class="form-control" @bind="coeficientePrearancel" maxlength="50" />
+                                    <small class="text-muted">REPARA - COEFPREA</small>
+                                </div>
+                            </div>
+                        }
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" @onclick="CerrarModalConfiguracion" disabled="@guardandoConfiguracion">
+                            Cerrar
+                        </button>
+                        <button type="button" class="btn btn-primary" @onclick="GuardarConfiguracionCodGenericoAsync" disabled="@(cargandoConfiguracion || guardandoConfiguracion)">
+                            @if (guardandoConfiguracion)
+                            {
+                                <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
+                                <span class="ms-1">Guardando...</span>
+                            }
+                            else
+                            {
+                                <i class="fas fa-save"></i>
+                                <span class="ms-1">Guardar</span>
+                            }
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+
+    <!-- Filtros de búsqueda -->
+    <div class="card mb-3">
+        <div class="card-header">
+            <h6 class="mb-0">
+                <i class="fas fa-filter"></i> Filtros de Búsqueda
+            </h6>
+        </div>
+        <div class="card-body">
+            <div class="row">
+                <div class="col-md-2">
+                    <label class="form-label fw-bold">ID:</label>
+                    <input type="number" class="form-control" @bind="filtroId" @bind:event="oninput" placeholder="ID..." />
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label fw-bold">N° Reparación:</label>
+                    <input type="number" class="form-control" @bind="filtroNumRepa" @bind:event="oninput" placeholder="N° Repa..." />
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label fw-bold">Fecha Desde:</label>
+                    <input type="date" class="form-control" @bind="filtroFechaDesde" @bind:event="oninput" />
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label fw-bold">Fecha Hasta:</label>
+                    <input type="date" class="form-control" @bind="filtroFechaHasta" @bind:event="oninput" />
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label fw-bold">N° Cliente:</label>
+                    <input type="number" class="form-control" @bind="filtroNumeCli" @bind:event="oninput" placeholder="N° Cliente..." />
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label fw-bold">Estado:</label>
+                    <select class="form-select" @bind="filtroStatus" @bind:event="oninput">
+                        <option value="">Todos</option>
+                        <option value="0">Activos</option>
+                        <option value="-1">Anulados</option>
+                    </select>
+                </div>
+            </div>
+            <div class="row mt-2">
+                <div class="col-md-4">
+                    <label class="form-label fw-bold">Razón Social:</label>
+                    <input type="text" class="form-control" @bind="filtroRasoCli" @bind:event="oninput" placeholder="Razón Social..." />
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label fw-bold">Código Reparación:</label>
+                    <input type="text" class="form-control" @bind="filtroCodRepa" @bind:event="oninput" placeholder="Código..." />
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label fw-bold">N° Serie:</label>
+                    <input type="text" class="form-control" @bind="filtroNumeroSerie" @bind:event="oninput" placeholder="N° Serie..." />
+                </div>
+                <div class="col-md-2 d-flex align-items-end">
+                    <button class="btn btn-primary w-100" @onclick="ApplyFilterAsync">
+                        <i class="fas fa-filter"></i> Filtrar
+                    </button>
+                </div>
+            </div>
+            <div class="row mt-2">
+                <div class="col-12 text-end">
+                    <button class="btn btn-outline-secondary" @onclick="CleanFilterAsync">
+                        <i class="fas fa-eraser"></i> Limpiar Filtros
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Paginación superior -->
+    <Pagination CurrentPage="currentPage"
+                TotalPages="totalPages"
+                SelectedPage="SelectedPageAsync" />
+
+    <!-- Tabla de recepciones -->
+    <div class="card">
+        <div class="card-body">
+            @if (recepciones == null)
+            {
+                <div class="text-center">
+                    <div class="spinner-border" role="status">
+                        <span class="visually-hidden">Cargando...</span>
+                    </div>
+                </div>
+            }
+            else if (!recepciones.Any())
+            {
+                <div class="alert alert-info text-center">
+                    <i class="fas fa-info-circle"></i> No se encontraron recepciones de bombas.
+                </div>
+            }
+            else
+            {
+                <div class="table-responsive">
+                    <table class="table table-striped table-hover">
+                        <thead class="table-dark">
+                            <tr>
+                                <th>ID</th>
+                                <th>N° Repa</th>
+                                <th>Fecha Recep.</th>
+                                <th>N° Cliente</th>
+                                <th>Razón Social</th>
+                                <th>Cód. Repa</th>
+                                <th>N° Serie</th>
+                                <th>Estado</th>
+                                <th>Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var recepcion in recepciones)
+                            {
+                                <tr>
+                                    <td>@recepcion.Id</td>
+                                    <td><strong>@recepcion.NumRepa</strong></td>
+                                    <td>@recepcion.FechRecep?.ToString("dd/MM/yyyy")</td>
+                                    <td>@recepcion.Nume_Cli</td>
+                                    <td>@recepcion.Raso_Cli</td>
+                                    <td>@recepcion.CodRepa</td>
+                                    <td>@recepcion.NumeroSerie</td>
+                                    <td>
+                                        @if (recepcion.Status == 0)
+                                        {
+                                            <span class="badge bg-success">Activo</span>
+                                        }
+                                        else if (recepcion.Status == -1)
+                                        {
+                                            <span class="badge bg-danger">Anulado</span>
+                                        }
+                                        else
+                                        {
+                                            <span class="badge bg-secondary">@recepcion.Status</span>
+                                        }
+                                    </td>
+                                    <td>
+                                        <div class="btn-group" role="group">
+                                            <button class="btn btn-sm btn-outline-info" 
+                                                    @onclick="(() => VerFichaReparacion(recepcion.NumRepa))" 
+                                                    title="Ficha Reparación">
+                                                <i class="fas fa-file-alt"></i>
+                                            </button>
+                                            <button class="btn btn-sm btn-outline-primary" 
+                                                    @onclick="(() => VerRecepcion(recepcion.NumRepa))" 
+                                                    title="Ver">
+                                                <i class="fas fa-eye"></i>
+                                            </button>
+                                            <button class="btn btn-sm btn-outline-success" 
+                                                    @onclick="(() => ImprimirRecepcion(recepcion.NumRepa))" 
+                                                    title="Imprimir">
+                                                <i class="fas fa-print"></i>
+                                            </button>
+                                            @if (recepcion.Status == -1)
+                                            {
+                                                <button class="btn btn-sm btn-outline-warning" 
+                                                        @onclick="(() => ReactivarRecepcion(recepcion))" 
+                                                        title="Reactivar">
+                                                    <i class="fas fa-undo"></i>
+                                                </button>
+                                            }
+                                            else
+                                            {
+                                                <button class="btn btn-sm btn-outline-danger" 
+                                                        @onclick="(() => AnularRecepcion(recepcion))" 
+                                                        title="Anular">
+                                                    <i class="fas fa-ban"></i>
+                                                </button>
+                                            }
+                                        </div>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        </div>
+    </div>
+
+    <!-- Paginación inferior -->
+    <Pagination CurrentPage="currentPage"
+                TotalPages="totalPages"
+                SelectedPage="SelectedPageAsync" />
+</div>
+
+<SelectorProductos @ref="selectorProductosCodGenericoRef"
+                  PermitirCantidad="false"
+                  CantidadDefault="1"
+                  OnProductoSeleccionado="OnProductoCodGenericoSeleccionado"
+                  OnClose="OnCloseSelectorProductoCodGenerico" />
+
+@code {
+    private List<Repara>? recepciones;
+    private int currentPage = 1;
+    private int totalPages;
+
+    private bool mostrarModalConfiguracion;
+    private bool cargandoConfiguracion;
+    private bool guardandoConfiguracion;
+    private string codigoGenerico = string.Empty;
+    private string descripcionCodigoGenerico = string.Empty;
+    private string valorHora = string.Empty;
+    private string coeficientePrearancel = string.Empty;
+
+    private SelectorProductos? selectorProductosCodGenericoRef;
+
+    // Filtros
+    private int? filtroId;
+    private int? filtroNumRepa;
+    private DateTime? filtroFechaDesde;
+    private DateTime? filtroFechaHasta;
+    private int? filtroNumeCli;
+    private string filtroRasoCli = string.Empty;
+    private string filtroCodRepa = string.Empty;
+    private string filtroNumeroSerie = string.Empty;
+    private string filtroStatus = string.Empty;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync(int page = 1)
+    {
+        try
+        {
+            // Construir URL con parámetros de consulta
+            var url = $"api/repara?page={page}&recordsNumber=10";
+
+            // Agregar filtros solo si tienen valores válidos
+            if (filtroId.HasValue && filtroId > 0)
+            {
+                url += $"&filtroId={filtroId}";
+            }
+
+            if (filtroNumRepa.HasValue && filtroNumRepa > 0)
+            {
+                url += $"&filtroNumRepa={filtroNumRepa}";
+            }
+
+            if (filtroFechaDesde.HasValue)
+            {
+                url += $"&filtroFechaDesde={filtroFechaDesde.Value:yyyy-MM-dd}";
+            }
+
+            if (filtroFechaHasta.HasValue)
+            {
+                url += $"&filtroFechaHasta={filtroFechaHasta.Value:yyyy-MM-dd}";
+            }
+
+            if (filtroNumeCli.HasValue && filtroNumeCli > 0)
+            {
+                url += $"&filtroNumeCli={filtroNumeCli}";
+            }
+
+            if (!string.IsNullOrWhiteSpace(filtroRasoCli))
+            {
+                url += $"&filtroRasoCli={Uri.EscapeDataString(filtroRasoCli)}";
+            }
+
+            if (!string.IsNullOrWhiteSpace(filtroCodRepa))
+            {
+                url += $"&filtroCodRepa={Uri.EscapeDataString(filtroCodRepa)}";
+            }
+
+            if (!string.IsNullOrWhiteSpace(filtroNumeroSerie))
+            {
+                url += $"&filtroNumeroSerie={Uri.EscapeDataString(filtroNumeroSerie)}";
+            }
+
+            if (!string.IsNullOrWhiteSpace(filtroStatus))
+            {
+                url += $"&filtroStatus={Uri.EscapeDataString(filtroStatus)}";
+            }
+
+            Console.WriteLine($"Cargando recepciones desde: {url}");
+
+            var responseHttp = await repository.Get<List<Repara>>(url);
+            
+            if (responseHttp.Error)
+            {
+                var message = await responseHttp.GetErrorMessageAsync();
+                await sweetAlertService.FireAsync("Error", $"Error al cargar recepciones: {message}", SweetAlertIcon.Error);
+                return;
+            }
+
+            recepciones = responseHttp.Response;
+            Console.WriteLine($"Se cargaron {recepciones?.Count ?? 0} recepciones");
+
+            await LoadTotalPagesAsync();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error inesperado: {ex.Message}");
+            await sweetAlertService.FireAsync("Error", $"Error inesperado: {ex.Message}", SweetAlertIcon.Error);
+        }
+    }
+
+    private async Task LoadTotalPagesAsync()
+    {
+        try
+        {
+            var url = $"api/repara/totalPages?recordsNumber=10";
+
+            // Aplicar los mismos filtros que en LoadAsync
+            if (filtroId.HasValue && filtroId > 0)
+            {
+                url += $"&filtroId={filtroId}";
+            }
+
+            if (filtroNumRepa.HasValue && filtroNumRepa > 0)
+            {
+                url += $"&filtroNumRepa={filtroNumRepa}";
+            }
+
+            if (filtroFechaDesde.HasValue)
+            {
+                url += $"&filtroFechaDesde={filtroFechaDesde.Value:yyyy-MM-dd}";
+            }
+
+            if (filtroFechaHasta.HasValue)
+            {
+                url += $"&filtroFechaHasta={filtroFechaHasta.Value:yyyy-MM-dd}";
+            }
+
+            if (filtroNumeCli.HasValue && filtroNumeCli > 0)
+            {
+                url += $"&filtroNumeCli={filtroNumeCli}";
+            }
+
+            if (!string.IsNullOrWhiteSpace(filtroRasoCli))
+            {
+                url += $"&filtroRasoCli={Uri.EscapeDataString(filtroRasoCli)}";
+            }
+
+            if (!string.IsNullOrWhiteSpace(filtroCodRepa))
+            {
+                url += $"&filtroCodRepa={Uri.EscapeDataString(filtroCodRepa)}";
+            }
+
+            if (!string.IsNullOrWhiteSpace(filtroNumeroSerie))
+            {
+                url += $"&filtroNumeroSerie={Uri.EscapeDataString(filtroNumeroSerie)}";
+            }
+
+            if (!string.IsNullOrWhiteSpace(filtroStatus))
+            {
+                url += $"&filtroStatus={Uri.EscapeDataString(filtroStatus)}";
+            }
+
+            var responseHttp = await repository.Get<int>(url);
+            if (responseHttp.Error)
+            {
+                totalPages = 1;
+                return;
+            }
+
+            totalPages = responseHttp.Response;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error en LoadTotalPagesAsync: {ex.Message}");
+            totalPages = 1;
+        }
+    }
+
+    private async Task SelectedPageAsync(int page)
+    {
+        currentPage = page;
+        await LoadAsync(page);
+    }
+
+    private async Task ApplyFilterAsync()
+    {
+        currentPage = 1;
+        await LoadAsync(1);
+    }
+
+    private async Task CleanFilterAsync()
+    {
+        filtroId = null;
+        filtroNumRepa = null;
+        filtroFechaDesde = null;
+        filtroFechaHasta = null;
+        filtroNumeCli = null;
+        filtroRasoCli = string.Empty;
+        filtroCodRepa = string.Empty;
+        filtroNumeroSerie = string.Empty;
+        filtroStatus = string.Empty;
+        currentPage = 1;
+        await LoadAsync(1);
+    }
+
+    private void ImprimirRecepcion(int numRepa)
+    {
+        navigationManager.NavigateTo($"/impresion-recepcion-bombas/{numRepa}", true);
+    }
+
+    private async Task AnularRecepcion(Repara recepcion)
+    {
+        var result = await sweetAlertService.FireAsync(new SweetAlertOptions
+        {
+            Title = "¿Anular Recepción?",
+            Text = $"¿Está seguro que desea anular la recepción N° {recepcion.NumRepa}?",
+            Icon = SweetAlertIcon.Warning,
+            ShowCancelButton = true,
+            ConfirmButtonText = "Sí, anular",
+            CancelButtonText = "Cancelar"
+        });
+
+        if (result.IsConfirmed)
+        {
+            try
+            {
+                var responseHttp = await repository.Put<object>($"api/repara/anular/{recepcion.Id}", null);
+                
+                if (responseHttp.Error)
+                {
+                    var message = await responseHttp.GetErrorMessageAsync();
+                    await sweetAlertService.FireAsync("Error", message, SweetAlertIcon.Error);
+                    return;
+                }
+
+                await sweetAlertService.FireAsync("Éxito", "Recepción anulada correctamente", SweetAlertIcon.Success);
+                await LoadAsync(currentPage);
+            }
+            catch (Exception ex)
+            {
+                await sweetAlertService.FireAsync("Error", $"Error al anular: {ex.Message}", SweetAlertIcon.Error);
+            }
+        }
+    }
+
+    private async Task ReactivarRecepcion(Repara recepcion)
+    {
+        var result = await sweetAlertService.FireAsync(new SweetAlertOptions
+        {
+            Title = "¿Reactivar Recepción?",
+            Text = $"¿Está seguro que desea reactivar la recepción N° {recepcion.NumRepa}?",
+            Icon = SweetAlertIcon.Question,
+            ShowCancelButton = true,
+            ConfirmButtonText = "Sí, reactivar",
+            CancelButtonText = "Cancelar"
+        });
+
+        if (result.IsConfirmed)
+        {
+            try
+            {
+                var responseHttp = await repository.Put<object>($"api/repara/reactivar/{recepcion.Id}", null);
+                
+                if (responseHttp.Error)
+                {
+                    var message = await responseHttp.GetErrorMessageAsync();
+                    await sweetAlertService.FireAsync("Error", message, SweetAlertIcon.Error);
+                    return;
+                }
+
+                await sweetAlertService.FireAsync("Éxito", "Recepción reactivada correctamente", SweetAlertIcon.Success);
+                await LoadAsync(currentPage);
+            }
+            catch (Exception ex)
+            {
+                await sweetAlertService.FireAsync("Error", $"Error al reactivar: {ex.Message}", SweetAlertIcon.Error);
+            }
+        }
+    }
+
+    private void VerRecepcion(int numRepa)
+    {
+        navigationManager.NavigateTo($"/recepcion-bombas/{numRepa}");
+    }
+
+    private void VerFichaReparacion(int numRepa)
+    {
+        navigationManager.NavigateTo($"/ficha-reparacion/{numRepa}");
+    }
+
+    private void NuevaRecepcion()
+    {
+        navigationManager.NavigateTo("/recepcion-bombas");
+    }
+
+    private void AbrirConfiguracionRTip()
+    {   //Reparaciones tipícas
+        navigationManager.NavigateTo("/reparaciones-tipicas");
+    }
+
+    private async Task AbrirConfiguracionCodGenerico()
+    {
+        mostrarModalConfiguracion = true;
+        await CargarConfiguracionCodGenericoAsync();
+    }
+
+    private void CerrarModalConfiguracion()
+    {
+        mostrarModalConfiguracion = false;
+    }
+
+    private async Task CargarConfiguracionCodGenericoAsync()
+    {
+        try
+        {
+            cargandoConfiguracion = true;
+            codigoGenerico = string.Empty;
+            descripcionCodigoGenerico = string.Empty;
+            valorHora = string.Empty;
+            coeficientePrearancel = string.Empty;
+
+            // Cargar CODGENER
+            var responseHttp = await repository.Get<FLEXCRL>("api/flexcrl/REPARA/CODGENER");
+
+            if (responseHttp.Error)
+            {
+                var message = await responseHttp.GetErrorMessageAsync();
+
+                if (!string.IsNullOrWhiteSpace(message) && message.Contains("No se encontró control", StringComparison.OrdinalIgnoreCase))
+                {
+                    codigoGenerico = string.Empty;
+                }
+                else
+                {
+                    await sweetAlertService.FireAsync("Error", $"Error al cargar configuración: {message}", SweetAlertIcon.Error);
+                    return;
+                }
+            }
+            else
+            {
+                codigoGenerico = responseHttp.Response?.VALCONTROL ?? string.Empty;
+
+                if (!string.IsNullOrWhiteSpace(codigoGenerico))
+                {
+                    descripcionCodigoGenerico = $"Código guardado: {codigoGenerico}";
+                }
+            }
+
+            // Cargar VALHORA
+            var responseValHora = await repository.Get<FLEXCRL>("api/flexcrl/REPARA/VALHORA");
+            if (!responseValHora.Error && responseValHora.Response != null)
+            {
+                valorHora = responseValHora.Response.VALCONTROL ?? string.Empty;
+            }
+
+            // Cargar COEFPREA
+            var responseCoefPrea = await repository.Get<FLEXCRL>("api/flexcrl/REPARA/COEFPREA");
+            if (!responseCoefPrea.Error && responseCoefPrea.Response != null)
+            {
+                coeficientePrearancel = responseCoefPrea.Response.VALCONTROL ?? string.Empty;
+            }
+        }
+        catch (Exception ex)
+        {
+            await sweetAlertService.FireAsync("Error", $"Error inesperado al cargar configuración: {ex.Message}", SweetAlertIcon.Error);
+        }
+        finally
+        {
+            cargandoConfiguracion = false;
+        }
+    }
+
+    private async Task GuardarConfiguracionCodGenericoAsync()
+    {
+        try
+        {
+            guardandoConfiguracion = true;
+
+            if (string.IsNullOrWhiteSpace(codigoGenerico))
+            {
+                await sweetAlertService.FireAsync("Atención", "Debe seleccionar un producto para el Código genérico.", SweetAlertIcon.Warning);
+                return;
+            }
+
+            // Guardar CODGENER
+            var requestCodGener = new FlexcrlRequest
+            {
+                Clabus = "REPARA",
+                Probus = "CODGENER",
+                Valcontrol = codigoGenerico ?? string.Empty
+            };
+
+            var responseCodGener = await repository.Put<object>("api/flexcrl", requestCodGener);
+            if (responseCodGener.Error)
+            {
+                var message = await responseCodGener.GetErrorMessageAsync();
+                await sweetAlertService.FireAsync("Error", $"Error al guardar Código genérico: {message}", SweetAlertIcon.Error);
+                return;
+            }
+
+            // Guardar VALHORA
+            var requestValHora = new FlexcrlRequest
+            {
+                Clabus = "REPARA",
+                Probus = "VALHORA",
+                Valcontrol = valorHora ?? string.Empty
+            };
+
+            var responseValHora = await repository.Put<object>("api/flexcrl", requestValHora);
+            if (responseValHora.Error)
+            {
+                var message = await responseValHora.GetErrorMessageAsync();
+                await sweetAlertService.FireAsync("Error", $"Error al guardar Valor Hora: {message}", SweetAlertIcon.Error);
+                return;
+            }
+
+            // Guardar COEFPREA
+            var requestCoefPrea = new FlexcrlRequest
+            {
+                Clabus = "REPARA",
+                Probus = "COEFPREA",
+                Valcontrol = coeficientePrearancel ?? string.Empty
+            };
+
+            var responseCoefPrea = await repository.Put<object>("api/flexcrl", requestCoefPrea);
+            if (responseCoefPrea.Error)
+            {
+                var message = await responseCoefPrea.GetErrorMessageAsync();
+                await sweetAlertService.FireAsync("Error", $"Error al guardar Coeficiente Prearancel: {message}", SweetAlertIcon.Error);
+                return;
+            }
+
+            await sweetAlertService.FireAsync("Éxito", "Configuración guardada correctamente", SweetAlertIcon.Success);
+            mostrarModalConfiguracion = false;
+        }
+        catch (Exception ex)
+        {
+            await sweetAlertService.FireAsync("Error", $"Error inesperado al guardar configuración: {ex.Message}", SweetAlertIcon.Error);
+        }
+        finally
+        {
+            guardandoConfiguracion = false;
+        }
+    }
+
+    private class FlexcrlRequest
+    {
+        public string? Clabus { get; set; }
+        public string? Probus { get; set; }
+        public string? Valcontrol { get; set; }
+    }
+
+    private async Task AbrirSelectorProductoCodGenerico()
+    {
+        if (selectorProductosCodGenericoRef == null)
+        {
+            await sweetAlertService.FireAsync("Error", "No se pudo abrir el buscador de productos.", SweetAlertIcon.Error);
+            return;
+        }
+
+        await selectorProductosCodGenericoRef.AbrirModal();
+    }
+
+    private void OnProductoCodGenericoSeleccionado(Master producto)
+    {
+        codigoGenerico = producto.Codigo ?? string.Empty;
+        descripcionCodigoGenerico = producto.Descripcion ?? string.Empty;
+        StateHasChanged();
+    }
+
+    private void OnCloseSelectorProductoCodGenerico()
+    {
+    }
+}

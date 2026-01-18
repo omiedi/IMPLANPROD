@@ -1,0 +1,880 @@
+@page "/derechos-usuarios/{UsuarioId:int}/{IdFlexoft:int}"
+@using IMPLANPROD.Shared.DTOs
+@using IMPLANPROD.Shared.Entities
+@using IMPLANPROD.Client.Shared.Components
+@inject IRepository repository
+@inject NavigationManager navigationManager
+@inject SweetAlertService sweetAlertService
+
+<div class="container-fluid">
+    <div class="row mb-3">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center">
+                <h3><i class="fas fa-user-shield"></i> Derechos de Usuario</h3>
+                <button class="btn btn-outline-secondary" @onclick="RegresarALista">
+                    <i class="fas fa-arrow-left"></i> Regresar a Lista
+                </button>
+            </div>
+        </div>
+    </div>
+
+    @if (usuario != null)
+    {
+        <div class="row mb-4">
+            <div class="col-md-12">
+                <div class="card">
+                    <div class="card-header bg-primary text-white">
+                        <h5 class="mb-0">
+                            <i class="fas fa-user"></i> Información del Usuario
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-md-2 text-center">
+                                @if (!string.IsNullOrEmpty(usuario.FotoUrl))
+                                {
+                                    <img src="@usuario.FotoUrl" alt="Foto" class="rounded-circle mb-2" style="width: 80px; height: 80px; object-fit: cover;" />
+                                }
+                                else
+                                {
+                                    <div class="rounded-circle bg-secondary d-flex align-items-center justify-content-center mx-auto mb-2" style="width: 80px; height: 80px;">
+                                        <i class="fas fa-user fa-2x text-white"></i>
+                                    </div>
+                                }
+                            </div>
+                            <div class="col-md-10">
+                                <div class="row">
+                                    <div class="col-md-6">
+                                        <p><strong>Usuario:</strong> @usuario.NombreUsuario</p>
+                                        <p><strong>Email:</strong> @usuario.Email</p>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <p><strong>Num. Usuario:</strong> <span class="badge bg-info">@UsuarioId</span></p>
+                                        <p><strong>ID Flexoft:</strong> <span class="badge bg-secondary">@IdFlexoft</span></p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Instructivos colapsables -->
+        <div class="row mb-3">
+            <div class="col-12">
+                <!-- Instructivo Usuario -->
+                <div class="card mb-2">
+                    <div class="card-header bg-info text-white p-2">
+                        <button class="btn btn-link text-white text-decoration-none w-100 text-start p-0" 
+                                type="button" 
+                                @onclick="() => mostrarInstructivoUsuario = !mostrarInstructivoUsuario">
+                            <i class="fas @(mostrarInstructivoUsuario ? "fa-chevron-down" : "fa-chevron-right") me-2"></i>
+                            <strong>Instructivo para el Usuario</strong>
+                        </button>
+                    </div>
+                    @if (mostrarInstructivoUsuario)
+                    {
+                        <div class="card-body">
+                            <h6 class="text-primary"><i class="fas fa-info-circle"></i> Descripción</h6>
+                            <p>
+                                Esta pantalla permite gestionar los derechos de acceso de un usuario específico a las diferentes aplicaciones del sistema.
+                                Puede otorgar o revocar permisos de lectura y escritura para cada aplicación de forma individual.
+                            </p>
+
+                            <h6 class="text-primary"><i class="fas fa-list-check"></i> Secciones de la Pantalla</h6>
+                            
+                            <h6 class="text-secondary mt-3">1. Información del Usuario</h6>
+                            <ul>
+                                <li><strong>Foto:</strong> Imagen del perfil del usuario (si está disponible)</li>
+                                <li><strong>Usuario:</strong> Nombre de usuario en el sistema</li>
+                                <li><strong>Email:</strong> Correo electrónico del usuario</li>
+                                <li><strong>Num. Usuario:</strong> ID del usuario en el sistema</li>
+                                <li><strong>ID Flexoft:</strong> Identificador del usuario en el sistema legacy (usado para sincronización con VB6)</li>
+                            </ul>
+
+                            <h6 class="text-secondary mt-3">2. Filtro de Búsqueda</h6>
+                            <ul>
+                                <li><strong>Campo de búsqueda:</strong> Permite filtrar aplicaciones por código o descripción en tiempo real</li>
+                                <li><strong>Botón X:</strong> Limpia el filtro de búsqueda (aparece solo cuando hay texto)</li>
+                                <li><strong>Contador:</strong> Muestra cuántas aplicaciones se están mostrando del total</li>
+                                <li>💡 <strong>Tip:</strong> La búsqueda no distingue entre mayúsculas y minúsculas</li>
+                            </ul>
+
+                            <h6 class="text-secondary mt-3">3. Tabla de Derechos de Acceso</h6>
+                            <ul>
+                                <li><strong>Aplicación:</strong> Nombre y código de cada aplicación del sistema
+                                    <ul>
+                                        <li>Descripción en negrita</li>
+                                        <li>Código en texto pequeño gris</li>
+                                    </ul>
+                                </li>
+                                <li><strong>Lectura (👁️):</strong> Checkbox para otorgar permiso de solo lectura
+                                    <ul>
+                                        <li>Permite al usuario ver información pero no modificarla</li>
+                                        <li>Útil para usuarios que solo necesitan consultar datos</li>
+                                    </ul>
+                                </li>
+                                <li><strong>Escritura (✏️):</strong> Checkbox para otorgar permiso de escritura
+                                    <ul>
+                                        <li>Permite al usuario crear, modificar y eliminar información</li>
+                                        <li>Implica acceso completo a la aplicación</li>
+                                    </ul>
+                                </li>
+                            </ul>
+
+                            <h6 class="text-secondary mt-3">4. Botones de Acción</h6>
+                            <ul>
+                                <li><strong>Guardar Cambios (superior):</strong> Botón grande verde a la derecha del buscador
+                                    <ul>
+                                        <li>Se habilita solo cuando hay cambios pendientes</li>
+                                        <li>Muestra spinner animado mientras guarda</li>
+                                        <li>Siempre visible para acceso rápido</li>
+                                    </ul>
+                                </li>
+                                <li><strong>Volver (inferior):</strong> Botón gris al pie de la tabla para regresar a la lista</li>
+                                <li><strong>Regresar a Lista (superior):</strong> Botón en la esquina superior derecha</li>
+                            </ul>
+
+                            <h6 class="text-primary mt-3"><i class="fas fa-lightbulb"></i> Consejos de Uso</h6>
+                            <ul>
+                                <li>Use el filtro de búsqueda para encontrar rápidamente aplicaciones específicas</li>
+                                <li>Los cambios se marcan automáticamente al modificar cualquier checkbox</li>
+                                <li>El botón "Guardar" se deshabilita si no hay cambios pendientes</li>
+                                <li>Puede otorgar solo lectura, solo escritura, o ambos permisos</li>
+                                <li>Los cambios se guardan para todas las aplicaciones a la vez</li>
+                                <li>El sistema muestra notificaciones de éxito o error al guardar</li>
+                            </ul>
+
+                            <h6 class="text-primary mt-3"><i class="fas fa-shield-alt"></i> Consideraciones de Seguridad</h6>
+                            <ul>
+                                <li>⚠️ <strong>Escritura implica lectura:</strong> Si otorga escritura, el usuario también podrá leer</li>
+                                <li>⚠️ <strong>Permisos críticos:</strong> Tenga cuidado al otorgar escritura en aplicaciones sensibles</li>
+                                <li>⚠️ <strong>Revisión periódica:</strong> Revise regularmente los permisos de los usuarios</li>
+                                <li>✅ <strong>Principio de mínimo privilegio:</strong> Otorgue solo los permisos necesarios</li>
+                            </ul>
+
+                            <h6 class="text-primary mt-3"><i class="fas fa-clipboard-list"></i> Casos de Uso Comunes</h6>
+                            <ul>
+                                <li><strong>Usuario de consulta:</strong> Otorgar solo lectura en todas las aplicaciones necesarias</li>
+                                <li><strong>Usuario operativo:</strong> Lectura general + escritura en aplicaciones específicas de su área</li>
+                                <li><strong>Supervisor:</strong> Escritura en aplicaciones de su departamento + lectura en otras áreas</li>
+                                <li><strong>Administrador:</strong> Escritura en todas las aplicaciones del sistema</li>
+                                <li><strong>Usuario temporal:</strong> Permisos limitados con revisión programada</li>
+                            </ul>
+
+                            <h6 class="text-primary mt-3"><i class="fas fa-sync-alt"></i> Sincronización con Sistema Legacy</h6>
+                            <ul>
+                                <li>Los derechos se guardan en la tabla <code>DER_ACCE</code> usando el <strong>ID Flexoft</strong></li>
+                                <li>Compatible con el sistema VB6 original</li>
+                                <li>Los cambios se reflejan inmediatamente en ambos sistemas</li>
+                            </ul>
+                        </div>
+                    }
+                </div>
+
+                <!-- Instructivo Desarrollador -->
+                <InstructivoDesarrollador>
+                    <h6 class="text-info"><i class="fas fa-code"></i> Arquitectura</h6>
+                    <p>
+                        Componente Blazor para gestión de derechos de acceso de usuarios. Implementa un sistema de permisos granular
+                        por aplicación con sincronización bidireccional con el sistema VB6 legacy mediante la tabla <code>DER_ACCE</code>.
+                    </p>
+
+                    <h6 class="text-info mt-3"><i class="fas fa-puzzle-piece"></i> Parámetros de Ruta</h6>
+                    <ul>
+                        <li><code>UsuarioId:int</code> - ID del usuario en la tabla Usuarios (usado para display)</li>
+                        <li><code>IdFlexoft:int</code> - ID del usuario en sistema legacy (usado para DER_ACCE.NUM_USER)</li>
+                    </ul>
+
+                    <h6 class="text-info mt-3"><i class="fas fa-database"></i> Estructura de Datos</h6>
+                    <pre class="bg-dark text-light p-3 rounded">
+<strong>Entidades:</strong>
+- DerAcce (DER_ACCE): Tabla de derechos de acceso
+  * NUM_USER (short): IdFlexoft del usuario
+  * COD_APLI (string): Código de aplicación
+  * DER_READ (short): 0=No, 1=Sí lectura
+  * DER_WRITE (short): 0=No, 1=Sí escritura
+
+- IndiApli (INDI_APLI): Catálogo de aplicaciones
+  * COD_APLI (string): Código único
+  * DES_APLI (string): Descripción
+
+<strong>DTO:</strong>
+- DerechoUsuarioDTO:
+  * CodApli: string
+  * DesApli: string
+  * TieneLectura: bool (binding bidireccional)
+  * TieneEscritura: bool (binding bidireccional)
+                    </pre>
+
+                    <h6 class="text-info mt-3"><i class="fas fa-cogs"></i> Flujo de Datos</h6>
+                    <pre class="bg-dark text-light p-3 rounded">
+<strong>Carga de Derechos:</strong>
+1. OnInitializedAsync()
+2. CargarDatosUsuario() → GET /api/usuarios/{IdFlexoft}
+3. CargarDerechos() → GET /api/DerechosUsuario/usuario/{IdFlexoft}
+4. Backend: LEFT JOIN INDI_APLI con DER_ACCE
+5. Retorna lista completa de aplicaciones con flags de permisos
+
+<strong>Guardado de Derechos:</strong>
+1. Usuario modifica checkboxes → MarcarCambio()
+2. Click en Guardar → GuardarDerechos()
+3. POST /api/DerechosUsuario/usuario/{IdFlexoft} con lista completa
+4. Backend itera cada derecho:
+   - Busca registro existente en DER_ACCE
+   - Si no existe y tiene permisos: INSERT
+   - Si existe: UPDATE DER_READ y DER_WRITE
+5. Usa transacción para atomicidad
+                    </pre>
+
+                    <h6 class="text-info mt-3"><i class="fas fa-filter"></i> Sistema de Filtrado</h6>
+                    <pre class="bg-dark text-light p-3 rounded">
+<strong>Propiedad Calculada:</strong>
+private IEnumerable&lt;DerechoUsuarioDTO&gt; DerechosFiltrados
+{
+    get
+    {
+        if (string.IsNullOrWhiteSpace(filtroBusqueda))
+            return derechos;
+        
+        var filtro = filtroBusqueda.Trim().ToLower();
+        return derechos.Where(d => 
+            d.CodApli.ToLower().Contains(filtro) || 
+            d.DesApli.ToLower().Contains(filtro)
+        );
+    }
+}
+
+<strong>Características:</strong>
+- Filtrado en memoria (client-side)
+- Case-insensitive
+- Búsqueda en código Y descripción
+- Actualización en tiempo real (@@bind:event="oninput")
+                    </pre>
+
+                    <h6 class="text-info mt-3"><i class="fas fa-exchange-alt"></i> Compatibilidad VB6</h6>
+                    <pre class="bg-dark text-light p-3 rounded">
+<strong>Código VB6 Original:</strong>
+For U& = 1 To FIN&
+    CAPLI$ = Trim$(MSF.TextMatrix(U&, 4))
+    DRX1% = 0: If Left(MSF.TextMatrix(U&, 2), 1) = "S" Then DRX1% = 1
+    DRX2% = 0: If Left(MSF.TextMatrix(U&, 3), 1) = "S" Then DRX2% = 1
+    
+    SQLX$ = "SELECT * FROM DER_ACCE WHERE NUM_USER = " & USEL%
+    SQLX$ = SQLX$ + " AND COD_APLI = '" & CAPLI$ & "'"
+    
+    If .EOF Then .AddNew
+    !NUM_USER = USEL%
+    !COD_APLI = CAPLI$
+    !DER_READ = DRX1%
+    !DER_WRITE = DRX2%
+    .Update
+Next U&
+
+<strong>Equivalencia C#:</strong>
+- USEL% → IdFlexoft (parámetro de ruta)
+- MSF grid → List&lt;DerechoUsuarioDTO&gt;
+- DRX1%, DRX2% → TieneLectura, TieneEscritura (bool)
+- AddNew/Update → EF Core Add/Update con SaveChangesAsync
+                    </pre>
+
+                    <h6 class="text-info mt-3"><i class="fas fa-server"></i> Endpoints API</h6>
+                    <ul>
+                        <li><code>GET /api/usuarios/{idFlexoft}</code> - Obtener datos del usuario por IdFlexoft</li>
+                        <li><code>GET /api/DerechosUsuario/usuario/{numUser}</code> - Obtener derechos del usuario</li>
+                        <li><code>POST /api/DerechosUsuario/usuario/{numUser}</code> - Guardar derechos (lista completa)</li>
+                    </ul>
+
+                    <h6 class="text-info mt-3"><i class="fas fa-check-circle"></i> Validaciones y Estados</h6>
+                    <ul>
+                        <li><code>hayCambios</code> - Flag para habilitar/deshabilitar botón Guardar</li>
+                        <li><code>guardando</code> - Flag para mostrar spinner y deshabilitar durante guardado</li>
+                        <li><code>cargando</code> - Flag para mostrar spinner inicial de carga</li>
+                        <li>Botón Guardar deshabilitado si: <code>!hayCambios || guardando</code></li>
+                    </ul>
+
+                    <h6 class="text-info mt-3"><i class="fas fa-paint-brush"></i> Componentes UI</h6>
+                    <ul>
+                        <li><strong>SweetAlertService:</strong> Notificaciones de éxito/error</li>
+                        <li><strong>Bootstrap 5:</strong> Grid system, cards, buttons, form-check</li>
+                        <li><strong>Font Awesome:</strong> Iconos (fa-user-shield, fa-eye, fa-edit, fa-save, etc.)</li>
+                        <li><strong>Responsive:</strong> col-md-6 para filtro y botón, col-md-12 para tabla</li>
+                    </ul>
+
+                    <h6 class="text-info mt-3"><i class="fas fa-bug"></i> Debugging</h6>
+                    <pre class="bg-dark text-light p-3 rounded">
+<strong>Console Logs Disponibles:</strong>
+- Backend logs en DerechosUsuarioService
+- Frontend: Agregar console.log en métodos clave si es necesario
+
+<strong>Verificación de Datos:</strong>
+1. Inspeccionar Network tab: Payload de POST
+2. Verificar tabla DER_ACCE en SQL Server
+3. Confirmar NUM_USER = IdFlexoft correcto
+4. Validar COD_APLI existe en INDI_APLI
+                    </pre>
+
+                    <h6 class="text-info mt-3"><i class="fas fa-rocket"></i> Mejoras Futuras</h6>
+                    <ul>
+                        <li>Implementar permisos por grupos/roles</li>
+                        <li>Agregar auditoría de cambios de permisos</li>
+                        <li>Exportar/importar configuraciones de permisos</li>
+                        <li>Copiar permisos de un usuario a otro</li>
+                        <li>Vista de permisos por aplicación (inversa)</li>
+                        <li>Notificaciones al usuario cuando cambian sus permisos</li>
+                    </ul>
+
+                    <h6 class="text-info mt-3"><i class="fas fa-exclamation-triangle"></i> Consideraciones Importantes</h6>
+                    <ul>
+                        <li>⚠️ <strong>IdFlexoft vs UsuarioId:</strong> Usar IdFlexoft para DER_ACCE.NUM_USER (compatibilidad VB6)</li>
+                        <li>⚠️ <strong>Transacciones:</strong> Backend usa transacción para garantizar atomicidad</li>
+                        <li>⚠️ <strong>Performance:</strong> LEFT JOIN puede ser costoso con muchas aplicaciones</li>
+                        <li>⚠️ <strong>Sincronización:</strong> Cambios se reflejan inmediatamente en VB6</li>
+                        <li>✅ <strong>Validación:</strong> Backend valida que COD_APLI exista en INDI_APLI</li>
+                    </ul>
+
+                    <hr class="my-4" />
+
+                    <h5 class="text-success mt-4">
+                        <i class="fas fa-graduation-cap me-2"></i>
+                        Ejemplo Completo: Implementación de Validación de Derechos
+                    </h5>
+                    <div class="alert alert-success">
+                        <h6><i class="fas fa-lightbulb me-2"></i>Caso de Uso Real: Validación de Derechos en Lista de Clientes</h6>
+                        <p class="mb-0">
+                            Este ejemplo muestra la implementación completa del sistema de derechos en la página 
+                            <code>FichaClienteIndex.razor</code> para controlar el acceso a la lista de clientes.
+                        </p>
+                    </div>
+
+                    <h6 class="mt-3"><i class="fas fa-cog me-2"></i>1. Configuración Inicial</h6>
+                    <pre class="bg-dark text-light p-3 rounded"><code>@@page "/ficha-cliente-index"
+@@using IMPLANPROD.Client.Services
+@@inject DerechosUsuarioClientService derechosService
+@@inject NavigationManager NavigationManager
+
+@@code {
+    // Variables de control de permisos
+    private bool tieneAccesoEscritura = false;
+    private bool verificandoPermisos = true;
+    private const string COD_APLI = "CLIENTES";
+    private const string DES_APLI = "ACCESO A LISTA DE CLIENTES";
+}</code></pre>
+
+                    <h6 class="mt-3"><i class="fas fa-play-circle me-2"></i>2. Verificación en OnInitializedAsync</h6>
+                    <pre class="bg-dark text-light p-3 rounded"><code>protected override async Task OnInitializedAsync()
+{
+    // Verificar derechos de acceso del usuario
+    verificandoPermisos = true;
+    
+    // Verificar si el usuario tiene acceso de lectura mínimo
+    var nivelAcceso = await derechosService.VerificarDerechoAsync(
+        COD_APLI,
+        DES_APLI,
+        mostrarMensaje: true // Mostrar mensaje si no tiene acceso
+    );
+
+    // Si no tiene acceso (nivel 0), redirigir al inicio
+    if (nivelAcceso == 0)
+    {
+        Console.WriteLine($"Usuario sin acceso a {COD_APLI}. Redirigiendo...");
+        await Task.Delay(2000); // Esperar 2 segundos para que vea el mensaje
+        NavigationManager.NavigateTo("/");
+        return;
+    }
+
+    // Determinar si tiene permisos de escritura (nivel 2)
+    tieneAccesoEscritura = nivelAcceso >= 2;
+    
+    Console.WriteLine($"Acceso a {COD_APLI}: Nivel {nivelAcceso} - Escritura: {tieneAccesoEscritura}");
+    
+    verificandoPermisos = false;
+    
+    // Cargar datos solo si tiene acceso
+    await LoadAsync();
+}</code></pre>
+
+                    <h6 class="mt-3"><i class="fas fa-eye me-2"></i>3. Indicadores Visuales en la UI</h6>
+                    <pre class="bg-dark text-light p-3 rounded"><code>@@if (verificandoPermisos)
+{
+    &lt;div class="alert alert-info"&gt;
+        &lt;div class="spinner-border spinner-border-sm me-2" role="status"&gt;
+            &lt;span class="visually-hidden"&gt;Verificando permisos...&lt;/span&gt;
+        &lt;/div&gt;
+        &lt;span&gt;Verificando permisos de acceso...&lt;/span&gt;
+    &lt;/div&gt;
+}
+else if (!tieneAccesoEscritura)
+{
+    &lt;div class="alert alert-warning"&gt;
+        &lt;i class="fas fa-exclamation-triangle me-2"&gt;&lt;/i&gt;
+        &lt;strong&gt;Modo Solo Lectura:&lt;/strong&gt; Usted tiene permisos de solo lectura. 
+        No puede crear, editar o dar de baja clientes.
+    &lt;/div&gt;
+}</code></pre>
+
+                    <h6 class="mt-3"><i class="fas fa-lock me-2"></i>4. Botones con Permisos Condicionales</h6>
+                    <pre class="bg-dark text-light p-3 rounded"><code>&lt;!-- Botón Nuevo Cliente --&gt;
+&lt;button class="btn btn-primary" 
+        @@onclick="NuevoCliente" 
+        disabled="@@(!tieneAccesoEscritura)"&gt;
+    @@if (tieneAccesoEscritura)
+    {
+        &lt;i class="fas fa-user-plus"&gt;&lt;/i&gt;
+        &lt;text&gt; Nuevo Cliente&lt;/text&gt;
+    }
+    else
+    {
+        &lt;i class="fas fa-lock"&gt;&lt;/i&gt;
+        &lt;text&gt; Nuevo Cliente (Sin Permisos)&lt;/text&gt;
+    }
+&lt;/button&gt;
+
+&lt;!-- Botón Ver Clientes Dados de Baja --&gt;
+&lt;button class="btn btn-secondary ms-2" 
+        @@onclick="IrAClientesDadosDeBaja" 
+        disabled="@@(!tieneAccesoEscritura)"&gt;
+    @@if (tieneAccesoEscritura)
+    {
+        &lt;i class="fas fa-user-slash"&gt;&lt;/i&gt;
+        &lt;text&gt; Ver clientes dados de baja&lt;/text&gt;
+    }
+    else
+    {
+        &lt;i class="fas fa-lock"&gt;&lt;/i&gt;
+        &lt;text&gt; Ver clientes dados de baja (Sin Permisos)&lt;/text&gt;
+    }
+&lt;/button&gt;</code></pre>
+
+                    <h6 class="mt-3"><i class="fas fa-table me-2"></i>5. Botones de Acción en Tabla</h6>
+                    <pre class="bg-dark text-light p-3 rounded"><code>&lt;!-- Botón Editar --&gt;
+&lt;button class="btn btn-sm btn-outline-primary me-1" 
+        @@onclick="() =&gt; EditarCliente(cliente.Id)" 
+        disabled="@@(!tieneAccesoEscritura)"
+        title="@@(tieneAccesoEscritura ? "Editar cliente" : "Sin permisos de escritura")"&gt;
+    &lt;i class="fas @@(tieneAccesoEscritura ? "fa-edit" : "fa-lock")"&gt;&lt;/i&gt;
+&lt;/button&gt;
+
+&lt;!-- Botón Dar de Baja --&gt;
+&lt;button class="btn btn-sm btn-outline-danger" 
+        @@onclick="() =&gt; DarDeBaja(cliente.Id)" 
+        disabled="@@(!tieneAccesoEscritura)"
+        title="@@(tieneAccesoEscritura ? "Dar de baja cliente" : "Sin permisos de escritura")"&gt;
+    &lt;i class="fas @@(tieneAccesoEscritura ? "fa-user-slash" : "fa-lock")"&gt;&lt;/i&gt;
+&lt;/button&gt;</code></pre>
+
+                    <h6 class="mt-3"><i class="fas fa-check-circle me-2"></i>Resultado del Flujo</h6>
+                    <div class="table-responsive">
+                        <table class="table table-bordered table-sm">
+                            <thead class="table-dark">
+                                <tr>
+                                    <th>Nivel de Acceso</th>
+                                    <th>Comportamiento</th>
+                                    <th>Botones</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr class="table-danger">
+                                    <td><strong>Nivel 0</strong><br/>(Sin acceso)</td>
+                                    <td>
+                                        • Muestra mensaje de error<br/>
+                                        • Espera 2 segundos<br/>
+                                        • Redirige a página principal
+                                    </td>
+                                    <td>No se muestran</td>
+                                </tr>
+                                <tr class="table-warning">
+                                    <td><strong>Nivel 1</strong><br/>(Solo lectura)</td>
+                                    <td>
+                                        • Muestra alerta de modo solo lectura<br/>
+                                        • Carga datos de clientes<br/>
+                                        • Permite visualización
+                                    </td>
+                                    <td>
+                                        ❌ Nuevo Cliente (deshabilitado)<br/>
+                                        ❌ Ver dados de baja (deshabilitado)<br/>
+                                        ❌ Editar (deshabilitado)<br/>
+                                        ❌ Dar de baja (deshabilitado)
+                                    </td>
+                                </tr>
+                                <tr class="table-success">
+                                    <td><strong>Nivel 2</strong><br/>(Lectura y escritura)</td>
+                                    <td>
+                                        • Sin alertas restrictivas<br/>
+                                        • Carga datos de clientes<br/>
+                                        • Permite todas las operaciones
+                                    </td>
+                                    <td>
+                                        ✅ Nuevo Cliente (habilitado)<br/>
+                                        ✅ Ver dados de baja (habilitado)<br/>
+                                        ✅ Editar (habilitado)<br/>
+                                        ✅ Dar de baja (habilitado)
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <h6 class="mt-3"><i class="fas fa-database me-2"></i>Configuración en Base de Datos</h6>
+                    <div class="alert alert-info">
+                        <p><strong>Requisitos previos:</strong></p>
+                        <ol class="mb-0">
+                            <li>El campo <code>USUARIOS.IdFlexoft</code> debe contener el número de usuario del sistema legacy</li>
+                            <li>En la tabla <code>DER_ACCE</code> debe existir un registro con:
+                                <ul>
+                                    <li><code>NUM_USER</code> = valor de <code>USUARIOS.IdFlexoft</code></li>
+                                    <li><code>COD_APLI</code> = "CLIENTES"</li>
+                                    <li><code>DER_READ</code> = 1 (para lectura)</li>
+                                    <li><code>DER_WRITE</code> = 1 (para escritura)</li>
+                                </ul>
+                            </li>
+                            <li>El usuario debe cerrar sesión y volver a iniciar sesión después de configurar los derechos</li>
+                        </ol>
+                    </div>
+
+                    <h6 class="mt-3"><i class="fas fa-bug me-2"></i>Debugging y Logging</h6>
+                    <pre class="bg-dark text-light p-3 rounded"><code>// En la consola del navegador verás:
+=== DEBUG: Verificación de Derechos ===
+UserInfo obtenido: true
+IdFlexoft: 123
+Id: 456
+NombreUsuario: juan.perez
+Email: juan.perez@@empresa.com
+Codiempresa: 1
+Acceso a CLIENTES: Nivel 2 - Escritura: true</code></pre>
+
+                    <h6 class="mt-3"><i class="fas fa-clipboard-check me-2"></i>Checklist de Implementación</h6>
+                    <div class="card">
+                        <div class="card-body">
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" disabled checked>
+                                <label class="form-check-label">Inyectar <code>DerechosUsuarioClientService</code></label>
+                            </div>
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" disabled checked>
+                                <label class="form-check-label">Declarar variables de control (<code>tieneAccesoEscritura</code>, <code>verificandoPermisos</code>)</label>
+                            </div>
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" disabled checked>
+                                <label class="form-check-label">Definir constantes <code>COD_APLI</code> y <code>DES_APLI</code></label>
+                            </div>
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" disabled checked>
+                                <label class="form-check-label">Verificar derechos en <code>OnInitializedAsync</code></label>
+                            </div>
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" disabled checked>
+                                <label class="form-check-label">Manejar redirección si nivel = 0</label>
+                            </div>
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" disabled checked>
+                                <label class="form-check-label">Agregar indicadores visuales (spinner, alertas)</label>
+                            </div>
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" disabled checked>
+                                <label class="form-check-label">Deshabilitar botones según <code>tieneAccesoEscritura</code></label>
+                            </div>
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" disabled checked>
+                                <label class="form-check-label">Agregar iconos condicionales (candado vs acción)</label>
+                            </div>
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" disabled checked>
+                                <label class="form-check-label">Agregar tooltips informativos</label>
+                            </div>
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" disabled checked>
+                                <label class="form-check-label">Probar con usuarios de diferentes niveles</label>
+                            </div>
+                        </div>
+                    </div>
+                </InstructivoDesarrollador>
+            </div>
+        </div>
+    }
+
+    @if (cargando)
+    {
+        <div class="text-center">
+            <div class="spinner-border text-primary" role="status">
+                <span class="visually-hidden">Cargando...</span>
+            </div>
+            <p>Cargando derechos...</p>
+        </div>
+    }
+    else if (derechos == null || !derechos.Any())
+    {
+        <div class="alert alert-warning">
+            <i class="fas fa-exclamation-triangle"></i> No hay aplicaciones configuradas en el sistema.
+        </div>
+    }
+    else
+    {
+        <div class="row">
+            <div class="col-md-12">
+                <div class="card">
+                    <div class="card-header bg-dark text-white">
+                        <h5 class="mb-0">
+                            <i class="fas fa-list"></i> Derechos de Acceso a Aplicaciones
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <!-- Filtro de búsqueda y botón Guardar -->
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <div class="input-group">
+                                    <span class="input-group-text">
+                                        <i class="fas fa-search"></i>
+                                    </span>
+                                    <input type="text" 
+                                           class="form-control" 
+                                           placeholder="Buscar por código o descripción de aplicación..."
+                                           @bind="filtroBusqueda"
+                                           @bind:event="oninput" />
+                                    @if (!string.IsNullOrWhiteSpace(filtroBusqueda))
+                                    {
+                                        <button class="btn btn-outline-secondary" @onclick="LimpiarFiltro">
+                                            <i class="fas fa-times"></i>
+                                        </button>
+                                    }
+                                </div>
+                                <small class="text-muted">
+                                    Mostrando @DerechosFiltrados.Count() de @derechos.Count aplicaciones
+                                </small>
+                            </div>
+                            <div class="col-md-6 text-end">
+                                <button class="btn btn-success btn-lg" @onclick="GuardarDerechos" disabled="@(!hayCambios || guardando)">
+                                    @if (guardando)
+                                    {
+                                        <span class="spinner-border spinner-border-sm me-2" role="status"></span>
+                                        <span>Guardando...</span>
+                                    }
+                                    else
+                                    {
+                                        <i class="fas fa-save me-2"></i>
+                                        <span>Guardar Cambios</span>
+                                    }
+                                </button>
+                            </div>
+                        </div>
+
+                        <div class="table-responsive">
+                            <table class="table table-striped table-hover table-bordered">
+                                <thead class="table-dark">
+                                    <tr>
+                                        <th style="width: 50%;">Aplicación</th>
+                                        <th style="width: 25%; text-align: center;">
+                                            <i class="fas fa-eye"></i> Lectura
+                                        </th>
+                                        <th style="width: 25%; text-align: center;">
+                                            <i class="fas fa-edit"></i> Escritura
+                                        </th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var derecho in DerechosFiltrados)
+                                    {
+                                        <tr>
+                                            <td>
+                                                <strong>@derecho.DesApli</strong>
+                                                <br />
+                                                <small class="text-muted">Código: @derecho.CodApli</small>
+                                            </td>
+                                            <td style="text-align: center; vertical-align: middle;">
+                                                <div class="form-check d-flex justify-content-center">
+                                                    <input class="form-check-input" 
+                                                           type="checkbox" 
+                                                           @bind="derecho.TieneLectura"
+                                                           @bind:after="() => MarcarCambio()"
+                                                           style="width: 20px; height: 20px; cursor: pointer;" />
+                                                </div>
+                                            </td>
+                                            <td style="text-align: center; vertical-align: middle;">
+                                                <div class="form-check d-flex justify-content-center">
+                                                    <input class="form-check-input" 
+                                                           type="checkbox" 
+                                                           @bind="derecho.TieneEscritura"
+                                                           @bind:after="() => MarcarCambio()"
+                                                           style="width: 20px; height: 20px; cursor: pointer;" />
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <div class="row mt-3">
+                            <div class="col-md-12">
+                                <div class="d-flex justify-content-between">
+                                    <button class="btn btn-secondary" @onclick="Volver">
+                                        <i class="fas fa-arrow-left"></i> Volver
+                                    </button>
+                                    <button class="btn btn-success" @onclick="GuardarDerechos" disabled="@(!hayCambios || guardando)">
+                                        @if (guardando)
+                                        {
+                                            <span class="spinner-border spinner-border-sm me-2" role="status"></span>
+                                        }
+                                        else
+                                        {
+                                            <i class="fas fa-save me-2"></i>
+                                        }
+                                        Guardar Cambios
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter] public int UsuarioId { get; set; }
+    [Parameter] public int IdFlexoft { get; set; }
+
+    private Usuario? usuario;
+    private List<DerechoUsuarioDTO>? derechos;
+    private List<Perfil> perfiles = new();
+
+    // Variable para el filtro de búsqueda
+    private string filtroBusqueda = string.Empty;
+
+    // Variables para instructivos colapsables
+    private bool mostrarInstructivoUsuario = false;
+
+    private bool cargando = true;
+    private bool guardando = false;
+    private bool hayCambios = false;
+    private string? mensajeError;
+
+    // Propiedad calculada para filtrar derechos por código o descripción
+    private IEnumerable<DerechoUsuarioDTO> DerechosFiltrados
+    {
+        get
+        {
+            if (derechos == null) return Enumerable.Empty<DerechoUsuarioDTO>();
+            
+            if (string.IsNullOrWhiteSpace(filtroBusqueda))
+                return derechos;
+
+            var filtro = filtroBusqueda.Trim().ToLower();
+            
+            return derechos.Where(d => 
+                d.CodApli.ToLower().Contains(filtro) || 
+                d.DesApli.ToLower().Contains(filtro)
+            );
+        }
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        await CargarDatosUsuario();
+
+        await CargarDerechos();
+        cargando = false;
+    }
+
+    private async Task CargarDatosUsuario()
+    {
+        try
+        {
+            var responseHttp = await repository.Get<Usuario>($"api/usuarios/{IdFlexoft}");
+            if (!responseHttp.Error && responseHttp.Response != null)
+            {
+                usuario = responseHttp.Response;
+            }
+        }
+        catch (Exception ex)
+        {
+            await sweetAlertService.FireAsync("Error", $"Error al cargar datos del usuario: {ex.Message}", SweetAlertIcon.Error);
+        }
+    }
+
+    private async Task CargarDerechos()
+    {
+        try
+        {
+            var responseHttp = await repository.Get<List<DerechoUsuarioDTO>>($"api/DerechosUsuario/usuario/{IdFlexoft}");
+            if (!responseHttp.Error && responseHttp.Response != null)
+            {
+                derechos = responseHttp.Response;
+                hayCambios = false;
+            }
+            else
+            {
+                await sweetAlertService.FireAsync("Error", "No se pudieron cargar los derechos del usuario", SweetAlertIcon.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            await sweetAlertService.FireAsync("Error", $"Error al cargar derechos: {ex.Message}", SweetAlertIcon.Error);
+        }
+    }
+  
+    private void MarcarCambio()
+    {
+        hayCambios = true;
+    }
+
+    private async Task GuardarDerechos()
+    {
+        if (derechos == null) return;
+
+        guardando = true;
+
+        try
+        {
+            var responseHttp = await repository.Post($"api/DerechosUsuario/usuario/{IdFlexoft}", derechos);
+            
+            if (!responseHttp.Error)
+            {
+                await sweetAlertService.FireAsync(
+                    "Éxito", 
+                    "Los derechos se guardaron correctamente", 
+                    SweetAlertIcon.Success
+                );
+                hayCambios = false;
+                await CargarDerechos(); // Recargar para obtener los IDs actualizados
+            }
+            else
+            {
+                await sweetAlertService.FireAsync(
+                    "Error", 
+                    "No se pudieron guardar los derechos", 
+                    SweetAlertIcon.Error
+                );
+            }
+        }
+        catch (Exception ex)
+        {
+            await sweetAlertService.FireAsync(
+                "Error", 
+                $"Error al guardar derechos: {ex.Message}", 
+                SweetAlertIcon.Error
+            );
+        }
+        finally
+        {
+            guardando = false;
+        }
+    }
+
+    private void Volver()
+    {
+        navigationManager.NavigateTo("/derechos-usuarios/lista");
+    }
+
+    private void RegresarALista()
+    {
+        navigationManager.NavigateTo("/derechos-usuarios/lista");
+    }
+
+    private void LimpiarFiltro()
+    {
+        filtroBusqueda = string.Empty;
+    }
+}

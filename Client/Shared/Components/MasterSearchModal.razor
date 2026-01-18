@@ -1,0 +1,171 @@
+@inject IRepository repository
+@inject SweetAlertService sweetAlertService
+@inject IJSRuntime JSRuntime
+
+@if (IsVisible)
+{
+    <div class="modal fade show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5);" role="dialog">
+        <div class="modal-dialog modal-lg modal-dialog-centered" role="document">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Buscar producto</h5>
+                    <button type="button" class="btn-close" @onclick="CloseModal" aria-label="Cerrar"></button>
+                </div>
+
+                <div class="modal-body">
+                    <form @onsubmit="HandleSubmit" @onsubmit:preventDefault>
+                        <div class="input-group mb-3">
+                            <input type="text"
+                            class="form-control"
+                            placeholder="Buscar producto..."
+                            @bind="searchQuery"
+                            @bind:event="oninput"
+                            @onkeyup="HandleKeyPress"
+                            @ref="searchInput" />
+
+                            <button class="btn btn-outline-primary" type="submit">
+                                <i class="oi oi-magnifying-glass"></i> Buscar
+                            </button>
+                        </div>
+                    </form>
+
+                    @if (showResults && searchResults?.Any() == true)
+                    {
+                        <div class="list-group list-group-flush" style="max-height: 400px; overflow-y: auto;">
+                            @foreach (var repuesto in searchResults)
+                            {
+                                <button type="button"
+                                class="list-group-item list-group-item-action py-1"
+                                @onclick="() => SelectRepuesto(repuesto)">
+                                    <div class="d-flex justify-content-between align-items-center">
+                                        <div class="d-flex align-items-center">
+                                            <strong class="me-2">@repuesto.Codigo</strong>
+                                            <span class="text-truncate mx-2" style="max-width: 250px;">@repuesto.Descripcion</span>
+                                            <small class="text-muted ms-2">U.M.: @(repuesto.Umedida ?? "-")</small>
+                                        </div>
+                                        <span class="badge bg-secondary">@repuesto.Codint</span>
+                                    </div>
+                                </button>
+                            }
+                        </div>
+                    }
+                    else if (showResults)
+                    {
+                        <div class="alert alert-info">
+                            No se encontraron repuestos.
+                        </div>
+                    }
+                </div>
+
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" @onclick="CloseModal">Cancelar</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+@code {
+    private string searchQuery = "";
+    private List<Master> searchResults = new();
+    private bool showResults;
+    private ElementReference searchInput;
+
+    [Parameter] public EventCallback<Master> OnRepuestoSelected { get; set; }
+    [Parameter] public EventCallback OnCloseRequested { get; set; }
+    [Parameter] public bool IsVisible { get; set; }
+    
+    /// <summary>
+    /// Se ejecuta cuando cambian los parámetros del componente
+    /// </summary>
+    protected override async Task OnParametersSetAsync()
+    {
+        // Si el modal se está mostrando, enfocar el input de búsqueda
+        if (IsVisible)
+        {
+            await Task.Delay(50); // Pequeño retraso para asegurar que el DOM esté listo
+            await FocusSearchInput();
+        }
+        
+        await base.OnParametersSetAsync();
+    }
+    
+    /// <summary>
+    /// Enfoca el input de búsqueda
+    /// </summary>
+    private async Task FocusSearchInput()
+    {
+        try
+        {
+            await JSRuntime.InvokeVoidAsync("focusElement", searchInput);
+        }
+        catch (Exception)
+        {
+            // Ignorar errores de enfoque
+        }
+    }
+
+    /// <summary>
+    /// Maneja los eventos de teclado
+    /// </summary>
+    /// <param name="e">Evento de teclado</param>
+    private void HandleKeyPress(KeyboardEventArgs e)
+    {
+        // Ya no necesitamos manejar Enter aquí porque el formulario lo capturará
+        // y llamará a HandleSubmit
+    }
+
+    /// <summary>
+    /// Maneja el envío del formulario de búsqueda
+    /// </summary>
+    private async Task HandleSubmit()
+    {
+        await SearchMaster();
+    }
+
+    private async Task SearchMaster()
+    {
+        try
+        {
+            if (string.IsNullOrWhiteSpace(searchQuery))
+            {
+                searchResults.Clear();
+                showResults = false;
+                return;
+            }
+
+            var response = await repository.Get<List<Master>>($"api/master/search?filter={Uri.EscapeDataString(searchQuery)}");
+
+            if (response.Error)
+            {
+                var message = await response.GetErrorMessageAsync();
+                await sweetAlertService.FireAsync("Error", message, SweetAlertIcon.Error);
+                searchResults.Clear();
+                showResults = false;
+                return;
+            }
+
+            searchResults = response.Response ?? new List<Master>();
+            showResults = true;
+        }
+        catch (Exception ex)
+        {
+            await sweetAlertService.FireAsync("Error", $"Error al buscar productos: {ex.Message}", SweetAlertIcon.Error);
+            searchResults.Clear();
+            showResults = false;
+        }
+    }
+
+    private async Task SelectRepuesto(Master repuesto)
+    {
+        await OnRepuestoSelected.InvokeAsync(repuesto);
+        await CloseModal();
+    }
+
+    private async Task CloseModal()
+    {
+        searchQuery = "";
+        searchResults.Clear();
+        showResults = false;
+        await OnCloseRequested.InvokeAsync();
+    }
+}

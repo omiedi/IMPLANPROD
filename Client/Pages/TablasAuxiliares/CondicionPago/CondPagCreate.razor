@@ -1,0 +1,37 @@
+@inject IRepository repository
+@inject NavigationManager navigationManager
+@inject SweetAlertService sweetAlertService
+@inject IModalService Modal
+
+<div class="modal-body">
+    <h3>Crear Condición de Pago</h3>
+
+    <CondPagForm @ref="condPagForm" CondPag="condPag" OnValidSubmit="Create" ReturnAction="Return" IsEdit="false" />
+</div>
+
+@code {
+    private CondPag condPag = new();
+    private CondPagForm? condPagForm;
+    [CascadingParameter]
+    BlazoredModalInstance BlazoredModal { get; set; } = default!;
+
+    private async Task Create()
+    {
+        var responseHttp = await repository.Post("/api/condpag", condPag);
+        if (responseHttp.Error)
+        {
+            var mensajeError = await responseHttp.GetErrorMessageAsync();
+            await sweetAlertService.FireAsync("Error", mensajeError, SweetAlertIcon.Error);
+            return;
+        }
+
+        await BlazoredModal.CloseAsync(ModalResult.Ok());
+        Return();
+    }
+
+    private void Return()
+    {
+        condPagForm!.FormPostedSuccessfully = true;
+        navigationManager.NavigateTo("/TablasAuxiliares/CondicionPago/CondPag");
+    }
+}

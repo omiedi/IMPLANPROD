@@ -1,0 +1,193 @@
+@page "/configuracion/email"
+@using IMPLANPROD.Shared.DTOs
+@using Microsoft.AspNetCore.Components.Forms
+@inject IRepository repository
+@inject SweetAlertService sweetAlertService
+
+<div class="container mt-4">
+    <h3>Configuración de Correo Electrónico</h3>
+
+
+    <div class="card">
+        <div class="card-body">
+            <h5 class="card-title mb-4">Configuración de Gmail</h5>
+
+            <EditForm Model="@emailConfig" OnValidSubmit="GuardarConfiguracion">
+                <DataAnnotationsValidator />
+
+                <div class="mb-3">
+                    <label class="form-label">Correo Gmail:</label>
+                    <InputText class="form-control" @bind-Value="emailConfig.EmailAddress" />
+                    <small class="text-muted">Ingrese su dirección de correo de Gmail</small>
+                    <ValidationMessage For="@(() => emailConfig.EmailAddress)" />
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label">Contraseña de Aplicación:</label>
+                    <InputText type="password" class="form-control" @bind-Value="emailConfig.AppPassword" />
+                    <small class="text-muted">Ingrese la contraseña de aplicación generada en su cuenta de Google</small>
+                    <ValidationMessage For="@(() => emailConfig.AppPassword)" />
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label">Nombre para mostrar:</label>
+                    <InputText class="form-control" @bind-Value="emailConfig.DisplayName" />
+                    <small class="text-muted">Nombre que aparecerá como remitente de los correos</small>
+                    <ValidationMessage For="@(() => emailConfig.DisplayName)" />
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label">Archivo adjunto:</label>
+                    <InputFile OnChange="OnFileChange" class="form-control" accept=".pdf,.doc,.docx,.xls,.xlsx,.txt,.jpg,.png" />
+                    <small class="text-muted">Seleccione un archivo para adjuntar al correo de prueba</small>
+                    @if (selectedFile != null)
+                    {
+                        <div class="mt-2">
+                            <span class="text-success">
+                                <i class="oi oi-file"></i> @selectedFile.Name
+                            </span>
+                        </div>
+                    }
+                </div>
+
+                <div class="alert alert-info">
+                    <h6>¿Cómo obtener una contraseña de aplicación?</h6>
+                    <ol>
+                        <li>Ve a la configuración de tu cuenta de Google</li>
+                        <li>Selecciona "Seguridad"</li>
+                        <li>En "Acceso a Google", selecciona "Verificación en dos pasos"</li>
+                        <li>Al final de la página, selecciona "Contraseñas de aplicación"</li>
+                        <li>Genera una nueva contraseña para esta aplicación</li>
+                    </ol>
+                </div>
+
+                <div class="mt-4">
+                    <button type="submit" class="btn btn-primary me-2">
+                        <i class="oi oi-check"></i> Guardar Configuración
+                    </button>
+                    <button type="button" class="btn btn-info" @onclick="EnviarMailPrueba" disabled="@(!ConfiguracionValida())">
+                        <i class="oi oi-envelope-closed"></i> Enviar Email de Prueba
+                    </button>
+                </div>
+            </EditForm>
+        </div>
+    </div>
+
+    @if (enviandoPrueba)
+    {
+        <div class="position-fixed top-0 start-0 w-100 h-100 d-flex justify-content-center align-items-center" style="background: rgba(0,0,0,0.5); z-index: 1050;">
+            <div class="spinner-border text-light" role="status">
+                <span class="visually-hidden">Enviando correo de prueba...</span>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    private EmailConfigDTO emailConfig = new();
+    private bool enviandoPrueba = false;
+    private IBrowserFile selectedFile;
+    private const int maxFileSize = 10 * 1024 * 1024; // 10MB
+
+    protected override async Task OnInitializedAsync()
+    {
+        await CargarConfiguracion();
+    }
+
+    private async Task CargarConfiguracion()
+    {
+        var response = await repository.Get<EmailConfigDTO>("api/emailconfig");
+        if (!response.Error)
+        {
+            emailConfig = response.Response;
+        }
+    }
+
+    private async Task GuardarConfiguracion()
+    {
+        var response = await repository.Post("api/emailconfig", emailConfig);
+        if (response.Error)
+        {
+            await sweetAlertService.FireAsync("Error", "No se pudo guardar la configuración", SweetAlertIcon.Error);
+            return;
+        }
+
+        await sweetAlertService.FireAsync("Éxito", "Configuración guardada correctamente", SweetAlertIcon.Success);
+    }
+
+    private bool ConfiguracionValida()
+    {
+        return !string.IsNullOrEmpty(emailConfig.EmailAddress) &&
+               !string.IsNullOrEmpty(emailConfig.AppPassword) &&
+               !string.IsNullOrEmpty(emailConfig.DisplayName);
+    }
+
+    private async Task OnFileChange(InputFileChangeEventArgs e)
+    {
+        selectedFile = e.File;
+        if (selectedFile.Size > maxFileSize)
+        {
+            await sweetAlertService.FireAsync("Error", "El archivo no debe superar los 10MB", SweetAlertIcon.Error);
+            selectedFile = null;
+        }
+    }
+
+    private async Task EnviarMailPrueba()
+    {
+        try
+        {
+            enviandoPrueba = true;
+            
+            if (selectedFile != null)
+            {
+                var fileContent = new byte[selectedFile.Size];
+                await selectedFile.OpenReadStream(maxFileSize).ReadAsync(fileContent);
+                
+                var emailTest = new EmailTestDTO
+                {
+                    Config = emailConfig,
+                    AttachmentContent = fileContent,
+                    AttachmentName = selectedFile.Name,
+                    AttachmentContentType = selectedFile.ContentType
+                };
+                
+                var response = await repository.Post("api/emailconfig/test", emailTest);
+                
+                if (response.Error)
+                {
+                    await sweetAlertService.FireAsync("Error",
+                        "No se pudo enviar el correo de prueba. Verifique la configuración.",
+                        SweetAlertIcon.Error);
+                    return;
+                }
+            }
+            else
+            {
+                var response = await repository.Post("api/emailconfig/test", emailConfig);
+                
+                if (response.Error)
+                {
+                    await sweetAlertService.FireAsync("Error",
+                        "No se pudo enviar el correo de prueba. Verifique la configuración.",
+                        SweetAlertIcon.Error);
+                    return;
+                }
+            }
+
+            await sweetAlertService.FireAsync("Éxito",
+                "Correo de prueba enviado correctamente. Verifique su bandeja de entrada.",
+                SweetAlertIcon.Success);
+        }
+        catch (Exception ex)
+        {
+            await sweetAlertService.FireAsync("Error",
+                $"Error al enviar el correo de prueba: {ex.Message}",
+                SweetAlertIcon.Error);
+        }
+        finally
+        {
+            enviandoPrueba = false;
+        }
+    }
+}
+ESCDA

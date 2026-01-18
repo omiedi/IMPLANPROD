@@ -1,0 +1,527 @@
+@page "/graficos-recepciones"
+@using ApexCharts
+@using IMPLANPROD.Shared.DTOs
+@using IMPLANPROD.Client.Repositories
+@inject IJSRuntime JSRuntime
+@inject IRepository repository
+@inject NavigationManager NavigationManager
+
+<PageTitle>Gráficos de Recepciones</PageTitle>
+
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header bg-success text-white">
+                    <h4 class="mb-0">
+                        <i class="fas fa-chart-line me-2"></i>Gráficos de Recepciones y Calidad de Proveedores
+                    </h4>
+                </div>
+                <div class="card-body">
+                    
+                    <!-- Filtros -->
+                    <div class="row mb-4">
+                        <div class="col-md-3">
+                            <label class="form-label">Desde:</label>
+                            <input type="date" class="form-control" @bind="fechaDesde" />
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">Hasta:</label>
+                            <input type="date" class="form-control" @bind="fechaHasta" />
+                        </div>
+                        <div class="col-md-3">
+                            <div class="d-flex align-items-end h-100">
+                                <button class="btn btn-success me-2" @onclick="GenerarGraficos" disabled="@cargando">
+                                    @if (cargando)
+                                    {
+                                        <i class="fas fa-spinner fa-spin me-1"></i>
+                                        <span>Generando...</span>
+                                    }
+                                    else
+                                    {
+                                        <i class="fas fa-sync me-1"></i>
+                                        <span>Generar Gráficos</span>
+                                    }
+                                </button>
+                                <button class="btn btn-secondary" @onclick="Volver">
+                                    <i class="fas fa-arrow-left me-1"></i>Volver
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    @if (cargando)
+                    {
+                        <div class="text-center py-5">
+                            <div class="spinner-border text-success" role="status">
+                                <span class="visually-hidden">Generando...</span>
+                            </div>
+                            <p class="mt-2">Generando gráficos con ApexCharts C#...</p>
+                        </div>
+                    }
+                    else if (!graficosGenerados)
+                    {
+                        <div class="text-center py-5">
+                            <div class="alert alert-info">
+                                <i class="fas fa-info-circle me-2"></i>
+                                <strong>Haz clic en "Generar Gráficos" para visualizar los reportes</strong>
+                                <p class="mb-0 mt-2">Análisis de recepciones y calificación de proveedores.</p>
+                            </div>
+                        </div>
+                    }
+                    else
+                    {
+                        <!-- Estadísticas Resumen -->
+                        <div class="row mb-4">
+                            <div class="col-12">
+                                <div class="card">
+                                    <div class="card-header bg-dark text-white">
+                                        <h6 class="mb-0">
+                                            <i class="fas fa-calculator me-2"></i>Resumen del Período
+                                        </h6>
+                                    </div>
+                                    <div class="card-body">
+                                        <div class="row text-center">
+                                            <div class="col-md-2">
+                                                <div class="border rounded p-3">
+                                                    <h5 class="text-primary">@totalRecepciones</h5>
+                                                    <small class="text-muted">Total Recepciones</small>
+                                                </div>
+                                            </div>
+                                            <div class="col-md-2">
+                                                <div class="border rounded p-3">
+                                                    <h5 class="text-success">@cantidadTotalRecibida.ToString("N2")</h5>
+                                                    <small class="text-muted">Cantidad Recibida</small>
+                                                </div>
+                                            </div>
+                                            <div class="col-md-2">
+                                                <div class="border rounded p-3">
+                                                    <h5 class="text-danger">@cantidadTotalRechazada.ToString("N2")</h5>
+                                                    <small class="text-muted">Cantidad Rechazada</small>
+                                                </div>
+                                            </div>
+                                            <div class="col-md-2">
+                                                <div class="border rounded p-3">
+                                                    <h5 class="@(porcentajeRechazo > 5 ? "text-danger" : "text-success")">@porcentajeRechazo.ToString("N2")%</h5>
+                                                    <small class="text-muted">% Rechazo</small>
+                                                </div>
+                                            </div>
+                                            <div class="col-md-2">
+                                                <div class="border rounded p-3">
+                                                    <h5 class="text-info">@totalProveedores</h5>
+                                                    <small class="text-muted">Proveedores</small>
+                                                </div>
+                                            </div>
+                                            <div class="col-md-2">
+                                                <div class="border rounded p-3">
+                                                    <h5 class="text-warning">@promedioMensual.ToString("N2")</h5>
+                                                    <small class="text-muted">Promedio Mensual</small>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Gráficos ApexCharts -->
+                        <div class="row">
+                            <!-- Gráfico de Líneas - Recepciones por Mes -->
+                            <div class="col-md-6 mb-4">
+                                <div class="card">
+                                    <div class="card-header bg-info text-white">
+                                        <h6 class="mb-0">
+                                            <i class="fas fa-chart-line me-2"></i>Recepciones por Mes
+                                        </h6>
+                                    </div>
+                                    <div class="card-body" style="height: 400px;">
+                                        <ApexChart TItem="DatoMensualRecepcionDTO"
+                                                   Title="Evolución de Recepciones Mensuales"
+                                                   Options="opcionesLineas"
+                                                   Height="350">
+                                            
+                                            <ApexPointSeries TItem="DatoMensualRecepcionDTO"
+                                                             Items="datosRecepcionesPorMes"
+                                                             Name="Año Actual"
+                                                             SeriesType="SeriesType.Line"
+                                                             XValue="@(e => e.Mes)"
+                                                             YValue="@(e => e.Cantidad)" />
+                                            
+                                            <ApexPointSeries TItem="DatoMensualRecepcionDTO"
+                                                             Items="datosRecepcionesPorMesAnterior"
+                                                             Name="Año Anterior"
+                                                             SeriesType="SeriesType.Line"
+                                                             XValue="@(e => e.Mes)"
+                                                             YValue="@(e => e.Cantidad)" />
+                                        </ApexChart>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Gráfico de Barras - Calificación de Proveedores -->
+                            <div class="col-md-6 mb-4">
+                                <div class="card">
+                                    <div class="card-header bg-success text-white">
+                                        <h6 class="mb-0">
+                                            <i class="fas fa-star me-2"></i>Calificación de Proveedores (Top 10)
+                                        </h6>
+                                    </div>
+                                    <div class="card-body" style="height: 400px;">
+                                        <ApexChart TItem="CalificacionProveedorDTO"
+                                                   Title="Calidad de Proveedores (0-100)"
+                                                   Options="opcionesBarrasCalificacion"
+                                                   Height="350">
+                                            
+                                            <ApexPointSeries TItem="CalificacionProveedorDTO"
+                                                             Items="datosCalificacionProveedores"
+                                                             Name="Calificación"
+                                                             SeriesType="SeriesType.Bar"
+                                                             XValue="@(e => e.Proveedor)"
+                                                             YValue="@(e => e.CalificacionGeneral)" />
+                                        </ApexChart>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="row">
+                            <!-- Gráfico de Barras - Rechazos por Proveedor -->
+                            <div class="col-md-6 mb-4">
+                                <div class="card">
+                                    <div class="card-header bg-danger text-white">
+                                        <h6 class="mb-0">
+                                            <i class="fas fa-exclamation-triangle me-2"></i>Top 5 Proveedores con Más Rechazos
+                                        </h6>
+                                    </div>
+                                    <div class="card-body" style="height: 400px;">
+                                        <ApexChart TItem="DatoRechazoDTO"
+                                                   Title="Cantidad Rechazada por Proveedor"
+                                                   Options="opcionesBarrasRechazos"
+                                                   Height="350">
+                                            
+                                            <ApexPointSeries TItem="DatoRechazoDTO"
+                                                             Items="datosRechazosPorProveedor"
+                                                             Name="Cantidad Rechazada"
+                                                             SeriesType="SeriesType.Bar"
+                                                             XValue="@(e => e.Proveedor)"
+                                                             YValue="@(e => e.CantidadRechazada)" />
+                                        </ApexChart>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Gráfico Circular - Estados de Recepciones -->
+                            <div class="col-md-6 mb-4">
+                                <div class="card">
+                                    <div class="card-header bg-warning text-dark">
+                                        <h6 class="mb-0">
+                                            <i class="fas fa-chart-pie me-2"></i>Estados de Recepciones
+                                        </h6>
+                                    </div>
+                                    <div class="card-body" style="height: 400px;">
+                                        <ApexChart TItem="DatoEstadoRecepcionDTO"
+                                                   Title="Distribución por Estados"
+                                                   Options="opcionesPie"
+                                                   Height="350">
+                                            
+                                            <ApexPointSeries TItem="DatoEstadoRecepcionDTO"
+                                                             Items="datosEstadosRecepciones"
+                                                             Name="Cantidad"
+                                                             SeriesType="SeriesType.Pie"
+                                                             XValue="@(e => e.Estado)"
+                                                             YValue="@(e => e.Cantidad)" />
+                                        </ApexChart>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="row">
+                            <!-- Gráfico de Barras Horizontales - Top Productos -->
+                            <div class="col-md-12 mb-4">
+                                <div class="card">
+                                    <div class="card-header bg-primary text-white">
+                                        <h6 class="mb-0">
+                                            <i class="fas fa-box me-2"></i>Top 10 Productos Más Recibidos
+                                        </h6>
+                                    </div>
+                                    <div class="card-body" style="height: 450px;">
+                                        <ApexChart TItem="DatoProductoRecepcionDTO"
+                                                   Title="Productos con Mayor Cantidad Recibida"
+                                                   Options="opcionesBarrasProductos"
+                                                   Height="400">
+                                            
+                                            <ApexPointSeries TItem="DatoProductoRecepcionDTO"
+                                                             Items="datosTopProductos"
+                                                             Name="Cantidad Total"
+                                                             SeriesType="SeriesType.Bar"
+                                                             XValue="@(e => e.Producto)"
+                                                             YValue="@(e => e.CantidadTotal)" />
+                                        </ApexChart>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        /*Proveedor A:
+- Total recibido: 1000 unidades
+- Aprobado: 950 (95%)
+- Rechazado: 30 (3%)
+- Faltante: 20 (2%)
+
+Calificación = 100 - (3 × 2) - 2 = 92 → Excelente
+*/
+                        <!-- Tabla de Calificación Detallada de Proveedores -->
+                        <div class="row">
+                            <div class="col-12">
+                                <div class="card">
+                                    <div class="card-header bg-success text-white">
+                                        <h6 class="mb-0">
+                                            <i class="fas fa-table me-2"></i>Detalle de Calificación de Proveedores
+                                        </h6>
+                                    </div>
+                                    <div class="card-body">
+                                        <div class="table-responsive">
+                                            <table class="table table-striped table-hover table-sm">
+                                                <thead class="table-dark">
+                                                    <tr>
+                                                        <th>Proveedor</th>
+                                                        <th class="text-center">Recepciones</th>
+                                                        <th class="text-end">% Aprobación</th>
+                                                        <th class="text-end">% Rechazo</th>
+                                                        <th class="text-end">% Faltante</th>
+                                                        <th class="text-center">Calificación</th>
+                                                        <th class="text-center">Categoría</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    @foreach (var proveedor in datosCalificacionProveedores)
+                                                    {
+                                                        <tr>
+                                                            <td>@proveedor.Proveedor</td>
+                                                            <td class="text-center">@proveedor.TotalRecepciones</td>
+                                                            <td class="text-end text-success">@proveedor.PorcentajeAprobacion.ToString("N2")%</td>
+                                                            <td class="text-end text-danger">@proveedor.PorcentajeRechazo.ToString("N2")%</td>
+                                                            <td class="text-end text-warning">@proveedor.PorcentajeFaltante.ToString("N2")%</td>
+                                                            <td class="text-center">
+                                                                <span class="badge @GetBadgeClass(proveedor.CalificacionGeneral)">
+                                                                    @proveedor.CalificacionGeneral.ToString("N2")
+                                                                </span>
+                                                            </td>
+                                                            <td class="text-center">
+                                                                <span class="badge @GetCategoriaBadgeClass(proveedor.Categoria)">
+                                                                    @proveedor.Categoria
+                                                                </span>
+                                                            </td>
+                                                        </tr>
+                                                    }
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                        <div class="alert alert-info mt-3">
+                                            <strong>Fórmula de Calificación:</strong> 100 - (% Rechazo × 2) - % Faltante
+                                            <br/>
+                                            <strong>Categorías:</strong> Excelente (≥90), Bueno (≥75), Regular (≥60), Deficiente (&lt;60)
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    }
+
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    // Variables de estado
+    private DateTime fechaDesde = DateTime.Now.AddMonths(-6);
+    private DateTime fechaHasta = DateTime.Now;
+    private bool cargando = false;
+    private bool graficosGenerados = false;
+    
+    // Variables para estadísticas
+    private int totalRecepciones = 0;
+    private decimal cantidadTotalRecibida = 0;
+    private decimal cantidadTotalRechazada = 0;
+    private decimal porcentajeRechazo = 0;
+    private int totalProveedores = 0;
+    private decimal promedioMensual = 0;
+
+    // Datos para los gráficos
+    private List<DatoMensualRecepcionDTO> datosRecepcionesPorMes = new();
+    private List<DatoMensualRecepcionDTO> datosRecepcionesPorMesAnterior = new();
+    private List<CalificacionProveedorDTO> datosCalificacionProveedores = new();
+    private List<DatoRechazoDTO> datosRechazosPorProveedor = new();
+    private List<DatoEstadoRecepcionDTO> datosEstadosRecepciones = new();
+    private List<DatoProductoRecepcionDTO> datosTopProductos = new();
+    
+    // Datos completos de la API
+    private GraficosRecepcionesDTO? datosGraficos;
+
+    // Opciones de configuración para los gráficos
+    private ApexChartOptions<DatoMensualRecepcionDTO> opcionesLineas = new();
+    private ApexChartOptions<CalificacionProveedorDTO> opcionesBarrasCalificacion = new();
+    private ApexChartOptions<DatoRechazoDTO> opcionesBarrasRechazos = new();
+    private ApexChartOptions<DatoEstadoRecepcionDTO> opcionesPie = new();
+    private ApexChartOptions<DatoProductoRecepcionDTO> opcionesBarrasProductos = new();
+
+    protected override void OnInitialized()
+    {
+        ConfigurarOpcionesGraficos();
+    }
+
+    private void ConfigurarOpcionesGraficos()
+    {
+        // Opciones para gráfico de líneas
+        opcionesLineas = new ApexChartOptions<DatoMensualRecepcionDTO>
+        {
+            Theme = new Theme { Mode = Mode.Light, Palette = PaletteType.Palette1 },
+            Chart = new Chart { Toolbar = new Toolbar { Show = false }, Zoom = new Zoom { Enabled = false } },
+            Stroke = new Stroke { Curve = Curve.Smooth, Width = 3 },
+            Colors = new List<string> { "#17a2b8", "#ffc107" }
+        };
+
+        // Opciones para gráfico de calificación
+        opcionesBarrasCalificacion = new ApexChartOptions<CalificacionProveedorDTO>
+        {
+            Theme = new Theme { Mode = Mode.Light, Palette = PaletteType.Palette2 },
+            Chart = new Chart { Toolbar = new Toolbar { Show = false } },
+            Colors = new List<string> { "#28a745" },
+            PlotOptions = new PlotOptions { Bar = new PlotOptionsBar { Horizontal = true } },
+            Yaxis = new List<YAxis> { new YAxis { Max = 100 } }
+        };
+
+        // Opciones para gráfico de rechazos
+        opcionesBarrasRechazos = new ApexChartOptions<DatoRechazoDTO>
+        {
+            Theme = new Theme { Mode = Mode.Light },
+            Chart = new Chart { Toolbar = new Toolbar { Show = false } },
+            Colors = new List<string> { "#dc3545" },
+            PlotOptions = new PlotOptions { Bar = new PlotOptionsBar { Horizontal = true } }
+        };
+
+        // Opciones para gráfico circular
+        opcionesPie = new ApexChartOptions<DatoEstadoRecepcionDTO>
+        {
+            Theme = new Theme { Mode = Mode.Light },
+            Colors = new List<string> { "#28a745", "#ffc107", "#dc3545", "#17a2b8" },
+            Legend = new Legend { Position = LegendPosition.Bottom }
+        };
+
+        // Opciones para gráfico de productos
+        opcionesBarrasProductos = new ApexChartOptions<DatoProductoRecepcionDTO>
+        {
+            Theme = new Theme { Mode = Mode.Light },
+            Chart = new Chart { Toolbar = new Toolbar { Show = false } },
+            Colors = new List<string> { "#007bff" },
+            PlotOptions = new PlotOptions { Bar = new PlotOptionsBar { Horizontal = true } }
+        };
+    }
+
+    private async Task GenerarGraficos()
+    {
+        if (cargando) return;
+        
+        cargando = true;
+        StateHasChanged();
+
+        try
+        {
+            var url = $"api/bolrecep/graficos?fechaDesde={fechaDesde:yyyy-MM-dd}&fechaHasta={fechaHasta:yyyy-MM-dd}";
+            var responseHttp = await repository.Get<GraficosRecepcionesDTO>(url);
+            
+            if (!responseHttp.Error && responseHttp.Response != null)
+            {
+                datosGraficos = responseHttp.Response;
+                
+                // Asignar datos a las variables de los gráficos
+                datosRecepcionesPorMes = datosGraficos.RecepcionesPorMes;
+                datosCalificacionProveedores = datosGraficos.CalificacionProveedores;
+                datosRechazosPorProveedor = datosGraficos.RechazosPorProveedor;
+                datosEstadosRecepciones = datosGraficos.EstadosRecepciones;
+                datosTopProductos = datosGraficos.TopProductosRecibidos;
+                
+                // Obtener datos del año anterior
+                var fechaDesdeAnterior = fechaDesde.AddYears(-1);
+                var fechaHastaAnterior = fechaHasta.AddYears(-1);
+                var urlAnterior = $"api/bolrecep/graficos?fechaDesde={fechaDesdeAnterior:yyyy-MM-dd}&fechaHasta={fechaHastaAnterior:yyyy-MM-dd}";
+                var responseAnterior = await repository.Get<GraficosRecepcionesDTO>(urlAnterior);
+                
+                if (!responseAnterior.Error && responseAnterior.Response != null)
+                {
+                    // Ajustar las fechas del año anterior para que coincidan con el eje X del año actual
+                    // Convertir año anterior al año actual para que las etiquetas coincidan
+                    datosRecepcionesPorMesAnterior = responseAnterior.Response.RecepcionesPorMes
+                        .Select(d => 
+                        {
+                            // Parsear la fecha del año anterior (formato: YYYY-MM)
+                            if (d.Mes.Length >= 7 && DateTime.TryParse(d.Mes + "-01", out var fecha))
+                            {
+                                // Sumar 1 año para que coincida con el eje X del año actual
+                                var fechaAjustada = fecha.AddYears(1);
+                                return new DatoMensualRecepcionDTO
+                                {
+                                    Mes = fechaAjustada.ToString("yyyy-MM"),
+                                    Cantidad = d.Cantidad
+                                };
+                            }
+                            return d;
+                        })
+                        .ToList();
+                    
+                    Console.WriteLine($"=== DATOS AÑO ANTERIOR RECEPCIONES: {datosRecepcionesPorMesAnterior.Count} meses ===");
+                }
+                else
+                {
+                    datosRecepcionesPorMesAnterior = new List<DatoMensualRecepcionDTO>();
+                    Console.WriteLine("=== NO SE ENCONTRARON DATOS DEL AÑO ANTERIOR RECEPCIONES ===");
+                }
+                
+                // Asignar estadísticas generales
+                totalRecepciones = datosGraficos.TotalRecepciones;
+                cantidadTotalRecibida = datosGraficos.CantidadTotalRecibida;
+                cantidadTotalRechazada = datosGraficos.CantidadTotalRechazada;
+                porcentajeRechazo = datosGraficos.PorcentajeRechazo;
+                totalProveedores = datosGraficos.TotalProveedores;
+                promedioMensual = datosGraficos.PromedioMensual;
+                
+                graficosGenerados = true;
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error obteniendo datos de gráficos: {ex.Message}");
+        }
+        finally
+        {
+            cargando = false;
+            StateHasChanged();
+        }
+    }
+
+    private string GetBadgeClass(decimal calificacion)
+    {
+        return calificacion >= 90 ? "bg-success" :
+               calificacion >= 75 ? "bg-info" :
+               calificacion >= 60 ? "bg-warning" : "bg-danger";
+    }
+
+    private string GetCategoriaBadgeClass(string categoria)
+    {
+        return categoria switch
+        {
+            "Excelente" => "bg-success",
+            "Bueno" => "bg-info",
+            "Regular" => "bg-warning",
+            "Deficiente" => "bg-danger",
+            _ => "bg-secondary"
+        };
+    }
+
+    private void Volver()
+    {
+        NavigationManager.NavigateTo("/recepcion/selproveedor");
+    }
+}

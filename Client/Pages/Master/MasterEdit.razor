@@ -1,0 +1,67 @@
+@page "/master/edit/{Id:int}"
+@inject IRepository repository
+@inject NavigationManager navigationManager
+@inject SweetAlertService sweetAlertService
+@inject IModalService Modal
+
+<h3>Editar Producto</h3>
+
+@if (master is null)
+{
+    <div class="align-items-center">
+        <img src="https://media0.giphy.com/media/3oEjI6SIIHBdRxXI40/giphy.gif?cid=ecf05e47q4b7z67j4s1jr2t1uymf1mh3kq8sxpgmj89wf4xg&rid=giphy.gif&ct=g" />
+    </div>
+}
+else
+{
+    <MasterForm @ref="masterForm" Master="master" OnValidSubmit="Edit" ReturnAction="Return" IsEdit="true" />
+}
+
+@code {
+    private Master? master;
+    private MasterForm? masterForm;
+    public bool FormPostedSuccessfully { get; set; }
+    [Parameter]
+    public int Id { get; set; }
+
+    [CascadingParameter]
+    BlazoredModalInstance BlazoredModal { get; set; } = default!;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var responseHttp = await repository.Get<Master>($"/api/master/{Id}");
+        if (responseHttp.Error)
+        {
+            if (responseHttp.HttpResponseMessage.StatusCode == System.Net.HttpStatusCode.NotFound)
+            {
+                navigationManager.NavigateTo("/master");
+                return;
+            }
+
+            var message = await responseHttp.GetErrorMessageAsync();
+            await sweetAlertService.FireAsync("Error", message, SweetAlertIcon.Error);
+            return;
+        }
+        master = responseHttp.Response;
+    }
+
+    private async Task Edit()
+    {
+        var responseHttp = await repository.Put("/api/master", master);
+        if (responseHttp.Error)
+        {
+            var message = await responseHttp.GetErrorMessageAsync();
+            await sweetAlertService.FireAsync("Error", message, SweetAlertIcon.Error);
+            return;
+        }
+
+        // await BlazoredModal.CloseAsync(ModalResult.Ok());
+        Return();
+    }
+
+    private void Return()
+    {
+        masterForm!.FormPostedSuccessfully = true;
+        navigationManager.NavigateTo("/master-index");
+    }
+}

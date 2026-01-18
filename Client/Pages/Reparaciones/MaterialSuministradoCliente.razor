@@ -1,0 +1,1068 @@
+@page "/material-suministrado-cliente"
+@using IMPLANPROD.Client.Shared.Components
+@inject IRepository repository
+@inject SweetAlertService sweetAlertService
+@inject NavigationManager navigationManager
+
+<div class="container-fluid mt-3">
+    <div class="card shadow">
+        <div class="card-header bg-primary text-white">
+            <h4 class="mb-0">
+                <i class="fas fa-box me-2"></i>Material Suministrado por el Cliente
+            </h4>
+        </div>
+        <div class="card-body">
+            <!-- Instructivos colapsables -->
+            <div class="row mb-3">
+                <div class="col-12">
+                    <!-- Instructivo Usuario -->
+                    <div class="card mb-2">
+                        <div class="card-header bg-info text-white p-2">
+                            <button class="btn btn-link text-white text-decoration-none w-100 text-start p-0" 
+                                    type="button" 
+                                    @onclick="() => mostrarInstructivoUsuario = !mostrarInstructivoUsuario">
+                                <i class="fas @(mostrarInstructivoUsuario ? "fa-chevron-down" : "fa-chevron-right") me-2"></i>
+                                <strong>Instructivo para el Usuario</strong>
+                            </button>
+                        </div>
+                        @if (mostrarInstructivoUsuario)
+                        {
+                            <div class="card-body">
+                                <h6 class="text-primary"><i class="fas fa-info-circle"></i> Descripción</h6>
+                                <p>
+                                    Esta pantalla permite gestionar los materiales que el cliente ha suministrado para una orden de reparación específica.
+                                    Puede visualizar el stock disponible de materiales y realizar operaciones de ingreso, devolución o consumo.
+                                </p>
+
+                                <h6 class="text-primary"><i class="fas fa-list-check"></i> Funcionalidades</h6>
+                                <ul>
+                                    <li><strong>Selección de O.R.:</strong> Seleccione una orden de reparación para ver sus materiales suministrados</li>
+                                    <li><strong>Visualización:</strong> La tabla muestra el código, descripción y saldo disponible de cada material</li>
+                                    <li><strong>Agregar Material (BR):</strong> Permite ingresar nuevo material suministrado por el cliente usando un selector de productos</li>
+                                    <li><strong>Devolución (DV):</strong> Registra la devolución de material al cliente</li>
+                                    <li><strong>Consumo (CF):</strong> Registra el consumo de material en la fabricación/reparación</li>
+                                    <li><strong>Ver Movimientos:</strong> Muestra todos los movimientos de material en formato de cuenta contable con ingresos, salidas y saldos acumulados</li>
+                                </ul>
+
+                                <h6 class="text-primary mt-3"><i class="fas fa-clipboard-list"></i> Casos de Uso</h6>
+                                <ul>
+                                    <li>El cliente entrega material adicional después de iniciada la reparación</li>
+                                    <li>Se devuelve material sobrante al cliente</li>
+                                    <li>Se registra el consumo de material suministrado durante la reparación</li>
+                                    <li>Consultar el historial completo de movimientos de una orden de reparación</li>
+                                    <li>Verificar saldos y trazabilidad de materiales suministrados</li>
+                                </ul>
+                            </div>
+                        }
+                    </div>
+
+                    <!-- Instructivo Desarrollador -->
+                    <InstructivoDesarrollador>
+                                <h6 class="text-info"><i class="fas fa-code"></i> Arquitectura</h6>
+                                <p>
+                                    Componente Blazor que replica la funcionalidad VB6 de gestión de materiales suministrados (CARGAMATSUM y MOVI_SUMINISTRADOS).
+                                </p>
+
+                                <h6 class="text-info mt-3"><i class="fas fa-server"></i> Endpoints</h6>
+                                <ul>
+                                    <li><code>GET /api/repara/materiales-suministrados/{numRepa}</code> - Obtiene materiales agrupados con saldo &gt; 0</li>
+                                    <li><code>POST /api/repara/movimiento-material-suministrado</code> - Registra movimientos BR/DV/CF</li>
+                                    <li><code>GET /api/repara/movimientos-cuenta-contable/{numRepa}</code> - Obtiene todos los movimientos en formato cuenta contable</li>
+                                </ul>
+
+                                <h6 class="text-info mt-3"><i class="fas fa-database"></i> Tablas Afectadas</h6>
+                                <ul>
+                                    <li><strong>DETAMASU:</strong> Almacena movimientos de material suministrado (INSERT)</li>
+                                    <li><strong>MASTER:</strong> Consulta para obtener descripciones de productos (SELECT)</li>
+                                    <li><strong>REPARA:</strong> Consulta para obtener datos de la orden de reparación (SELECT)</li>
+                                </ul>
+
+                                <h6 class="text-info mt-3"><i class="fas fa-exchange-alt"></i> Códigos de Movimiento</h6>
+                                <ul>
+                                    <li><strong>BR:</strong> Agregado Posterior (ingreso positivo)</li>
+                                    <li><strong>DV:</strong> Devolución (salida negativa)</li>
+                                    <li><strong>CF:</strong> Consumo de Fábrica (salida negativa)</li>
+                                </ul>
+
+                                <h6 class="text-info mt-3"><i class="fas fa-calculator"></i> Lógica VB6 Replicada</h6>
+                                <pre class="bg-light p-2 rounded"><code>SELECT COD_INTE, COD_EXTE, (SUM(CANTINGRE) - SUM(CANTSALID)) AS SALDO
+FROM DETAMASU
+WHERE TALON = @@NumRepa
+GROUP BY COD_INTE, COD_EXTE
+HAVING (SUM(CANTINGRE) - SUM(CANTSALID)) &gt; 0</code></pre>
+
+                                <h6 class="text-info mt-3"><i class="fas fa-check-circle"></i> Campos Registrados en DETAMASU</h6>
+                                <ul>
+                                    <li><code>CodiEmprNet = 0</code></li>
+                                    <li><code>CodiMovi</code> - BR, DV o CF</li>
+                                    <li><code>Nume_Clie</code> - Cliente de la O.R. (obtenido desde reparacionSeleccionada)</li>
+                                    <li><code>Cod_Inte</code> - Código interno del producto (seleccionado desde SelectorProductos)</li>
+                                    <li><code>Cod_Exte</code> - Código externo del producto (obtenido desde MASTER)</li>
+                                    <li><code>Talon</code> - NumRepa</li>
+                                    <li><code>CantIngre/CantSalid</code> - Según signo de cantidad</li>
+                                    <li><code>FechMov</code> - Fecha del movimiento</li>
+                                    <li><code>FeRemovi = DateTime.Now</code></li>
+                                    <li><code>Referencia</code> - Descripción del movimiento</li>
+                                </ul>
+
+                                <h6 class="text-info mt-3"><i class="fas fa-chart-line"></i> Funcionalidad Cuenta Contable</h6>
+                                <ul>
+                                    <li><strong>Modal de Movimientos:</strong> Muestra todos los movimientos en formato de cuenta contable</li>
+                                    <li><strong>Columnas:</strong> Fecha, Códigos, Descripción, Tipo Mov., Ingresos, Salidas, Saldo</li>
+                                    <li><strong>Saldo Acumulado:</strong> Se calcula dinámicamente por producto usando Dictionary&lt;int, decimal&gt;</li>
+                                    <li><strong>Colores:</strong> Verde (BR), Amarillo (DV), Rojo (CF)</li>
+                                    <li><strong>Resumen:</strong> Tabla adicional con totales agrupados por producto</li>
+                                    <li><strong>Totales:</strong> Fila de totales con suma de ingresos, salidas y saldo final</li>
+                                </ul>
+
+                                <h6 class="text-info mt-3"><i class="fas fa-bug"></i> Debugging</h6>
+                                <ul>
+                                    <li>Console.WriteLine en carga de movimientos para verificar cantidad de registros</li>
+                                    <li>Logging en backend con ILogger para rastrear operaciones</li>
+                                    <li>Validación de Nume_Clie desde reparacionSeleccionada?.Nume_Cli</li>
+                                </ul>
+                    </InstructivoDesarrollador>
+                </div>
+            </div>
+
+            <!-- Selector de Reparaciones -->
+            <div class="row mb-3">
+                <div class="col-12">
+                    <div class="card">
+                        <div class="card-header bg-light">
+                            <h6 class="mb-0">
+                                <i class="fas fa-list me-2"></i>Seleccionar Orden de Reparación
+                            </h6>
+                        </div>
+                        <div class="card-body">
+                            <!-- Filtros de Búsqueda -->
+                            <div class="row mb-3">
+                                <div class="col-md-2">
+                                    <label class="form-label fw-bold">NumRepa:</label>
+                                    <input type="number" 
+                                           class="form-control form-control-sm" 
+                                           @bind="filtroNumRepa"
+                                           placeholder="Número" />
+                                </div>
+                                <div class="col-md-2">
+                                    <label class="form-label fw-bold">Cliente:</label>
+                                    <input type="number" 
+                                           class="form-control form-control-sm" 
+                                           @bind="filtroNumeCli"
+                                           placeholder="N° Cliente" />
+                                </div>
+                                <div class="col-md-3">
+                                    <label class="form-label fw-bold">Razón Social:</label>
+                                    <input type="text" 
+                                           class="form-control form-control-sm" 
+                                           @bind="filtroRasoCli"
+                                           placeholder="Razón social" />
+                                </div>
+                                <div class="col-md-2">
+                                    <label class="form-label fw-bold">Referencia:</label>
+                                    <input type="text" 
+                                           class="form-control form-control-sm" 
+                                           @bind="filtroReferen"
+                                           placeholder="Referencia" />
+                                </div>
+                                <div class="col-md-2">
+                                    <label class="form-label fw-bold">N° Orden:</label>
+                                    <input type="number" 
+                                           class="form-control form-control-sm" 
+                                           @bind="filtroNuOrdRep"
+                                           placeholder="N° Orden" />
+                                </div>
+                                <div class="col-md-1 d-flex align-items-end">
+                                    <button class="btn btn-primary btn-sm w-100" @onclick="AplicarFiltros">
+                                        <i class="fas fa-search"></i>
+                                    </button>
+                                </div>
+                            </div>
+
+                            @if (cargandoReparaciones)
+                            {
+                                <div class="text-center py-3">
+                                    <div class="spinner-border spinner-border-sm text-primary" role="status">
+                                        <span class="visually-hidden">Cargando...</span>
+                                    </div>
+                                    <span class="ms-2">Cargando reparaciones...</span>
+                                </div>
+                            }
+                            else if (reparaciones.Any())
+                            {
+                                <div class="table-responsive">
+                                    <table class="table table-hover table-sm mb-0">
+                                        <thead class="table-light">
+                                            <tr>
+                                                <th>NumRepa</th>
+                                                <th>Referencia</th>
+                                                <th>Cliente</th>
+                                                <th>Razón Social</th>
+                                                <th>N° Orden</th>
+                                                <th>Cód. Repa</th>
+                                                <th>Ref. Orden</th>
+                                                <th class="text-center">Acción</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            @foreach (var rep in reparaciones)
+                                            {
+                                                <tr class="@(numRepaSeleccionado == rep.NumRepa ? "table-primary" : "")">
+                                                    <td><strong>@rep.NumRepa</strong></td>
+                                                    <td>@rep.Referen</td>
+                                                    <td>@rep.Nume_Cli</td>
+                                                    <td>@rep.Raso_Cli</td>
+                                                    <td>@rep.NuOrdRep</td>
+                                                    <td>@rep.CodRepa</td>
+                                                    <td>@rep.RefOrdRep</td>
+                                                    <td class="text-center">
+                                                        <button class="btn btn-sm btn-primary" 
+                                                                @onclick="() => SeleccionarReparacion(rep)">
+                                                            <i class="fas fa-check me-1"></i>Seleccionar
+                                                        </button>
+                                                    </td>
+                                                </tr>
+                                            }
+                                        </tbody>
+                                    </table>
+                                </div>
+
+                                <!-- Paginación -->
+                                <div class="row mt-3">
+                                    <div class="col-md-6">
+                                        <p class="text-muted mb-0">
+                                            Mostrando @reparaciones.Count de @totalCount reparaciones
+                                        </p>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <nav aria-label="Paginación">
+                                            <ul class="pagination pagination-sm justify-content-end mb-0">
+                                                <li class="page-item @(paginaActual == 1 ? "disabled" : "")">
+                                                    <button class="page-link" @onclick="() => CambiarPagina(1)">
+                                                        <i class="fas fa-angle-double-left"></i>
+                                                    </button>
+                                                </li>
+                                                <li class="page-item @(paginaActual == 1 ? "disabled" : "")">
+                                                    <button class="page-link" @onclick="() => CambiarPagina(paginaActual - 1)">
+                                                        <i class="fas fa-angle-left"></i>
+                                                    </button>
+                                                </li>
+                                                
+                                                @for (int i = Math.Max(1, paginaActual - 2); i <= Math.Min(totalPaginas, paginaActual + 2); i++)
+                                                {
+                                                    var pagina = i;
+                                                    <li class="page-item @(paginaActual == pagina ? "active" : "")">
+                                                        <button class="page-link" @onclick="() => CambiarPagina(pagina)">
+                                                            @pagina
+                                                        </button>
+                                                    </li>
+                                                }
+
+                                                <li class="page-item @(paginaActual == totalPaginas ? "disabled" : "")">
+                                                    <button class="page-link" @onclick="() => CambiarPagina(paginaActual + 1)">
+                                                        <i class="fas fa-angle-right"></i>
+                                                    </button>
+                                                </li>
+                                                <li class="page-item @(paginaActual == totalPaginas ? "disabled" : "")">
+                                                    <button class="page-link" @onclick="() => CambiarPagina(totalPaginas)">
+                                                        <i class="fas fa-angle-double-right"></i>
+                                                    </button>
+                                                </li>
+                                            </ul>
+                                        </nav>
+                                    </div>
+                                </div>
+                            }
+                            else
+                            {
+                                <div class="alert alert-info mb-0">
+                                    <i class="fas fa-info-circle me-2"></i>
+                                    No se encontraron reparaciones con los filtros aplicados.
+                                </div>
+                            }
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            @if (reparacionSeleccionada != null)
+            {
+                <!-- Información de la Reparación Seleccionada -->
+                <div class="row mb-3">
+                    <div class="col-12">
+                        <div class="alert alert-success">
+                            <h6 class="alert-heading">
+                                <i class="fas fa-check-circle me-2"></i>Reparación Seleccionada
+                            </h6>
+                            <div class="row">
+                                <div class="col-md-3">
+                                    <strong>NumRepa:</strong> @reparacionSeleccionada.NumRepa
+                                </div>
+                                <div class="col-md-3">
+                                    <strong>Cliente:</strong> @reparacionSeleccionada.Nume_Cli
+                                </div>
+                                <div class="col-md-6">
+                                    <strong>Razón Social:</strong> @reparacionSeleccionada.Raso_Cli
+                                </div>
+                            </div>
+                            <div class="row mt-2">
+                                <div class="col-md-3">
+                                    <strong>N° Orden:</strong> @reparacionSeleccionada.NuOrdRep
+                                </div>
+                                <div class="col-md-3">
+                                    <strong>Cód. Repa:</strong> @reparacionSeleccionada.CodRepa
+                                </div>
+                                <div class="col-md-6">
+                                    <strong>Referencia:</strong> @reparacionSeleccionada.Referen
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            }
+
+            @if (cargando)
+            {
+                <div class="text-center my-5">
+                    <div class="spinner-border text-primary" role="status">
+                        <span class="visually-hidden">Cargando...</span>
+                    </div>
+                    <p class="mt-2">Cargando materiales...</p>
+                </div>
+            }
+            else if (materiales.Any())
+            {
+                <!-- Tabla de Materiales -->
+                <div class="table-responsive">
+                    <table class="table table-striped table-hover">
+                        <thead class="table-primary">
+                            <tr>
+                                <th>Código Interno</th>
+                                <th>Código Externo</th>
+                                <th>Descripción</th>
+                                <th class="text-end">Saldo</th>
+                                <th class="text-center">Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var material in materiales)
+                            {
+                                <tr>
+                                    <td>@material.Cod_Inte</td>
+                                    <td>@material.Cod_Exte</td>
+                                    <td>@material.Descripcion</td>
+                                    <td class="text-end">@material.Saldo.ToString("N1")</td>
+                                    <td class="text-center">
+                                        <button class="btn btn-sm btn-success me-1" 
+                                                @onclick="() => AbrirModalAgregar(material)"
+                                                title="Agregar material">
+                                            <i class="fas fa-plus"></i>
+                                        </button>
+                                        <button class="btn btn-sm btn-warning me-1" 
+                                                @onclick="() => AbrirModalDevolucion(material)"
+                                                title="Devolución">
+                                            <i class="fas fa-undo"></i>
+                                        </button>
+                                        <button class="btn btn-sm btn-danger" 
+                                                @onclick="() => AbrirModalConsumo(material)"
+                                                title="Consumo">
+                                            <i class="fas fa-minus"></i>
+                                        </button>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- Botones de acción -->
+                <div class="mt-3 d-flex gap-2">
+                    <button class="btn btn-primary" @onclick="AbrirModalNuevoMaterial">
+                        <i class="fas fa-plus-circle me-1"></i>Agregar Nuevo Material
+                    </button>
+                    <button class="btn btn-info" @onclick="AbrirModalMovimientos">
+                        <i class="fas fa-list-alt me-1"></i>Ver Movimientos
+                    </button>
+                </div>
+            }
+            else if (numRepaSeleccionado > 0 && !cargando)
+            {
+                <div class="alert alert-info">
+                    <i class="fas fa-info-circle me-2"></i>
+                    No se encontraron materiales suministrados para esta orden de reparación.
+                    <div class="mt-2">
+                        <button class="btn btn-sm btn-primary me-2" @onclick="AbrirModalNuevoMaterial">
+                            <i class="fas fa-plus me-1"></i>Agregar Material
+                        </button>
+                        <button class="btn btn-sm btn-info" @onclick="AbrirModalMovimientos">
+                            <i class="fas fa-list-alt me-1"></i>Ver Movimientos
+                        </button>
+                    </div>
+                </div>
+            }
+        </div>
+    </div>
+</div>
+
+<!-- Modal para movimientos -->
+@if (mostrarModal)
+{
+    <div class="modal fade show" style="display: block" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header @(tipoMovimiento == "BR" ? "bg-success" : tipoMovimiento == "DV" ? "bg-warning" : "bg-danger") text-white">
+                    <h5 class="modal-title">
+                        @if (tipoMovimiento == "BR")
+                        {
+                            <i class="fas fa-plus-circle me-2"></i><text>Agregar Material</text>
+                        }
+                        else if (tipoMovimiento == "DV")
+                        {
+                            <i class="fas fa-undo me-2"></i><text>Devolución de Material</text>
+                        }
+                        else
+                        {
+                            <i class="fas fa-minus-circle me-2"></i><text>Consumo de Material</text>
+                        }
+                    </h5>
+                    <button type="button" class="btn-close btn-close-white" @onclick="CerrarModal"></button>
+                </div>
+                <div class="modal-body">
+                    @if (esNuevoMaterial)
+                    {
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">Seleccionar Código:</label>
+                            <div class="input-group">
+                                <input type="text" 
+                                       class="form-control" 
+                                       value="@productoSeleccionadoTexto" 
+                                       readonly 
+                                       placeholder="Haga clic en el botón para seleccionar un producto" />
+                                <button type="button" 
+                                        class="btn btn-primary" 
+                                        @onclick="AbrirSelectorProductos">
+                                    <i class="fas fa-search"></i> Buscar
+                                </button>
+                            </div>
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">Producto:</label>
+                            <p class="form-control-plaintext">
+                                <strong>@movimientoActual.Cod_Inte</strong> - @materialSeleccionado?.Descripcion
+                            </p>
+                        </div>
+                    }
+
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">Cantidad:</label>
+                        <input type="number" 
+                               class="form-control" 
+                               @bind="cantidadMovimiento"
+                               step="0.1"
+                               min="0.1" />
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">Fecha:</label>
+                        <input type="date" 
+                               class="form-control" 
+                               @bind="movimientoActual.FechMov" />
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">Observaciones:</label>
+                        <textarea class="form-control" 
+                                  @bind="movimientoActual.Referencia"
+                                  rows="3"></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" @onclick="CerrarModal">
+                        <i class="fas fa-times me-1"></i>Cancelar
+                    </button>
+                    <button type="button" 
+                            class="btn @(tipoMovimiento == "BR" ? "btn-success" : tipoMovimiento == "DV" ? "btn-warning" : "btn-danger")" 
+                            @onclick="RegistrarMovimiento"
+                            disabled="@guardando">
+                        @if (guardando)
+                        {
+                            <span class="spinner-border spinner-border-sm me-1"></span>
+                        }
+                        else
+                        {
+                            <i class="fas fa-save me-1"></i>
+                        }
+                        Guardar
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="modal-backdrop fade show"></div>
+}
+
+<!-- Selector de Productos -->
+<SelectorProductos @ref="selectorProductosRef"
+                   PermitirCantidad="true"
+                   CantidadDefault="1"
+                   OnProductoSeleccionadoCantidad="OnProductoSeleccionado"
+                   OnClose="OnCloseSelectorProductos" />
+
+<!-- Modal de Movimientos (Cuenta Contable) -->
+@if (mostrarModalMovimientos)
+{
+    <div class="modal fade show" style="display: block" tabindex="-1">
+        <div class="modal-dialog modal-xl">
+            <div class="modal-content">
+                <div class="modal-header bg-info text-white">
+                    <h5 class="modal-title">
+                        <i class="fas fa-list-alt me-2"></i>Movimientos de Material - O.R. @numRepaSeleccionado
+                    </h5>
+                    <button type="button" class="btn-close btn-close-white" @onclick="CerrarModalMovimientos"></button>
+                </div>
+                <div class="modal-body">
+                    @if (reparacionSeleccionada != null)
+                    {
+                        <div class="alert alert-secondary mb-3">
+                            <div class="row">
+                                <div class="col-md-4">
+                                    <strong>Cliente:</strong> @reparacionSeleccionada.Nume_Cli - @reparacionSeleccionada.Raso_Cli
+                                </div>
+                                <div class="col-md-4">
+                                    <strong>Referencia:</strong> @reparacionSeleccionada.Referen
+                                </div>
+                                <div class="col-md-4">
+                                    <strong>N° Orden:</strong> @reparacionSeleccionada.NuOrdRep
+                                </div>
+                            </div>
+                        </div>
+                    }
+
+                    @if (cargandoMovimientos)
+                    {
+                        <div class="text-center py-4">
+                            <div class="spinner-border text-primary" role="status">
+                                <span class="visually-hidden">Cargando movimientos...</span>
+                            </div>
+                            <p class="mt-2">Cargando movimientos...</p>
+                        </div>
+                    }
+                    else if (movimientosCuentaContable.Any())
+                    {
+                        <div class="table-responsive">
+                            <table class="table table-bordered table-hover table-sm">
+                                <thead class="table-dark">
+                                    <tr>
+                                        <th>Fecha</th>
+                                        <th>Código Interno</th>
+                                        <th>Código Externo</th>
+                                        <th>Descripción</th>
+                                        <th>Tipo Mov.</th>
+                                        <th class="text-end">Ingresos</th>
+                                        <th class="text-end">Salidas</th>
+                                        <th class="text-end">Saldo</th>
+                                        <th>Referencia</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @{
+                                        var saldoAcumulado = new Dictionary<int, decimal>();
+                                    }
+                                    @foreach (var mov in movimientosCuentaContable)
+                                    {
+                                        // Calcular saldo acumulado por producto
+                                        if (!saldoAcumulado.ContainsKey(mov.Cod_Inte))
+                                        {
+                                            saldoAcumulado[mov.Cod_Inte] = 0;
+                                        }
+                                        saldoAcumulado[mov.Cod_Inte] += (mov.CantIngre ?? 0) - (mov.CantSalid ?? 0);
+                                        var saldo = saldoAcumulado[mov.Cod_Inte];
+                                        <tr class="@(mov.CodiMovi == "BR" ? "table-success" : mov.CodiMovi == "DV" ? "table-warning" : "table-danger")">
+                                            <td>@mov.FechMov?.ToString("dd/MM/yyyy")</td>
+                                            <td><strong>@mov.Cod_Inte</strong></td>
+                                            <td>@mov.Cod_Exte</td>
+                                            <td>@mov.Descripcion</td>
+                                            <td>
+                                                @if (mov.CodiMovi == "BR")
+                                                {
+                                                    <span class="badge bg-success">BR - Ingreso</span>
+                                                }
+                                                else if (mov.CodiMovi == "DV")
+                                                {
+                                                    <span class="badge bg-warning text-dark">DV - Devolución</span>
+                                                }
+                                                else if (mov.CodiMovi == "CF")
+                                                {
+                                                    <span class="badge bg-danger">CF - Consumo</span>
+                                                }
+                                                else
+                                                {
+                                                    <span class="badge bg-secondary">@mov.CodiMovi</span>
+                                                }
+                                            </td>
+                                            <td class="text-end">
+                                                @if (mov.CantIngre.HasValue && mov.CantIngre > 0)
+                                                {
+                                                    <strong class="text-success">@mov.CantIngre.Value.ToString("N2")</strong>
+                                                }
+                                                else
+                                                {
+                                                    <span class="text-muted">-</span>
+                                                }
+                                            </td>
+                                            <td class="text-end">
+                                                @if (mov.CantSalid.HasValue && mov.CantSalid > 0)
+                                                {
+                                                    <strong class="text-danger">@mov.CantSalid.Value.ToString("N2")</strong>
+                                                }
+                                                else
+                                                {
+                                                    <span class="text-muted">-</span>
+                                                }
+                                            </td>
+                                            <td class="text-end">
+                                                <strong class="@(saldo > 0 ? "text-success" : saldo < 0 ? "text-danger" : "text-secondary")">@saldo.ToString("N2")</strong>
+                                            </td>
+                                            <td><small>@mov.Referencia</small></td>
+                                        </tr>
+                                    }
+                                </tbody>
+                                <tfoot class="table-light">
+                                    <tr>
+                                        <td colspan="5" class="text-end"><strong>TOTALES:</strong></td>
+                                        <td class="text-end">
+                                            <strong class="text-success">@movimientosCuentaContable.Sum(m => m.CantIngre ?? 0).ToString("N2")</strong>
+                                        </td>
+                                        <td class="text-end">
+                                            <strong class="text-danger">@movimientosCuentaContable.Sum(m => m.CantSalid ?? 0).ToString("N2")</strong>
+                                        </td>
+                                        <td class="text-end">
+                                            <strong>@((movimientosCuentaContable.Sum(m => m.CantIngre ?? 0) - movimientosCuentaContable.Sum(m => m.CantSalid ?? 0)).ToString("N2"))</strong>
+                                        </td>
+                                        <td></td>
+                                    </tr>
+                                </tfoot>
+                            </table>
+                        </div>
+
+                        <!-- Resumen por producto -->
+                        <div class="mt-3">
+                            <h6 class="text-primary"><i class="fas fa-chart-bar me-2"></i>Resumen por Producto</h6>
+                            <div class="table-responsive">
+                                <table class="table table-sm table-bordered">
+                                    <thead class="table-secondary">
+                                        <tr>
+                                            <th>Código Interno</th>
+                                            <th>Código Externo</th>
+                                            <th>Descripción</th>
+                                            <th class="text-end">Total Ingresos</th>
+                                            <th class="text-end">Total Salidas</th>
+                                            <th class="text-end">Saldo Final</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach (var grupo in movimientosCuentaContable.GroupBy(m => m.Cod_Inte))
+                                        {
+                                            var primerMov = grupo.First();
+                                            var totalIngresos = grupo.Sum(m => m.CantIngre ?? 0);
+                                            var totalSalidas = grupo.Sum(m => m.CantSalid ?? 0);
+                                            var saldoFinal = totalIngresos - totalSalidas;
+                                            <tr>
+                                                <td><strong>@grupo.Key</strong></td>
+                                                <td>@primerMov.Cod_Exte</td>
+                                                <td>@primerMov.Descripcion</td>
+                                                <td class="text-end text-success"><strong>@totalIngresos.ToString("N2")</strong></td>
+                                                <td class="text-end text-danger"><strong>@totalSalidas.ToString("N2")</strong></td>
+                                                <td class="text-end">
+                                                    <strong class="@(saldoFinal > 0 ? "text-success" : saldoFinal < 0 ? "text-danger" : "text-secondary")">@saldoFinal.ToString("N2")</strong>
+                                                </td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="alert alert-info text-center">
+                            <i class="fas fa-info-circle me-2"></i>
+                            No se encontraron movimientos para esta orden de reparación.
+                        </div>
+                    }
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" @onclick="CerrarModalMovimientos">
+                        <i class="fas fa-times me-1"></i>Cerrar
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="modal-backdrop fade show"></div>
+}
+
+@code {
+    private bool mostrarInstructivoUsuario = false;
+    private int numRepaSeleccionado = 0;
+    private List<ReparacionListaDTO> reparaciones = new();
+    private ReparacionListaDTO? reparacionSeleccionada = null;
+    private bool cargandoReparaciones = false;
+    
+    // Filtros
+    private int? filtroNumRepa = null;
+    private int? filtroNumeCli = null;
+    private string? filtroRasoCli = null;
+    private string? filtroReferen = null;
+    private int? filtroNuOrdRep = null;
+    
+    // Paginación
+    private int paginaActual = 1;
+    private int registrosPorPagina = 20;
+    private int totalCount = 0;
+    private int totalPaginas = 0;
+    
+    private List<MaterialSuministradoDTO> materiales = new();
+    private bool cargando = false;
+    private bool mostrarModal = false;
+    private bool guardando = false;
+    private string tipoMovimiento = "";
+    private MaterialSuministradoDTO? materialSeleccionado = null;
+    private MovimientoMaterialDTO movimientoActual = new();
+    private decimal cantidadMovimiento = 0;
+    private bool esNuevoMaterial = false;
+    private SelectorProductos? selectorProductosRef;
+    private string productoSeleccionadoTexto = string.Empty;
+    private bool mostrarModalMovimientos = false;
+    private bool cargandoMovimientos = false;
+    private List<MovimientoCuentaContableDTO> movimientosCuentaContable = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await CargarReparaciones();
+    }
+
+    private async Task CargarReparaciones()
+    {
+        try
+        {
+            cargandoReparaciones = true;
+            StateHasChanged();
+
+            var url = $"api/repara/lista-reparaciones?page={paginaActual}&pageSize={registrosPorPagina}";
+            
+            if (filtroNumRepa.HasValue && filtroNumRepa > 0)
+                url += $"&filtroNumRepa={filtroNumRepa}";
+            
+            if (filtroNumeCli.HasValue && filtroNumeCli > 0)
+                url += $"&filtroNumeCli={filtroNumeCli}";
+            
+            if (!string.IsNullOrWhiteSpace(filtroRasoCli))
+                url += $"&filtroRasoCli={Uri.EscapeDataString(filtroRasoCli)}";
+            
+            if (!string.IsNullOrWhiteSpace(filtroReferen))
+                url += $"&filtroReferen={Uri.EscapeDataString(filtroReferen)}";
+            
+            if (filtroNuOrdRep.HasValue && filtroNuOrdRep > 0)
+                url += $"&filtroNuOrdRep={filtroNuOrdRep}";
+
+            var response = await repository.Get<System.Text.Json.JsonElement>(url);
+
+            if (!response.Error)
+            {
+                var data = response.Response;
+                reparaciones = System.Text.Json.JsonSerializer.Deserialize<List<ReparacionListaDTO>>(
+                    data.GetProperty("data").GetRawText(),
+                    new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true }
+                ) ?? new();
+                
+                totalCount = data.GetProperty("totalCount").GetInt32();
+                totalPaginas = data.GetProperty("totalPages").GetInt32();
+                paginaActual = data.GetProperty("currentPage").GetInt32();
+                
+                Console.WriteLine($"Se cargaron {reparaciones.Count} reparaciones de {totalCount} total");
+            }
+            else
+            {
+                var errorMessage = await response.GetErrorMessageAsync();
+                await sweetAlertService.FireAsync("Error", errorMessage, SweetAlertIcon.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error al cargar reparaciones: {ex.Message}");
+            await sweetAlertService.FireAsync("Error", $"Error al cargar reparaciones: {ex.Message}", SweetAlertIcon.Error);
+        }
+        finally
+        {
+            cargandoReparaciones = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task AplicarFiltros()
+    {
+        paginaActual = 1; // Resetear a primera página al aplicar filtros
+        await CargarReparaciones();
+    }
+
+    private async Task CambiarPagina(int nuevaPagina)
+    {
+        if (nuevaPagina < 1 || nuevaPagina > totalPaginas || nuevaPagina == paginaActual)
+            return;
+        
+        paginaActual = nuevaPagina;
+        await CargarReparaciones();
+    }
+
+    private async Task SeleccionarReparacion(ReparacionListaDTO reparacion)
+    {
+        reparacionSeleccionada = reparacion;
+        numRepaSeleccionado = reparacion.NumRepa;
+        
+        Console.WriteLine($"Reparación seleccionada: {numRepaSeleccionado}");
+        
+        // Cargar materiales automáticamente
+        await CargarMateriales();
+    }
+
+    private async Task CargarMateriales()
+    {
+        if (numRepaSeleccionado <= 0)
+        {
+            await sweetAlertService.FireAsync("Error", "Debe ingresar un número de reparación válido", SweetAlertIcon.Error);
+            return;
+        }
+
+        try
+        {
+            cargando = true;
+            StateHasChanged();
+
+            var response = await repository.Get<List<MaterialSuministradoDTO>>($"api/repara/materiales-suministrados/{numRepaSeleccionado}");
+
+            if (!response.Error)
+            {
+                materiales = response.Response ?? new();
+                Console.WriteLine($"Se cargaron {materiales.Count} materiales");
+            }
+            else
+            {
+                var errorMessage = await response.GetErrorMessageAsync();
+                await sweetAlertService.FireAsync("Error", errorMessage, SweetAlertIcon.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error al cargar materiales: {ex.Message}");
+            await sweetAlertService.FireAsync("Error", $"Error al cargar materiales: {ex.Message}", SweetAlertIcon.Error);
+        }
+        finally
+        {
+            cargando = false;
+            StateHasChanged();
+        }
+    }
+
+    private void AbrirModalAgregar(MaterialSuministradoDTO material)
+    {
+        materialSeleccionado = material;
+        tipoMovimiento = "BR";
+        esNuevoMaterial = false;
+        InicializarMovimiento(material.Cod_Inte, "Agregado Posterior");
+        mostrarModal = true;
+    }
+
+    private void AbrirModalDevolucion(MaterialSuministradoDTO material)
+    {
+        materialSeleccionado = material;
+        tipoMovimiento = "DV";
+        esNuevoMaterial = false;
+        InicializarMovimiento(material.Cod_Inte, "Devolución de Suministros");
+        mostrarModal = true;
+    }
+
+    private void AbrirModalConsumo(MaterialSuministradoDTO material)
+    {
+        materialSeleccionado = material;
+        tipoMovimiento = "CF";
+        esNuevoMaterial = false;
+        InicializarMovimiento(material.Cod_Inte, "Consumo de Fábrica");
+        mostrarModal = true;
+    }
+
+    private void AbrirModalNuevoMaterial()
+    {
+        materialSeleccionado = null;
+        tipoMovimiento = "BR";
+        esNuevoMaterial = true;
+        InicializarMovimiento(0, "Agregado Posterior");
+        mostrarModal = true;
+    }
+
+    private void InicializarMovimiento(int codInte, string referencia)
+    {
+        cantidadMovimiento = 1; // Cantidad por defecto en 1
+        movimientoActual = new MovimientoMaterialDTO
+        {
+            Cod_Inte = codInte,
+            CodiMovi = tipoMovimiento,
+            Talon = numRepaSeleccionado,
+            Nume_Clie = reparacionSeleccionada?.Nume_Cli ?? 0, // Asignar número de cliente de la reparación
+            FechMov = DateTime.Now,
+            Referencia = referencia
+        };
+        productoSeleccionadoTexto = string.Empty;
+    }
+
+    private async Task AbrirSelectorProductos()
+    {
+        if (selectorProductosRef != null)
+        {
+            await selectorProductosRef.AbrirModal();
+        }
+    }
+
+    private void OnProductoSeleccionado(SelectorProductos.SeleccionProducto seleccion)
+    {
+        // Asignar código interno del producto seleccionado
+        movimientoActual.Cod_Inte = seleccion.Producto.Codint;
+        
+        // Asignar cantidad desde el selector (por defecto 1)
+        cantidadMovimiento = seleccion.Cantidad;
+        
+        // Mostrar información del producto seleccionado
+        productoSeleccionadoTexto = $"{seleccion.Producto.Codint} - {seleccion.Producto.Codigo} - {seleccion.Producto.Descripcion}";
+        
+        Console.WriteLine($"Producto seleccionado: {productoSeleccionadoTexto}, Cantidad: {cantidadMovimiento}");
+        
+        StateHasChanged();
+    }
+
+    private void OnCloseSelectorProductos()
+    {
+        // Método vacío para manejar el cierre del selector
+    }
+
+    private async Task AbrirModalMovimientos()
+    {
+        if (numRepaSeleccionado <= 0)
+        {
+            await sweetAlertService.FireAsync("Error", "Debe seleccionar una orden de reparación", SweetAlertIcon.Error);
+            return;
+        }
+
+        mostrarModalMovimientos = true;
+        await CargarMovimientosCuentaContable();
+    }
+
+    private void CerrarModalMovimientos()
+    {
+        mostrarModalMovimientos = false;
+        movimientosCuentaContable.Clear();
+    }
+
+    private async Task CargarMovimientosCuentaContable()
+    {
+        try
+        {
+            cargandoMovimientos = true;
+            StateHasChanged();
+
+            var response = await repository.Get<List<MovimientoCuentaContableDTO>>($"api/repara/movimientos-cuenta-contable/{numRepaSeleccionado}");
+
+            if (!response.Error)
+            {
+                movimientosCuentaContable = response.Response ?? new();
+                Console.WriteLine($"Se cargaron {movimientosCuentaContable.Count} movimientos para cuenta contable");
+            }
+            else
+            {
+                var errorMessage = await response.GetErrorMessageAsync();
+                await sweetAlertService.FireAsync("Error", errorMessage, SweetAlertIcon.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error al cargar movimientos cuenta contable: {ex.Message}");
+            await sweetAlertService.FireAsync("Error", $"Error al cargar movimientos: {ex.Message}", SweetAlertIcon.Error);
+        }
+        finally
+        {
+            cargandoMovimientos = false;
+            StateHasChanged();
+        }
+    }
+
+    // DTO para movimientos en formato cuenta contable
+    public class MovimientoCuentaContableDTO
+    {
+        public int Cod_Inte { get; set; }
+        public string? Cod_Exte { get; set; }
+        public string? Descripcion { get; set; }
+        public string? CodiMovi { get; set; }
+        public decimal? CantIngre { get; set; }
+        public decimal? CantSalid { get; set; }
+        public DateTime? FechMov { get; set; }
+        public string? Referencia { get; set; }
+    }
+
+    private async Task RegistrarMovimiento()
+    {
+        if (cantidadMovimiento <= 0)
+        {
+            await sweetAlertService.FireAsync("Error", "La cantidad debe ser mayor a cero", SweetAlertIcon.Error);
+            return;
+        }
+
+        if (esNuevoMaterial && movimientoActual.Cod_Inte <= 0)
+        {
+            await sweetAlertService.FireAsync("Error", "Debe ingresar un código interno de producto válido", SweetAlertIcon.Error);
+            return;
+        }
+
+        try
+        {
+            guardando = true;
+            StateHasChanged();
+
+            // Ajustar cantidad según tipo de movimiento
+            movimientoActual.Cantidad = tipoMovimiento == "BR" ? cantidadMovimiento : -cantidadMovimiento;
+
+            var response = await repository.Post<MovimientoMaterialDTO, object>("api/repara/movimiento-material-suministrado", movimientoActual);
+
+            if (!response.Error)
+            {
+                await sweetAlertService.FireAsync("Éxito", "Movimiento registrado exitosamente", SweetAlertIcon.Success);
+                CerrarModal();
+                await CargarMateriales(); // Recargar lista
+            }
+            else
+            {
+                var errorMessage = await response.GetErrorMessageAsync();
+                await sweetAlertService.FireAsync("Error", errorMessage, SweetAlertIcon.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error al registrar movimiento: {ex.Message}");
+            await sweetAlertService.FireAsync("Error", $"Error al registrar movimiento: {ex.Message}", SweetAlertIcon.Error);
+        }
+        finally
+        {
+            guardando = false;
+            StateHasChanged();
+        }
+    }
+
+    private void CerrarModal()
+    {
+        mostrarModal = false;
+        materialSeleccionado = null;
+        cantidadMovimiento = 0;
+        esNuevoMaterial = false;
+    }
+}

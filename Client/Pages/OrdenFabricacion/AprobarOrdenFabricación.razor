@@ -1,0 +1,728 @@
+@page "/AprobarOrdenfabricacion"
+@using IMPLANPROD.Shared.Entities
+@using IMPLANPROD.Shared.DTOs
+@using IMPLANPROD.Client.Repositories
+@using IMPLANPROD.Client.Shared.Components
+@using CurrieTechnologies.Razor.SweetAlert2
+@inject IRepository repository
+@inject SweetAlertService sweetAlertService
+@inject NavigationManager navigationManager
+@inject HttpClient Http
+
+
+<div class="bg-primary bg-opacity-10 p-3 rounded-3 mb-3 d-flex justify-content-between align-items-center">
+    <h3 class="m-0 text-primary">Aprobación de Órdenes de Fabricación</h3>
+</div>
+
+@if (registros.Count == 0)
+{ 
+    <div class="alert alert-info mt-3">
+        <i class="oi oi-info me-2"></i> No se encontraron registros que coincidan con la búsqueda.
+    </div>
+
+}
+else
+{
+    <!-- Contenedor con scroll para más de 16 filas -->
+    <div class="table-responsive" style="@(registros.Count > 16 ? "max-height: 800px; overflow-y: auto;" : "")">
+        <table class="table table-striped">
+            <thead class="sticky-top bg-white">
+                <tr>
+                    <th>Número O.F.</th>
+                    <th>Código Interno</th>
+                    <th>Código Externo</th>
+                    <th>Descripción</th>
+                    <th>Pend.Aprob.</th>
+                    <th>Id Cierre</th>
+                    <th>Fecha Generación</th>
+                    <th>Deposito</th>
+                    <th>Ref.Depósito</th>
+                    <th>Acciones</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var item in registros)
+                {
+                    <tr>
+                        <td>@item.DoPriCor</td>
+                        <td>@item.Cod_Inte</td>
+                        <td>@item.Cod_Exte</td>
+                        <td>@GetDescripcion(item.Cod_Inte ?? 0)</td>
+                        <td>@item.Ajuste</td>
+                        <td>@item.IDTEXT</td>
+                        <td>@(item.FechMov?.ToShortDateString() ?? "")</td>
+                        <td>@item.DepoMovi</td>
+                        <td>@GetDepositos(item.DepoMovi ?? 0)</td>
+                        <td>
+                            <button class="btn btn-success btn-sm" title="Aprobar Orden" 
+                                    @onclick="() => AprobarOrden(item)">
+                                <i class="oi oi-check"></i> Aprobar
+                            </button>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+}
+
+<!-- Componente modal para seleccionar depósito de entrada -->
+<DepositoSelectorModal IsVisible="mostrarModalDeposito"
+                       OnDepositoSeleccionado="@(EventCallback.Factory.Create<DepositoSeleccionadoDTO>(this, OnDepositoEntradaSeleccionado))"
+                       OnModalClosed="@(EventCallback.Factory.Create(this, OnModalDepositoEntradaCerrado))"
+                       DepositoPorDefecto="depositoEntrada" />
+
+<!-- Componente modal para seleccionar depósito de consumo -->
+<DepositoSelectorModal IsVisible="mostrarModalDepositoConsumo"
+                       OnDepositoSeleccionado="@(EventCallback.Factory.Create<DepositoSeleccionadoDTO>(this, OnDepositoConsumoSeleccionado))"
+                       OnModalClosed="@(EventCallback.Factory.Create(this, OnModalDepositoConsumoCerrado))"
+                       DepositoPorDefecto="depositoConsumo" />
+
+@code
+{
+
+
+
+    private List<int> depositos = new List<int>();
+    private int idFlexoftUsuario = 0;
+    private List<OFabricacionRequestDTO> paramUserDepos = new List<OFabricacionRequestDTO>();
+    private List<Orfapen> registros = new List<Orfapen>();
+    private Dictionary<int, string> descripciones = new Dictionary<int, string>();
+    private Dictionary<int, string> descripDepos = new Dictionary<int, string>();
+    
+    // Variables para el proceso de aprobación
+    private string ordenFabricacionSeleccionada = string.Empty;
+    private string idTextCierre = string.Empty;
+    private decimal saldoPendiente = 0;
+    private int depositoEntrada = 0;
+    private int depositoConsumo = 0;
+    
+    // Variables para el modal de selección de depósito
+    private bool mostrarModalDeposito = false;
+    private bool mostrarModalDepositoConsumo = false;
+    private bool depositoCambiado = false;
+    private bool depositoConsumoCambiado = false;
+    private string tipoDepositoSeleccionando = string.Empty; // "entrada" o "consumo"
+
+    public class DescripcionResponse
+    {
+        public string? Descripcion { get; set; }
+    }
+    protected override async Task OnInitializedAsync()
+    {
+        await ApruebaOrdenesFabricacion();
+    }
+    private async Task ApruebaOrdenesFabricacion()
+    {
+        try
+        {
+            // 1. Obtener el idFlexoft del usuario logueado
+            var responseUsuario = await repository.Get<int?>("api/Usuarios/InterObtenerIdFlexoft");
+            if (responseUsuario.Error || responseUsuario.Response == null || !responseUsuario.Response.HasValue)
+            {
+                await sweetAlertService.FireAsync("Error", "No se pudo obtener la información del usuario logueado", SweetAlertIcon.Error);
+                return;
+            }
+
+            idFlexoftUsuario = responseUsuario.Response.Value;
+
+
+            // 2. Obtener el codigoSecProd de UsuariosSectorProd según el idFlexoft
+            var responseCodigosSector = await repository.Get<List<int>>($"api/usuariossectorprod/codigossector/{idFlexoftUsuario}");
+
+            if (responseCodigosSector.Error || responseCodigosSector.Response == null || !responseCodigosSector.Response.Any())
+            {
+                await sweetAlertService.FireAsync("Error", "No se encontró asignación de sector para el usuario logueado", SweetAlertIcon.Error);
+                return;
+            }
+
+            var codigosSector = responseCodigosSector.Response;
+            //
+            // 3. Obtener el depósito de la tabla Secprod usando el codigoSecProd
+            if (codigosSector == null || !codigosSector.Any())
+            {
+                await sweetAlertService.FireAsync("Error", "No se encontraron sectores asignados", SweetAlertIcon.Error);
+                return;
+            }
+
+            // Llamar al nuevo endpoint que devuelve los depósitos
+            var responseDepositos = await repository.Get<List<int>>($"api/secprod/depositos?codigos={string.Join(",", codigosSector)}");
+
+            if (responseDepositos.Error || responseDepositos.Response == null || !responseDepositos.Response.Any())
+            {
+                await sweetAlertService.FireAsync("Error", "No se encontró información de depósitos", SweetAlertIcon.Error);
+                return;
+            }
+
+            depositos = responseDepositos.Response;
+
+            // 4. Crear el objeto de parámetros y llamar al endpoint de órdenes pendientes
+            var parametros = new OFabricacionRequestDTO
+            {
+                IdFlexoftUsuario = idFlexoftUsuario,
+                Depositos = depositos
+            };
+
+            // Llamar al endpoint para obtener las órdenes pendientes de aprobación
+            var responseOrdenes = await repository.Post<OFabricacionRequestDTO, List<Orfapen>>($"api/AprobacionOrdenFabricacion/pendientesAprobacion", parametros);
+
+            if (responseOrdenes.Error || responseOrdenes.Response == null)
+            {
+                await sweetAlertService.FireAsync("Error", "No se pudieron obtener las órdenes pendientes de aprobación", SweetAlertIcon.Error);
+                return;
+            }
+
+            registros = responseOrdenes.Response;
+
+            // Cargar descripciones
+            await CargarDescripciones();
+            await CargarDepositos();
+
+        }
+        catch (Exception ex)
+        {
+            await sweetAlertService.FireAsync("Error", $"Error al obtener datos del usuario: {ex.Message}", SweetAlertIcon.Error);
+        }
+    }
+
+
+    private async Task CargarDescripciones()
+    {
+        try
+        {
+            foreach (var item in registros)
+            {
+                int codInte = item.Cod_Inte ?? 0;
+                if (codInte > 0 && !descripciones.ContainsKey(codInte)) //ContainsKey(codInte) devuelve true si ya cargaste antes la descripción para ese codigo
+                {  
+                    var response = await Http.GetStringAsync($"api/masterfunciones/descripcion/{codInte}"); // con GetStringAsync por que con
+                    var descripcion = response?.Trim() ?? string.Empty;                                     //ar response = await repository.Get<string>($"api/masterfunciones/descripcion/{codInte}");
+                                                                                                            // daba error
+                    descripciones[codInte] = descripcion;
+                    if ( descripcion != null)
+                    {
+                        descripciones[codInte] = descripcion; //  Guardamos la descripción
+                    }
+                    else
+                    {
+                        descripciones[codInte] = string.Empty; //  Fallback si no hay descripción
+                    }
+                }
+            }
+            StateHasChanged(); //  Actualiza la UI si estás en Blazor
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error al cargar descripciones: {ex.Message}");
+        }
+    }  private string GetDescripcion(int codInte)
+    {// esta es la llamada de la parte html que lee aca el vector diccionario
+        if (codInte > 0 && descripciones.ContainsKey(codInte))
+        {
+            return descripciones[codInte];
+        }
+        return "Cargando...";
+    }
+    private async Task CargarDepositos()
+    {//leer todos los depositos es decir retornar una lista y luego asignar al vector en GetDepositos
+        try
+        {
+            
+                foreach (var item in registros)
+                {
+                    int depo = item.DepoMovi ?? 0;
+                if (depo > 0 && !descripciones.ContainsKey(depo)) //ContainsKey(depo) devuelve true si ya cargaste antes la descripción para ese depósito
+                    {
+                    var response = await Http.GetStringAsync($"api/tadeposi/descripcion/{depo}"); // con GetStringAsync por que con
+                        var descriDepo = response?.Trim() ?? string.Empty;                                     //ar response = await repository.Get<string>($"api/masterfunciones/descripcion/{codInte}");
+                                                                                                               // daba error
+                        descripDepos[depo] = descriDepo;
+                        if (descriDepo != null)
+                        {
+                            descripDepos[depo] = descriDepo; //  Guardamos la descripción
+                        }
+                        else
+                        {
+                            descripDepos[depo] = string.Empty; //  Fallback si no hay descripción
+                        }
+                    }
+                }
+                StateHasChanged(); //  Actualiza la UI si estás en Blazor
+         }   
+                catch (Exception ex)
+                 {
+                  Console.WriteLine($"Error al cargar descripciones: {ex.Message}");
+                 }
+    }
+    private string GetDepositos(int Deposito)
+    {// esta es la llamada de la parte html que lee aca el vector diccionario
+        if (Deposito > 0 && descripDepos.ContainsKey(Deposito))
+        {
+            return descripDepos[Deposito];
+        }
+        return "Cargando...";
+    }
+
+    /// <summary>
+    /// Procesa la aprobación de una orden de fabricación
+    /// Captura O.F., IDTEXT de cierre, SALDO y valida depósitos
+    /// </summary>
+    private async Task AprobarOrden(Orfapen orden)
+    {
+        try
+        {
+            // Capturar datos de la orden seleccionada
+            ordenFabricacionSeleccionada = orden.DoPriCor ?? string.Empty;
+            idTextCierre = orden.IDTEXT ?? string.Empty;
+            saldoPendiente = orden.Ajuste;
+            
+            // Validar que tenemos los datos necesarios
+            if (string.IsNullOrEmpty(ordenFabricacionSeleccionada))
+            {
+                await sweetAlertService.FireAsync("Error", "No se pudo obtener el número de orden de fabricación", SweetAlertIcon.Error);
+                return;
+            }
+            
+            if (string.IsNullOrEmpty(idTextCierre))
+            {
+                await sweetAlertService.FireAsync("Error", "No se pudo obtener el ID de cierre", SweetAlertIcon.Error);
+                return;
+            }
+            
+            // Leer y validar el depósito de entrada desde ORFAPEN
+            await ValidarDepositoEntrada();
+            
+            // Leer y validar el depósito de consumo desde ORFAPEN
+            await ValidarDepositoConsumo();
+            
+            // Mostrar información capturada para confirmación con opción de cambiar depósitos
+            await MostrarConfirmacionAprobacion();
+        }
+        catch (Exception ex)
+        {
+            await sweetAlertService.FireAsync("Error", $"Error al procesar la aprobación: {ex.Message}", SweetAlertIcon.Error);
+        }
+    }
+    
+    /// <summary>
+    /// Valida el depósito de entrada leyendo desde ORFAPEN
+    /// donde DOPRICOR = Orden de Fabricación seleccionada y CODIMOVI = 'OF'
+    /// </summary>
+    private async Task ValidarDepositoEntrada()
+    {
+        try
+        {
+            // Llamar al endpoint para obtener el depósito de entrada
+            var response = await repository.Get<int?>($"api/orfapen/deposito-entrada?ordenFabricacion={ordenFabricacionSeleccionada}&codigoMovimiento=OF");
+            
+            if (response.Error || !response.Response.HasValue)
+            {
+                await sweetAlertService.FireAsync("Error", 
+                    $"No se pudo obtener el depósito de entrada para la O.F. {ordenFabricacionSeleccionada}", 
+                    SweetAlertIcon.Error);
+                return;
+            }
+            
+            depositoEntrada = response.Response.Value;
+            
+            // Validar que el depósito es válido
+            if (depositoEntrada <= 0)
+            {
+                await sweetAlertService.FireAsync("Error", 
+                    $"Depósito de entrada inválido ({depositoEntrada}) para la O.F. {ordenFabricacionSeleccionada}", 
+                    SweetAlertIcon.Error);
+                return;
+            }
+        }
+        catch (Exception ex)
+        {
+            await sweetAlertService.FireAsync("Error", 
+                $"Error al validar depósito de entrada: {ex.Message}", 
+                SweetAlertIcon.Error);
+            throw;
+        }
+    }
+    
+    /// <summary>
+    /// Valida el depósito de consumo leyendo desde ORFAPEN
+    /// </summary>
+    private async Task ValidarDepositoConsumo()
+    {
+        try
+        {
+            var response = await repository.Get<DepositoConsumoResponseDTO>($"api/orfapen/deposito-consumo?ordenFabricacion={ordenFabricacionSeleccionada}");
+            
+            if (response.Response != null)
+            {
+                depositoConsumo = response.Response.CodigoDeposito;
+                
+                // Si el depósito está inactivo o requiere selección manual, mostrar modal
+                if (response.Response.RequiereSeleccion)
+                {
+                    await sweetAlertService.FireAsync("Atención", 
+                        response.Response.Mensaje, 
+                        SweetAlertIcon.Warning);
+                    
+                    // Abrir modal para seleccionar depósito de consumo
+                    tipoDepositoSeleccionando = "consumo";
+                    mostrarModalDepositoConsumo = true;
+                    StateHasChanged();
+                    return;
+                }
+            }
+            else
+            {
+                await sweetAlertService.FireAsync("Error", 
+                    "No se pudo obtener información del depósito de consumo", 
+                    SweetAlertIcon.Error);
+                throw new Exception("No se pudo obtener depósito de consumo");
+            }
+        }
+        catch (Exception ex)
+        {
+            await sweetAlertService.FireAsync("Error", 
+                $"Error al validar depósito de consumo: {ex.Message}", 
+                SweetAlertIcon.Error);
+            throw;
+        }
+    }
+    
+    /// <summary>
+    /// Muestra las opciones para cambiar depósitos
+    /// </summary>
+    private async Task MostrarOpcionesCambioDeposito()
+    {
+        try
+        {
+            var confirmacion = await sweetAlertService.FireAsync(new SweetAlertOptions
+            {
+                Title = "Cambiar Depósitos",
+                Text = "¿Qué depósito desea cambiar?",
+                Icon = SweetAlertIcon.Question,
+                ShowCancelButton = true,
+                ShowDenyButton = true,
+                ConfirmButtonText = "📥 Depósito Entrada",
+                DenyButtonText = "📤 Depósito Consumo",
+                CancelButtonText = "✖ Cancelar",
+                ConfirmButtonColor = "#007bff",
+                DenyButtonColor = "#28a745",
+                CancelButtonColor = "#6c757d"
+            });
+            
+            if (confirmacion.IsConfirmed)
+            {
+                // Cambiar depósito de entrada
+                tipoDepositoSeleccionando = "entrada";
+                mostrarModalDeposito = true;
+                StateHasChanged();
+            }
+            else if (confirmacion.IsDenied)
+            {
+                // Cambiar depósito de consumo
+                tipoDepositoSeleccionando = "consumo";
+                mostrarModalDepositoConsumo = true;
+                StateHasChanged();
+            }
+            // Si es cancelado, volver a mostrar confirmación principal
+            else
+            {
+                await MostrarConfirmacionAprobacion();
+            }
+        }
+        catch (Exception ex)
+        {
+            await sweetAlertService.FireAsync("Error", 
+                $"Error al mostrar opciones: {ex.Message}", 
+                SweetAlertIcon.Error);
+        }
+    }
+    
+    /// <summary>
+    /// Muestra la confirmación de aprobación con opciones para cambiar depósitos
+    /// </summary>
+    private async Task MostrarConfirmacionAprobacion()
+    {
+        try
+        {
+            // Obtener descripciones de los depósitos
+            var descripcionDepositoEntrada = await ObtenerDescripcionDeposito(depositoEntrada);
+            var descripcionDepositoConsumo = await ObtenerDescripcionDeposito(depositoConsumo);
+            
+            var mensaje = $"Orden de Fabricación: {ordenFabricacionSeleccionada}\n" +
+                         $"ID Cierre: {idTextCierre}\n" +
+                         $"Saldo Pendiente: {saldoPendiente:F4}\n" +
+                         $"Depósito de Entrada: {depositoEntrada} - {descripcionDepositoEntrada}\n" +
+                         $"Depósito de Consumo: {depositoConsumo} - {descripcionDepositoConsumo}\n\n" +
+                         "Seleccione una opción:";
+            
+            var confirmacion = await sweetAlertService.FireAsync(new SweetAlertOptions
+            {
+                Title = "Confirmar Aprobación",
+                Html = mensaje.Replace("\n", "<br>"),
+                Icon = SweetAlertIcon.Question,
+                ShowCancelButton = true,
+                ShowDenyButton = true,
+                ConfirmButtonText = "✓ Aprobar",
+                DenyButtonText = "🔄 Cambiar Depósitos",
+                CancelButtonText = "✖ Cancelar",
+                ConfirmButtonColor = "#28a745",
+                DenyButtonColor = "#ffc107",
+                CancelButtonColor = "#6c757d"
+            });
+            
+            if (confirmacion.IsConfirmed)
+            {
+                // Aprobar con los depósitos actuales
+                await ProcesarAprobacion();
+            }
+            else if (confirmacion.IsDenied)
+            {
+                // Mostrar opciones para cambiar depósitos
+                await MostrarOpcionesCambioDeposito();
+            }
+            // Si es cancelado, no hacer nada
+        }
+        catch (Exception ex)
+        {
+            await sweetAlertService.FireAsync("Error", 
+                $"Error al mostrar confirmación: {ex.Message}", 
+                SweetAlertIcon.Error);
+        }
+    }
+
+    /// <summary>
+    /// Obtiene la descripción de un depósito
+    /// </summary>
+    private async Task<string> ObtenerDescripcionDeposito(int codigoDeposito)
+    {
+        try
+        {
+            if (descripDepos.ContainsKey(codigoDeposito))
+            {
+                return descripDepos[codigoDeposito];
+            }
+            
+            var response = await Http.GetStringAsync($"api/tadeposi/descripcion/{codigoDeposito}");
+            var descripcion = response?.Trim() ?? string.Empty;
+            
+            // Guardar en cache para futuras consultas
+            descripDepos[codigoDeposito] = descripcion;
+            
+            return descripcion;
+        }
+        catch
+        {
+            return "Descripción no disponible";
+        }
+    }
+
+    /// <summary>
+    /// Maneja la selección de un depósito de entrada desde el modal
+    /// </summary>
+    private async Task OnDepositoEntradaSeleccionado(DepositoSeleccionadoDTO depositoSeleccionado)
+    {
+        try
+        {
+            depositoEntrada = depositoSeleccionado.CodigoDepo;
+            depositoCambiado = true;
+            mostrarModalDeposito = false;
+            
+            await sweetAlertService.FireAsync("Éxito", 
+                $"Depósito de entrada actualizado a: {depositoSeleccionado.CodigoDepo} - {depositoSeleccionado.Descripcion}", 
+                SweetAlertIcon.Success);
+            
+            // Volver a mostrar la confirmación con el depósito actualizado
+            await MostrarConfirmacionAprobacion();
+        }
+        catch (Exception ex)
+        {
+            await sweetAlertService.FireAsync("Error", 
+                $"Error al actualizar depósito de entrada: {ex.Message}", 
+                SweetAlertIcon.Error);
+        }
+    }
+    
+    /// <summary>
+    /// Maneja la selección de un depósito de consumo desde el modal
+    /// </summary>
+    private async Task OnDepositoConsumoSeleccionado(DepositoSeleccionadoDTO depositoSeleccionado)
+    {
+        try
+        {
+            depositoConsumo = depositoSeleccionado.CodigoDepo;
+            depositoConsumoCambiado = true;
+            mostrarModalDepositoConsumo = false;
+            
+            await sweetAlertService.FireAsync("Éxito", 
+                $"Depósito de consumo actualizado a: {depositoSeleccionado.CodigoDepo} - {depositoSeleccionado.Descripcion}", 
+                SweetAlertIcon.Success);
+            
+            // Si estamos en el flujo inicial de validación, continuar con la confirmación
+            if (tipoDepositoSeleccionando == "consumo")
+            {
+                await MostrarConfirmacionAprobacion();
+            }
+            else
+            {
+                // Si estamos cambiando desde la confirmación, volver a mostrarla
+                await MostrarConfirmacionAprobacion();
+            }
+        }
+        catch (Exception ex)
+        {
+            await sweetAlertService.FireAsync("Error", 
+                $"Error al actualizar depósito de consumo: {ex.Message}", 
+                SweetAlertIcon.Error);
+        }
+    }
+    
+    /// <summary>
+    /// Maneja el cierre del modal de depósito de entrada sin selección
+    /// </summary>
+    private void OnModalDepositoEntradaCerrado()
+    {
+        mostrarModalDeposito = false;
+        // No volver a mostrar la confirmación si el usuario cerró el modal sin seleccionar
+        StateHasChanged();
+    }
+    
+    /// <summary>
+    /// Maneja el cierre del modal de depósito de consumo sin selección
+    /// </summary>
+    private void OnModalDepositoConsumoCerrado()
+    {
+        mostrarModalDepositoConsumo = false;
+        
+        // Si estamos en el flujo inicial de validación y el depósito requiere selección manual,
+        // no podemos continuar sin una selección válida
+        if (tipoDepositoSeleccionando == "consumo")
+        {
+            // El usuario debe seleccionar un depósito válido para continuar
+            StateHasChanged();
+            return;
+        }
+        
+        // Si estamos cambiando desde la confirmación, no hacer nada más
+        StateHasChanged();
+    }
+
+    /// <summary>
+    /// Procesa la aprobación de la orden de fabricación
+    /// Utiliza la funcionalidad existente de cierre de órdenes
+    /// </summary>
+    private async Task ProcesarAprobacion()
+    {
+        try
+        {
+            // 1. Solicitar cantidad a aprobar al usuario
+            var cantidadConfirmada = await SolicitarCantidadAprobacion();
+            if (cantidadConfirmada <= 0)
+            {
+                return; // Usuario canceló
+            }
+
+            // 2. Validar que no se apruebe más de lo pendiente
+            if (saldoPendiente < cantidadConfirmada)
+            {
+                await sweetAlertService.FireAsync("Error", "Imposible aprobar más cantidad que la pendiente.", SweetAlertIcon.Error);
+                return;
+            }
+
+            // 3. Confirmación final
+            var confirmacionFinal = await sweetAlertService.FireAsync(new SweetAlertOptions
+            {
+                Title = "Confirmar Aprobación",
+                Text = $"¿Confirma cantidades aprobadas por {cantidadConfirmada:F1}?",
+                Icon = SweetAlertIcon.Question,
+                ShowCancelButton = true,
+                ConfirmButtonText = "Sí, Continuar",
+                CancelButtonText = "No, Cancelar"
+            });
+
+            if (!confirmacionFinal.IsConfirmed)
+                return;
+
+            // 4. Usar el endpoint existente de cierre con control de calidad
+            await ProcesarAprobacionConCierreExistente(cantidadConfirmada);
+
+            // 5. Mensaje de éxito
+            await sweetAlertService.FireAsync("Éxito", "Aprobación procesada correctamente", SweetAlertIcon.Success);
+            
+            // 6. Recargar la lista
+            await ApruebaOrdenesFabricacion();
+        }
+        catch (Exception ex)
+        {
+            await sweetAlertService.FireAsync("Error", 
+                $"Error al procesar la aprobación: {ex.Message}", 
+                SweetAlertIcon.Error);
+        }
+    }
+
+    /// <summary>
+    /// Solicita la cantidad a aprobar al usuario
+    /// </summary>
+    private async Task<decimal> SolicitarCantidadAprobacion()
+    {
+        // Usar SweetAlert para solicitar la cantidad
+        var resultado = await sweetAlertService.FireAsync(new SweetAlertOptions
+        {
+            Title = $"Aprobación para Orden: {ordenFabricacionSeleccionada}",
+            Text = $"Saldo Pendiente: {saldoPendiente:F1}",
+            Input = SweetAlertInputType.Number,
+            InputValue = saldoPendiente.ToString("F1"),
+            ShowCancelButton = true,
+            ConfirmButtonText = "Confirmar",
+            CancelButtonText = "Cancelar"
+        });
+
+        if (resultado.IsConfirmed && !string.IsNullOrEmpty(resultado.Value))
+        {
+            if (decimal.TryParse(resultado.Value, out decimal cantidad))
+            {
+                return cantidad;
+            }
+        }
+        
+        return 0; // Usuario canceló o ingresó valor inválido
+    }
+
+    /// <summary>
+    /// Procesa la aprobación usando el nuevo endpoint de aprobación con cierre existente
+    /// </summary>
+    private async Task ProcesarAprobacionConCierreExistente(decimal cantidadAprobada)
+    {
+        try
+        {
+            // Crear DTO para la aprobación con cierre existente
+            var datosAprobacion = new AprobacionCierreDTO
+            {
+                IdSubOr = ordenFabricacionSeleccionada,
+                IdText = idTextCierre,
+                CantidadAprobada = cantidadAprobada,
+                DepositoEntrada = depositoEntrada,
+                DepositoConsumo = depositoConsumo,
+                Observaciones = "Aprobación de orden de fabricación"
+            };
+
+            // Llamar al nuevo endpoint de aprobación
+            var response = await repository.Post("api/AprobacionOrdenFabricacion/procesarAprobacionConCierre", datosAprobacion);
+
+            if (response.Error)
+            {
+                var errorMessage = await response.GetErrorMessageAsync();
+                throw new Exception(errorMessage);
+            }
+
+            // La transacción se procesó exitosamente en el backend
+            // Incluye: movimiento de stock, registro ORFAPEN, consumo de componentes, 
+            // actualización de ORDEFABR y eliminación de reservas si corresponde
+        }
+        catch (Exception ex)
+        {
+            throw new Exception($"Error al procesar la aprobación: {ex.Message}");
+        }
+    }
+
+}
+ 

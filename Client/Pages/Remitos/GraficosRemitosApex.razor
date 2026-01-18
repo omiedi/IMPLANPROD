@@ -1,0 +1,454 @@
+@page "/graficos-remitos-apex"
+@page "/remitos/graficos"
+@using ApexCharts
+@using IMPLANPROD.Shared.DTOs
+@using IMPLANPROD.Client.Repositories
+@inject IJSRuntime JSRuntime
+@inject IRepository repository
+
+<PageTitle>Gráficos de Remitos</PageTitle>
+
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header bg-primary text-white">
+                    <h4 class="mb-0">
+                        <i class="fas fa-chart-bar me-2"></i>Gráficos de Remitos
+                    </h4>
+                </div>
+                <div class="card-body">
+
+                    <!-- Filtros -->
+                    <div class="row mb-4">
+                        <div class="col-md-3">
+                            <label class="form-label">Desde:</label>
+                            <input type="date" class="form-control" @bind="fechaDesde" />
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">Hasta:</label>
+                            <input type="date" class="form-control" @bind="fechaHasta" />
+                        </div>
+                        <div class="col-md-3">
+                            <div class="d-flex align-items-end h-100">
+                                <button class="btn btn-success me-2" @onclick="GenerarGraficos" disabled="@cargando">
+                                    @if (cargando)
+                                    {
+                                        <i class="fas fa-spinner fa-spin me-1"></i>
+                                        <span>Generando...</span>
+                                    }
+                                    else
+                                    {
+                                        <i class="fas fa-sync me-1"></i>
+                                        <span>Generar Gráficos</span>
+                                    }
+                                </button>
+                                <a href="/remitos" class="btn btn-secondary">
+                                    <i class="fas fa-arrow-left me-1"></i>Volver
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+
+                    @if (cargando)
+                    {
+                        <div class="text-center py-5">
+                            <div class="spinner-border text-primary" role="status">
+                                <span class="visually-hidden">Generando...</span>
+                            </div>
+                            <p class="mt-2">Generando gráficos de remitos con ApexCharts C#...</p>
+                        </div>
+                    }
+                    else if (!graficosGenerados)
+                    {
+                        <div class="text-center py-5">
+                            <div class="alert alert-info">
+                                <i class="fas fa-info-circle me-2"></i>
+                                <strong>Haz clic en "Generar Gráficos" para visualizar los reportes de remitos</strong>
+                                <p class="mb-0 mt-2">Gráficos interactivos generados completamente en C# con ApexCharts.</p>
+                            </div>
+                        </div>
+                    }
+                    else
+                    {
+                        <!-- Gráficos ApexCharts -->
+                        <div class="row">
+                            <!-- Gráfico de Líneas - Remitos por Mes -->
+                            <div class="col-md-6 mb-4">
+                                <div class="card">
+                                    <div class="card-header bg-info text-white">
+                                        <h6 class="mb-0">
+                                            <i class="fas fa-chart-line me-2"></i>Remitos por Mes
+                                        </h6>
+                                    </div>
+                                    <div class="card-body" style="height: 400px;">
+                                        <ApexChart TItem="DatoMensualRemitoDTO"
+                                                   Title="Evolución de Remitos Mensuales"
+                                                   Options="opcionesLineas"
+                                                   Height="350">
+
+                                            <ApexPointSeries TItem="DatoMensualRemitoDTO"
+                                                             Items="datosRemitosPorMes"
+                                                             Name="Año Actual"
+                                                             SeriesType="SeriesType.Line"
+                                                             XValue="@(e => e.Mes)"
+                                                             YValue="@(e => e.Cantidad)" />
+                                            
+                                            <ApexPointSeries TItem="DatoMensualRemitoDTO"
+                                                             Items="datosRemitosPorMesAnterior"
+                                                             Name="Año Anterior"
+                                                             SeriesType="SeriesType.Line"
+                                                             XValue="@(e => e.Mes)"
+                                                             YValue="@(e => e.Cantidad)" />
+                                        </ApexChart>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Gráfico de Barras - Top Clientes -->
+                            <div class="col-md-6 mb-4">
+                                <div class="card">
+                                    <div class="card-header bg-success text-white">
+                                        <h6 class="mb-0">
+                                            <i class="fas fa-chart-bar me-2"></i>Top 5 Clientes
+                                        </h6>
+                                    </div>
+                                    <div class="card-body" style="height: 400px;">
+                                        <ApexChart TItem="DatoClienteRemitoDTO"
+                                                   Title="Clientes con Mayor Volumen de Remitos"
+                                                   Options="opcionesBarras"
+                                                   Height="350">
+
+                                            <ApexPointSeries TItem="DatoClienteRemitoDTO"
+                                                             Items="datosTopClientes"
+                                                             Name="Cantidad de Remitos"
+                                                             SeriesType="SeriesType.Bar"
+                                                             XValue="@(e => e.Nombre)"
+                                                             YValue="@(e => e.CantidadRemitos)" />
+                                        </ApexChart>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="row">
+                            <!-- Gráfico Circular - Estados -->
+                            <div class="col-md-6 mb-4">
+                                <div class="card">
+                                    <div class="card-header bg-warning text-dark">
+                                        <h6 class="mb-0">
+                                            <i class="fas fa-chart-pie me-2"></i>Estados de Remitos
+                                        </h6>
+                                    </div>
+                                    <div class="card-body" style="height: 400px;">
+                                        <ApexChart TItem="DatoEstadoRemitoDTO"
+                                                   Title="Distribución por Estados"
+                                                   Options="opcionesPie"
+                                                   Height="350">
+
+                                            <ApexPointSeries TItem="DatoEstadoRemitoDTO"
+                                                             Items="datosEstados"
+                                                             Name="Cantidad"
+                                                             SeriesType="SeriesType.Pie"
+                                                             XValue="@(e => e.Estado)"
+                                                             YValue="@(e => e.Cantidad)" />
+                                        </ApexChart>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Gráfico de Barras - Top Productos -->
+                            <div class="col-md-6 mb-4">
+                                <div class="card">
+                                    <div class="card-header bg-danger text-white">
+                                        <h6 class="mb-0">
+                                            <i class="fas fa-box me-2"></i>Top 5 Productos
+                                        </h6>
+                                    </div>
+                                    <div class="card-body" style="height: 400px;">
+                                        <ApexChart TItem="DatoProductoRemitoDTO"
+                                                   Title="Productos con Mayor Cantidad de Unidades"
+                                                   Options="opcionesProductos"
+                                                   Height="350">
+
+                                            <ApexPointSeries TItem="DatoProductoRemitoDTO"
+                                                             Items="datosProductos"
+                                                             Name="Cantidad de Unidades"
+                                                             SeriesType="SeriesType.Bar"
+                                                             XValue="@(e => e.Producto)"
+                                                             YValue="@(e => e.CantidadUnidades)" />
+                                        </ApexChart>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Estadísticas Resumen -->
+                        <div class="row">
+                            <div class="col-12">
+                                <div class="card">
+                                    <div class="card-header bg-dark text-white">
+                                        <h6 class="mb-0">
+                                            <i class="fas fa-calculator me-2"></i>Resumen del Período
+                                        </h6>
+                                    </div>
+                                    <div class="card-body">
+                                        <div class="row text-center">
+                                            <div class="col-md-3">
+                                                <div class="border rounded p-3">
+                                                    <h5 class="text-primary">@totalRemitos</h5>
+                                                    <small class="text-muted">Total Remitos</small>
+                                                </div>
+                                            </div>
+                                            <div class="col-md-3">
+                                                <div class="border rounded p-3">
+                                                    <h5 class="text-success">@totalProductosDistintos</h5>
+                                                    <small class="text-muted">Productos Distintos</small>
+                                                </div>
+                                            </div>
+                                            <div class="col-md-3">
+                                                <div class="border rounded p-3">
+                                                    <h5 class="text-info">@totalClientes</h5>
+                                                    <small class="text-muted">Clientes</small>
+                                                </div>
+                                            </div>
+                                            <div class="col-md-3">
+                                                <div class="border rounded p-3">
+                                                    <h5 class="text-warning">@promedioMensual.ToString("N1")</h5>
+                                                    <small class="text-muted">Promedio Remitos/Mes</small>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    }
+
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    private DateTime fechaDesde = DateTime.Now.AddMonths(-6);
+    private DateTime fechaHasta = DateTime.Now;
+    private bool cargando = false;
+    private bool graficosGenerados = false;
+
+    private int totalRemitos = 0;
+    private int totalProductosDistintos = 0;
+    private int totalClientes = 0;
+    private decimal promedioMensual = 0;
+
+    private List<DatoMensualRemitoDTO> datosRemitosPorMes = new();
+    private List<DatoMensualRemitoDTO> datosRemitosPorMesAnterior = new();
+    private List<DatoClienteRemitoDTO> datosTopClientes = new();
+    private List<DatoEstadoRemitoDTO> datosEstados = new();
+    private List<DatoProductoRemitoDTO> datosProductos = new();
+
+    private GraficosRemitosDTO? datosGraficos;
+
+    private ApexChartOptions<DatoMensualRemitoDTO> opcionesLineas = new();
+    private ApexChartOptions<DatoClienteRemitoDTO> opcionesBarras = new();
+    private ApexChartOptions<DatoEstadoRemitoDTO> opcionesPie = new();
+    private ApexChartOptions<DatoProductoRemitoDTO> opcionesProductos = new();
+
+    protected override void OnInitialized()
+    {
+        ConfigurarOpcionesGraficos();
+    }
+
+    private void ConfigurarOpcionesGraficos()
+    {
+        opcionesLineas = new ApexChartOptions<DatoMensualRemitoDTO>
+        {
+            Theme = new Theme
+            {
+                Mode = Mode.Light,
+                Palette = PaletteType.Palette1
+            },
+            Chart = new Chart
+            {
+                Toolbar = new Toolbar { Show = false },
+                Zoom = new Zoom { Enabled = false }
+            },
+            Stroke = new Stroke
+            {
+                Curve = Curve.Smooth,
+                Width = 3
+            },
+            Colors = new List<string> { "#17a2b8", "#ffc107" },
+            Yaxis = new List<YAxis>
+            {
+                new YAxis
+                {
+                    Labels = new YAxisLabels
+                    {
+                        Formatter = "function(value) { return Math.round(value); }"
+                    }
+                }
+            }
+        };
+
+        opcionesBarras = new ApexChartOptions<DatoClienteRemitoDTO>
+        {
+            Theme = new Theme
+            {
+                Mode = Mode.Light,
+                Palette = PaletteType.Palette2
+            },
+            Chart = new Chart
+            {
+                Toolbar = new Toolbar { Show = false }
+            },
+            Colors = new List<string> { "#28a745" },
+            PlotOptions = new PlotOptions
+            {
+                Bar = new PlotOptionsBar
+                {
+                    Horizontal = true
+                }
+            },
+            Yaxis = new List<YAxis>
+            {
+                new YAxis
+                {
+                    Labels = new YAxisLabels
+                    {
+                        Formatter = "function(value) { return Math.round(value); }"
+                    }
+                }
+            }
+        };
+
+        opcionesPie = new ApexChartOptions<DatoEstadoRemitoDTO>
+        {
+            Theme = new Theme
+            {
+                Mode = Mode.Light
+            },
+            Colors = new List<string> { "#28a745", "#dc3545" },
+            Legend = new Legend
+            {
+                Position = LegendPosition.Bottom
+            }
+        };
+
+        opcionesProductos = new ApexChartOptions<DatoProductoRemitoDTO>
+        {
+            Theme = new Theme
+            {
+                Mode = Mode.Light,
+                Palette = PaletteType.Palette3
+            },
+            Chart = new Chart
+            {
+                Toolbar = new Toolbar { Show = false }
+            },
+            Colors = new List<string> { "#dc3545" },
+            PlotOptions = new PlotOptions
+            {
+                Bar = new PlotOptionsBar
+                {
+                    Horizontal = true
+                }
+            },
+            Yaxis = new List<YAxis>
+            {
+                new YAxis
+                {
+                    Labels = new YAxisLabels
+                    {
+                        Formatter = "function(value) { return Math.round(value); }"
+                    }
+                }
+            }
+        };
+    }
+
+    private async Task GenerarGraficos()
+    {
+        if (cargando) return;
+
+        cargando = true;
+        StateHasChanged();
+
+        try
+        {
+            var url = $"api/graficosremitos?fechaDesde={fechaDesde:yyyy-MM-dd}&fechaHasta={fechaHasta:yyyy-MM-dd}";
+            var responseHttp = await repository.Get<GraficosRemitosDTO>(url);
+
+            if (!responseHttp.Error && responseHttp.Response != null)
+            {
+                datosGraficos = responseHttp.Response;
+
+                datosRemitosPorMes = datosGraficos.RemitosPorMes;
+                datosTopClientes = datosGraficos.TopClientes;
+                datosEstados = datosGraficos.EstadosRemitos;
+                datosProductos = datosGraficos.TopProductos;
+
+                totalRemitos = datosGraficos.TotalRemitos;
+                totalProductosDistintos = datosGraficos.TotalProductosDistintos;
+                totalClientes = datosGraficos.TotalClientes;
+                promedioMensual = datosGraficos.PromedioMensual;
+
+                // Obtener datos del año anterior
+                var fechaDesdeAnterior = fechaDesde.AddYears(-1);
+                var fechaHastaAnterior = fechaHasta.AddYears(-1);
+                var urlAnterior = $"api/graficosremitos?fechaDesde={fechaDesdeAnterior:yyyy-MM-dd}&fechaHasta={fechaHastaAnterior:yyyy-MM-dd}";
+                var responseAnterior = await repository.Get<GraficosRemitosDTO>(urlAnterior);
+                
+                if (!responseAnterior.Error && responseAnterior.Response != null)
+                {
+                    // Ajustar las fechas del año anterior para que coincidan con el eje X del año actual
+                    // Convertir año anterior al año actual para que las etiquetas coincidan
+                    datosRemitosPorMesAnterior = responseAnterior.Response.RemitosPorMes
+                        .Select(d => 
+                        {
+                            // Parsear la fecha del año anterior (formato: YYYY-MM)
+                            if (d.Mes.Length >= 7 && DateTime.TryParse(d.Mes + "-01", out var fecha))
+                            {
+                                // Sumar 1 año para que coincida con el eje X del año actual
+                                var fechaAjustada = fecha.AddYears(1);
+                                return new DatoMensualRemitoDTO
+                                {
+                                    Mes = fechaAjustada.ToString("yyyy-MM"),
+                                    Cantidad = d.Cantidad
+                                };
+                            }
+                            return d;
+                        })
+                        .ToList();
+                    
+                    Console.WriteLine($"=== DATOS AÑO ANTERIOR: {datosRemitosPorMesAnterior.Count} meses ===");
+                }
+                else
+                {
+                    datosRemitosPorMesAnterior = new List<DatoMensualRemitoDTO>();
+                    Console.WriteLine("=== NO SE ENCONTRARON DATOS DEL AÑO ANTERIOR ===");
+                }
+
+                graficosGenerados = true;
+            }
+            else
+            {
+                Console.WriteLine($"Error en la API de gráficos de remitos: {responseHttp.Error}");
+                if (responseHttp.HttpResponseMessage != null)
+                {
+                    Console.WriteLine($"Status: {responseHttp.HttpResponseMessage.StatusCode}");
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error obteniendo datos de gráficos de remitos: {ex.Message}");
+        }
+        finally
+        {
+            cargando = false;
+            StateHasChanged();
+        }
+    }
+}

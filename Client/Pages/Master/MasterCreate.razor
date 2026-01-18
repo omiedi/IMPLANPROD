@@ -1,0 +1,72 @@
+@page "/master-create"
+@inject NavigationManager navigationManager
+@inject IRepository repository
+@inject SweetAlertService sweetAlertService
+<div class="bg-primary bg-opacity-10 p-3 rounded-3 mb-3">
+    <h3 class="m-0 text-primary">Crear Nuevo Producto</h3>
+</div>
+
+<MasterForm @ref="masterForm" master="master" OnValidSubmit="CreateAsync" ReturnAction="Return" IsEdit="false" />
+
+@code {
+    private Master master = new();
+    private MasterForm? masterForm;
+
+    private async Task CreateAsync()
+    {
+        var httpResponse = await repository.Post("api/master", master);
+
+        if (httpResponse.Error)
+        {
+            var mensajeError = await httpResponse.GetErrorMessageAsync();
+            await sweetAlertService.FireAsync("Error", mensajeError, SweetAlertIcon.Error);
+            return;
+        }
+        return;
+    }
+
+
+    private void Return()
+    {
+        masterForm!.FormPostedSuccessfully = true;
+        navigationManager.NavigateTo("/master-index");
+    }
+}
+
+@* <!--
+    Componente: MasterCreate.razor
+    Descripción: Página para crear nuevos productos utilizando el formulario maestro MasterForm
+    Autor: IA Cascade
+    Fecha: 30/05/2025
+-->
+
+<div class="bg-primary bg-opacity-10 p-3 rounded-3 mb-3">
+    <h3 class="m-0 text-primary">Crear Nuevo Producto</h3>
+</div>
+<MasterForm @ref="MasterForm" master="master" OnValidSubmit="Create" ReturnAction="Return" IsEdit="false" />
+
+
+@code {
+    private Master master ;
+    private MasterForm? MasterForm;
+
+        private async Task Create()
+    {
+        var response = await repository.Post("/api/master", master);
+        if (response.Error)
+        {
+            await sweetAlertService.FireAsync("Error", response.HttpResponseMessage.ReasonPhrase, SweetAlertIcon.Error);
+            return;
+        }
+
+        Return();
+        await sweetAlertService.FireAsync("Éxito", "Producto creado correctamente", SweetAlertIcon.Success);
+    }
+
+    private void Return()
+    {
+        MasterForm!.FormPostedSuccessfully = true;
+        navigationManager.NavigateTo("/master-index");
+    }
+}
+ *@

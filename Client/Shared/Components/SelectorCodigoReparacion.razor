@@ -1,0 +1,173 @@
+@inject IRepository repository
+@inject SweetAlertService sweetAlertService
+
+@if (mostrarModal)
+{
+    <div class="modal fade show" style="display:block; background-color: rgba(0,0,0,0.5);" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header bg-primary text-white">
+                    <h5 class="modal-title">
+                        <i class="fas fa-wrench"></i> Seleccionar Código de Reparación
+                    </h5>
+                    <button type="button" class="btn-close btn-close-white" @onclick="Cerrar"></button>
+                </div>
+                <div class="modal-body">
+                    <!-- Búsqueda -->
+                    <div class="mb-3">
+                        <div class="input-group">
+                            <span class="input-group-text">
+                                <i class="fas fa-search"></i>
+                            </span>
+                            <input type="text" 
+                                   class="form-control" 
+                                   placeholder="Buscar por código o descripción..."
+                                   @bind="filtro"
+                                   @bind:event="oninput"
+                                   @onkeyup="FiltrarCodigosReparacion" />
+                        </div>
+                    </div>
+
+                    <!-- Lista de códigos de reparación -->
+                    @if (codigosReparacion == null)
+                    {
+                        <div class="text-center">
+                            <div class="spinner-border text-primary" role="status">
+                                <span class="visually-hidden">Cargando...</span>
+                            </div>
+                        </div>
+                    }
+                    else if (!codigosReparacion.Any())
+                    {
+                        <div class="alert alert-info">
+                            <i class="fas fa-info-circle"></i> No se encontraron códigos de reparación.
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="table-responsive" style="max-height: 400px; overflow-y: auto;">
+                            <table class="table table-hover table-sm">
+                                <thead class="table-dark sticky-top">
+                                    <tr>
+                                        <th style="width: 30%">Código</th>
+                                        <th style="width: 60%">Descripción</th>
+                                        <th style="width: 10%"></th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var codigo in codigosReparacionFiltrados)
+                                    {
+                                        <tr style="cursor: pointer;" @onclick="() => Seleccionar(codigo)">
+                                            <td><strong>@codigo.Codigo</strong></td>
+                                            <td>@codigo.Descripcion</td>
+                                            <td>
+                                                <button class="btn btn-sm btn-primary" @onclick="() => Seleccionar(codigo)">
+                                                    <i class="fas fa-check"></i>
+                                                </button>
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    }
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" @onclick="Cerrar">
+                        <i class="fas fa-times"></i> Cancelar
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private bool mostrarModal = false;
+    private List<Indirep>? codigosReparacion;
+    private List<Indirep>? codigosReparacionFiltrados;
+    private string filtro = string.Empty;
+
+    [Parameter] public EventCallback<Indirep> OnCodigoSeleccionado { get; set; }
+
+    /// <summary>
+    /// Abre el modal y carga los códigos de reparación
+    /// </summary>
+    public async Task Abrir()
+    {
+        mostrarModal = true;
+        filtro = string.Empty;
+        await CargarCodigosReparacion();
+        StateHasChanged();
+    }
+
+    /// <summary>
+    /// Cierra el modal
+    /// </summary>
+    private void Cerrar()
+    {
+        mostrarModal = false;
+        filtro = string.Empty;
+        StateHasChanged();
+    }
+
+    /// <summary>
+    /// Carga los códigos de reparación desde la API
+    /// </summary>
+    private async Task CargarCodigosReparacion()
+    {
+        try
+        {
+            var responseHttp = await repository.Get<List<Indirep>>("api/indirep/combo");
+            if (responseHttp.Error)
+            {
+                var message = await responseHttp.GetErrorMessageAsync();
+                await sweetAlertService.FireAsync("Error", message, SweetAlertIcon.Error);
+                codigosReparacion = new List<Indirep>();
+                codigosReparacionFiltrados = new List<Indirep>();
+                return;
+            }
+
+            codigosReparacion = responseHttp.Response;
+            codigosReparacionFiltrados = codigosReparacion;
+        }
+        catch (Exception ex)
+        {
+            await sweetAlertService.FireAsync("Error", $"Error al cargar códigos de reparación: {ex.Message}", SweetAlertIcon.Error);
+            codigosReparacion = new List<Indirep>();
+            codigosReparacionFiltrados = new List<Indirep>();
+        }
+    }
+
+    /// <summary>
+    /// Filtra los códigos de reparación según el texto ingresado
+    /// </summary>
+    private void FiltrarCodigosReparacion()
+    {
+        if (codigosReparacion == null)
+            return;
+
+        if (string.IsNullOrWhiteSpace(filtro))
+        {
+            codigosReparacionFiltrados = codigosReparacion;
+        }
+        else
+        {
+            var filtroLower = filtro.ToLower();
+            codigosReparacionFiltrados = codigosReparacion
+                .Where(c => c.Codigo.ToLower().Contains(filtroLower) ||
+                           (c.Descripcion?.ToLower().Contains(filtroLower) ?? false))
+                .ToList();
+        }
+        StateHasChanged();
+    }
+
+    /// <summary>
+    /// Selecciona un código de reparación y cierra el modal
+    /// </summary>
+    private async Task Seleccionar(Indirep codigo)
+    {
+        await OnCodigoSeleccionado.InvokeAsync(codigo);
+        Cerrar();
+    }
+}

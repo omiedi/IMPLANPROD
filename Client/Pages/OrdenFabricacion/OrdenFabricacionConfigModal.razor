@@ -1,0 +1,681 @@
+@using IMPLANPROD.Shared.Entities
+@inject IRepository repository
+@inject SweetAlertService sweetAlertService
+
+@* Modal de configuración de Orden de Fabricación *@
+@if (IsVisible)
+{
+    <div class="modal fade show" style="display: block" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header bg-primary text-white">
+                    <h5 class="modal-title">
+                        <i class="oi oi-cog me-2"></i>Configuración de Orden de Fabricación
+                    </h5>
+                    <button type="button" class="btn-close btn-close-white" @onclick="CerrarModal"></button>
+                </div>
+                <div class="modal-body">
+                    @if (cargandoConfiguracion)
+                    {
+                        <div class="d-flex justify-content-center align-items-center" style="min-height: 200px;">
+                            <div class="spinner-border text-primary" role="status">
+                                <span class="visually-hidden">Cargando configuración...</span>
+                            </div>
+                        </div>
+                    }
+                    else
+                    {
+                        @* Sección de Información de la Orden de Fabricación *@
+                        @if (ordenFabricacion != null)
+                        {
+                            <div class="row mb-3">
+                                <div class="col-12">
+                                    <div class="card border-info">
+                                        <div class="card-header bg-info text-white">
+                                            <h6 class="card-title mb-0">
+                                                <i class="oi oi-document me-2"></i>Información de la Orden de Fabricación
+                                            </h6>
+                                        </div>
+                                        <div class="card-body">
+                                            <div class="row">
+                                                <div class="col-md-6">
+                                                    <div class="mb-2">
+                                                        <strong>ID Sub-Orden:</strong> @ordenFabricacion.IdSubOr
+                                                    </div>
+                                                    <div class="mb-2">
+                                                        <strong>Referencia:</strong> @ordenFabricacion.Referen
+                                                    </div>
+                                                    <div class="mb-2">
+                                                        <strong>Código Interno:</strong> @ordenFabricacion.Cod_Inte
+                                                    </div>
+                                                    @if (articuloMaster != null)
+                                                    {
+                                                        <div class="mb-2">
+                                                            <strong>Descripción:</strong> @articuloMaster.Descripcion
+                                                        </div>
+                                                    }
+                                                </div>
+                                                <div class="col-md-6">
+                                                    <div class="mb-2">
+                                                        <strong>Cantidad Proyectada:</strong> @cantidadProyectada.ToString("N2")
+                                                    </div>
+                                                    <div class="mb-2">
+                                                        <strong>Cantidad Aprobada:</strong> @cantidadAprobada.ToString("N2")
+                                                    </div>
+                                                    <div class="mb-2">
+                                                        <strong>Cantidad Pendiente:</strong> 
+                                                        <span class="badge bg-warning text-dark">@cantidadPendiente.ToString("N2")</span>
+                                                    </div>
+                                                    @if (cantidadFinProceso > 0)
+                                                    {
+                                                        <div class="mb-2">
+                                                            <strong>Cantidad Fin Proceso:</strong> @cantidadFinProceso.ToString("N2")
+                                                        </div>
+                                                    }
+                                                </div>
+                                            </div>
+                                            @if (articuloMaster != null)
+                                            {
+                                                <hr class="my-3" />
+                                                <div class="row">
+                                                    <div class="col-12">
+                                                        <h6 class="text-muted mb-2">
+                                                            <i class="oi oi-home me-1"></i>Depósitos por Defecto del Artículo
+                                                        </h6>
+                                                    </div>
+                                                    <div class="col-md-6">
+                                                        <div class="mb-2">
+                                                            <strong>Depósito de Entrada:</strong> 
+                                                            <span class="badge bg-success">@depositoEntradaPorDefecto</span>
+                                                        </div>
+                                                    </div>
+                                                    <div class="col-md-6">
+                                                        <div class="mb-2">
+                                                            <strong>Depósito de Consumo:</strong> 
+                                                            <span class="badge bg-primary">@depositoConsumoPorDefecto</span>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            }
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        }
+                        
+                        <div class="row">
+                            <div class="col-12">
+                                <div class="card">
+                                    <div class="card-header bg-light">
+                                        <h6 class="card-title mb-0">
+                                            <i class="oi oi-shield me-2"></i>Control de Calidad
+                                        </h6>
+                                    </div>
+                                    <div class="card-body">
+                                        <div class="form-check form-switch">
+                                            <input class="form-check-input" 
+                                                   type="checkbox" 
+                                                   id="cierreConCalidad"
+                                                   @bind="cierreConCalidad" />
+                                            <label class="form-check-label" for="cierreConCalidad">
+                                                <strong>Cierre de Fabricación con control de calidad</strong>
+                                            </label>
+                                            <div class="form-text">
+                                                Cuando está habilitado, se requiere control de calidad antes del cierre de la orden de fabricación.
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        @* Sección de Configuración de Depósitos *@
+                        <div class="row mt-3">
+                            <div class="col-12">
+                                <div class="card">
+                                    <div class="card-header bg-light">
+                                        <h6 class="card-title mb-0">
+                                            <i class="oi oi-home me-2"></i>Configuración de Depósitos
+                                        </h6>
+                                    </div>
+                                    <div class="card-body">
+                                        <div class="row">
+                                            <div class="col-md-4">
+                                                <div class="mb-3">
+                                                    <label for="depositoCentral" class="form-label">
+                                                        <strong>Depósito Central:</strong>
+                                                    </label>
+                                                    <InputSelect class="form-select" id="depositoCentral" @bind-Value="NroDepositoCentralSeleccionado">
+                                                        <option value="0">-- Seleccionar Depósito --</option>
+                                                        @if (depositosDisponibles != null)
+                                                        {
+                                                            @foreach (var deposito in depositosDisponibles)
+                                                            {
+                                                                <option value="@deposito.Key">@deposito.Key - @deposito.Value</option>
+                                                            }
+                                                        }
+                                                    </InputSelect>
+                                                    <div class="form-text">
+                                                        Configuración del depósito central (Depocen).
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <div class="col-md-4">
+                                                <div class="mb-3">
+                                                    <label for="depositoCierre" class="form-label">
+                                                        <strong>Depósito de Cierre:</strong>
+                                                    </label>
+                                                    <InputSelect class="form-select" id="depositoCierre" @bind-Value="NroDepositoCierreSeleccionado">
+                                                        <option value="0">-- Seleccionar Depósito --</option>
+                                                        @if (depositosDisponibles != null)
+                                                        {
+                                                            @foreach (var deposito in depositosDisponibles)
+                                                            {
+                                                                <option value="@deposito.Key">@deposito.Key - @deposito.Value</option>
+                                                            }
+                                                        }
+                                                    </InputSelect>
+                                                    <div class="form-text">
+                                                        Configuración del depósito de cierre (Depocie).
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <div class="col-md-4">
+                                                <div class="mb-3">
+                                                    <label for="depositoDestino" class="form-label">
+                                                        <strong>Depósito Destino:</strong>
+                                                    </label>
+                                                    <InputSelect class="form-select" id="depositoDestino" @bind-Value="NroDepositoDestinoSeleccionado">
+                                                        <option value="0">-- Seleccionar Depósito --</option>
+                                                        @if (depositosDisponibles != null)
+                                                        {
+                                                            @foreach (var deposito in depositosDisponibles)
+                                                            {
+                                                                <option value="@deposito.Key">@deposito.Key - @deposito.Value</option>
+                                                            }
+                                                        }
+                                                    </InputSelect>
+                                                    <div class="form-text">
+                                                        Configuración del depósito destino (Depodest).
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <!-- Nueva fila para Depósito Scrap si cantidad rechazada > 0 muestra input de depositos para seleccionar default configurado-->
+                        <div class="row mt-3">
+                            <div class="col-md-4">
+                                <div class="mb-3">
+                                    <label for="depositoScrap" class="form-label">
+                                        <strong>Depósito Scrap:</strong>
+                                    </label>
+                                    <InputSelect class="form-select" id="depositoScrap" @bind-Value="NroDepositoScrapSeleccionado">
+                                        <option value="0">-- Seleccionar Depósito --</option>
+                                        @if (depositosDisponibles != null)
+                                        {
+                                            @foreach (var deposito in depositosDisponibles)
+                                            {
+                                                <option value="@deposito.Key">@deposito.Key - @deposito.Value</option>
+                                            }
+                                        }
+                                    </InputSelect>
+                                    <div class="form-text">
+                                        Configuración del depósito scrap (DEPSCRAP).
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    }
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" @onclick="CerrarModal">
+                        <i class="oi oi-x me-1"></i>Cancelar
+                    </button>
+                    <button type="button" 
+                            class="btn btn-primary" 
+                            @onclick="GuardarConfiguracion"
+                            disabled="@(cargandoConfiguracion || guardandoConfiguracion)">
+                        @if (guardandoConfiguracion)
+                        {
+                            <span class="spinner-border spinner-border-sm me-2" role="status"></span>
+                        }
+                        else
+                        {
+                            <i class="oi oi-check me-1"></i>
+                        }
+                        Guardar
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="modal-backdrop fade show"></div>
+}
+
+@code {
+    /// <summary>
+    /// Parámetros del componente
+    /// </summary>
+    [Parameter] public bool IsVisible { get; set; } = false;
+    [Parameter] public EventCallback OnCloseRequested { get; set; }
+    [Parameter] public EventCallback OnConfigurationSaved { get; set; }
+    [Parameter] public string? IdSubOr { get; set; } // ID de la sub-orden para cargar datos específicos
+
+    /// <summary>
+    /// Variables de estado del componente
+    /// </summary>
+    private bool cargandoConfiguracion = false;
+    private bool guardandoConfiguracion = false;
+    
+    /// <summary>
+    /// Datos de la orden de fabricación cargada
+    /// Equivalente a los datos obtenidos de ORDEFABR en VB6
+    /// </summary>
+    private OrdeFabr? ordenFabricacion = null;
+    private Master? articuloMaster = null;
+    
+    /// <summary>
+    /// Cantidades calculadas según lógica VB6
+    /// </summary>
+    private decimal cantidadPendiente = 0; // Equivalente a CAPEN1# en VB6
+    private decimal cantidadProyectada = 0; // Equivalente a CANPROY en VB6
+    private decimal cantidadAprobada = 0; // Equivalente a CanApro en VB6
+    private decimal cantidadFinProceso = 0; // Equivalente a CANTFINPROCESO en VB6
+    private bool cierreConCalidad = false;
+    
+    /// <summary>
+    /// Configuración de depósitos
+    /// </summary>
+    private List<Tadeposi> depositos = new();
+    private int NroDepositoCentralSeleccionado = 0;
+    private int NroDepositoCierreSeleccionado = 0;
+    private int NroDepositoDestinoSeleccionado = 0;
+    private int NroDepositoScrapSeleccionado = 0;
+    
+    /// <summary>
+    /// Depósitos por defecto del artículo
+    /// Equivalente a DEPENT1% y DEPCONS1% en VB6
+    /// </summary>
+    private int depositoEntradaPorDefecto = 0; // Equivalente a DEPENT1% en VB6
+    private int depositoConsumoPorDefecto = 0; // Equivalente a DEPCONS1% en VB6
+    
+    // Diccionario para almacenar los depósitos disponibles (ID, Descripción)
+    private Dictionary<int, string>? depositosDisponibles;
+
+    // Constantes para los parámetros de FlexcrlService según la lógica VB6
+    private const string CLABUS_PARAM = "";
+    private const string PROBUS_PARAM_CIERCALI = "CIERCALI";
+    private const string PROBUS_PARAM_DEPOCEN = "Depocen";
+    private const string PROBUS_PARAM_DEPOCIE = "Depocie";
+    private const string PROBUS_PARAM_DEPODEST = "Depodest";
+    private const string PROBUS_PARAM_DEPSCRAP = "DEPSCRAP";
+
+    /// <summary>
+    /// Se ejecuta cuando el componente se inicializa
+    /// </summary>
+    protected override async Task OnInitializedAsync()
+    {
+        await CargarConfiguracion();
+    }
+    
+    /// <summary>
+    /// Se ejecuta cuando los parámetros cambian
+    /// </summary>
+    protected override async Task OnParametersSetAsync()
+    {
+        // Solo cargar configuración básica si no se ha cargado antes
+        if (IsVisible && !cargandoConfiguracion)
+        {
+            // Si se proporciona un IdSubOr, cargar datos específicos de la orden
+            if (!string.IsNullOrEmpty(IdSubOr))
+            {
+                await CargarDatosOrdenFabricacion();
+            }
+            else
+            {
+                // Si no hay IdSubOr, solo cargar la configuración básica
+                await CargarConfiguracion();
+            }
+        }
+    }
+
+    /// <summary>
+    /// Carga los datos específicos de la orden de fabricación
+    /// Equivalente a la consulta SELECT * FROM ORDEFABR WHERE IdSubOr = 'NROOF$' en VB6
+    /// </summary>
+    private async Task CargarDatosOrdenFabricacion()
+    {
+        try
+        {
+            cargandoConfiguracion = true;
+            StateHasChanged();
+            
+            // Cargar datos de la orden de fabricación
+            var responseOrden = await repository.Get<List<OrdeFabr>>($"api/ordefabr/por-idsubor/{IdSubOr}");
+            if (!responseOrden.Error && responseOrden.Response?.Any() == true)
+            {
+                ordenFabricacion = responseOrden.Response.First();
+                
+                // Cargar datos del artículo (Master) para obtener depósitos por defecto
+                if (ordenFabricacion.Cod_Inte.HasValue)
+                {
+                    await CargarDatosArticulo(ordenFabricacion.Cod_Inte.Value);
+                }
+                
+                // Calcular cantidades según lógica VB6
+                CalcularCantidades();
+                
+                // Establecer depósitos por defecto según lógica VB6
+                EstablecerDepositosPorDefecto();
+            }
+        }
+        catch (Exception ex)
+        {
+            await sweetAlertService.FireAsync("Error", $"Error al cargar datos de la orden: {ex.Message}", SweetAlertIcon.Error);
+        }
+        finally
+        {
+            cargandoConfiguracion = false;
+            StateHasChanged();
+        }
+    }
+    
+    /// <summary>
+    /// Carga los datos del artículo desde la tabla Master
+    /// Equivalente a la función DEPENART% en VB6
+    /// </summary>
+    private async Task CargarDatosArticulo(int codigoInterno)
+    {
+        try
+        {
+            var responseMaster = await repository.Get<List<Master>>($"api/master/por-codint/{codigoInterno}");
+            if (!responseMaster.Error && responseMaster.Response?.Any() == true)
+            {
+                articuloMaster = responseMaster.Response.First();
+            }
+        }
+        catch (Exception ex)
+        {
+            // Log del error pero no interrumpir el flujo
+            Console.WriteLine($"Error al cargar datos del artículo: {ex.Message}");
+        }
+    }
+    
+    /// <summary>
+    /// Calcula las cantidades según la lógica del código VB6
+    /// Equivalente al cálculo de CAPEN1# en VB6
+    /// </summary>
+    private void CalcularCantidades()
+    {
+        if (ordenFabricacion == null) return;
+        
+        // Obtener valores base
+        cantidadProyectada = ordenFabricacion.CanProy ?? 0;
+        cantidadAprobada = ordenFabricacion.CanApro ?? 0;
+        cantidadFinProceso = ordenFabricacion.Canti_Fin_Proceso ?? 0;
+        
+        // Lógica VB6: CAPENDE# = XVALO(!CANPROY) - XVALO(!CanApro): If CAPENDE# < 0 Then CAPENDE# = 0
+        decimal cantidadPendienteBase = cantidadProyectada - cantidadAprobada;
+        if (cantidadPendienteBase < 0) cantidadPendienteBase = 0;
+        
+        cantidadPendiente = cantidadPendienteBase;
+        
+        // Lógica VB6: Si hay cantidad en proceso, recalcular
+        // If CANTFINPROCESO > 0 Then
+        //   CAPENDETMP# = CANTFINPROCESO - XVALO(!CanApro)
+        //   If CAPENDETMP# >= 1 Then CAPEN1# = CAPENDETMP#
+        if (cantidadFinProceso > 0)
+        {
+            decimal cantidadPendienteTemporal = cantidadFinProceso - cantidadAprobada;
+            if (cantidadPendienteTemporal >= 1)
+            {
+                cantidadPendiente = cantidadPendienteTemporal;
+            }
+        }
+        
+        // Nota: En el código VB6 hay lógica adicional para CANTAPROX y TX1FACIL$
+        // que no está implementada aquí porque depende de variables globales
+        // que no están disponibles en este contexto
+    }
+    
+    /// <summary>
+    /// Establece los depósitos por defecto según la lógica VB6
+    /// Equivalente a DEPENT1% = DEPENART%(CODI1%) y DEPCONS1% = DEPCONART%(CODI1%)
+    /// </summary>
+    private void EstablecerDepositosPorDefecto()
+    {
+        if (articuloMaster == null) return;
+        
+        // Obtener depósito de entrada por defecto del artículo
+        // Equivalente a DEPENART% en VB6
+        depositoEntradaPorDefecto = articuloMaster.DepoEntra ?? 0;
+        
+        // Obtener depósito de consumo por defecto del artículo  
+        // Equivalente a DEPCONART% en VB6
+        depositoConsumoPorDefecto = articuloMaster.DepoCon ?? 0;
+        
+        // Lógica VB6: Si existe depósito por default para la entrada de materiales
+        // presenta este último, aunque tenga uno el artículo
+        // DEPOENTRA% = XVALO(Control("", "DEPOCIE"))
+        // If DEPOENTRA% > 0 Then DEPENT1% = DEPOENTRA%
+        
+        // Si hay un depósito de cierre configurado globalmente, usarlo para entrada
+        if (NroDepositoCierreSeleccionado > 0)
+        {
+            depositoEntradaPorDefecto = NroDepositoCierreSeleccionado;
+        }
+    }
+
+    /// <summary>
+    /// Carga la configuración actual desde FlexcrlService
+    /// Equivalente a: If Control$("", "PRECOCIE") = "SI" Then Check5.Value = 1
+    /// </summary>
+    private async Task CargarConfiguracion()
+    {
+        try
+        {
+            cargandoConfiguracion = true;
+            StateHasChanged();
+
+            // Primero cargar los depósitos disponibles
+            await CargarDepositosDisponibles();
+            
+            // Llamar al endpoint para obtener el control específico de cierre con calidad
+            // Usar "empty" como placeholder para el parámetro CLABUS vacío para evitar URLs malformadas
+            string clabusParam = string.IsNullOrEmpty(CLABUS_PARAM) ? "empty" : CLABUS_PARAM;
+            var response = await repository.Get<FLEXCRL>($"api/flexcrl/{clabusParam}/{PROBUS_PARAM_CIERCALI}");
+
+            if (response.Error)
+            {
+                // Si no existe el registro, se considera como "NO" (false)
+                cierreConCalidad = false;
+            }
+            else
+            {
+                var control = response.Response;
+                // Verificar si el valor es "SI" para establecer el checkbox
+                cierreConCalidad = control?.VALCONTROL?.ToUpper() == "SI";
+            }
+            
+            // Cargar configuración de depósito central
+            await CargarConfiguracionDeposito(PROBUS_PARAM_DEPOCEN, (valor) => NroDepositoCentralSeleccionado = valor);
+            
+            // Cargar configuración de depósito de cierre
+            await CargarConfiguracionDeposito(PROBUS_PARAM_DEPOCIE, (valor) => NroDepositoCierreSeleccionado = valor);
+
+            // Cargar configuración de depósito destino
+            await CargarConfiguracionDeposito(PROBUS_PARAM_DEPODEST, (valor) => NroDepositoDestinoSeleccionado = valor);
+            
+            // Cargar configuración de depósito scrap
+            await CargarConfiguracionDeposito(PROBUS_PARAM_DEPSCRAP, (valor) => NroDepositoScrapSeleccionado = valor);
+        }
+        catch (Exception ex)
+        {
+            await sweetAlertService.FireAsync("Error", $"Error al cargar la configuración: {ex.Message}", SweetAlertIcon.Error);
+            cierreConCalidad = false;
+        }
+        finally
+        {
+            cargandoConfiguracion = false;
+            StateHasChanged();
+        }
+    }
+
+    /// <summary>
+    /// Carga los depósitos disponibles desde la API
+    /// </summary>
+    private async Task CargarDepositosDisponibles()
+    {
+        try
+        {
+            // Obtenemos la información de todos los depósitos (incluida la descripción)
+            // El endpoint devuelve un diccionario donde la clave es el código del depósito y el valor es la descripción
+            var responseDepositosInfo = await repository.Get<Dictionary<int, string>>("api/tadeposi/combo");
+            if (responseDepositosInfo.Error)
+            {
+                await sweetAlertService.FireAsync("Error", responseDepositosInfo.HttpResponseMessage.ReasonPhrase, SweetAlertIcon.Error);
+                return;
+            }
+            
+            depositosDisponibles = responseDepositosInfo.Response;
+        }
+        catch (Exception ex)
+        {
+            await sweetAlertService.FireAsync("Error", $"Error al cargar los depósitos: {ex.Message}", SweetAlertIcon.Error);
+            depositosDisponibles = new Dictionary<int, string>();
+        }
+    }
+
+    /// <summary>
+    /// Carga la configuración de un depósito específico
+    /// </summary>
+    /// <param name="probus">Parámetro PROBUS para identificar el tipo de depósito</param>
+    /// <param name="setValor">Acción para establecer el valor cargado</param>
+    private async Task CargarConfiguracionDeposito(string probus, Action<int> setValor)
+    {
+        try
+        {
+            string clabusParam = string.IsNullOrEmpty(CLABUS_PARAM) ? "empty" : CLABUS_PARAM;
+            var response = await repository.Get<FLEXCRL>($"api/flexcrl/{clabusParam}/{probus}");
+
+            if (response.Error)
+            {
+                // Si no existe el registro, se considera como 0 (sin selección)
+                setValor(0);
+            }
+            else
+            {
+                var control = response.Response;
+                // Intentar convertir el valor a entero, si falla usar 0
+                if (int.TryParse(control?.VALCONTROL, out int valorDeposito))
+                {
+                    setValor(valorDeposito);
+                }
+                else
+                {
+                    setValor(0);
+                }
+            }
+        }
+        catch (Exception)
+        {
+            // En caso de error, establecer valor por defecto
+            setValor(0);
+        }
+    }
+
+    /// <summary>
+    /// Guarda la configuración usando FlexcrlService
+    /// Equivalente a la lógica VB6:
+    /// MONUME$ = "NO": If Check5.Value = 1 Then MONUME$ = "SI"
+    /// Call GRACONTROL("", "PRECOCIE", MONUME$)
+    /// </summary>
+    private async Task GuardarConfiguracion()
+    {
+        try
+        {
+            guardandoConfiguracion = true;
+            StateHasChanged();
+
+            // Determinar el valor a guardar según la lógica VB6
+            string valorControl = "NO";
+            if (cierreConCalidad)
+            {
+                valorControl = "SI";
+            }
+
+            // Guardar configuración de cierre con calidad
+            await GuardarConfiguracionControl(PROBUS_PARAM_CIERCALI, valorControl);
+            
+            // Guardar configuración de depósitos
+            await GuardarConfiguracionControl(PROBUS_PARAM_DEPOCEN, NroDepositoCentralSeleccionado.ToString());
+            await GuardarConfiguracionControl(PROBUS_PARAM_DEPOCIE, NroDepositoCierreSeleccionado.ToString());
+            await GuardarConfiguracionControl(PROBUS_PARAM_DEPODEST, NroDepositoDestinoSeleccionado.ToString());
+            await GuardarConfiguracionControl(PROBUS_PARAM_DEPSCRAP, NroDepositoScrapSeleccionado.ToString());
+            
+            // Si llegamos aquí, todas las configuraciones se guardaron exitosamente
+            await sweetAlertService.FireAsync("Éxito", "Configuración guardada exitosamente.", SweetAlertIcon.Success);
+            
+            // Notificar que se guardó la configuración
+            await OnConfigurationSaved.InvokeAsync();
+            
+            // Cerrar el modal
+            await CerrarModal();
+        }
+        catch (Exception ex)
+        {
+            await sweetAlertService.FireAsync("Error", $"Error inesperado al guardar la configuración: {ex.Message}", SweetAlertIcon.Error);
+        }
+        finally
+        {
+            guardandoConfiguracion = false;
+            StateHasChanged();
+        }
+    }
+
+    /// <summary>
+    /// Guarda la configuración de un control específico
+    /// </summary>
+    /// <param name="probus">Parámetro PROBUS para identificar el tipo de control</param>
+    /// <param name="valor">Valor a guardar</param>
+    private async Task GuardarConfiguracionControl(string probus, string valor)
+    {
+        try
+        {
+            // Crear el objeto para enviar al endpoint
+            // Usar "empty" como placeholder para CLABUS vacío para mantener consistencia
+            string clabusParam = string.IsNullOrEmpty(CLABUS_PARAM) ? "empty" : CLABUS_PARAM;
+            var configData = new
+            {
+                clabus = CLABUS_PARAM, // Enviar el valor real (vacío) al backend
+                probus = probus,
+                valcontrol = valor
+            };
+
+            // Llamar al endpoint para actualizar o crear el control
+            var response = await repository.Put("api/flexcrl", configData);
+
+            if (response.Error)
+            {
+                var errorMessage = await response.GetErrorMessageAsync();
+                throw new Exception($"Error al guardar {probus}: {errorMessage}");
+            }
+        }
+        catch (Exception ex)
+        {
+            await sweetAlertService.FireAsync("Error", ex.Message, SweetAlertIcon.Error);
+            throw; // Re-lanzar la excepción para que el método padre la maneje
+        }
+    }
+
+    /// <summary>
+    /// Cierra el modal y notifica al componente padre
+    /// </summary>
+    private async Task CerrarModal()
+    {
+        await OnCloseRequested.InvokeAsync();
+    }
+}

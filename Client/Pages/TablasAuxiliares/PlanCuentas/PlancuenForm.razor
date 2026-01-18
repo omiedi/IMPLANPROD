@@ -1,0 +1,159 @@
+@inject SweetAlertService sweetAlertService
+@inject IRepository repository
+
+@using CurrieTechnologies.Razor.SweetAlert2
+
+<!-- Formulario para crear/editar una cuenta del plan de cuentas -->
+<EditForm Model="Cuenta" OnValidSubmit="OnValidSubmit">
+    <DataAnnotationsValidator />
+
+    <div class="row">
+        <div class="col-md-6">
+            <div class="mb-3">
+                <label>Código Externo:</label>
+                <div>
+                    <InputText class="form-control" @bind-Value="@codigoExternoTexto" @oninput="OnCodigoExternoInput" placeholder="Ingrese solo números" />
+                    <ValidationMessage For="@(() => Cuenta.CodExCue)" />
+                    <small class="form-text text-muted">Solo números, se formateará automáticamente a 2 decimales</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-6">
+            <div class="mb-3">
+                <label>Código Interno:</label>
+                <div>
+                    <InputNumber class="form-control" @bind-Value="@Cuenta.CodInCue" disabled="true" />
+                    <ValidationMessage For="@(() => Cuenta.CodInCue)" />
+                    <small class="form-text text-muted">Se asigna automáticamente</small>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="mb-3">
+        <label>Denominación:</label>
+        <div>
+            <InputText class="form-control" @bind-Value="@Cuenta.Denocue" placeholder="Descripción de la cuenta" />
+            <ValidationMessage For="@(() => Cuenta.Denocue)" />
+        </div>
+    </div>
+
+    <div class="mb-3">
+        <label>Observaciones:</label>
+        <div>
+            <InputTextArea class="form-control" @bind-Value="@Cuenta.Observa" rows="3" placeholder="Observaciones adicionales" />
+            <ValidationMessage For="@(() => Cuenta.Observa)" />
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-md-6">
+            <div class="mb-3">
+                <label>Tipo de Cuenta:</label>
+                <div>
+                    <InputSelect class="form-select" @bind-Value="@Cuenta.TipoCue">
+                        <option value="debe">Debe</option>
+                        <option value="haber">Haber</option>
+                    </InputSelect>
+                    <ValidationMessage For="@(() => Cuenta.TipoCue)" />
+                </div>
+            </div>
+        </div>
+        <div class="col-md-6">
+            <div class="mb-3">
+                <label>Estado:</label>
+                <div>
+                    <InputSelect class="form-select" @bind-Value="@Cuenta.Statcue">
+                        <option value="1">Activo</option>
+                        <option value="-1">Inactivo</option>
+                    </InputSelect>
+                    <ValidationMessage For="@(() => Cuenta.Statcue)" />
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <button class="btn btn-primary" type="submit">Guardar Cambios</button>
+    <button class="btn btn-success" type="button" @onclick="ReturnAction">Regresar</button>
+
+</EditForm>
+
+@code {
+    [EditorRequired]
+    [Parameter]
+    public Plancuen Cuenta { get; set; } = null!;
+
+    [EditorRequired]
+    [Parameter]
+    public EventCallback OnValidSubmit { get; set; }
+
+    [EditorRequired]
+    [Parameter]
+    public EventCallback ReturnAction { get; set; }
+
+    [Parameter]
+    public bool IsEdit { get; set; }
+
+    public bool FormPostedSuccessfully { get; set; }
+
+    private string codigoExternoTexto = string.Empty;
+
+    protected override async Task OnInitializedAsync()
+    {
+        // Si no es edición, obtener el siguiente código interno
+        if (!IsEdit)
+        {
+            await ObtenerSiguienteCodigo();
+            // Establecer valores por defecto
+            if (string.IsNullOrEmpty(Cuenta.TipoCue))
+            {
+                Cuenta.TipoCue = "debe";
+            }
+            if (!Cuenta.Statcue.HasValue)
+            {
+                Cuenta.Statcue = 1;
+            }
+        }
+        
+        // Inicializar el texto del código externo
+        codigoExternoTexto = Cuenta.CodExCue ?? string.Empty;
+    }
+
+    private async Task ObtenerSiguienteCodigo()
+    {
+        try
+        {
+            var responseHttp = await repository.Get<int>("api/plancuen/siguiente-codigo");
+            if (!responseHttp.Error)
+            {
+                Cuenta.CodInCue = responseHttp.Response;
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error al obtener siguiente código: {ex.Message}");
+        }
+    }
+
+    private void OnCodigoExternoInput(ChangeEventArgs e)
+    {
+        var input = e.Value?.ToString() ?? string.Empty;
+        
+        // Filtrar solo números y punto decimal
+        var filteredInput = new string(input.Where(c => char.IsDigit(c) || c == '.').ToArray());
+        
+        codigoExternoTexto = filteredInput;
+        
+        // Actualizar el modelo
+        if (decimal.TryParse(filteredInput, out decimal valor))
+        {
+            Cuenta.CodExCue = valor.ToString("F2");
+        }
+        else
+        {
+            Cuenta.CodExCue = filteredInput;
+        }
+        
+        StateHasChanged();
+    }
+}

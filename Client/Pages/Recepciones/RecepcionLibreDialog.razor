@@ -1,0 +1,190 @@
+@using IMPLANPROD.Shared.DTOs
+@using Blazored.Modal
+@using Blazored.Modal.Services
+@using IMPLANPROD.Client.Pages.Depositos
+
+@inject IRepository repository
+@inject SweetAlertService sweetAlertService
+@inject IModalService modalService
+
+<div class="modal fade show" style="display: block; background-color: rgba(0,0,0,0.5)">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title">Recepción Libre</h5>
+                <button type="button" class="btn-close btn-close-white" @onclick="Cancel"></button>
+            </div>
+
+            <EditForm Model="RecepcionLibre" OnValidSubmit="Submit">
+                <DataAnnotationsValidator />
+
+                <div class="modal-body">
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <div class="form-group">
+                                <label>Número de Remito:</label>
+                                <InputText class="form-control" @bind-Value="RecepcionLibre.NumeroRemito" />
+                                <ValidationMessage For="@(() => RecepcionLibre.NumeroRemito)" />
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="form-group">
+                                <label>Depósito:</label>
+                                <div class="input-group">
+                                    <InputNumber class="form-control" @bind-Value="RecepcionLibre.Deposito" />
+                                    <button class="btn btn-primary" type="button" @onclick="BuscarDeposito">
+                                        <i class="oi oi-magnifying-glass"></i>
+                                    </button>
+                                </div>
+                                @if (!string.IsNullOrEmpty(RecepcionLibre.NombreDeposito))
+                                {
+                                    <div class="form-text">@RecepcionLibre.NombreDeposito</div>
+                                }
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="table-responsive">
+                        <table class="table table-sm table-hover">
+                            <thead>
+                                <tr>
+                                    <th>Código Interno</th>
+                                    <th>Código Externo</th>
+                                    <th>Descripción</th>
+                                    <th>Unidad</th>
+                                    <th>Cantidad</th>
+                                    <th></th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var item in Items)
+                                {
+                                    <tr>
+                                        <td>@item.CodigoInterno</td>
+                                        <td>@item.CodigoExterno</td>
+                                        <td>@item.Descripcion</td>
+                                        <td>@item.Unidad</td>
+                                        <td>@item.CantidadNominal</td>
+                                        <td>
+                                            <button type="button" class="btn btn-danger btn-sm" @onclick="() => EliminarItem(item)">
+                                                <i class="oi oi-trash"></i>
+                                            </button>
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <div class="text-end mb-3">
+                        <button type="button" class="btn btn-success" @onclick="AgregarItem">
+                            <i class="oi oi-plus"></i> Agregar Repuesto
+                        </button>
+                    </div>
+                </div>
+
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" @onclick="Cancel">Cancelar</button>
+                    <button type="submit" class="btn btn-primary">Guardar Recepción</button>
+                </div>
+            </EditForm>
+        </div>
+    </div>
+</div>
+
+@code {
+    [CascadingParameter] BlazoredModalInstance BlazoredModal { get; set; } = default!;
+    [Parameter] public RecepcionLibreDTO RecepcionLibre { get; set; } = new();
+    [Parameter] public List<RecepcionLibreDTO> Items { get; set; } = new();
+
+    private async Task BuscarDeposito()
+    {
+        try
+        {
+            var parameters = new ModalParameters();
+            var options = new ModalOptions()
+            {
+                DisableBackgroundCancel = true,
+                HideHeader = false
+            };
+
+            var modal = modalService.Show<DepositoDialog>("Seleccionar Depósito", parameters, options);
+            var result = await modal.Result;
+
+            if (!result.Cancelled)
+            {
+                var deposito = (DepositoDTO)result.Data;
+                RecepcionLibre.Deposito = deposito.Id;
+                RecepcionLibre.NombreDeposito = deposito.Nombre;
+                StateHasChanged();
+            }
+        }
+        catch (Exception ex)
+        {
+            await sweetAlertService.FireAsync("Error", ex.Message, SweetAlertIcon.Error);
+        }
+    }
+
+    private async Task AgregarItem()
+    {
+        var parameters = new ModalParameters()
+            .Add(nameof(RecepcionDetalleDialog.Detalle), new RecepcionItemDTO())
+            .Add(nameof(RecepcionDetalleDialog.Title), "Agregar Repuesto");
+
+        var modal = modalService.Show<RecepcionDetalleDialog>("Agregar Repuesto", parameters);
+        var result = await modal.Result;
+
+        if (!result.Cancelled)
+        {
+            var item = (RecepcionItemDTO)result.Data;
+            Items.Add(new RecepcionLibreDTO
+            {
+                CodigoInterno = item.CodigoInterno,
+                CodigoExterno = item.CodigoExterno,
+                Descripcion = item.DescripcionItem,
+                Unidad = item.Unidad,
+                CantidadNominal = item.CantidadNominal,
+                Deposito = RecepcionLibre.Deposito,
+                NombreDeposito = RecepcionLibre.NombreDeposito,
+                NumeroProveedor = RecepcionLibre.NumeroProveedor,
+                RazonSocialProveedor = RecepcionLibre.RazonSocialProveedor,
+                NumeroRemito = RecepcionLibre.NumeroRemito
+            });
+            StateHasChanged();
+        }
+    }
+
+    private void EliminarItem(RecepcionLibreDTO item)
+    {
+        Items.Remove(item);
+        StateHasChanged();
+    }
+
+    private void Cancel()
+    {
+        BlazoredModal.CancelAsync();
+    }
+
+    private async Task Submit()
+    {
+        if (string.IsNullOrWhiteSpace(RecepcionLibre.NumeroRemito))
+        {
+            await sweetAlertService.FireAsync("Error", "Debe ingresar un número de remito", SweetAlertIcon.Error);
+            return;
+        }
+
+        if (RecepcionLibre.Deposito <= 0)
+        {
+            await sweetAlertService.FireAsync("Error", "Debe seleccionar un depósito válido", SweetAlertIcon.Error);
+            return;
+        }
+
+        if (!Items.Any())
+        {
+            await sweetAlertService.FireAsync("Error", "Debe agregar al menos un repuesto", SweetAlertIcon.Error);
+            return;
+        }
+
+        await BlazoredModal.CloseAsync(ModalResult.Ok(Items));
+    }
+}

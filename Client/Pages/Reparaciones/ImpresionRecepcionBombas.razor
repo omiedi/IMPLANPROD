@@ -1,0 +1,221 @@
+@page "/impresion-recepcion-bombas/{NumRepa:int}"
+@layout EmptyLayout
+@inject IRepository repository
+@inject NavigationManager navigationManager
+
+@if (cargando)
+{
+    <div class="text-center p-5">
+        <div class="spinner-border" role="status">
+            <span class="visually-hidden">Cargando...</span>
+        </div>
+    </div>
+}
+else if (repara != null)
+{
+    <div class="print-container">
+        <!-- Encabezado -->
+        <div class="header-section">
+            <div class="row">
+                <div class="col-6">
+                    <h4 class="company-name">METALURGICASIAM S.A.</h4>
+                </div>
+                <div class="col-6 text-end">
+                    <div class="document-header">
+                        <div class="document-type">DOCUMENTO NO VALIDO COMO FACTURA</div>
+                        <div class="checkbox-container">
+                            <span class="checkbox">X</span>
+                        </div>
+                        <h5 class="document-title">NOTA DE RECEPCION</h5>
+                        <div class="document-info">
+                            <div class="row">
+                                <div class="col-4"><strong>N°</strong></div>
+                                <div class="col-4"><strong>@repara.NumRepa</strong></div>
+                                <div class="col-2">ID</div>
+                                <div class="col-2">Hoja: 1/1</div>
+                            </div>
+                            <div class="row mt-1">
+                                <div class="col-4"><strong>Fecha</strong></div>
+                                <div class="col-8">@repara.FechRecep?.ToString("dd/MM/yy")</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Información del Cliente -->
+        <div class="client-section">
+            <div class="row border-top border-bottom py-2">
+                <div class="col-12">
+                    <div class="row">
+                        <div class="col-1"><strong>IVA RESPONSABLE INSCRIPTO</strong></div>
+                    </div>
+                    <div class="row mt-1">
+                        <div class="col-2"><strong>Señor(es)</strong></div>
+                        <div class="col-6"><strong>@repara.Raso_Cli</strong></div>
+                        <div class="col-2 text-end"><strong>Cuenta</strong></div>
+                        <div class="col-2 text-end"><strong>@repara.Nume_Cli</strong></div>
+                    </div>
+                    <div class="row mt-1">
+                        <div class="col-12">@repara.Domi_Cli</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="row border-bottom py-2">
+                <div class="col-6">
+                    <div class="row">
+                        <div class="col-3"><strong>I.V.A.</strong></div>
+                        <div class="col-9">
+                            <span class="checkbox-small">☐</span> IVA Responsable Inscripto
+                        </div>
+                    </div>
+                </div>
+                <div class="col-6">
+                    <div class="row">
+                        <div class="col-4"><strong>C.U.I.T.</strong></div>
+                        <div class="col-8">@repara.Cuit_Cli</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="row border-bottom py-2">
+                <div class="col-6">
+                    <div class="row">
+                        <div class="col-3"><strong>Sitio</strong></div>
+                        <div class="col-9">Taller Nqn.</div>
+                    </div>
+                </div>
+                <div class="col-6">
+                    <div class="row">
+                        <div class="col-4"><strong>RTO. N°</strong></div>
+                        <div class="col-8">@repara.NumRemito</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="row border-bottom py-2">
+                <div class="col-6">
+                    <div class="row">
+                        <div class="col-3"><strong>Serie N°</strong></div>
+                        <div class="col-9">@repara.NumeroSerie</div>
+                    </div>
+                </div>
+                <div class="col-6">
+                    <div class="row">
+                        <div class="col-4"><strong>Referencia</strong></div>
+                        <div class="col-8">@repara.Referen</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="row py-2">
+                <div class="col-12">
+                    <strong>Recibimos de Ud (s) lo siguiente:</strong>
+                </div>
+            </div>
+        </div>
+
+        <!-- Tabla de Detalle -->
+        <table class="detail-table">
+            <thead>
+                <tr>
+                    <th style="width: 8%;">CANTIDAD</th>
+                    <th style="width: 52%;">DESCRIPCION</th>
+                    <th style="width: 10%;">KILOS</th>
+                    <th style="width: 10%;">O/C</th>
+                    <th style="width: 10%;">F.Entrega</th>
+                    <th style="width: 10%;">OBS</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td class="text-center">1</td>
+                    <td>
+                        <div><strong>@repara.Descripcion</strong></div>
+                        @if (!string.IsNullOrEmpty(repara.Defec_Infor))
+                        {
+                            <div class="mt-1">@repara.Defec_Infor</div>
+                        }
+                        @if (!string.IsNullOrEmpty(repara.Accesorios))
+                        {
+                            <div class="mt-1">Accesorios: @repara.Accesorios</div>
+                        }
+                    </td>
+                    <td></td>
+                    <td></td>
+                    <td></td>
+                    <td></td>
+                </tr>
+                <!-- Filas vacías para mantener el formato -->
+                @for (int i = 0; i < 14; i++)
+                {
+                    <tr>
+                        <td>&nbsp;</td>
+                        <td>&nbsp;</td>
+                        <td>&nbsp;</td>
+                        <td>&nbsp;</td>
+                        <td>&nbsp;</td>
+                        <td>&nbsp;</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+
+        <!-- Botones de acción (solo para pantalla) -->
+        <div class="no-print mt-3">
+            <button class="btn btn-primary me-2" @onclick="Imprimir">
+                <i class="fas fa-print"></i> Imprimir
+            </button>
+            <button class="btn btn-secondary" @onclick="Volver">
+                <i class="fas fa-arrow-left"></i> Volver
+            </button>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] public int NumRepa { get; set; }
+
+    private Repara? repara;
+    private bool cargando = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await CargarDatos();
+    }
+
+    private async Task CargarDatos()
+    {
+        try
+        {
+            cargando = true;
+            var responseHttp = await repository.Get<Repara>($"api/repara/{NumRepa}");
+            
+            if (!responseHttp.Error && responseHttp.Response != null)
+            {
+                repara = responseHttp.Response;
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error al cargar datos: {ex.Message}");
+        }
+        finally
+        {
+            cargando = false;
+        }
+    }
+
+    private void Imprimir()
+    {
+        // Usar JavaScript para imprimir
+        navigationManager.NavigateTo($"javascript:window.print();", true);
+    }
+
+    private void Volver()
+    {
+        navigationManager.NavigateTo("/recepcion-bombas-evaluacion");
+    }
+}

@@ -1,0 +1,593 @@
+@page "/graficos-pedidos-venta"
+@using ApexCharts
+@using IMPLANPROD.Shared.DTOs
+@using IMPLANPROD.Client.Repositories
+@inject IJSRuntime JSRuntime
+@inject IRepository repository
+@inject NavigationManager navigationManager
+
+<PageTitle>Gráficos de Pedidos de Venta</PageTitle>
+
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header bg-primary text-white">
+                    <h4 class="mb-0">
+                        <i class="fas fa-chart-bar me-2"></i>Gráficos de Pedidos de Venta
+                    </h4>
+                </div>
+                <div class="card-body">
+                    
+                    <!-- Filtros -->
+                    <div class="row mb-4">
+                        <div class="col-md-3">
+                            <label class="form-label">Desde:</label>
+                            <input type="date" class="form-control" @bind="fechaDesde" />
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">Hasta:</label>
+                            <input type="date" class="form-control" @bind="fechaHasta" />
+                        </div>
+                        <div class="col-md-3">
+                            <div class="d-flex align-items-end h-100">
+                                <button class="btn btn-success me-2" @onclick="GenerarGraficos" disabled="@cargando">
+                                    @if (cargando)
+                                    {
+                                        <i class="fas fa-spinner fa-spin me-1"></i>
+                                        <span>Generando...</span>
+                                    }
+                                    else
+                                    {
+                                        <i class="fas fa-sync me-1"></i>
+                                        <span>Generar Gráficos</span>
+                                    }
+                                </button>
+                                <button class="btn btn-secondary" @onclick="Volver">
+                                    <i class="fas fa-arrow-left me-1"></i>Volver
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    @if (cargando)
+                    {
+                        <div class="text-center py-5">
+                            <div class="spinner-border text-primary" role="status">
+                                <span class="visually-hidden">Generando...</span>
+                            </div>
+                            <p class="mt-2">Generando gráficos con ApexCharts C#...</p>
+                        </div>
+                    }
+                    else if (!graficosGenerados)
+                    {
+                        <div class="text-center py-5">
+                            <div class="alert alert-info">
+                                <i class="fas fa-info-circle me-2"></i>
+                                <strong>Haz clic en "Generar Gráficos" para visualizar los reportes</strong>
+                                <p class="mb-0 mt-2">Gráficos interactivos generados completamente en C# con ApexCharts.</p>
+                            </div>
+                        </div>
+                    }
+                    else
+                    {
+                        <!-- Gráficos ApexCharts -->
+                        <div class="row">
+                            <!-- Gráfico de Líneas - Ventas por Mes -->
+                            <div class="col-md-6 mb-4">
+                                <div class="card">
+                                    <div class="card-header bg-info text-white">
+                                        <h6 class="mb-0">
+                                            <i class="fas fa-chart-line me-2"></i>Ventas por Mes
+                                        </h6>
+                                    </div>
+                                    <div class="card-body" style="height: 400px;">
+                                        <ApexChart TItem="DatoMensualDTO"
+                                                   Title="Evolución de Ventas Mensuales"
+                                                   Options="opcionesLineas"
+                                                   Height="350">
+                                            
+                                            <ApexPointSeries TItem="DatoMensualDTO"
+                                                             Items="datosVentasPorMes"
+                                                             Name="Año Actual"
+                                                             SeriesType="SeriesType.Line"
+                                                             XValue="@(e => e.Mes)"
+                                                             YValue="@(e => e.Monto)" />
+                                            
+                                            <ApexPointSeries TItem="DatoMensualDTO"
+                                                             Items="datosVentasPorMesAnterior"
+                                                             Name="Año Anterior"
+                                                             SeriesType="SeriesType.Line"
+                                                             XValue="@(e => e.Mes)"
+                                                             YValue="@(e => e.Monto)" />
+                                        </ApexChart>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Gráfico de Barras - Top Clientes -->
+                            <div class="col-md-6 mb-4">
+                                <div class="card">
+                                    <div class="card-header bg-success text-white">
+                                        <h6 class="mb-0">
+                                            <i class="fas fa-chart-bar me-2"></i>Top 10 Clientes
+                                        </h6>
+                                    </div>
+                                    <div class="card-body" style="height: 400px;">
+                                        <ApexChart TItem="DatoClienteDTO"
+                                                   Title="Clientes con Mayor Volumen"
+                                                   Options="opcionesBarras"
+                                                   Height="350">
+                                            
+                                            <ApexPointSeries TItem="DatoClienteDTO"
+                                                             Items="datosTopClientes"
+                                                             Name="Monto Total ($)"
+                                                             SeriesType="SeriesType.Bar"
+                                                             XValue="@(e => e.Nombre)"
+                                                             YValue="@(e => e.Monto)" />
+                                        </ApexChart>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="row">
+                            <!-- Gráfico Circular - Estados -->
+                            <div class="col-md-6 mb-4">
+                                <div class="card">
+                                    <div class="card-header bg-warning text-dark">
+                                        <h6 class="mb-0">
+                                            <i class="fas fa-chart-pie me-2"></i>Estados de Pedidos
+                                        </h6>
+                                    </div>
+                                    <div class="card-body" style="height: 400px;">
+                                        <ApexChart TItem="DatoEstadoDTO"
+                                                   Title="Distribución por Estados"
+                                                   Options="opcionesPie"
+                                                   Height="350">
+                                            
+                                            <ApexPointSeries TItem="DatoEstadoDTO"
+                                                             Items="datosEstados"
+                                                             Name="Cantidad"
+                                                             SeriesType="SeriesType.Pie"
+                                                             XValue="@(e => e.Estado)"
+                                                             YValue="@(e => e.Cantidad)" />
+                                        </ApexChart>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Gráfico Donut - Montos por Moneda -->
+                            <div class="col-md-6 mb-4">
+                                <div class="card">
+                                    <div class="card-header bg-danger text-white">
+                                        <h6 class="mb-0">
+                                            <i class="fas fa-coins me-2"></i>Montos por Moneda
+                                        </h6>
+                                    </div>
+                                    <div class="card-body" style="height: 400px;">
+                                        <ApexChart TItem="DatoMonedaDTO"
+                                                   Title="Distribución por Monedas"
+                                                   Options="opcionesDonut"
+                                                   Height="350">
+                                            
+                                            <ApexPointSeries TItem="DatoMonedaDTO"
+                                                             Items="datosMonedas"
+                                                             Name="Monto"
+                                                             SeriesType="SeriesType.Donut"
+                                                             XValue="@(e => e.Moneda)"
+                                                             YValue="@(e => e.Monto)" />
+                                        </ApexChart>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="row">
+                            <!-- Gráfico de Barras - Top Vendedores -->
+                            <div class="col-md-6 mb-4">
+                                <div class="card">
+                                    <div class="card-header bg-secondary text-white">
+                                        <h6 class="mb-0">
+                                            <i class="fas fa-user-tie me-2"></i>Top 10 Vendedores
+                                        </h6>
+                                    </div>
+                                    <div class="card-body" style="height: 400px;">
+                                        <ApexChart TItem="DatoVendedorDTO"
+                                                   Title="Vendedores con Mayor Volumen"
+                                                   Options="opcionesBarrasVendedores"
+                                                   Height="350">
+                                            
+                                            <ApexPointSeries TItem="DatoVendedorDTO"
+                                                             Items="datosTopVendedores"
+                                                             Name="Monto Total ($)"
+                                                             SeriesType="SeriesType.Bar"
+                                                             XValue="@(e => e.Nombre)"
+                                                             YValue="@(e => e.Monto)" />
+                                        </ApexChart>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Gráfico de Área - Top Productos -->
+                            <div class="col-md-6 mb-4">
+                                <div class="card">
+                                    <div class="card-header bg-dark text-white">
+                                        <h6 class="mb-0">
+                                            <i class="fas fa-box me-2"></i>Top 10 Productos
+                                        </h6>
+                                    </div>
+                                    <div class="card-body" style="height: 400px;">
+                                        <ApexChart TItem="DatoProductoDTO"
+                                                   Title="Productos Más Vendidos"
+                                                   Options="opcionesBarrasProductos"
+                                                   Height="350">
+                                            
+                                            <ApexPointSeries TItem="DatoProductoDTO"
+                                                             Items="datosTopProductos"
+                                                             Name="Cantidad Vendida"
+                                                             SeriesType="SeriesType.Bar"
+                                                             XValue="@(e => e.Codigo.Length > 20 ? e.Codigo.Substring(0, 20) : e.Codigo)"
+                                                             YValue="@(e => e.Cantidad)" />
+                                        </ApexChart>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Estadísticas Resumen -->
+                        <div class="row">
+                            <div class="col-12">
+                                <div class="card">
+                                    <div class="card-header bg-primary text-white">
+                                        <h6 class="mb-0">
+                                            <i class="fas fa-calculator me-2"></i>Resumen del Período
+                                        </h6>
+                                    </div>
+                                    <div class="card-body">
+                                        <div class="row text-center">
+                                            <div class="col-md-2">
+                                                <div class="border rounded p-3">
+                                                    <h5 class="text-primary">@totalPedidos</h5>
+                                                    <small class="text-muted">Total Pedidos</small>
+                                                </div>
+                                            </div>
+                                            <div class="col-md-2">
+                                                <div class="border rounded p-3">
+                                                    <h5 class="text-success">@montoTotal.ToString("C2")</h5>
+                                                    <small class="text-muted">Monto Total</small>
+                                                </div>
+                                            </div>
+                                            <div class="col-md-2">
+                                                <div class="border rounded p-3">
+                                                    <h5 class="text-info">@totalClientes</h5>
+                                                    <small class="text-muted">Clientes</small>
+                                                </div>
+                                            </div>
+                                            <div class="col-md-2">
+                                                <div class="border rounded p-3">
+                                                    <h5 class="text-warning">@promedioMensual.ToString("C2")</h5>
+                                                    <small class="text-muted">Promedio Mensual</small>
+                                                </div>
+                                            </div>
+                                            <div class="col-md-2">
+                                                <div class="border rounded p-3">
+                                                    <h5 class="text-secondary">@totalVendedores</h5>
+                                                    <small class="text-muted">Vendedores</small>
+                                                </div>
+                                            </div>
+                                            <div class="col-md-2">
+                                                <div class="border rounded p-3">
+                                                    <h5 class="text-dark">@totalProductos</h5>
+                                                    <small class="text-muted">Productos</small>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    }
+
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    // Variables de estado
+    private DateTime fechaDesde = DateTime.Now.AddMonths(-6);
+    private DateTime fechaHasta = DateTime.Now;
+    private bool cargando = false;
+    private bool graficosGenerados = false;
+    
+    // Variables para estadísticas
+    private int totalPedidos = 0;
+    private decimal montoTotal = 0;
+    private int totalClientes = 0;
+    private decimal promedioMensual = 0;
+    private int totalVendedores = 0;
+    private int totalProductos = 0;
+
+    // Datos para los gráficos
+    private List<DatoMensualDTO> datosVentasPorMes = new();
+    private List<DatoMensualDTO> datosVentasPorMesAnterior = new();
+    private List<DatoClienteDTO> datosTopClientes = new();
+    private List<DatoEstadoDTO> datosEstados = new();
+    private List<DatoMonedaDTO> datosMonedas = new();
+    private List<DatoVendedorDTO> datosTopVendedores = new();
+    private List<DatoProductoDTO> datosTopProductos = new();
+    
+    // Datos completos de la API
+    private GraficosPedidosVentaDTO? datosGraficos;
+
+    // Opciones de configuración para los gráficos
+    private ApexChartOptions<DatoMensualDTO> opcionesLineas = new();
+    private ApexChartOptions<DatoClienteDTO> opcionesBarras = new();
+    private ApexChartOptions<DatoEstadoDTO> opcionesPie = new();
+    private ApexChartOptions<DatoMonedaDTO> opcionesDonut = new();
+    private ApexChartOptions<DatoVendedorDTO> opcionesBarrasVendedores = new();
+    private ApexChartOptions<DatoProductoDTO> opcionesBarrasProductos = new();
+
+    /// <summary>
+    /// Inicialización del componente
+    /// </summary>
+    protected override void OnInitialized()
+    {
+        ConfigurarOpcionesGraficos();
+    }
+
+    /// <summary>
+    /// Configura las opciones de todos los gráficos
+    /// </summary>
+    private void ConfigurarOpcionesGraficos()
+    {
+        // Opciones para gráfico de líneas
+        opcionesLineas = new ApexChartOptions<DatoMensualDTO>
+        {
+            Theme = new Theme
+            {
+                Mode = Mode.Light,
+                Palette = PaletteType.Palette1
+            },
+            Chart = new Chart
+            {
+                Toolbar = new Toolbar { Show = false },
+                Zoom = new Zoom { Enabled = false }
+            },
+            Stroke = new Stroke
+            {
+                Curve = Curve.Smooth,
+                Width = 3
+            },
+            Colors = new List<string> { "#17a2b8", "#ffc107" },
+            Yaxis = new List<YAxis>
+            {
+                new YAxis
+                {
+                    Labels = new YAxisLabels
+                    {
+                        Formatter = "function(value) { return '$' + value.toLocaleString(); }"
+                    }
+                }
+            }
+        };
+
+        // Opciones para gráfico de barras (clientes)
+        opcionesBarras = new ApexChartOptions<DatoClienteDTO>
+        {
+            Theme = new Theme
+            {
+                Mode = Mode.Light,
+                Palette = PaletteType.Palette2
+            },
+            Chart = new Chart
+            {
+                Toolbar = new Toolbar { Show = false }
+            },
+            Colors = new List<string> { "#28a745" },
+            PlotOptions = new PlotOptions
+            {
+                Bar = new PlotOptionsBar
+                {
+                    Horizontal = true
+                }
+            },
+            Yaxis = new List<YAxis>
+            {
+                new YAxis
+                {
+                    Labels = new YAxisLabels
+                    {
+                        Formatter = "function(value) { return '$' + value.toLocaleString(); }"
+                    }
+                }
+            }
+        };
+
+        // Opciones para gráfico circular
+        opcionesPie = new ApexChartOptions<DatoEstadoDTO>
+        {
+            Theme = new Theme
+            {
+                Mode = Mode.Light
+            },
+            Colors = new List<string> { "#28a745", "#ffc107", "#dc3545", "#6c757d" },
+            Legend = new Legend
+            {
+                Position = LegendPosition.Bottom
+            }
+        };
+
+        // Opciones para gráfico donut
+        opcionesDonut = new ApexChartOptions<DatoMonedaDTO>
+        {
+            Theme = new Theme
+            {
+                Mode = Mode.Light
+            },
+            Colors = new List<string> { "#007bff", "#28a745", "#ffc107" },
+            Legend = new Legend
+            {
+                Position = LegendPosition.Bottom
+            }
+        };
+
+        // Opciones para gráfico de barras (vendedores)
+        opcionesBarrasVendedores = new ApexChartOptions<DatoVendedorDTO>
+        {
+            Theme = new Theme
+            {
+                Mode = Mode.Light,
+                Palette = PaletteType.Palette3
+            },
+            Chart = new Chart
+            {
+                Toolbar = new Toolbar { Show = false }
+            },
+            Colors = new List<string> { "#6c757d" },
+            PlotOptions = new PlotOptions
+            {
+                Bar = new PlotOptionsBar
+                {
+                    Horizontal = true
+                }
+            },
+            Yaxis = new List<YAxis>
+            {
+                new YAxis
+                {
+                    Labels = new YAxisLabels
+                    {
+                        Formatter = "function(value) { return '$' + value.toLocaleString(); }"
+                    }
+                }
+            }
+        };
+
+        // Opciones para gráfico de barras (productos)
+        opcionesBarrasProductos = new ApexChartOptions<DatoProductoDTO>
+        {
+            Theme = new Theme
+            {
+                Mode = Mode.Light,
+                Palette = PaletteType.Palette4
+            },
+            Chart = new Chart
+            {
+                Toolbar = new Toolbar { Show = false }
+            },
+            Colors = new List<string> { "#343a40" },
+            PlotOptions = new PlotOptions
+            {
+                Bar = new PlotOptionsBar
+                {
+                    Horizontal = true
+                }
+            }
+        };
+    }
+
+    /// <summary>
+    /// Genera todos los gráficos obteniendo datos reales de la API
+    /// </summary>
+    private async Task GenerarGraficos()
+    {
+        if (cargando) return;
+        
+        cargando = true;
+        StateHasChanged();
+
+        try
+        {
+            Console.WriteLine("=== OBTENIENDO DATOS REALES DE GRÁFICOS DE VENTAS ===");
+            
+            // Llamar a la API para obtener datos reales
+            var url = $"api/graficospedidosventa?fechaDesde={fechaDesde:yyyy-MM-dd}&fechaHasta={fechaHasta:yyyy-MM-dd}";
+            var responseHttp = await repository.Get<GraficosPedidosVentaDTO>(url);
+            
+            if (!responseHttp.Error && responseHttp.Response != null)
+            {
+                datosGraficos = responseHttp.Response;
+                
+                // Asignar datos a las variables de los gráficos
+                datosVentasPorMes = datosGraficos.VentasPorMes;
+                datosTopClientes = datosGraficos.TopClientes;
+                datosEstados = datosGraficos.EstadosPedidos;
+                datosMonedas = datosGraficos.MontosPorMoneda;
+                datosTopVendedores = datosGraficos.TopVendedores;
+                datosTopProductos = datosGraficos.TopProductos;
+                
+                // Asignar estadísticas generales
+                totalPedidos = datosGraficos.TotalPedidos;
+                montoTotal = datosGraficos.MontoTotal;
+                totalClientes = datosGraficos.TotalClientes;
+                promedioMensual = datosGraficos.PromedioMensual;
+                totalVendedores = datosGraficos.TotalVendedores;
+                totalProductos = datosGraficos.TotalProductos;
+                
+                // Obtener datos del año anterior
+                var fechaDesdeAnterior = fechaDesde.AddYears(-1);
+                var fechaHastaAnterior = fechaHasta.AddYears(-1);
+                var urlAnterior = $"api/graficospedidosventa?fechaDesde={fechaDesdeAnterior:yyyy-MM-dd}&fechaHasta={fechaHastaAnterior:yyyy-MM-dd}";
+                var responseAnterior = await repository.Get<GraficosPedidosVentaDTO>(urlAnterior);
+                
+                if (!responseAnterior.Error && responseAnterior.Response != null)
+                {
+                    // Ajustar las fechas del año anterior para que coincidan con el eje X del año actual
+                    // Convertir año anterior al año actual para que las etiquetas coincidan
+                    datosVentasPorMesAnterior = responseAnterior.Response.VentasPorMes
+                        .Select(d => 
+                        {
+                            // Parsear la fecha del año anterior (formato: YYYY-MM)
+                            if (d.Mes.Length >= 7 && DateTime.TryParse(d.Mes + "-01", out var fecha))
+                            {
+                                // Sumar 1 año para que coincida con el eje X del año actual
+                                var fechaAjustada = fecha.AddYears(1);
+                                return new DatoMensualDTO
+                                {
+                                    Mes = fechaAjustada.ToString("yyyy-MM"),
+                                    Monto = d.Monto,
+                                    Cantidad = d.Cantidad
+                                };
+                            }
+                            return d;
+                        })
+                        .ToList();
+                    
+                    Console.WriteLine($"=== DATOS AÑO ANTERIOR: {datosVentasPorMesAnterior.Count} meses ===");
+                }
+                else
+                {
+                    datosVentasPorMesAnterior = new List<DatoMensualDTO>();
+                    Console.WriteLine("=== NO SE ENCONTRARON DATOS DEL AÑO ANTERIOR ===");
+                }
+                
+                graficosGenerados = true;
+                Console.WriteLine($"=== GRÁFICOS GENERADOS: {totalPedidos} pedidos, {totalClientes} clientes ===");
+            }
+            else
+            {
+                Console.WriteLine($"Error en la API: {responseHttp.Error}");
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error obteniendo datos de gráficos: {ex.Message}");
+        }
+        finally
+        {
+            cargando = false;
+            StateHasChanged();
+        }
+    }
+
+    /// <summary>
+    /// Vuelve a la página de pedidos de venta
+    /// </summary>
+    private void Volver()
+    {
+        navigationManager.NavigateTo("/pedidos-venta");
+    }
+}

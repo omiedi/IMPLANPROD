@@ -1,0 +1,946 @@
+@page "/master/elaboracion/{Id}"
+@using DocumentFormat.OpenXml.ExtendedProperties
+@inject IRepository repository
+@inject NavigationManager navigation
+@inject SweetAlertService sweetAlertService
+
+<div class="d-flex justify-content-between align-items-stretch mb-3 gap-3">
+    <h3 style="background-color: #217346; color: white; padding: 10px; margin-bottom: 0; border-radius: 4px; flex-grow: 1;">
+        Elaboración del Producto: @resultado
+    </h3>
+    <div class="d-flex gap-2">
+        <button type="button" 
+        class="btn d-flex align-items-center justify-content-center gap-2" 
+        style="width: 4cm; font-size: 20px; font-weight: bold; background-color: #0d6efd; color: white; border: none;"
+        onmouseover="this.style.backgroundColor='#0b5ed7'; this.style.transform='scale(1.05)';"
+        onmouseout="this.style.backgroundColor='#0d6efd'; this.style.transform='scale(1)';"
+        @onclick="AgregarNuevaOperacion"
+        disabled="@(productoTerminado == null)">
+            <i class="fas fa-plus"></i> Nueva
+        </button>
+        <button type="button" 
+        class="btn d-flex align-items-center justify-content-center gap-2" 
+        style="width: 4cm; font-size: 20px; font-weight: bold; background-color: #0d6efd; color: white; border: none;"
+        onmouseover="this.style.backgroundColor='#0b5ed7'; this.style.transform='scale(1.05)';"
+        onmouseout="this.style.backgroundColor='#0d6efd'; this.style.transform='scale(1)';"
+        @onclick="GuardarCambios"
+        disabled="@(operacionSeleccionada == null)">
+            <i class="fas fa-save"></i> Grabar
+        </button>
+        <button type="button" 
+        class="btn d-flex align-items-center justify-content-center" 
+        style="width: 4cm; font-size: 20px; font-weight: bold; background-color: #207245; color: white; border: none;"
+        onmouseover="this.style.backgroundColor='#1A5A38'; this.style.transform='scale(1.05)';"
+        onmouseout="this.style.backgroundColor='#207245'; this.style.transform='scale(1)';"
+        @onclick="Regresar">
+            Regresar
+        </button>
+    </div>
+</div>
+
+@if (operaciones != null)
+
+{
+    <div class="row h-100">
+        <div class="col-md-6">
+            <div class="table-responsive" style="height: 1100px; overflow-y: auto; border: 1px solid #dee2e6; border-radius: 4px;">
+                <table class="table table-hover mb-0">
+                    <thead>
+                        <tr>
+                            <th class="bg-primary text-white">Operación</th>
+                            <th class="bg-primary text-white">Descripción</th>
+                            <th class="bg-primary text-white">Acciones</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var op in operaciones)
+                        {
+                            <tr class="@(operacionSeleccionada?.Id == op.Id ? "table-primary" : "")">
+                                <td @onclick="() => SeleccionarOperacion(op)" style="cursor: pointer;">@op.NumeOper</td>
+                                <td @onclick="() => SeleccionarOperacion(op)" style="cursor: pointer;">@op.DescOper</td>
+                                <td>
+                                    <div class="d-flex gap-2">
+                                        <button class="btn btn-sm btn-success" @onclick="() => InsertarOperacion(op.NumeOper ?? 0)" title="Insertar operación">
+                                            <i class="fas fa-plus"></i>
+                                        </button>
+                                        <button class="btn btn-sm btn-danger" @onclick="() => EliminarOperacion(op)" title="Eliminar operación">
+                                            <i class="fas fa-trash"></i>
+                                        </button>
+                                    </div>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+
+        </div>
+        <div class="col-md-6">
+            @if (operacionSeleccionada != null)
+            {
+                <div class="card">
+                    <div class="card-header bg-primary text-white">
+                        <h5 class="mb-0">Detalles de la Operación</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row g-3">
+                            <div class="d-flex gap-2 pb-3 border-bottom">
+                                <div style="width: 2cm;">
+                                    <label class="form-label fw-bold">N° Op.:</label>
+                                    <input type="text" class="form-control" value="@operacionSeleccionada.NumeOper" readonly />
+                                </div>
+                                <div style="width: 2cm;">
+                                    <label class="form-label fw-bold">Alter.:</label>
+                                    <input type="text" class="form-control" value="@operacionSeleccionada.AltOper" readonly />
+                                </div>
+                                <div class="flex-grow-1">
+                                    <label class="form-label fw-bold">Descripción:</label>
+                                    <input type="text" class="form-control" @bind="operacionSeleccionada.DescOper" @bind:event="oninput" />
+                                </div>
+                                <div style="width: 3cm;">
+                                    <label class="form-label fw-bold">Lote Estándar:</label>
+                                    <input type="number" class="form-control" @bind="operacionSeleccionada.LoteStan" @bind:event="oninput" @onchange="CambiaLoteVariable" />
+                                </div>
+                            </div>
+                            <div class="d-flex gap-2 pb-3 border-bottom">
+                                <div style="width: 4cm;">
+                                    <label class="form-label fw-bold">F. Revisión:</label>
+                                    <input type="date" class="form-control" value="@(operacionSeleccionada.Fech_Revis?.ToString("yyyy-MM-dd"))" readonly />
+                                </div>
+                                <div class="flex-grow-1">
+                                    <label class="form-label fw-bold">Máquina:</label>
+                                    <select class="form-select" @bind="operacionSeleccionada.CodMaq0">
+                                        <option value="">Seleccione una máquina...</option>
+                                        @if (padmaqList != null)
+                                        {
+                                            @foreach (var maquina in padmaqList)
+                                            {
+                                                <option value="@maquina.CodigoPadMaq">@maquina.CodigoPadMaq - @maquina.Descripcion</option>
+                                            }
+                                        }
+                                    </select>
+                                </div>
+                                <div style="width: 2cm;">
+                                    <label class="form-label fw-bold">H.P.F.:</label>
+                                    <input type="text" class="form-control" @bind="operacionSeleccionada.HoProFab" maxlength="24" />
+                                </div>
+                                <div style="width: 4cm;" class="d-flex align-items-end">
+                                    <div class="form-check mb-2">
+                                        <input type="checkbox" class="form-check-input" 
+                                        @bind="secuenciaFabricacion" 
+                                        @bind:event="oninput" 
+                                        @onchange="ActualizarSecuenciaFabricacion" />
+                                        <label class="form-check-label fw-bold">Sec. Fab. x U.</label>
+                                    </div>
+                                </div>
+                            </div>
+
+
+                            <div class="col-12">
+                                <div class="d-flex gap-2 pb-3 border-bottom">
+                                    <div class="border rounded p-2 flex-grow-1">
+                                        <div class="fw-bold mb-2">Tiempo variable x lote</div>
+                                        <div class="d-flex gap-2">
+
+                                            <div style="width: 4cm;">
+                                                <label class="form-label fw-bold">(Total Minutos)</label>
+                                                <input type="text" class="form-control" value="@FormatearDecimal(minutosEstandar)" readonly />
+                                            </div>
+                                            <div style="width: 2cm;">
+                                                <label class="form-label fw-bold">Horas:</label>
+                                                @*                                                 <input type="text" class="form-control" value="@tiempoVariableHoras"  />
+ *@                                                <input type="text" class="form-control" @bind="tiempoVariableHoras" @bind:event="oninput" @onchange="CambiaTiempoVariable" />
+
+                                            </div>
+                                            <div style="width: 2cm;">
+                                                <label class="form-label fw-bold">Min.:</label>
+                                                <input type="text" class="form-control" @bind="tiempoVariableMinutos" @bind:event="oninput" @onchange="CambiaTiempoVariable" />
+                                            </div>
+                                            <div style="width: 2cm;">
+                                                <label class="form-label fw-bold">Seg.:</label>
+                                                <input type="text" class="form-control" @bind="tiempoVariableSegundos" @bind:event="oninput" @onchange="CambiaTiempoVariable" />
+                                            </div>
+                                            <div style="width: 3cm;">
+                                                <label class="form-label fw-bold">Cadencia</label>
+                                                <input type="number" class="form-control" @bind-value="operacionSeleccionada.Cadencia" @bind-value:event="oninput" @onchange="CalcularTiempoVariable" readonly />
+                                            </div>
+                                            <div style="width: 3cm;">
+                                                <label class="form-label fw-bold">% Demora</label>
+                                                <input type="number" class="form-control" @bind-value="operacionSeleccionada.PorDemor" @bind-value:event="oninput" @onchange="CalcularTiempoVariable" />
+                                            </div>
+
+                                        </div>
+                                    </div>
+                                    <div class="d-flex align-items-end">
+                                        <div class="form-check mb-2">
+                                            <input type="checkbox" class="form-check-input" 
+                                            @bind="operacionTercerizada" 
+                                            @bind:event="oninput" 
+                                            @onchange="ActualizarOperacionTercerizada" />
+                                            <label class="form-check-label fw-bold">Op. Tercerizada</label>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-12">
+                            @* Sección de tiempos de la operación *@
+                            <h6 class="mt-3">Tiempos</h6>
+                            <div class="d-flex gap-2 pb-3 border-bottom">
+                                <div style="width: 4cm;">
+                                    @* Tiempo de preparación: tiempo necesario para configurar la máquina antes de iniciar la operación *@
+                                    <label class="form-label fw-bold" title="Tiempo necesario para preparar la máquina antes de iniciar la operación">T. Prep.:</label>
+                                    <input type="number" step="0.01" class="form-control" 
+                                    @bind="operacionSeleccionada.HorsPrep" 
+                                    @bind:event="oninput"
+                                    title="Ingrese el tiempo de preparación en horas (permite decimales)" />
+                                </div>
+                                <div style="width: 4cm;">
+                                    @* Tiempo fijo: tiempo constante que toma la operación independiente del lote *@
+                                    <label class="form-label fw-bold" title="Tiempo constante que toma la operación independiente del tamaño del lote">T. Fijo:</label>
+                                    <input type="number" step="0.01" class="form-control" 
+                                    @bind="operacionSeleccionada.HorsFijo" 
+                                    @bind:event="oninput"
+                                    title="Ingrese el tiempo fijo en horas (permite decimales)" />
+                                </div>
+                                <div style="width: 4cm;">
+                                    @* Tiempo de limpieza: tiempo necesario para limpiar la máquina después de la operación *@
+                                    <label class="form-label fw-bold" title="Tiempo necesario para limpiar la máquina después de completar la operación">T. Limp.:</label>
+                                    <input type="number" step="0.01" class="form-control" 
+                                    @bind="operacionSeleccionada.HorsLimp" 
+                                    @bind:event="oninput"
+                                    title="Ingrese el tiempo de limpieza en horas (permite decimales)" />
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-12">
+                            <div class="border rounded p-2">
+                                <h6 class="mt-3">Equipos Auxiliares</h6>
+                                <div class="d-flex gap-3">
+                                    <div class="flex-grow-1">
+                                        <label class="form-label fw-bold">Eq.Aux (1):</label>
+                                        <select class="form-select" @bind="operacionSeleccionada.CodMaq1">
+                                            <option value="">Seleccione una máquina...</option>
+                                            @if (padmaqList != null)
+                                            {
+                                                @foreach (var maquina in padmaqList)
+                                                {
+                                                    <option value="@maquina.CodigoPadMaq">@maquina.CodigoPadMaq - @maquina.Descripcion</option>
+                                                }
+                                            }
+                                        </select>
+                                        <label class="form-label fw-bold">Eq.Aux (2):</label>
+                                        <select class="form-select" @bind="operacionSeleccionada.CodMaq2">
+                                            <option value="">Seleccione una máquina...</option>
+                                            @if (padmaqList != null)
+                                            {
+                                                @foreach (var maquina in padmaqList)
+                                                {
+                                                    <option value="@maquina.CodigoPadMaq">@maquina.CodigoPadMaq - @maquina.Descripcion</option>
+                                                }
+                                            }
+                                        </select>
+                                        <label class="form-label fw-bold">Eq.Aux (3):</label>
+                                        <select class="form-select" @bind="operacionSeleccionada.CodMaq3">
+                                            <option value="">Seleccione una máquina...</option>
+                                            @if (padmaqList != null)
+                                            {
+                                                @foreach (var maquina in padmaqList)
+                                                {
+                                                    <option value="@maquina.CodigoPadMaq">@maquina.CodigoPadMaq - @maquina.Descripcion</option>
+                                                }
+                                            }
+                                        </select>
+                                        <label class="form-label fw-bold">Eq.Aux (4):</label>
+                                        <select class="form-select" @bind="operacionSeleccionada.CodMaq4">
+                                            <option value="">Seleccione una máquina...</option>
+                                            @if (padmaqList != null)
+                                            {
+                                                @foreach (var maquina in padmaqList)
+                                                {
+                                                    <option value="@maquina.CodigoPadMaq">@maquina.CodigoPadMaq - @maquina.Descripcion</option>
+                                                }
+                                            }
+                                        </select>
+                                        <label class="form-label fw-bold">Eq.Aux (5):</label>
+                                        <select class="form-select" @bind="operacionSeleccionada.CodMaq5">
+                                            <option value="">Seleccione una máquina...</option>
+                                            @if (padmaqList != null)
+                                            {
+                                                @foreach (var maquina in padmaqList)
+                                                {
+                                                    <option value="@maquina.CodigoPadMaq">@maquina.CodigoPadMaq - @maquina.Descripcion</option>
+                                                }
+                                            }
+                                        </select>
+                                    </div>
+                                    <div style="width: 4cm;">
+                                        <label class="form-label fw-bold">Mant. Herramental</label>
+                                        <input type="text" class="form-control" 
+                                        value="@FormatearTiempoHerramental(operacionSeleccionada.HorsMHer)"
+                                        @onchange="@((ChangeEventArgs e) => ActualizarTiempoHerramental((string)e.Value!))"
+                                        placeholder="HH:MM:SS" />
+                                    </div>
+                                </div>
+                            </div>
+                            <!-- Sección RRHH - Personal -->
+                            <div class="col-12">
+                                <div class="border rounded p-2">
+                                    <h6 class="mt-1">RRHH - Personal</h6>
+                                    <div class="d-flex gap-3 align-items-end">
+                                        <div style="width: 3cm;">
+                                            <label class="form-label fw-bold">Operarios (1)</label>
+                                            <input type="number" class="form-control" 
+                                            @bind-value="operacionSeleccionada.CantiOps" 
+                                            @bind-value:event="oninput" />
+                                        </div>
+                                        <div style="width: 6cm;">
+                                            <label class="form-label fw-bold">Categoría</label>
+                                            <select class="form-select" @bind="operacionSeleccionada.CategOps">
+                                                <option value="">Seleccione...</option>
+                                                @if (categoriasList != null)
+                                                {
+                                                    @foreach (var cat in categoriasList)
+                                                    {
+                                                        <option value="@cat.CodigoCategoria">@cat.Descripcion</option>
+                                                    }
+                                                }
+                                            </select>
+                                        </div>
+                                        <div style="width: 3cm;">
+                                            <label class="form-label fw-bold">Operarios (2)</label>
+                                            <input type="number" class="form-control"
+                                            @bind-value="operacionSeleccionada.Cantiops2"
+                                            @bind-value:event="oninput" />
+                                        </div>
+                                        <div style="width: 6cm;">
+                                            <label class="form-label fw-bold">Categoría</label>
+                                            <select class="form-select" @bind="operacionSeleccionada.Categops2">
+                                                <option value="">Seleccione...</option>
+                                                @if (categoriasList != null)
+                                                {
+                                                    @foreach (var cat in categoriasList)
+                                                    {
+                                                        <option value="@cat.CodigoCategoria">@cat.Descripcion</option>
+                                                    }
+                                                }
+                                            </select>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            }
+        </div>
+    </div>
+
+    @if (operacionSeleccionada != null)
+    {
+        <div class="row mt-3">
+            <div class="col-6">
+                <div class="border rounded p-3">
+                    <label class="form-label fw-bold mb-2">Observaciones</label>
+                    <textarea class="form-control"
+                    style="resize: none; height: 150px;"
+                    placeholder="Ingrese observaciones..."
+                    @bind="operacionSeleccionada.ObseOper"
+                    @bind:event="oninput"></textarea>
+                </div>
+            </div>
+        </div>
+    }
+
+}
+
+@code {
+
+
+    [Parameter]
+    public string? Id { get; set; }
+
+    private void Regresar()
+    {
+        if (!string.IsNullOrEmpty(Id))
+        {
+            navigation.NavigateTo($"/master/edit/{Id}");
+        }
+        else
+        {
+            navigation.NavigateTo("/master");
+        }
+    }
+
+    private string resultado = string.Empty;
+    private Master? productoTerminado;
+    private List<Secoper>? operaciones;
+    private Secoper? operacionSeleccionada;
+    private List<PADMAQ>? padmaqList;
+    private List<Catoper>? categoriasList;
+    private decimal loteEstandar = 1;
+    private decimal? minutosEstandar;
+    private bool secuenciaFabricacion;
+    private bool operacionTercerizada;
+
+    private decimal cadencia=0;
+    /// <summary>
+    /// Formatea el tiempo herramental de centecimal a formato HH:MM:SS
+    /// </summary>
+    private string FormatearTiempoHerramental(decimal? horasCentecimal)
+    {
+        if (!horasCentecimal.HasValue) return "00:00:00";
+
+        decimal totalHoras = horasCentecimal.Value;
+        int horas = (int)Math.Floor(totalHoras);
+        int minutos = (int)Math.Floor((totalHoras - horas) * 60);
+        int segundos = (int)Math.Floor(((totalHoras - horas) * 60 - minutos) * 60);
+
+        return $"{horas:00}:{minutos:00}:{segundos:00}";
+    }
+
+    /// <summary>
+    /// Actualiza el campo HorsMHer con el tiempo herramental convertido a centecimal
+    /// </summary>
+    private void ActualizarTiempoHerramental(string tiempo)
+    {
+        if (operacionSeleccionada != null && !string.IsNullOrEmpty(tiempo))
+        {
+            // Validar formato HH:MM:SS
+            var partes = tiempo.Split(':');
+            if (partes.Length == 3 && 
+                int.TryParse(partes[0], out int horas) && 
+                int.TryParse(partes[1], out int minutos) && 
+                int.TryParse(partes[2], out int segundos))
+            {
+                // Convertir a centecimal
+                decimal totalHoras = horas + (minutos / 60.0m) + (segundos / 3600.0m);
+                operacionSeleccionada.HorsMHer = totalHoras;
+            }
+        }
+    }
+
+    /// <summary>
+    /// Actualiza el campo OperacionTerceros en la operación seleccionada
+    /// convirtiendo el valor booleano a short (0 o 1)
+    /// </summary>
+    private void ActualizarOperacionTercerizada()
+    {
+        if (operacionSeleccionada != null)
+        {
+            operacionSeleccionada.OperacionTerceros = (short)(operacionTercerizada ? 1 : 0);
+        }
+    }
+
+    /// <summary>
+    /// Actualiza el campo SecuenciaFabricacion en la operación seleccionada
+    /// convirtiendo el valor booleano a short (0 o 1)
+    /// </summary>
+    private void ActualizarSecuenciaFabricacion()
+    {
+        if (operacionSeleccionada != null)
+        {
+            operacionSeleccionada.SecuenciaFabricacion = (short)(secuenciaFabricacion ? 1 : 0);
+        }
+    }
+    private string tiempoVariableHoras = "00";
+    private string tiempoVariableMinutos = "00";
+    private string tiempoVariableSegundos = "00";
+
+    private async Task SeleccionarOperacion(Secoper operacion)
+    {
+        operacionSeleccionada = operacion;
+        // Al seleccionar una operación, establecer el lote estándar desde master.Lorepos
+        loteEstandar = productoTerminado?.Lorepos ?? 1;
+        minutosEstandar = operacionSeleccionada.MinuStan;
+        // Actualizar estado de los checkboxes
+        secuenciaFabricacion = operacionSeleccionada.SecuenciaFabricacion == 1;
+        operacionTercerizada = operacionSeleccionada.OperacionTerceros == 1;
+        // Si no tiene cadencia establecida, inicializar en 1
+        if (operacionSeleccionada.Cadencia == 0)
+        {
+            operacionSeleccionada.Cadencia = 1;
+        }
+        await Task.CompletedTask; // Para hacer el método async
+        CalcularTiempoVariable();
+    }
+
+    /// <summary>
+    /// Calcula el tiempo variable basado en el lote estándar y los minutos estándar
+    /// </summary>
+    private void CalcularTiempoVariable()
+    {
+
+        CambiaLoteVariable();
+        // if (operacionSeleccionada?.MinuStan == null) return;
+
+        // // Actualizar minutos estándar
+        // _ = operacionSeleccionada.MinuStan;
+
+        // loteEstandar = Convert.ToDecimal(operacionSeleccionada.LoteStan);
+        // // Calcular el tiempo total en minutos considerando la cadencia
+        // var tiempoTotalMinutos = loteEstandar * operacionSeleccionada.MinuStan.Value;
+
+
+        // // Convertir a horas, minutos y segundos
+        // var horas = Math.Floor(tiempoTotalMinutos / 60);
+        // var minutos = Math.Floor(tiempoTotalMinutos % 60);
+        // var segundos = Math.Floor((tiempoTotalMinutos * 60) % 60);
+
+
+        // minutosEstandar = tiempoTotalMinutos;
+
+        // if (operacionSeleccionada.Cadencia.HasValue && operacionSeleccionada.Cadencia.Value != 0)
+        //     // La condición será true si Cadencia es mayor o igual a 0.
+        //         {   //si tiene cadencia se recalcula nuevamente
+
+        //         tiempoTotalMinutos = tiempoTotalMinutos * (1.0m / operacionSeleccionada.Cadencia.Value);
+        //         horas = Math.Floor(tiempoTotalMinutos / 60);
+        //         minutos = Math.Floor(tiempoTotalMinutos % 60);
+        //         segundos = Math.Floor((tiempoTotalMinutos * 60) % 60);
+
+        //         // tiempoVariableHoras = horas.ToString("00");
+        //         // tiempoVariableMinutos = minutos.ToString("00");
+        //         // tiempoVariableSegundos = segundos.ToString("00");
+        //         minutosEstandar = tiempoTotalMinutos;
+        // }
+        // tiempoVariableHoras = horas.ToString("00");
+        // tiempoVariableMinutos = minutos.ToString("00");
+        // tiempoVariableSegundos = segundos.ToString("00");
+
+        StateHasChanged();
+    }
+
+    private string FormatearDecimal(decimal? valor)
+    {
+        if (valor == null) return string.Empty;
+        return valor.Value.ToString("N2");
+    }
+
+    private string FormatearTiempo(decimal? horas)
+    {
+        if (horas == null) return string.Empty;
+
+        var totalMinutos = horas.Value * 60;
+        var h = Math.Floor(totalMinutos / 60);
+        var m = Math.Floor(totalMinutos % 60);
+        var s = Math.Floor((totalMinutos * 60) % 60);
+
+        return $"{h:00}:{m:00}:{s:00}";
+    }
+    private async Task CambiaLoteVariable()
+    {
+
+        decimal loteEstandar = Convert.ToDecimal(operacionSeleccionada?.LoteStan ?? 0);
+        decimal tiempoTotalMinutos = loteEstandar * Convert.ToDecimal(minutosEstandar); //cuando cambia el lote standar toma el valor de minutosEstandar ultimo que se modfiico en CambiaTiempoVariable
+                                                                                        // aca no se actualiza
+        tiempoVariableHoras = Convert.ToString( Math.Floor(tiempoTotalMinutos / 60));
+        tiempoVariableMinutos =  Convert.ToString(Math.Floor(tiempoTotalMinutos % 60));
+        tiempoVariableSegundos =  Convert.ToString(Math.Floor((tiempoTotalMinutos * 60) % 60));
+        StateHasChanged();
+
+    }
+
+    private async Task CambiaTiempoVariable()
+    {
+
+        decimal TSTANBA = 0;
+        // Convierte LoteStan a decimal asegurando que no es null
+
+
+        decimal loteEstandar = Convert.ToDecimal(operacionSeleccionada?.LoteStan ?? 0);
+
+        if (int.TryParse(tiempoVariableHoras, out int horas) && horas > 999) 
+        {
+            tiempoVariableHoras = "999";// Aquí asignamos el valor maximo
+        }
+        if (int.TryParse(tiempoVariableMinutos, out int minutos) && minutos > 59)
+        {
+            tiempoVariableMinutos = "59";// Aquí asignamos el valor maximo
+        }
+        if (int.TryParse(tiempoVariableSegundos, out int segundos) && segundos > 59)
+        {
+            tiempoVariableSegundos = "59";// Aquí asignamos el valor maximo
+        }
+        TSTANBA = Convert.ToDecimal(tiempoVariableHoras) + Convert.ToDecimal(tiempoVariableMinutos) / 60 + Convert.ToDecimal(tiempoVariableSegundos) / 3600;
+
+
+
+        if(loteEstandar > 0.5m) // Agregar 'm' para asegurarse de que 0.5 es un decimal
+        {
+            TSTANBA = TSTANBA / loteEstandar; // Aquí asignamos el resultado de la división
+        }
+        if (TSTANBA > 0.0m)
+        {
+            cadencia = 1 / TSTANBA;
+        }
+        if (cadencia >= 1000m)
+        {
+            cadencia = cadencia + 0.5m;
+            cadencia = (int)Math.Round(cadencia);
+        }
+        minutosEstandar = 60 * TSTANBA / loteEstandar;
+
+        // operacionSeleccionada!.MinuStan = 60 * TSTANBA / loteEstandar;
+        operacionSeleccionada!.Cadencia = Math.Round(cadencia,1);
+        StateHasChanged();
+
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        await CargarProductoTerminado();
+        if (productoTerminado != null)
+        {
+            await CargarOperaciones();
+            await CargarMaquinas();
+            await CargarCategorias();
+        }
+    }
+
+    private async Task CargarProductoTerminado()
+    {
+        if (string.IsNullOrEmpty(Id))
+        {
+            await sweetAlertService.FireAsync("Error", "No se ha especificado el código del producto", SweetAlertIcon.Error);
+            return;
+        }
+
+        var responseHttp = await repository.Get<Master>($"/api/master/{Id}");
+
+        if (responseHttp.Error)
+        {
+            var mensajeError = await responseHttp.GetErrorMessageAsync();
+            await sweetAlertService.FireAsync("Error", mensajeError, SweetAlertIcon.Error);
+            return;
+        }
+
+        productoTerminado = responseHttp.Response;
+        resultado = $"{productoTerminado!.Codigo} - {productoTerminado.Descripcion}";
+    }
+
+    private async Task CargarOperaciones()
+    {
+        var responseHttp = await repository.Get<List<Secoper>>($"/api/secoper/producto/{productoTerminado!.Codint}");
+
+        if (responseHttp.Error)
+        {
+            var mensajeError = await responseHttp.GetErrorMessageAsync();
+            await sweetAlertService.FireAsync("Error", mensajeError, SweetAlertIcon.Error);
+            return;
+        }
+
+        operaciones = responseHttp.Response;
+        // Ordenar operaciones por número de operación para asegurar el orden correcto
+        operaciones = operaciones.OrderBy(o => o.NumeOper).ToList();
+    }
+
+    /// <summary>
+    /// Agrega una nueva operación a la lista con número de operación múltiplo de 10
+    /// </summary>
+    /// <summary>
+    /// Inserta una nueva operación con número intermedio entre operaciones existentes
+    /// </summary>
+    private async Task InsertarOperacion(int numeroOperacion)
+    {
+        if (productoTerminado == null)
+        {
+            await sweetAlertService.FireAsync("Error", "No hay un producto seleccionado", SweetAlertIcon.Error);
+            return;
+        }
+
+        if (operaciones == null)
+        {
+            operaciones = new List<Secoper>();
+            return;
+        }
+
+        // Obtener todas las operaciones existentes ordenadas y convertir a int para facilitar operaciones
+        var operacionesOrdenadas = operaciones.Where(o => o.NumeOper.HasValue)
+                                            .Select(o => Convert.ToInt32(o.NumeOper.Value))
+                                            .OrderBy(o => o)
+                                            .ToList();
+
+        // Encontrar la operación anterior más cercana
+        int operacionAnterior = operacionesOrdenadas
+            .Where(o => o < numeroOperacion)
+            .DefaultIfEmpty(0)
+            .Max();
+
+        // Si no hay espacio para insertar nuevas operaciones
+        if (numeroOperacion - operacionAnterior <= 1)
+        {
+            await sweetAlertService.FireAsync("Error", 
+                "No hay espacio disponible para insertar una nueva operación entre los números existentes", 
+                SweetAlertIcon.Error);
+            return;
+        }
+
+        // Buscar el primer número disponible entre operacionAnterior y numeroOperacion
+        int? nuevoNumero = null;
+        var numerosExistentes = new HashSet<int>(operacionesOrdenadas);
+
+        // Comenzar desde el punto medio
+        int intentoInicial = (operacionAnterior + numeroOperacion) / 2;
+        
+        // Buscar hacia arriba y hacia abajo desde el punto medio
+        for (int i = 0; i <= (numeroOperacion - operacionAnterior) / 2; i++)
+        {
+            int intentoArriba = intentoInicial + i;
+            int intentoAbajo = intentoInicial - i;
+
+            if (intentoArriba < numeroOperacion && !numerosExistentes.Contains(intentoArriba))
+            {
+                nuevoNumero = intentoArriba;
+                break;
+            }
+            if (intentoAbajo > operacionAnterior && !numerosExistentes.Contains(intentoAbajo))
+            {
+                nuevoNumero = intentoAbajo;
+                break;
+            }
+        }
+
+        if (!nuevoNumero.HasValue || nuevoNumero.Value <= 0)
+        {
+            await sweetAlertService.FireAsync("Error", 
+                "No se encontró un número disponible para la nueva operación", 
+                SweetAlertIcon.Error);
+            return;
+        }
+
+        // Validar que el nuevo número esté en el rango válido de short
+        if (nuevoNumero.Value > short.MaxValue)
+        {
+            await sweetAlertService.FireAsync("Error", 
+                "El número de operación es demasiado grande", 
+                SweetAlertIcon.Error);
+            return;
+        }
+
+        // Preguntar si desea crear la operación
+        var confirmacion = await sweetAlertService.FireAsync(new SweetAlertOptions
+        {
+            Title = "Nueva Operación",
+            Text = $"¿Desea crear la operación {nuevoNumero}?",
+            Icon = SweetAlertIcon.Question,
+            ShowCancelButton = true,
+            ConfirmButtonText = "Sí, crear",
+            CancelButtonText = "No, cancelar"
+        });
+
+        if (!confirmacion.IsConfirmed) return;
+
+        var nuevaOperacion = new Secoper
+        {
+            CodIConj = productoTerminado.Codint,
+            CodXConj = productoTerminado.Codigo,
+            NumeOper = (short)nuevoNumero.Value,
+            DescOper = $"Operación agregada ({nuevoNumero.Value})",
+            LoteStan = 1,
+            Fech_Revis = DateTime.Now,
+            StatOper = 1,
+            CodiEmpr = 0,
+            EsNueva = true
+        };
+
+        operaciones.Add(nuevaOperacion);
+        operaciones = operaciones.OrderBy(o => o.NumeOper).ToList();
+
+        await SeleccionarOperacion(nuevaOperacion);
+        await GuardarCambios();
+        navigation.NavigateTo(navigation.Uri, forceLoad: true);
+    }
+
+    private async Task AgregarNuevaOperacion()
+    {
+        short signumeroCorto = 10;//lo uso para pasarlo a short 
+        if (productoTerminado == null)
+        {
+            await sweetAlertService.FireAsync("Error", "No hay un producto seleccionado", SweetAlertIcon.Error);
+            return;
+        }
+
+        if (operaciones == null)
+        {
+            operaciones = new List<Secoper>();
+        }
+
+        // Encontrar el siguiente número de operación (múltiplo de 10)
+        int siguienteNumero = 10;
+        if (operaciones.Any())
+        {
+            siguienteNumero = ((operaciones.Max(o => o.NumeOper ?? 0) / 10) + 1) * 10;
+            signumeroCorto = (short)siguienteNumero;
+        }
+
+        var nuevaOperacion = new Secoper
+        {
+            CodIConj = productoTerminado.Codint,
+            CodXConj = productoTerminado.Codigo,
+            NumeOper = signumeroCorto,
+            DescOper = $"Operación agregada ({siguienteNumero})",
+            LoteStan = 1, // Valor por defecto
+            Fech_Revis = DateTime.Now,
+            StatOper=1,
+            CodiEmpr=0,
+            EsNueva = true // Marcador para identificar operaciones nuevas no guardadas
+            };
+
+        operaciones.Add(nuevaOperacion);
+        operaciones = operaciones.OrderBy(o => o.NumeOper).ToList(); // Reordenar la lista
+
+        // Seleccionar automáticamente la nueva operación
+        await SeleccionarOperacion(nuevaOperacion);
+
+        // Preguntar si desea guardar la nueva operación
+        var confirmacion = await sweetAlertService.FireAsync(new SweetAlertOptions
+        {
+            Title = "Nueva Operación",
+            Text = $"¿Desea guardar la operación {signumeroCorto}?",
+            Icon = SweetAlertIcon.Question,
+            ShowCancelButton = true,
+            ConfirmButtonText = "Sí, guardar",
+            CancelButtonText = "No, descartar"
+        });
+
+        if (confirmacion.IsConfirmed)
+        {
+            await GuardarCambios();
+            navigation.NavigateTo(navigation.Uri, forceLoad: true);
+
+
+        }
+        else
+        {
+            // Si no se confirma, eliminar la operación de la lista
+            operaciones.Remove(nuevaOperacion);
+            operacionSeleccionada = null;
+            StateHasChanged();
+        }
+    }
+    private async Task CargarMaquinas()
+    {
+        // Cargar lista de máquinas
+        var responseMaquinas = await repository.Get<List<PADMAQ>>("api/padmaq/combo");
+        if (responseMaquinas.Error)
+        {
+            await sweetAlertService.FireAsync("Error", responseMaquinas.HttpResponseMessage.ToString(), SweetAlertIcon.Error);
+            return;
+        }
+
+        padmaqList = responseMaquinas.Response;
+    }
+
+    private async Task CargarCategorias()
+    {
+        // Cargar lista de categorías de operarios
+        var responseCategorias = await repository.Get<List<Catoper>>("api/catoper/combo");
+        if (responseCategorias.Error)
+        {
+            await sweetAlertService.FireAsync("Error", responseCategorias.HttpResponseMessage.ToString(), SweetAlertIcon.Error);
+            return;
+        }
+
+        categoriasList = responseCategorias.Response;
+    }
+
+    /// <summary>
+    /// Guarda los cambios realizados en la operación seleccionada
+    /// </summary>
+    /// <summary>
+    /// Elimina una operación de manera irreversible
+    /// </summary>
+    private async Task EliminarOperacion(Secoper operacion)
+    {
+        if (operacion == null)
+        {
+            await sweetAlertService.FireAsync("Error", "No se ha seleccionado una operación para eliminar", SweetAlertIcon.Error);
+            return;
+        }
+
+        // Confirmar la eliminación
+        var confirmacion = await sweetAlertService.FireAsync(new SweetAlertOptions
+        {
+            Title = "¿Eliminar operación?",
+            Text = $"¿Está seguro que desea eliminar la operación {operacion.NumeOper}? Esta acción es irreversible.",
+            Icon = SweetAlertIcon.Warning,
+            ShowCancelButton = true,
+            ConfirmButtonText = "Sí, eliminar",
+            CancelButtonText = "No, cancelar",
+            ConfirmButtonColor = "#dc3545"
+        });
+
+        if (!confirmacion.IsConfirmed) return;
+
+        try
+        {
+            // Eliminar la operación
+            var responseHttp = await repository.Delete($"/api/secoper/{operacion.Id}");
+
+            if (responseHttp.Error)
+            {
+                var mensajeError = await responseHttp.GetErrorMessageAsync();
+                await sweetAlertService.FireAsync("Error", mensajeError, SweetAlertIcon.Error);
+                return;
+            }
+
+            // Eliminar de la lista local
+            operaciones.Remove(operacion);
+            if (operacionSeleccionada?.Id == operacion.Id)
+            {
+                operacionSeleccionada = null;
+            }
+
+            await sweetAlertService.FireAsync("Éxito", "La operación ha sido eliminada correctamente", SweetAlertIcon.Success);
+            StateHasChanged();
+        }
+        catch (Exception ex)
+        {
+            await sweetAlertService.FireAsync("Error", $"Error al eliminar la operación: {ex.Message}", SweetAlertIcon.Error);
+        }
+    }
+
+    private async Task GuardarCambios()
+    {
+        if (operacionSeleccionada == null)
+        {
+            await sweetAlertService.FireAsync("Error", "No hay operación seleccionada para guardar", SweetAlertIcon.Error);
+            return;
+        }
+
+        try
+        {
+            operacionSeleccionada.MinuStan = minutosEstandar;
+
+            HttpResponseWrapper<object> responseHttp;
+            if (operacionSeleccionada.EsNueva)
+            {
+                // Si es una operación nueva, usar POST
+                responseHttp = await repository.Post("/api/secoper", operacionSeleccionada);
+                operacionSeleccionada.EsNueva= false;
+
+                await CargarOperaciones();
+            }
+            else
+            {
+                // Si es una operación existente, usar PUT
+                responseHttp = await repository.Put($"/api/secoper/{operacionSeleccionada.Id}", operacionSeleccionada);
+            }
+
+            if (responseHttp.Error)
+            {
+                var mensajeError = await responseHttp.GetErrorMessageAsync();
+                await sweetAlertService.FireAsync("Error", mensajeError, SweetAlertIcon.Error);
+                return;
+            }
+
+            await sweetAlertService.FireAsync("Éxito", "Los cambios se han guardado correctamente", SweetAlertIcon.Success);
+            await CargarOperaciones(); // Recargamos las operaciones para reflejar los cambios
+        }
+        catch (Exception ex)
+        {
+            await sweetAlertService.FireAsync("Error", $"Error al guardar los cambios: {ex.Message}", SweetAlertIcon.Error);
+        }
+    }
+}

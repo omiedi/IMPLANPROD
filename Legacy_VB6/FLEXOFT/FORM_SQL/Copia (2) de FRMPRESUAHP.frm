@@ -1,0 +1,5377 @@
+VERSION 5.00
+Object = "{5E9E78A0-531B-11CF-91F6-C2863C385E30}#1.0#0"; "MSFLXGRD.OCX"
+Object = "{90F3D7B3-92E7-44BA-B444-6A8E2A3BC375}#1.0#0"; "actskin4.ocx"
+Object = "{86CF1D34-0C5F-11D2-A9FC-0000F8754DA1}#2.0#0"; "MSCOMCT2.OCX"
+Begin VB.Form FRMPRESUAHP 
+   BackColor       =   &H00FFFFFF&
+   Caption         =   "COTIZACIÓN AHP"
+   ClientHeight    =   9165
+   ClientLeft      =   0
+   ClientTop       =   -555
+   ClientWidth     =   14520
+   ForeColor       =   &H00000000&
+   Icon            =   "FRMPRESUAHP.frx":0000
+   KeyPreview      =   -1  'True
+   LinkTopic       =   "Form1"
+   MaxButton       =   0   'False
+   MinButton       =   0   'False
+   ScaleHeight     =   9165
+   ScaleWidth      =   14520
+   StartUpPosition =   1  'CenterOwner
+   Begin MSFlexGridLib.MSFlexGrid MSF2 
+      Height          =   315
+      Left            =   8040
+      TabIndex        =   98
+      Top             =   7800
+      Visible         =   0   'False
+      Width           =   360
+      _ExtentX        =   635
+      _ExtentY        =   556
+      _Version        =   393216
+      BackColorFixed  =   16501405
+      SelectionMode   =   1
+      AllowUserResizing=   1
+      Appearance      =   0
+      BeginProperty Font {0BE35203-8F91-11CE-9DE3-00AA004BB851} 
+         Name            =   "Arial"
+         Size            =   9
+         Charset         =   0
+         Weight          =   700
+         Underline       =   0   'False
+         Italic          =   0   'False
+         Strikethrough   =   0   'False
+      EndProperty
+   End
+   Begin VB.Timer Timer1 
+      Interval        =   150
+      Left            =   6720
+      Top             =   4320
+   End
+   Begin VB.TextBox LENTREGA 
+      Appearance      =   0  'Flat
+      BackColor       =   &H00FFFFFF&
+      BeginProperty Font 
+         Name            =   "Arial"
+         Size            =   8.25
+         Charset         =   0
+         Weight          =   700
+         Underline       =   0   'False
+         Italic          =   0   'False
+         Strikethrough   =   0   'False
+      EndProperty
+      Height          =   315
+      Index           =   1
+      Left            =   0
+      TabIndex        =   96
+      TabStop         =   0   'False
+      Top             =   8280
+      Width           =   7920
+   End
+   Begin VB.TextBox LENTREGA 
+      Appearance      =   0  'Flat
+      BackColor       =   &H00FFFFFF&
+      BeginProperty Font 
+         Name            =   "Arial"
+         Size            =   8.25
+         Charset         =   0
+         Weight          =   700
+         Underline       =   0   'False
+         Italic          =   0   'False
+         Strikethrough   =   0   'False
+      EndProperty
+      Height          =   315
+      Index           =   0
+      Left            =   1350
+      TabIndex        =   95
+      TabStop         =   0   'False
+      Top             =   7920
+      Width           =   6570
+   End
+   Begin VB.TextBox Text19 
+      Alignment       =   1  'Right Justify
+      Appearance      =   0  'Flat
+      BackColor       =   &H00E0E0E0&
+      BeginProperty Font 
+         Name            =   "Arial"
+         Size            =   8.25
+         Charset         =   0
+         Weight          =   700
+         Underline       =   0   'False
+         Italic          =   0   'False
+         Strikethrough   =   0   'False
+      EndProperty
+      Height          =   315
+      HelpContextID   =   15
+      Left            =   15
+      Locked          =   -1  'True
+      TabIndex        =   94
+      TabStop         =   0   'False
+      Text            =   "Entrega"
+      Top             =   7920
+      Width           =   1215
+   End
+   Begin VB.TextBox Text41 
+      Alignment       =   1  'Right Justify
+      Appearance      =   0  'Flat
+      BackColor       =   &H00E0E0E0&
+      BeginProperty Font 
+         Name            =   "Arial"
+         Size            =   8.25
+         Charset         =   0
+         Weight          =   700
+         Underline       =   0   'False
+         Italic          =   0   'False
+         Strikethrough   =   0   'False
+      EndProperty
+      Height          =   315
+      Left            =   15
+      Locked          =   -1  'True
+      TabIndex        =   93
+      TabStop         =   0   'False
+      Text            =   "Vendedor"
+      Top             =   7575
+      Width           =   1215
+   End
+   Begin VB.CommandButton Command8 
+      Caption         =   "."
+      BeginProperty Font 
+         Name            =   "MS Sans Serif"
+         Size            =   9.75
+         Charset         =   0
+         Weight          =   700
+         Underline       =   0   'False
+         Italic          =   0   'False
+         Strikethrough   =   0   'False
+      EndProperty
+      Height          =   330
+      Left            =   1935
+      TabIndex        =   92
+      Top             =   7575
+      Width           =   255
+   End
+   Begin VB.TextBox TXTNUMVENDEDOR 
+      Alignment       =   1  'Right Justify
+      Appearance      =   0  'Flat
+      BeginProperty Font 
+         Name            =   "Arial"
+         Size            =   8.25
+         Charset         =   0
+         Weight          =   700
+         Underline       =   0   'False
+         Italic          =   0   'False
+         Strikethrough   =   0   'False
+      EndProperty
+      Height          =   315
+      Left            =   1335
+      TabIndex        =   91
+      Top             =   7575
+      Width           =   585
+   End
+   Begin VB.TextBox TXTNOMVENDEDOR 
+      Appearance      =   0  'Flat
+      BackColor       =   &H00E0E0E0&
+      BeginProperty Font 
+         Name            =   "Arial"
+         Size            =   8.25
+         Charset         =   0
+         Weight          =   700
+         Underline       =   0   'False
+         Italic          =   0   'False
+         Strikethrough   =   0   'False
+      EndProperty
+      Height          =   315
+      Left            =   2190
+      Locked          =   -1  'True
+      TabIndex        =   90
+      TabStop         =   0   'False
+      Top             =   7575
+      Width           =   5730
+   End
+   Begin VB.TextBox TXT36 
+      Appearance      =   0  'Flat
+      BackColor       =   &H00808080&
+      BeginProperty Font 
+         Name            =   "MS Sans Serif"
+         Size            =   9.75
+         Charset         =   0
+         Weight          =   700
+         Underline       =   0   'False
+         Italic          =   0   'False
+         Strikethrough   =   0   'False
+      EndProperty
+      ForeColor       =   &H00FFFFFF&
+      Height          =   360
+      Left            =   11760
+      Locked          =   -1  'True
+      TabIndex        =   88
+      Text            =   "Total Kg.:"
+      Top             =   8250
+      Width           =   1275
+   End
+   Begin VB.TextBox TXTTOTALPESO 
+      Alignment       =   1  'Right Justify
+      Appearance      =   0  'Flat
+      BackColor       =   &H00808080&
+      BeginProperty Font 
+         Name            =   "MS Sans Serif"
+         Size            =   9.75
+         Charset         =   0
+         Weight          =   700
+         Underline       =   0   'False
+         Italic          =   0   'False
+         Strikethrough   =   0   'False
+      EndProperty
+      ForeColor       =   &H00FFFF00&
+      Height          =   360
+      Left            =   13080
+      Locked          =   -1  'True
+      TabIndex        =   87
+      Top             =   8250
+      Width           =   1395
+   End
+   Begin VB.TextBox TXTCODCLIENTE 
+      Appearance      =   0  'Flat
+      BackColor       =   &H00808080&
+      BeginProperty Font 
+         Name            =   "MS Sans Serif"
+         Size            =   8.25
+         Charset         =   0
+         Weight          =   700
+         Underline       =   0   'False
+         Italic          =   0   'False
+         Strikethrough   =   0   'False
+      EndProperty
+      ForeColor       =   &H00FFFF00&
+      Height          =   285
+      Left            =   120
+      Locked          =   -1  'True
+      TabIndex        =   85
+      ToolTipText     =   "Código de Cliente - Doble Click Para Eliminar Relación "
+      Top             =   2580
+      Width           =   2355
+   End
+   Begin VB.CommandButton Command1 
+      Caption         =   "!"
+      BeginProperty Font 
+         Name            =   "MS Sans Serif"
+         Size            =   9.75
+         Charset         =   0
+         Weight          =   700
+         Underline       =   0   'False
+         Italic          =   0   'False
+         Strikethrough   =   0   'False
+      EndProperty
+      Height          =   255
+      Left            =   1920
+      TabIndex        =   28
+      ToolTipText     =   "Seleccion de Artículo (F2)"
+      Top             =   1850
+      Width           =   570
+   End
+   Begin VB.TextBox TXTMOVIL 
+      Alignment       =   1  'Right Justify
+      Appearance      =   0  'Flat
+      BackColor       =   &H00C0C0FF&
+      BeginProperty DataFormat 
+         Type            =   1
+         Format          =   "0,00"
+         HaveTrueFalseNull=   0
+         FirstDayOfWeek  =   0
+         FirstWeekOfYear =   0
+         LCID            =   11274
+         SubFormatType   =   1
+      EndProperty
+      BeginProperty Font 
+         Name            =   "Arial"
+         Size            =   8.25
+         Charset         =   0
+         Weight          =   700
+         Underline       =   0   'False
+         Italic          =   0   'False
+         Strikethrough   =   0   'False
+      EndProperty
+      Height          =   315
+      Left            =   0
+      TabIndex        =   84
+      TabStop         =   0   'False
+      ToolTipText     =   "Costo segun el proveedor y la via de entrega"
+      Top             =   0
+      Visible         =   0   'False
+      Width           =   1335
+   End
+   Begin VB.OptionButton CARGA 
+      Appearance      =   0  'Flat
+      BackColor       =   &H80000005&
+      Caption         =   "Sel.Manual"
+      BeginProperty Font 
+         Name            =   "MS Sans Serif"
+         Size            =   8.25
+         Charset         =   0
+         Weight          =   700
+         Underline       =   0   'False
+         Italic          =   0   'False
+         Strikethrough   =   0   'False
+      EndProperty
+      ForeColor       =   &H000000FF&
+      Height          =   255
+      Index           =   2
+      Left            =   13080
+      TabIndex        =   83
+      ToolTipText     =   " Modo de Carga: Selección Manual de Lotes"
+      Top             =   2600
+      Value           =   -1  'True
+      Visible         =   0   'False
+      Width           =   1455
+   End
+   Begin VB.OptionButton CARGA 
+      Appearance      =   0  'Flat
+      BackColor       =   &H80000005&
+      Caption         =   "Verif. Stock"
+      BeginProperty Font 
+         Name            =   "MS Sans Serif"
+         Size            =   8.25
+         Charset         =   0
+         Weight          =   700
+         Underline       =   0   'False
+         Italic          =   0   'False
+         Strikethrough   =   0   'False
+      EndProperty
+      ForeColor       =   &H80000008&
+      Height          =   255
+      Index           =   1
+      Left            =   11520
+      TabIndex        =   82
+      ToolTipText     =   "Modo de Carga: Valida Stock de Maera General"
+      Top             =   2600
+      Visible         =   0   'False
+      Width           =   1455
+   End
+   Begin VB.OptionButton CARGA 
+      Appearance      =   0  'Flat
+      BackColor       =   &H80000005&
+      Caption         =   "Carga Rapida"
+      BeginProperty Font 
+         Name            =   "MS Sans Serif"
+         Size            =   8.25
+         Charset         =   0
+         Weight          =   700
+         Underline       =   -1  'True
+         Italic          =   0   'False
+         Strikethrough   =   0   'False
+      EndProperty
+      ForeColor       =   &H00000000&
+      Height          =   255
+      Index           =   0
+      Left            =   9720
+      TabIndex        =   81
+      ToolTipText     =   "Modo de Carga: Directamente sin Validar Stock "
+      Top             =   2600
+      Visible         =   0   'False
+      Width           =   1695
+   End
+   Begin VB.CommandButton Command6 
+      Caption         =   "Actualizar"
+      BeginProperty Font 
+         Name            =   "MS Sans Serif"
+         Size            =   9.75
+         Charset         =   0
+         Weight          =   700
+         Underline       =   0   'False
+         Italic          =   0   'False
+         Strikethrough   =   0   'False
+      EndProperty
+      Height          =   660
+      Left            =   13080
+      TabIndex        =   78
+      Top             =   1800
+      Width           =   1380
+   End
+   Begin VB.CommandButton Command5 
+      Caption         =   "Graba e Imprime"
+      BeginProperty Font 
+         Name            =   "MS Sans Serif"
+         Size            =   9.75
+         Charset         =   0
+         Weight          =   700
+         Underline       =   0   'False
+         Italic          =   0   'False
+         Strikethrough   =   0   'False
+      EndProperty
+      Height          =   1215
+      Left            =   8520
+      TabIndex        =   77
+      Top             =   7440
+      Width           =   2955
+   End
+   Begin VB.Frame Frame1 
+      BackColor       =   &H00404040&
+      Height          =   1695
+      Left            =   15
+      TabIndex        =   46
+      Top             =   0
+      Width           =   14520
+      Begin VB.TextBox TXTREFERENCIA 
+         Appearance      =   0  'Flat
+         BackColor       =   &H00FFFFFF&
+         BeginProperty Font 
+            Name            =   "MS Sans Serif"
+            Size            =   8.25
+            Charset         =   0
+            Weight          =   700
+            Underline       =   0   'False
+            Italic          =   0   'False
+            Strikethrough   =   0   'False
+         EndProperty
+         Height          =   285
+         Left            =   8895
+         TabIndex        =   2
+         Top             =   1080
+         Width           =   3200
+      End
+      Begin VB.Frame Frame3 
+         BackColor       =   &H00404040&
+         Height          =   1120
+         Left            =   120
+         TabIndex        =   56
+         Top             =   210
+         Width           =   1400
+         Begin VB.CommandButton Command19 
+            Caption         =   "."
+            BeginProperty Font 
+               Name            =   "MS Sans Serif"
+               Size            =   9.75
+               Charset         =   0
+               Weight          =   700
+               Underline       =   0   'False
+               Italic          =   0   'False
+               Strikethrough   =   0   'False
+            EndProperty
+            Height          =   300
+            Left            =   1100
+            TabIndex        =   57
+            ToolTipText     =   "Seleccion de Cliente"
+            Top             =   480
+            Width           =   250
+         End
+         Begin VB.TextBox Text1 
+            Appearance      =   0  'Flat
+            BackColor       =   &H00FFFFFF&
+            BeginProperty Font 
+               Name            =   "MS Sans Serif"
+               Size            =   8.25
+               Charset         =   0
+               Weight          =   700
+               Underline       =   0   'False
+               Italic          =   0   'False
+               Strikethrough   =   0   'False
+            EndProperty
+            Height          =   300
+            Left            =   120
+            TabIndex        =   0
+            Top             =   460
+            Width           =   975
+         End
+         Begin ACTIVESKINLibCtl.SkinLabel SkinLabel6 
+            Height          =   240
+            Left            =   100
+            OleObjectBlob   =   "FRMPRESUAHP.frx":000C
+            TabIndex        =   58
+            Top             =   240
+            Width           =   1095
+         End
+         Begin VB.Label Label26 
+            BackColor       =   &H00EEEEEE&
+            BorderStyle     =   1  'Fixed Single
+            BeginProperty Font 
+               Name            =   "Arial"
+               Size            =   9
+               Charset         =   0
+               Weight          =   700
+               Underline       =   0   'False
+               Italic          =   0   'False
+               Strikethrough   =   0   'False
+            EndProperty
+            Height          =   300
+            Left            =   100
+            TabIndex        =   59
+            Top             =   765
+            Width           =   1215
+         End
+      End
+      Begin VB.TextBox Text2 
+         Appearance      =   0  'Flat
+         BackColor       =   &H00E0E0E0&
+         BeginProperty Font 
+            Name            =   "MS Sans Serif"
+            Size            =   8.25
+            Charset         =   0
+            Weight          =   700
+            Underline       =   0   'False
+            Italic          =   0   'False
+            Strikethrough   =   0   'False
+         EndProperty
+         Height          =   285
+         Left            =   2640
+         Locked          =   -1  'True
+         TabIndex        =   55
+         TabStop         =   0   'False
+         Top             =   220
+         Width           =   4950
+      End
+      Begin VB.TextBox Text3 
+         Appearance      =   0  'Flat
+         BackColor       =   &H00E0E0E0&
+         BeginProperty Font 
+            Name            =   "MS Sans Serif"
+            Size            =   8.25
+            Charset         =   0
+            Weight          =   700
+            Underline       =   0   'False
+            Italic          =   0   'False
+            Strikethrough   =   0   'False
+         EndProperty
+         Height          =   285
+         Left            =   2640
+         Locked          =   -1  'True
+         TabIndex        =   54
+         TabStop         =   0   'False
+         Top             =   505
+         Width           =   4950
+      End
+      Begin VB.TextBox Text4 
+         Appearance      =   0  'Flat
+         BackColor       =   &H00E0E0E0&
+         BeginProperty Font 
+            Name            =   "MS Sans Serif"
+            Size            =   8.25
+            Charset         =   0
+            Weight          =   700
+            Underline       =   0   'False
+            Italic          =   0   'False
+            Strikethrough   =   0   'False
+         EndProperty
+         Height          =   285
+         Left            =   2640
+         Locked          =   -1  'True
+         TabIndex        =   53
+         TabStop         =   0   'False
+         Top             =   795
+         Width           =   4950
+      End
+      Begin VB.TextBox Text18 
+         Appearance      =   0  'Flat
+         BackColor       =   &H00E0E0E0&
+         BeginProperty Font 
+            Name            =   "MS Sans Serif"
+            Size            =   8.25
+            Charset         =   0
+            Weight          =   700
+            Underline       =   0   'False
+            Italic          =   0   'False
+            Strikethrough   =   0   'False
+         EndProperty
+         Height          =   285
+         Left            =   8895
+         Locked          =   -1  'True
+         TabIndex        =   52
+         TabStop         =   0   'False
+         Top             =   790
+         Width           =   5520
+      End
+      Begin VB.TextBox Text5 
+         Appearance      =   0  'Flat
+         BackColor       =   &H00E0E0E0&
+         BeginProperty Font 
+            Name            =   "MS Sans Serif"
+            Size            =   8.25
+            Charset         =   0
+            Weight          =   700
+            Underline       =   0   'False
+            Italic          =   0   'False
+            Strikethrough   =   0   'False
+         EndProperty
+         Height          =   285
+         Left            =   8895
+         Locked          =   -1  'True
+         TabIndex        =   51
+         TabStop         =   0   'False
+         Top             =   505
+         Width           =   5520
+      End
+      Begin VB.TextBox Text8 
+         Appearance      =   0  'Flat
+         BackColor       =   &H00E0E0E0&
+         BeginProperty Font 
+            Name            =   "MS Sans Serif"
+            Size            =   8.25
+            Charset         =   0
+            Weight          =   700
+            Underline       =   0   'False
+            Italic          =   0   'False
+            Strikethrough   =   0   'False
+         EndProperty
+         Height          =   285
+         Left            =   8895
+         Locked          =   -1  'True
+         TabIndex        =   50
+         TabStop         =   0   'False
+         Top             =   220
+         Width           =   2895
+      End
+      Begin VB.TextBox Text17 
+         Alignment       =   1  'Right Justify
+         Appearance      =   0  'Flat
+         BackColor       =   &H00E0E0E0&
+         BeginProperty Font 
+            Name            =   "MS Sans Serif"
+            Size            =   8.25
+            Charset         =   0
+            Weight          =   700
+            Underline       =   0   'False
+            Italic          =   0   'False
+            Strikethrough   =   0   'False
+         EndProperty
+         Height          =   285
+         Left            =   13290
+         Locked          =   -1  'True
+         TabIndex        =   49
+         TabStop         =   0   'False
+         Top             =   1100
+         Width           =   1125
+      End
+      Begin VB.TextBox Text20 
+         Alignment       =   1  'Right Justify
+         Appearance      =   0  'Flat
+         BackColor       =   &H00E0E0E0&
+         BeginProperty Font 
+            Name            =   "MS Sans Serif"
+            Size            =   8.25
+            Charset         =   0
+            Weight          =   700
+            Underline       =   0   'False
+            Italic          =   0   'False
+            Strikethrough   =   0   'False
+         EndProperty
+         Height          =   285
+         Left            =   12300
+         Locked          =   -1  'True
+         TabIndex        =   48
+         TabStop         =   0   'False
+         Top             =   1440
+         Visible         =   0   'False
+         Width           =   435
+      End
+      Begin VB.TextBox Text35 
+         Appearance      =   0  'Flat
+         BackColor       =   &H00FFFFFF&
+         BeginProperty Font 
+            Name            =   "MS Sans Serif"
+            Size            =   8.25
+            Charset         =   0
+            Weight          =   700
+            Underline       =   0   'False
+            Italic          =   0   'False
+            Strikethrough   =   0   'False
+         EndProperty
+         Height          =   285
+         Left            =   2640
+         TabIndex        =   1
+         Top             =   1080
+         Width           =   4950
+      End
+      Begin VB.CommandButton Command4 
+         Caption         =   "Nuevo"
+         BeginProperty Font 
+            Name            =   "MS Sans Serif"
+            Size            =   9.75
+            Charset         =   0
+            Weight          =   700
+            Underline       =   0   'False
+            Italic          =   0   'False
+            Strikethrough   =   0   'False
+         EndProperty
+         Height          =   240
+         Left            =   1560
+         TabIndex        =   47
+         ToolTipText     =   "Seleccion de Cliente"
+         Top             =   1400
+         Width           =   1095
+      End
+      Begin ACTIVESKINLibCtl.SkinLabel SkinLabel7 
+         Height          =   240
+         Left            =   1560
+         OleObjectBlob   =   "FRMPRESUAHP.frx":0078
+         TabIndex        =   60
+         Top             =   240
+         Width           =   1095
+      End
+      Begin ACTIVESKINLibCtl.SkinLabel SkinLabel8 
+         Height          =   255
+         Left            =   1560
+         OleObjectBlob   =   "FRMPRESUAHP.frx":00E4
+         TabIndex        =   61
+         Top             =   525
+         Width           =   1095
+      End
+      Begin ACTIVESKINLibCtl.SkinLabel SkinLabel9 
+         Height          =   255
+         Left            =   1560
+         OleObjectBlob   =   "FRMPRESUAHP.frx":0156
+         TabIndex        =   62
+         Top             =   815
+         Width           =   1095
+      End
+      Begin ACTIVESKINLibCtl.SkinLabel SkinLabel10 
+         Height          =   240
+         Left            =   7815
+         OleObjectBlob   =   "FRMPRESUAHP.frx":01C8
+         TabIndex        =   63
+         Top             =   240
+         Width           =   1095
+      End
+      Begin ACTIVESKINLibCtl.SkinLabel SkinLabel11 
+         Height          =   255
+         Left            =   7815
+         OleObjectBlob   =   "FRMPRESUAHP.frx":0238
+         TabIndex        =   64
+         Top             =   525
+         Width           =   1095
+      End
+      Begin ACTIVESKINLibCtl.SkinLabel SkinLabel13 
+         Height          =   255
+         Left            =   7815
+         OleObjectBlob   =   "FRMPRESUAHP.frx":02A6
+         TabIndex        =   65
+         Top             =   810
+         Width           =   1095
+      End
+      Begin ACTIVESKINLibCtl.SkinLabel SkinLabel5 
+         Height          =   240
+         Left            =   11865
+         OleObjectBlob   =   "FRMPRESUAHP.frx":030E
+         TabIndex        =   66
+         Top             =   240
+         Width           =   1065
+      End
+      Begin ACTIVESKINLibCtl.SkinLabel SkinLabel18 
+         Height          =   285
+         Left            =   12120
+         OleObjectBlob   =   "FRMPRESUAHP.frx":037A
+         TabIndex        =   67
+         Top             =   1100
+         Width           =   1200
+      End
+      Begin MSComCtl2.DTPicker DTPicker1 
+         Height          =   285
+         Left            =   13020
+         TabIndex        =   68
+         Top             =   195
+         Width           =   1365
+         _ExtentX        =   2408
+         _ExtentY        =   503
+         _Version        =   393216
+         BeginProperty Font {0BE35203-8F91-11CE-9DE3-00AA004BB851} 
+            Name            =   "MS Sans Serif"
+            Size            =   8.25
+            Charset         =   0
+            Weight          =   700
+            Underline       =   0   'False
+            Italic          =   0   'False
+            Strikethrough   =   0   'False
+         EndProperty
+         CalendarBackColor=   16777215
+         Format          =   60817409
+         CurrentDate     =   40810
+      End
+      Begin ACTIVESKINLibCtl.SkinLabel SkinLabel2 
+         Height          =   285
+         Left            =   11900
+         OleObjectBlob   =   "FRMPRESUAHP.frx":03F2
+         TabIndex        =   69
+         Top             =   1120
+         Visible         =   0   'False
+         Width           =   360
+      End
+      Begin ACTIVESKINLibCtl.SkinLabel SkinLabel4 
+         Height          =   255
+         Left            =   1560
+         OleObjectBlob   =   "FRMPRESUAHP.frx":0458
+         TabIndex        =   70
+         Top             =   1080
+         Width           =   1095
+      End
+      Begin ACTIVESKINLibCtl.SkinLabel SkinLabel12 
+         Height          =   255
+         Left            =   7815
+         OleObjectBlob   =   "FRMPRESUAHP.frx":04C8
+         TabIndex        =   89
+         Top             =   1080
+         Width           =   1095
+      End
+   End
+   Begin VB.Frame Frame5 
+      BackColor       =   &H00E0E0E0&
+      BeginProperty Font 
+         Name            =   "MS Sans Serif"
+         Size            =   12
+         Charset         =   0
+         Weight          =   700
+         Underline       =   0   'False
+         Italic          =   0   'False
+         Strikethrough   =   0   'False
+      EndProperty
+      Height          =   1005
+      Left            =   0
+      TabIndex        =   33
+      Top             =   1560
+      Width           =   14520
+      Begin VB.TextBox TXTNUMPROV 
+         Alignment       =   1  'Right Justify
+         Appearance      =   0  'Flat
+         BackColor       =   &H00E0E0E0&
+         BeginProperty DataFormat 
+            Type            =   1
+            Format          =   "0,00"
+            HaveTrueFalseNull=   0
+            FirstDayOfWeek  =   0
+            FirstWeekOfYear =   0
+            LCID            =   11274
+            SubFormatType   =   1
+         EndProperty
+         BeginProperty Font 
+            Name            =   "MS Sans Serif"
+            Size            =   8.25
+            Charset         =   0
+            Weight          =   700
+            Underline       =   0   'False
+            Italic          =   0   'False
+            Strikethrough   =   0   'False
+         EndProperty
+         Height          =   285
+         Left            =   13200
+         Locked          =   -1  'True
+         TabIndex        =   99
+         Top             =   600
+         Width           =   945
+      End
+      Begin VB.TextBox TXTPESOP 
+         Alignment       =   1  'Right Justify
+         Appearance      =   0  'Flat
+         BackColor       =   &H00E0E0E0&
+         BeginProperty DataFormat 
+            Type            =   1
+            Format          =   "0,00"
+            HaveTrueFalseNull=   0
+            FirstDayOfWeek  =   0
+            FirstWeekOfYear =   0
+            LCID            =   11274
+            SubFormatType   =   1
+         EndProperty
+         BeginProperty Font 
+            Name            =   "MS Sans Serif"
+            Size            =   8.25
+            Charset         =   0
+            Weight          =   700
+            Underline       =   0   'False
+            Italic          =   0   'False
+            Strikethrough   =   0   'False
+         EndProperty
+         Height          =   285
+         Left            =   13200
+         Locked          =   -1  'True
+         TabIndex        =   86
+         Top             =   360
+         Width           =   945
+      End
+      Begin VB.TextBox Text38 
+         Alignment       =   1  'Right Justify
+         Appearance      =   0  'Flat
+         BackColor       =   &H00E0E0E0&
+         BeginProperty DataFormat 
+            Type            =   1
+            Format          =   "0,00"
+            HaveTrueFalseNull=   0
+            FirstDayOfWeek  =   0
+            FirstWeekOfYear =   0
+            LCID            =   11274
+            SubFormatType   =   1
+         EndProperty
+         BeginProperty Font 
+            Name            =   "MS Sans Serif"
+            Size            =   8.25
+            Charset         =   0
+            Weight          =   700
+            Underline       =   0   'False
+            Italic          =   0   'False
+            Strikethrough   =   0   'False
+         EndProperty
+         Height          =   380
+         Left            =   8670
+         Locked          =   -1  'True
+         TabIndex        =   35
+         Top             =   540
+         Width           =   1300
+      End
+      Begin VB.TextBox Text40 
+         Appearance      =   0  'Flat
+         BackColor       =   &H00E0E0E0&
+         BeginProperty Font 
+            Name            =   "MS Sans Serif"
+            Size            =   8.25
+            Charset         =   0
+            Weight          =   700
+            Underline       =   0   'False
+            Italic          =   0   'False
+            Strikethrough   =   0   'False
+         EndProperty
+         Height          =   285
+         Left            =   8670
+         Locked          =   -1  'True
+         TabIndex        =   34
+         TabStop         =   0   'False
+         Text            =   "Vía de Entr."
+         Top             =   270
+         Width           =   1545
+      End
+      Begin VB.TextBox TXTDESCRIPCION 
+         Appearance      =   0  'Flat
+         BackColor       =   &H00E0E0E0&
+         BeginProperty Font 
+            Name            =   "MS Sans Serif"
+            Size            =   8.25
+            Charset         =   0
+            Weight          =   700
+            Underline       =   0   'False
+            Italic          =   0   'False
+            Strikethrough   =   0   'False
+         EndProperty
+         Height          =   380
+         Left            =   2460
+         Locked          =   -1  'True
+         TabIndex        =   45
+         Top             =   540
+         Width           =   3855
+      End
+      Begin VB.TextBox Text9 
+         Alignment       =   1  'Right Justify
+         Appearance      =   0  'Flat
+         BackColor       =   &H00E0E0E0&
+         BeginProperty Font 
+            Name            =   "MS Sans Serif"
+            Size            =   8.25
+            Charset         =   0
+            Weight          =   700
+            Underline       =   0   'False
+            Italic          =   0   'False
+            Strikethrough   =   0   'False
+         EndProperty
+         Height          =   285
+         Left            =   10200
+         Locked          =   -1  'True
+         TabIndex        =   44
+         TabStop         =   0   'False
+         Text            =   "P.Venta"
+         Top             =   270
+         Width           =   1350
+      End
+      Begin VB.TextBox Text7 
+         Alignment       =   1  'Right Justify
+         Appearance      =   0  'Flat
+         BackColor       =   &H00E0E0E0&
+         BeginProperty Font 
+            Name            =   "MS Sans Serif"
+            Size            =   8.25
+            Charset         =   0
+            Weight          =   700
+            Underline       =   0   'False
+            Italic          =   0   'False
+            Strikethrough   =   0   'False
+         EndProperty
+         Height          =   285
+         Left            =   6300
+         Locked          =   -1  'True
+         TabIndex        =   43
+         TabStop         =   0   'False
+         Text            =   "Cantidad"
+         Top             =   270
+         Width           =   930
+      End
+      Begin VB.TextBox Text11 
+         Appearance      =   0  'Flat
+         BackColor       =   &H00E0E0E0&
+         BeginProperty Font 
+            Name            =   "MS Sans Serif"
+            Size            =   8.25
+            Charset         =   0
+            Weight          =   700
+            Underline       =   0   'False
+            Italic          =   0   'False
+            Strikethrough   =   0   'False
+         EndProperty
+         Height          =   285
+         Left            =   2460
+         Locked          =   -1  'True
+         TabIndex        =   42
+         TabStop         =   0   'False
+         Text            =   "Descripción"
+         Top             =   270
+         Width           =   3855
+      End
+      Begin VB.TextBox Text12 
+         Appearance      =   0  'Flat
+         BackColor       =   &H00E0E0E0&
+         BeginProperty Font 
+            Name            =   "MS Sans Serif"
+            Size            =   8.25
+            Charset         =   0
+            Weight          =   700
+            Underline       =   0   'False
+            Italic          =   0   'False
+            Strikethrough   =   0   'False
+         EndProperty
+         Height          =   285
+         Left            =   120
+         Locked          =   -1  'True
+         TabIndex        =   41
+         TabStop         =   0   'False
+         Text            =   "Código"
+         Top             =   270
+         Width           =   2355
+      End
+      Begin VB.TextBox txtcodigo 
+         Appearance      =   0  'Flat
+         BackColor       =   &H00FFFFFF&
+         BeginProperty Font 
+            Name            =   "MS Sans Serif"
+            Size            =   8.25
+            Charset         =   0
+            Weight          =   700
+            Underline       =   0   'False
+            Italic          =   0   'False
+            Strikethrough   =   0   'False
+         EndProperty
+         Height          =   380
+         Left            =   120
+         TabIndex        =   3
+         ToolTipText     =   "Código Original"
+         Top             =   540
+         Width           =   2355
+      End
+      Begin VB.TextBox TXTPREUNIT 
+         Alignment       =   1  'Right Justify
+         Appearance      =   0  'Flat
+         BackColor       =   &H00E0E0E0&
+         BeginProperty DataFormat 
+            Type            =   1
+            Format          =   "0,00"
+            HaveTrueFalseNull=   0
+            FirstDayOfWeek  =   0
+            FirstWeekOfYear =   0
+            LCID            =   11274
+            SubFormatType   =   1
+         EndProperty
+         BeginProperty Font 
+            Name            =   "MS Sans Serif"
+            Size            =   8.25
+            Charset         =   0
+            Weight          =   700
+            Underline       =   0   'False
+            Italic          =   0   'False
+            Strikethrough   =   0   'False
+         EndProperty
+         Height          =   380
+         Left            =   10200
+         Locked          =   -1  'True
+         TabIndex        =   40
+         ToolTipText     =   "DOBLE CLICK PARA MODO EDICIÓN"
+         Top             =   540
+         Width           =   1350
+      End
+      Begin VB.TextBox TXTCANTIDAD 
+         Alignment       =   1  'Right Justify
+         Appearance      =   0  'Flat
+         BeginProperty DataFormat 
+            Type            =   1
+            Format          =   "0,00"
+            HaveTrueFalseNull=   0
+            FirstDayOfWeek  =   0
+            FirstWeekOfYear =   0
+            LCID            =   11274
+            SubFormatType   =   1
+         EndProperty
+         BeginProperty Font 
+            Name            =   "MS Sans Serif"
+            Size            =   8.25
+            Charset         =   0
+            Weight          =   700
+            Underline       =   0   'False
+            Italic          =   0   'False
+            Strikethrough   =   0   'False
+         EndProperty
+         Height          =   380
+         Left            =   6300
+         TabIndex        =   4
+         TabStop         =   0   'False
+         Text            =   "   "
+         ToolTipText     =   "('+')  PARA AGREGAR ('-') PARA BORRAR"
+         Top             =   540
+         Width           =   930
+      End
+      Begin VB.TextBox Text6 
+         Alignment       =   1  'Right Justify
+         Appearance      =   0  'Flat
+         BackColor       =   &H00E0E0E0&
+         BeginProperty Font 
+            Name            =   "MS Sans Serif"
+            Size            =   8.25
+            Charset         =   0
+            Weight          =   700
+            Underline       =   0   'False
+            Italic          =   0   'False
+            Strikethrough   =   0   'False
+         EndProperty
+         Height          =   285
+         Left            =   11520
+         Locked          =   -1  'True
+         TabIndex        =   39
+         TabStop         =   0   'False
+         Text            =   "Importe"
+         Top             =   270
+         Width           =   1545
+      End
+      Begin VB.TextBox TXTIMPORTE 
+         Alignment       =   1  'Right Justify
+         Appearance      =   0  'Flat
+         BackColor       =   &H00E0E0E0&
+         BeginProperty DataFormat 
+            Type            =   1
+            Format          =   "0,00"
+            HaveTrueFalseNull=   0
+            FirstDayOfWeek  =   0
+            FirstWeekOfYear =   0
+            LCID            =   11274
+            SubFormatType   =   1
+         EndProperty
+         BeginProperty Font 
+            Name            =   "MS Sans Serif"
+            Size            =   8.25
+            Charset         =   0
+            Weight          =   700
+            Underline       =   0   'False
+            Italic          =   0   'False
+            Strikethrough   =   0   'False
+         EndProperty
+         Height          =   380
+         Left            =   11520
+         Locked          =   -1  'True
+         TabIndex        =   38
+         ToolTipText     =   "('+')  PARA AGREGAR ('-') PARA BORRAR"
+         Top             =   540
+         Width           =   1545
+      End
+      Begin VB.TextBox Text15 
+         Alignment       =   1  'Right Justify
+         Appearance      =   0  'Flat
+         BackColor       =   &H00E0E0E0&
+         BeginProperty DataFormat 
+            Type            =   1
+            Format          =   "0,00"
+            HaveTrueFalseNull=   0
+            FirstDayOfWeek  =   0
+            FirstWeekOfYear =   0
+            LCID            =   11274
+            SubFormatType   =   1
+         EndProperty
+         BeginProperty Font 
+            Name            =   "MS Sans Serif"
+            Size            =   8.25
+            Charset         =   0
+            Weight          =   700
+            Underline       =   0   'False
+            Italic          =   0   'False
+            Strikethrough   =   0   'False
+         EndProperty
+         Height          =   380
+         Left            =   7200
+         Locked          =   -1  'True
+         TabIndex        =   36
+         ToolTipText     =   "Costo de Maestro de Articulos"
+         Top             =   540
+         Width           =   1470
+      End
+      Begin VB.TextBox Text16 
+         Alignment       =   1  'Right Justify
+         Appearance      =   0  'Flat
+         BackColor       =   &H00E0E0E0&
+         BeginProperty Font 
+            Name            =   "MS Sans Serif"
+            Size            =   8.25
+            Charset         =   0
+            Weight          =   700
+            Underline       =   0   'False
+            Italic          =   0   'False
+            Strikethrough   =   0   'False
+         EndProperty
+         Height          =   285
+         Left            =   7200
+         Locked          =   -1  'True
+         TabIndex        =   37
+         TabStop         =   0   'False
+         Text            =   "Costo"
+         Top             =   270
+         Width           =   1470
+      End
+      Begin VB.ComboBox Combo6 
+         BeginProperty Font 
+            Name            =   "Arial"
+            Size            =   12
+            Charset         =   0
+            Weight          =   700
+            Underline       =   0   'False
+            Italic          =   0   'False
+            Strikethrough   =   0   'False
+         EndProperty
+         Height          =   405
+         Left            =   7950
+         Sorted          =   -1  'True
+         TabIndex        =   97
+         Text            =   "Combo6"
+         Top             =   540
+         Width           =   2295
+      End
+   End
+   Begin VB.CommandButton Command11 
+      Caption         =   "."
+      BeginProperty Font 
+         Name            =   "MS Sans Serif"
+         Size            =   9.75
+         Charset         =   0
+         Weight          =   700
+         Underline       =   0   'False
+         Italic          =   0   'False
+         Strikethrough   =   0   'False
+      EndProperty
+      Height          =   330
+      Left            =   1935
+      TabIndex        =   32
+      Top             =   6540
+      Width           =   255
+   End
+   Begin VB.TextBox Text23 
+      Alignment       =   1  'Right Justify
+      Appearance      =   0  'Flat
+      BeginProperty Font 
+         Name            =   "Arial"
+         Size            =   8.25
+         Charset         =   0
+         Weight          =   700
+         Underline       =   0   'False
+         Italic          =   0   'False
+         Strikethrough   =   0   'False
+      EndProperty
+      Height          =   315
+      Left            =   1330
+      TabIndex        =   31
+      Top             =   6555
+      Width           =   585
+   End
+   Begin VB.TextBox Text22 
+      Appearance      =   0  'Flat
+      BackColor       =   &H00E0E0E0&
+      BeginProperty Font 
+         Name            =   "Arial"
+         Size            =   8.25
+         Charset         =   0
+         Weight          =   700
+         Underline       =   0   'False
+         Italic          =   0   'False
+         Strikethrough   =   0   'False
+      EndProperty
+      Height          =   315
+      Left            =   2190
+      Locked          =   -1  'True
+      TabIndex        =   30
+      TabStop         =   0   'False
+      Top             =   6540
+      Width           =   5730
+   End
+   Begin VB.TextBox Text39 
+      Alignment       =   1  'Right Justify
+      Appearance      =   0  'Flat
+      BackColor       =   &H00E0E0E0&
+      BeginProperty Font 
+         Name            =   "Arial"
+         Size            =   8.25
+         Charset         =   0
+         Weight          =   700
+         Underline       =   0   'False
+         Italic          =   0   'False
+         Strikethrough   =   0   'False
+      EndProperty
+      Height          =   315
+      Left            =   0
+      Locked          =   -1  'True
+      TabIndex        =   29
+      TabStop         =   0   'False
+      Text            =   "L. Precios"
+      Top             =   6540
+      Width           =   1215
+   End
+   Begin VB.TextBox Text10 
+      Alignment       =   2  'Center
+      Appearance      =   0  'Flat
+      BackColor       =   &H00E0E0E0&
+      BeginProperty Font 
+         Name            =   "MS Sans Serif"
+         Size            =   8.25
+         Charset         =   0
+         Weight          =   700
+         Underline       =   0   'False
+         Italic          =   0   'False
+         Strikethrough   =   0   'False
+      EndProperty
+      Height          =   285
+      Left            =   11775
+      Locked          =   -1  'True
+      TabIndex        =   27
+      TabStop         =   0   'False
+      Text            =   "Total:"
+      Top             =   7935
+      Width           =   975
+   End
+   Begin VB.TextBox Text14 
+      Alignment       =   1  'Right Justify
+      Appearance      =   0  'Flat
+      BackColor       =   &H00E0E0E0&
+      BeginProperty Font 
+         Name            =   "MS Sans Serif"
+         Size            =   8.25
+         Charset         =   0
+         Weight          =   700
+         Underline       =   0   'False
+         Italic          =   0   'False
+         Strikethrough   =   0   'False
+      EndProperty
+      Height          =   285
+      Left            =   12855
+      Locked          =   -1  'True
+      TabIndex        =   26
+      TabStop         =   0   'False
+      Top             =   7935
+      Width           =   1635
+   End
+   Begin VB.TextBox Text21 
+      Alignment       =   2  'Center
+      Appearance      =   0  'Flat
+      BackColor       =   &H00000000&
+      BeginProperty Font 
+         Name            =   "MS Sans Serif"
+         Size            =   12
+         Charset         =   0
+         Weight          =   700
+         Underline       =   0   'False
+         Italic          =   0   'False
+         Strikethrough   =   0   'False
+      EndProperty
+      ForeColor       =   &H000000FF&
+      Height          =   270
+      Left            =   2600
+      Locked          =   -1  'True
+      TabIndex        =   25
+      TabStop         =   0   'False
+      Text            =   "MODIFICACIÓN DE PRESUPUESTO"
+      ToolTipText     =   "Doble Click Para Salir de Modo Edición"
+      Top             =   2570
+      Visible         =   0   'False
+      Width           =   7020
+   End
+   Begin VB.PictureBox Picture999 
+      Height          =   330
+      Index           =   0
+      Left            =   5295
+      ScaleHeight     =   270
+      ScaleWidth      =   1110
+      TabIndex        =   24
+      Top             =   1560
+      Visible         =   0   'False
+      Width           =   1170
+   End
+   Begin VB.TextBox TICAMBIS1 
+      BackColor       =   &H00FFFFFF&
+      Enabled         =   0   'False
+      BeginProperty Font 
+         Name            =   "Arial"
+         Size            =   9
+         Charset         =   0
+         Weight          =   700
+         Underline       =   0   'False
+         Italic          =   0   'False
+         Strikethrough   =   0   'False
+      EndProperty
+      Height          =   300
+      Left            =   10080
+      MaxLength       =   14
+      TabIndex        =   23
+      Top             =   6600
+      Visible         =   0   'False
+      Width           =   1065
+   End
+   Begin VB.TextBox Text24 
+      Alignment       =   2  'Center
+      Appearance      =   0  'Flat
+      BackColor       =   &H00E0E0E0&
+      BeginProperty Font 
+         Name            =   "MS Sans Serif"
+         Size            =   8.25
+         Charset         =   0
+         Weight          =   700
+         Underline       =   0   'False
+         Italic          =   0   'False
+         Strikethrough   =   0   'False
+      EndProperty
+      Height          =   380
+      Left            =   0
+      Locked          =   -1  'True
+      TabIndex        =   22
+      Text            =   "[F2] Presenta Lista de Códigos -  [F4] Edición de Precio de Venta -  [F5] Graba e Imprime Presupuesto Activo."
+      Top             =   8720
+      Width           =   14475
+   End
+   Begin VB.TextBox Total 
+      Alignment       =   1  'Right Justify
+      BeginProperty Font 
+         Name            =   "Arial"
+         Size            =   9
+         Charset         =   0
+         Weight          =   700
+         Underline       =   0   'False
+         Italic          =   0   'False
+         Strikethrough   =   0   'False
+      EndProperty
+      Height          =   330
+      Index           =   0
+      Left            =   12855
+      TabIndex        =   21
+      Text            =   " "
+      Top             =   6600
+      Width           =   1620
+   End
+   Begin VB.TextBox PORDESCU 
+      BeginProperty Font 
+         Name            =   "Arial"
+         Size            =   9
+         Charset         =   0
+         Weight          =   700
+         Underline       =   0   'False
+         Italic          =   0   'False
+         Strikethrough   =   0   'False
+      EndProperty
+      Height          =   300
+      Left            =   11415
+      MaxLength       =   14
+      TabIndex        =   20
+      Top             =   7080
+      Width           =   1065
+   End
+   Begin VB.TextBox Total 
+      Alignment       =   1  'Right Justify
+      BackColor       =   &H00E0E0E0&
+      BeginProperty Font 
+         Name            =   "Arial"
+         Size            =   9
+         Charset         =   0
+         Weight          =   700
+         Underline       =   0   'False
+         Italic          =   0   'False
+         Strikethrough   =   0   'False
+      EndProperty
+      Height          =   330
+      Index           =   1
+      Left            =   12855
+      TabIndex        =   19
+      TabStop         =   0   'False
+      Text            =   " "
+      Top             =   6960
+      Width           =   1620
+   End
+   Begin VB.TextBox Text25 
+      Alignment       =   2  'Center
+      Appearance      =   0  'Flat
+      BackColor       =   &H00E0E0E0&
+      BeginProperty Font 
+         Name            =   "MS Sans Serif"
+         Size            =   8.25
+         Charset         =   0
+         Weight          =   700
+         Underline       =   0   'False
+         Italic          =   0   'False
+         Strikethrough   =   0   'False
+      EndProperty
+      Height          =   285
+      Left            =   11655
+      Locked          =   -1  'True
+      TabIndex        =   18
+      TabStop         =   0   'False
+      Text            =   "Sub-Total:"
+      Top             =   6600
+      Width           =   1095
+   End
+   Begin VB.TextBox TXTDESCRIPAGO 
+      Appearance      =   0  'Flat
+      BackColor       =   &H00E0E0E0&
+      BeginProperty Font 
+         Name            =   "Arial"
+         Size            =   8.25
+         Charset         =   0
+         Weight          =   700
+         Underline       =   0   'False
+         Italic          =   0   'False
+         Strikethrough   =   0   'False
+      EndProperty
+      Height          =   315
+      Left            =   2190
+      Locked          =   -1  'True
+      TabIndex        =   17
+      TabStop         =   0   'False
+      Top             =   6885
+      Width           =   5730
+   End
+   Begin VB.TextBox TXTCONDIPAGO 
+      Alignment       =   1  'Right Justify
+      Appearance      =   0  'Flat
+      BeginProperty Font 
+         Name            =   "Arial"
+         Size            =   8.25
+         Charset         =   0
+         Weight          =   700
+         Underline       =   0   'False
+         Italic          =   0   'False
+         Strikethrough   =   0   'False
+      EndProperty
+      Height          =   315
+      Left            =   1335
+      TabIndex        =   16
+      Top             =   6885
+      Width           =   585
+   End
+   Begin VB.CommandButton Command2 
+      Caption         =   "."
+      BeginProperty Font 
+         Name            =   "MS Sans Serif"
+         Size            =   9.75
+         Charset         =   0
+         Weight          =   700
+         Underline       =   0   'False
+         Italic          =   0   'False
+         Strikethrough   =   0   'False
+      EndProperty
+      Height          =   330
+      Left            =   1935
+      TabIndex        =   15
+      Top             =   6885
+      Width           =   255
+   End
+   Begin VB.TextBox Text27 
+      Alignment       =   1  'Right Justify
+      Appearance      =   0  'Flat
+      BackColor       =   &H00E0E0E0&
+      BeginProperty Font 
+         Name            =   "Arial"
+         Size            =   8.25
+         Charset         =   0
+         Weight          =   700
+         Underline       =   0   'False
+         Italic          =   0   'False
+         Strikethrough   =   0   'False
+      EndProperty
+      Height          =   315
+      Left            =   15
+      Locked          =   -1  'True
+      TabIndex        =   14
+      TabStop         =   0   'False
+      Text            =   "Cond. Pago"
+      Top             =   6885
+      Width           =   1215
+   End
+   Begin VB.TextBox Text28 
+      Appearance      =   0  'Flat
+      BackColor       =   &H00E0E0E0&
+      BeginProperty Font 
+         Name            =   "Arial"
+         Size            =   8.25
+         Charset         =   0
+         Weight          =   700
+         Underline       =   0   'False
+         Italic          =   0   'False
+         Strikethrough   =   0   'False
+      EndProperty
+      Height          =   315
+      Left            =   2190
+      Locked          =   -1  'True
+      TabIndex        =   13
+      TabStop         =   0   'False
+      Top             =   7230
+      Width           =   5730
+   End
+   Begin VB.TextBox Text29 
+      Alignment       =   1  'Right Justify
+      Appearance      =   0  'Flat
+      BeginProperty Font 
+         Name            =   "Arial"
+         Size            =   8.25
+         Charset         =   0
+         Weight          =   700
+         Underline       =   0   'False
+         Italic          =   0   'False
+         Strikethrough   =   0   'False
+      EndProperty
+      Height          =   315
+      Left            =   1335
+      TabIndex        =   12
+      Top             =   7230
+      Width           =   585
+   End
+   Begin VB.CommandButton Command3 
+      Caption         =   "."
+      BeginProperty Font 
+         Name            =   "MS Sans Serif"
+         Size            =   9.75
+         Charset         =   0
+         Weight          =   700
+         Underline       =   0   'False
+         Italic          =   0   'False
+         Strikethrough   =   0   'False
+      EndProperty
+      Height          =   330
+      Left            =   1935
+      TabIndex        =   11
+      Top             =   7230
+      Width           =   255
+   End
+   Begin VB.TextBox Text30 
+      Alignment       =   1  'Right Justify
+      Appearance      =   0  'Flat
+      BackColor       =   &H00E0E0E0&
+      BeginProperty Font 
+         Name            =   "Arial"
+         Size            =   8.25
+         Charset         =   0
+         Weight          =   700
+         Underline       =   0   'False
+         Italic          =   0   'False
+         Strikethrough   =   0   'False
+      EndProperty
+      Height          =   315
+      Left            =   15
+      Locked          =   -1  'True
+      TabIndex        =   10
+      TabStop         =   0   'False
+      Text            =   "Validez Hasta"
+      Top             =   7230
+      Width           =   1215
+   End
+   Begin VB.TextBox Text31 
+      Alignment       =   1  'Right Justify
+      Appearance      =   0  'Flat
+      BackColor       =   &H00E0E0E0&
+      BeginProperty Font 
+         Name            =   "MS Sans Serif"
+         Size            =   8.25
+         Charset         =   0
+         Weight          =   700
+         Underline       =   0   'False
+         Italic          =   0   'False
+         Strikethrough   =   0   'False
+      EndProperty
+      Height          =   285
+      Left            =   12855
+      Locked          =   -1  'True
+      TabIndex        =   9
+      TabStop         =   0   'False
+      Top             =   7680
+      Width           =   1635
+   End
+   Begin VB.TextBox Text32 
+      Alignment       =   2  'Center
+      Appearance      =   0  'Flat
+      BackColor       =   &H00E0E0E0&
+      BeginProperty Font 
+         Name            =   "MS Sans Serif"
+         Size            =   8.25
+         Charset         =   0
+         Weight          =   700
+         Underline       =   0   'False
+         Italic          =   0   'False
+         Strikethrough   =   0   'False
+      EndProperty
+      Height          =   285
+      Left            =   11775
+      Locked          =   -1  'True
+      TabIndex        =   8
+      TabStop         =   0   'False
+      Text            =   "I.V.A.:"
+      Top             =   7680
+      Width           =   975
+   End
+   Begin VB.TextBox Text33 
+      Alignment       =   1  'Right Justify
+      Appearance      =   0  'Flat
+      BackColor       =   &H00E0E0E0&
+      BeginProperty Font 
+         Name            =   "MS Sans Serif"
+         Size            =   8.25
+         Charset         =   0
+         Weight          =   700
+         Underline       =   0   'False
+         Italic          =   0   'False
+         Strikethrough   =   0   'False
+      EndProperty
+      Height          =   285
+      Left            =   12855
+      Locked          =   -1  'True
+      TabIndex        =   7
+      TabStop         =   0   'False
+      Top             =   7440
+      Width           =   1635
+   End
+   Begin VB.TextBox Text34 
+      Alignment       =   2  'Center
+      Appearance      =   0  'Flat
+      BackColor       =   &H00E0E0E0&
+      BeginProperty Font 
+         Name            =   "MS Sans Serif"
+         Size            =   8.25
+         Charset         =   0
+         Weight          =   700
+         Underline       =   0   'False
+         Italic          =   0   'False
+         Strikethrough   =   0   'False
+      EndProperty
+      Height          =   285
+      Left            =   11775
+      Locked          =   -1  'True
+      TabIndex        =   6
+      TabStop         =   0   'False
+      Text            =   "Sub-Total:"
+      Top             =   7440
+      Width           =   975
+   End
+   Begin VB.CommandButton Command7 
+      Caption         =   "."
+      BeginProperty Font 
+         Name            =   "MS Sans Serif"
+         Size            =   9.75
+         Charset         =   0
+         Weight          =   700
+         Underline       =   0   'False
+         Italic          =   0   'False
+         Strikethrough   =   0   'False
+      EndProperty
+      Height          =   660
+      Left            =   8565
+      TabIndex        =   5
+      ToolTipText     =   "Seleccion de Cliente"
+      Top             =   1810
+      Width           =   255
+   End
+   Begin ACTIVESKINLibCtl.Skin Skin1 
+      Left            =   15
+      OleObjectBlob   =   "FRMPRESUAHP.frx":053C
+      Top             =   120
+   End
+   Begin ACTIVESKINLibCtl.SkinLabel SkinLabel999 
+      Height          =   225
+      Index           =   0
+      Left            =   6975
+      OleObjectBlob   =   "FRMPRESUAHP.frx":0770
+      TabIndex        =   71
+      Top             =   2160
+      Visible         =   0   'False
+      Width           =   1365
+   End
+   Begin ACTIVESKINLibCtl.SkinLabel SkinLabel3 
+      Height          =   270
+      Left            =   11295
+      OleObjectBlob   =   "FRMPRESUAHP.frx":07CE
+      TabIndex        =   72
+      Top             =   6885
+      Width           =   975
+   End
+   Begin MSFlexGridLib.MSFlexGrid MSF1 
+      Height          =   3555
+      Left            =   0
+      TabIndex        =   79
+      Top             =   2880
+      Width           =   14520
+      _ExtentX        =   25612
+      _ExtentY        =   6271
+      _Version        =   393216
+      BackColorFixed  =   16501405
+      SelectionMode   =   1
+      AllowUserResizing=   1
+      Appearance      =   0
+      BeginProperty Font {0BE35203-8F91-11CE-9DE3-00AA004BB851} 
+         Name            =   "Arial"
+         Size            =   9
+         Charset         =   0
+         Weight          =   700
+         Underline       =   0   'False
+         Italic          =   0   'False
+         Strikethrough   =   0   'False
+      EndProperty
+   End
+   Begin VB.Label TICAMBIS 
+      Alignment       =   2  'Center
+      BackColor       =   &H00C0C0C0&
+      BorderStyle     =   1  'Fixed Single
+      Caption         =   "Pesos"
+      BeginProperty Font 
+         Name            =   "Arial"
+         Size            =   9
+         Charset         =   0
+         Weight          =   700
+         Underline       =   -1  'True
+         Italic          =   0   'False
+         Strikethrough   =   0   'False
+      EndProperty
+      ForeColor       =   &H00FF0000&
+      Height          =   375
+      Left            =   8520
+      TabIndex        =   80
+      ToolTipText     =   "Doble Click para Cambiar Cotizacion"
+      Top             =   6960
+      Visible         =   0   'False
+      Width           =   1380
+   End
+   Begin VB.Label TEPRUEBA 
+      AutoSize        =   -1  'True
+      Caption         =   "Label2"
+      Height          =   195
+      Left            =   1935
+      TabIndex        =   76
+      Top             =   720
+      Visible         =   0   'False
+      Width           =   960
+   End
+   Begin VB.Label MONEMIS 
+      Alignment       =   2  'Center
+      BackColor       =   &H00C0C0C0&
+      BorderStyle     =   1  'Fixed Single
+      Caption         =   "Pesos"
+      BeginProperty Font 
+         Name            =   "Arial"
+         Size            =   9
+         Charset         =   0
+         Weight          =   700
+         Underline       =   -1  'True
+         Italic          =   0   'False
+         Strikethrough   =   0   'False
+      EndProperty
+      ForeColor       =   &H00FF0000&
+      Height          =   375
+      Left            =   8520
+      TabIndex        =   75
+      ToolTipText     =   "Doble-Click para 'Dólares'"
+      Top             =   6480
+      Visible         =   0   'False
+      Width           =   1380
+   End
+   Begin VB.Label Label11 
+      BackStyle       =   0  'Transparent
+      Caption         =   "T-C:"
+      BeginProperty Font 
+         Name            =   "Arial"
+         Size            =   8.25
+         Charset         =   0
+         Weight          =   700
+         Underline       =   0   'False
+         Italic          =   0   'False
+         Strikethrough   =   0   'False
+      EndProperty
+      Height          =   330
+      Left            =   8040
+      TabIndex        =   74
+      Top             =   7095
+      Visible         =   0   'False
+      Width           =   315
+   End
+   Begin VB.Label Label7 
+      BackStyle       =   0  'Transparent
+      Caption         =   "%:"
+      BeginProperty Font 
+         Name            =   "Arial"
+         Size            =   8.25
+         Charset         =   0
+         Weight          =   700
+         Underline       =   0   'False
+         Italic          =   0   'False
+         Strikethrough   =   0   'False
+      EndProperty
+      Height          =   330
+      Left            =   12570
+      TabIndex        =   73
+      Top             =   7035
+      Width           =   225
+   End
+   Begin VB.Menu mnu 
+      Caption         =   "Menú"
+      Begin VB.Menu MNUEDITPRESUP 
+         Caption         =   "Editar Presupuesto"
+      End
+   End
+   Begin VB.Menu pxcopia 
+      Caption         =   "Pres.X.Copia"
+      Begin VB.Menu mnupcopia 
+         Caption         =   "Pres.x.Copia"
+      End
+   End
+   Begin VB.Menu mnuvis 
+      Caption         =   "Ver"
+      Begin VB.Menu mnuvisualiza 
+         Caption         =   "Visualizar Presupuesto"
+      End
+   End
+   Begin VB.Menu mnuconfigrep 
+      Caption         =   "Tablas de configuración"
+      Begin VB.Menu MnuTabEntr 
+         Caption         =   "Tabla de Vias de Entrega"
+      End
+      Begin VB.Menu MnuArt_Prov 
+         Caption         =   "Asociar Art. a Proveedor"
+      End
+      Begin VB.Menu MnuProv_Art 
+         Caption         =   "Asociar Prov. a Artículo"
+      End
+      Begin VB.Menu mnuDemora 
+         Caption         =   "Tabla de Demoras"
+      End
+      Begin VB.Menu MnuLimvias 
+         Caption         =   "Límiites Segun Vias"
+      End
+      Begin VB.Menu mnutcoef 
+         Caption         =   "Tipo de Coeficientes"
+      End
+      Begin VB.Menu mnuasigcoef 
+         Caption         =   "Asignación de Coeficientes"
+      End
+   End
+   Begin VB.Menu mnua 
+      Caption         =   "Accesos Directos"
+      Begin VB.Menu mnuP 
+         Caption         =   "Pedidos de Clientes"
+      End
+   End
+   Begin VB.Menu MNUPR 
+      Caption         =   "Procesos"
+      Begin VB.Menu mnutraz 
+         Caption         =   "Asignar Marca de Trazabilidad 1 a Todos los Artículos"
+      End
+   End
+   Begin VB.Menu mnus 
+      Caption         =   "Setup"
+      Begin VB.Menu mnusetup 
+         Caption         =   "Setup"
+      End
+   End
+   Begin VB.Menu mnur 
+      Caption         =   "Reportes"
+      Begin VB.Menu mnuconfig 
+         Caption         =   "Configuración de Reportes"
+      End
+      Begin VB.Menu mnucrt 
+         Caption         =   "Selección de Reportes"
+      End
+   End
+End
+Attribute VB_Name = "FRMPRESUAHP"
+Attribute VB_GlobalNameSpace = False
+Attribute VB_Creatable = False
+Attribute VB_PredeclaredId = True
+Attribute VB_Exposed = False
+'HAY QUE DESPLEGAR DEL BOTON DE SELECCION DE CODIGO QUE MUESTRE LOS ITEMS DE LA LISTA DE PRECIOS
+'ACTIVA , DEBERIA MOSTRAR LOS ITEMS CON PRECIO.
+'VER TAMBIEN EL CASO EN QUE SE UTILICE LISTA 0 PARA QUE APAREZCAN TODOS LOS ITEMS EN EL BUSCADOR SIN PRECIO
+'CARGA DE DETALLE POR TEXTO LIBRE
+Public EDICION%
+
+Sub ACTUPESO()
+   TXTTOTALPESO = 0
+   For I% = 1 To MSF1.Rows - 1
+     PESOUNIT = XVALO(MSF1.TextMatrix(I%, 13))
+     CANTI = XVALO(MSF1.TextMatrix(I%, 4))
+     TXTTOTALPESO = TXTTOTALPESO + (CANTI * PESOUNIT)
+     TXTTOTALPESO.Refresh
+  Next I%
+  TXTTOTALPESO = FORMATNUM$(XVALO(TXTTOTALPESO), "F10.4")
+  
+End Sub
+
+Function COLORSTATUS$(CANTI, ST, PI, PC)
+    'VERDE HAY STOCK ' AHORA SE CAMBIA A AMARILLO PARA QUE SELECCIONE QUE LOTES ELIGE.
+    ' AMARILLO: LA CANTIDAD PROYECTADA  +  EL STOCK ES - LO PEDIDO >= A LA DEMANDA
+    'ROJO
+    'LA CANTIDAD PROYECTADA  +  EL STOCK ES - LO PEDIDO <= A LA DEMANDA
+    '
+    CANTI1 = XVALO(CANTI)
+    If CANTI > 0 Then
+      ST1 = XVALO(ST)
+      PI1 = XVALO(PI)
+      PC1 = XVALO(PC)
+      '
+      If CANTI1 <= ST1 Then
+         COLORSTATUS$ = "A" 'ANTES ERA VERDE SE CAMBIA A AMARILLO PARA QUE SELECCIONE EL LOTE CORRESPONDIENTE.
+      ElseIf (ST1 + PI1) - PC1 >= CANTI1 Then
+         COLORSTATUS$ = "A"
+      Else
+         COLORSTATUS$ = "R"
+      End If
+    End If
+End Function
+
+Function COSTOFOB#(LOTE$)
+    COSTOFOB# = 0
+    CONDI$ = "IDENLOTE = '" & LOTE$ & "'"
+    NUOC& = XVALO(VALOBADA("BOLRECEP", "NumOC", CONDI$, "NOMESS"))
+    If NUOC& > 0 Then
+       CONDI$ = "NUME_OCOM = " & NUOC&
+       COSTOFOB# = XVALO(VALOBADA("OCOMDETA", "PrUn_Neto", CONDI$, "NOMESS"))
+    End If
+    '
+End Function
+Function DISPONIB_LIBRE(CI1%)
+   '
+   'STOCK ACTUAL MENOS RESERVADO DE PEDIDOS
+   If CI1% > 0 Then
+    '
+    ST_RESERVADO = SALDO_LOTE_PEDIDO(CI1%, "", 0)
+    STAC = STOCKACT(CI1%)
+    DISPONIB_LIBRE = STAC - ST_RESERVADO
+    If DISPONIB_LIBRE < 0 Then DISPONIB_LIBRE = 0
+   End If
+   '
+End Function
+
+Sub GENERA_TABLA_RELACION_ART_PROV()
+   Call CREACAMPO("", "RELACODPROV", "Num_Prov", 4, 0, 1)
+   Call CREACAMPO("", "RELACODPROV", "Cod_inte", 4, 0, 1)
+   Call CREACAMPO("", "RELACODPROV", "Precio", 7, 0)
+   Call CREACAMPO("", "RELACODPROV", "Moneda", 3, 2)
+   Call CREACAMPO("", "RELACODPROV", "Fecha", 8, 0)
+   Call CREACAMPO("", "RELACODPROV", "MarBorra", 3, 0)
+   Call CREACAMPO("", "RELACODPROV", "Via", 3, 0)
+End Sub
+
+Function MONELOTE%(LOTE$)
+    MONELOTE% = 1
+    CONDI$ = "IDENLOTE = '" & LOTE$ & "'"
+    NUOC& = XVALO(VALOBADA("BOLRECEP", "NumOC", CONDI$, "NOMESS"))
+    If NUOC& > 0 Then
+       CONDI$ = "NUME_OCOM = " & NUOC&
+       MONELOTE% = XVALO(VALOBADA("OCOMDETA", "Mone_Emis", CONDI$, "NOMESS"))
+    End If
+
+End Function
+
+
+Sub MOVER_ARRIBA(REG&)
+    '1.CODIGO
+    '2.CODIGO CLIENTE
+    '3.DESCRIPCION
+    '4.CANTIDAD
+    '5.NUMERO PROVEEDOR ' OCULTO
+    '6.R.S.PROVEEDOR
+    '7.COSTO
+    '8.PR.VENTA
+    '9.IMPORTE
+    '10.VIA ENTREGA
+    '11.LOTES OCULTO
+    '12.CANTIDAD DE LOTES OCULTO
+    '13.NUMERO DE PROVEEDOR OCULTO
+    '14.KILOS OCULTO
+    '15.DEMORA OCULTO
+
+    txtcodigo = MSF1.TextMatrix(REG&, 1)
+    TXTCODCLIENTE = MSF1.TextMatrix(REG&, 2)
+    TXTDESCRIPCION = MSF1.TextMatrix(REG&, 2)
+    TXTCANTIDAD = MSF1.TextMatrix(REG&, 4)
+    Text15 = MSF1.TextMatrix(REG&, 7)
+    TXTPREUNIT = MSF1.TextMatrix(REG&, 8)
+    TXTIMPORTE = MSF1.TextMatrix(REG&, 9)
+    Text38 = MSF1.TextMatrix(REG&, 10)
+End Sub
+
+Sub PRESENTA_INFO_ARTICULO(CIXI%, Optional FILA&, Optional SINSTOCK%)
+   '
+   Screen.MousePointer = 11
+   
+   Call GENERA_TABLA_RELACION_ART_PROV
+   '
+   INFOSIAHP.txtcodigo = CODEXT$(CIXI%)
+   INFOSIAHP.TXTDESCRIPCION = DESCRIT0$(CIXI%)
+   INFOSIAHP.TXTCODICLIENTE = TXTCODCLIENTE
+   INFOSIAHP.TXTSOLICITADA = XVALO(TXTCANTIDAD)
+   INFOSIAHP.TXTPESO = FORMATNUM$(PESUNI(CIXI%), "F10.2")
+   
+
+   F$ = "F11." & CNTDC$(CI1%)  'FORMATO
+   ENCA$ = "Proveedor/A16;Vía Ent./A12;Stock/F8;Reserv./F8;Tránsito/F8;F.Ing./D8;Cto.Fob U$S/F10.2;Gst.Nac./F10.2;%/F6.2;P.Vta.U$S/F10.2;Cant./F7;Dispon./F7;Lote/A12;NUMEROPROVE/A0"
+   Call CARGA_ENCABEZADO(INFOSIAHP.MSF1, ENCA$, INFOSIAHP)
+   '
+   PESOX = PESUNI(CIXI%)
+
+   CI1% = CIXI%
+   If SINSTOCK% > 0 Then GoTo 90
+   '
+    Call APERBASDAT("STOCKS")
+    SQLX$ = " SELECT * FROM LOTINGRE WITH(NOLOCK)"
+    SQLX$ = SQLX$ + "WHERE Cod_Inte = " & CI1%
+    SQLX$ = SQLX$ + " ORDER BY FechAlta ASC "
+    '
+    Set LOTINGTEMP = READSET(SQLX$)
+    'AQUI TOMO LAS RESERVAS TOTALES DEL ITEM.
+    ST_RESERVADO = SALDO_LOTE_PEDIDO(CIXI%, "", 0)
+    JJ& = 0
+    With LOTINGTEMP
+25     If Not (.BOF And .EOF) Then
+         Do While Not .EOF
+           TTXX$ = REBLA$
+           FEX% = CVINT(!FechAlta)
+           LOTE$ = SAFETEXT$(!IDENLOTE)
+           SLOTE = SaldoLote(CIXI%, LOTE$, DEPO%)
+           '
+           CANRES = XVALO(!CanReser) + ST_RESERVADO
+           DISPONIBLE = SLOTE
+           
+           'SI TIENE STOCK LO MUESTRA EN CASO CONTRARIO PASA AL SIGUIENTE.
+           If DISPONIBLE < 0.05 Then GoTo 29
+           
+           'AQUI VOY MOSTRANDO LAS RESERVAS EN CADA FILA DE LO QUE HAYA STOCK'
+           'SI LAS RESERVAS SON > AL STOCK NO SE MUESTRAN EN LA GRILLA.
+           If ST_RESERVADO > DISPONIBLE Then
+              CANRES = DISPONIBLE
+              ST_RESERVADO = ST_RESERVADO - DISPONIBLE
+           Else
+              CANRES = ST_RESERVADO
+              ST_RESERVADO = 0
+           End If
+           '
+           NPROV = PROVELOTE%(LOTE$)
+           VIA_LOTE% = VIALOTE%(LOTE$)
+           j& = j& + 1
+           INFOSIAHP.MSF1.Rows = j& + 1
+           INFOSIAHP.MSF1.TextMatrix(j&, 1) = TEL2CLI$(-1 * NPROV)
+           INFOSIAHP.MSF1.TextMatrix(j&, 2) = ECOARCH$("VIASENTR", MKI$(XVALO(INFOSIAHP.ViaEntrega(LOTE$)))) 'DEVUELVE EL LOTE LA VIA DE ENT (SE CARGA EN LA O.C.)
+           INFOSIAHP.MSF1.Row = j&
+           INFOSIAHP.MSF1.COL = 3
+           INFOSIAHP.MSF1.CellFontBold = True
+           INFOSIAHP.MSF1.TextMatrix(j&, 3) = DISPONIBLE
+           INFOSIAHP.MSF1.TextMatrix(j&, 4) = CANRES
+           COMPRAX = FORMATNUM$(COMPRA_PEND_DE_ENTR(NPROV, CI1%), "F8.0")     ' CANTIDAD COMPRADA PENDIENTE DE ENTREGA
+           CANRECEP = FORMATNUM$(CANT_RECEP_PENDIENTE_APROB(NPROV, CI1%), "F8.0")
+             ST_TRANSITO = XVALO(COMPRAX) + XVALO(CANRECEP)
+           INFOSIAHP.MSF1.TextMatrix(j&, 5) = ST_TRANSITO
+           INFOSIAHP.MSF1.TextMatrix(j&, 6) = FECHATEX$(FEX%)
+             COSFOB# = COSTOFOB#(LOTE$) ' CREAR FUNCION PENDIENTE (TRAE EL COSTO DE LA ORDEN DE COMPRA)
+             MONECOMP% = MONELOTE%(LOTE$)
+             COEFCON = 1
+             If MONECOMP% <> MONEMI% Then
+                COEFCON = TICAMONE(MONECOMP%) / TICAMONE(MONEMI%)
+             End If
+             COSFOB# = COEFCON * COSFOB#
+             'SIMBOMON$ = SIMBOLPES$(MONELOTE%(LOTE$)) 'MONELOTE% DEVUELVE LA MONEDA CON LA CUAL SE HIZO LA ORDEN DE COMPRA DE ESTE LOTE
+           'INFOSIAHP.MSF1.TextMatrix(j&, 7) = SIMBOMON$ & " " & TRIM$(FORMATNUM$(COSFOB#, "F10.2"))
+           INFOSIAHP.MSF1.TextMatrix(j&, 7) = TRIM$(FORMATNUM$(COSFOB#, "F10.2"))
+             'GASNAC# = GASTONACIONAL#(LOTE$) ' CREAR FUNCION PENDIENTE
+           INFOSIAHP.MSF1.TextMatrix(j&, 8) = GASNAC#
+             PREVENTAX# = PRECIOVENTA_X_FORMULA(XVALO(COSFOB# + GASTONACIONAL#), VIA%)
+           INFOSIAHP.MSF1.TextMatrix(j&, 9) = FORMATNUM$(PORCENT_ENTRE_2_VALORES(PREVENTAX#, (COSFOB# + GASNAC#)), "F9.2")
+           INFOSIAHP.MSF1.TextMatrix(j&, 10) = PREVENTAX#
+           INFOSIAHP.MSF1.TextMatrix(j&, 11) = ""
+                INFOSIAHP.MSF1.COL = 12
+                INFOSIAHP.MSF1.CellFontBold = True
+                FILA1& = 0: If EDICION% > 0 Then FILA1& = j& ' SI ESTA EN EDICION NO TIENE EN CUENTA LA FILA A EDITAR
+                DISPONIBILIDAD = XVALO(INFOSIAHP.MSF1.TextMatrix(j&, 3)) - XVALO(INFOSIAHP.MSF1.TextMatrix(j&, 4)) - CARGADO_ENGRILLA(LOTE$, FILA1&)
+                If DISPONIBILIDAD < 0 Then DISPONIBILIDAD = 0
+           INFOSIAHP.MSF1.TextMatrix(j&, 12) = DISPONIBILIDAD
+           INFOSIAHP.MSF1.TextMatrix(j&, 13) = LOTE$
+           INFOSIAHP.MSF1.TextMatrix(j&, 14) = NPROV
+           '
+29       .MoveNext
+         Loop
+       End If
+    End With
+    LOTINGTEMP.Close
+    Set LOTINGTEMP = Nothing
+    
+    'AHORA VEO SI HAY COMPRAS O RECEPCIONES NO APROBADAS DE OTROS PROVEEDORES
+    'UTILIZANDO LA MISMA FUNCION SIN EL PARAMENTRO DEL PROVEEDOR
+    'SI LA CANTIAD SUPERA LO QUE ESTA EN TRANSITO, YA CARGADO MUESTRA UNA FILA MAS INDICANDO COMO TRANSITO DE OTROS EL SALDO EN TRANSITO
+    'ORDENO LA GRILLA POR PROVEEDOR Y VIA
+    ACUMULO_TRANSITO = 0
+    MSF1.COL = 1: MSF1.Sort = 7
+    MSF1.COL = 2: MSF1.Sort = 7
+    '
+    'RECORRO UNA VEZ ORDENDADO Y ACUMULO LO YA PRESENTADO COMO EN TRANSTO
+    For I& = 1 To INFOSIAHP.MSF1.Rows - 1
+       PROVEEX$ = TRIM$(UCase$(INFOSIAHP.MSF1.TextMatrix(I&, 1)))
+       If PROVEEX$ = PROVEEX_ANT$ Then INFOSIAHP.MSF1.TextMatrix(I&, 4) = "": INFOSIAHP.MSF1.TextMatrix(I&, 5) = ""
+       PROVEEX_ANT$ = TRIM$(UCase$(INFOSIAHP.MSF1.TextMatrix(I&, 1)))
+       ACUMULO_TRANSITO = ACUMULO_TRANSITO + XVALO(INFOSIAHP.MSF1.TextMatrix(I&, 5))
+    Next I&
+    '
+    'COMPARO SI EL TOTAL EN TRANSITO (SIN FILTRAR POR PROVEEDOR) ES MAYOR QUE LO PRESENTADO EN LA GRILLA MUESTRO LA DIFERENCIA, COMO TRANSITO EN OTROS.
+    COMPRAX = FORMATNUM$(COMPRA_PEND_DE_ENTR(0, CI1%), "F8.0")     ' CANTIDAD COMPRADA PENDIENTE DE ENTREGA
+    CANRECEP = FORMATNUM$(CANT_RECEP_PENDIENTE_APROB(0, CI1%), "F8.0")
+    TOTAL_TRANSITO = XVALO(COMPRAX) + XVALO(CANRECEP)
+    If TOTAL_TRANSITO > ACUMULO_TRANSITO Then
+       INFOSIAHP.TXTTRANSITO_OTROS = TOTAL_TRANSITO - ACUMULO_TRANSITO
+    End If
+    '
+    Screen.MousePointer = 1
+    '
+    
+    
+    'HASTA ACA LLEGAMOS
+'End Sub
+
+   
+   
+   
+   
+   
+'   j& = 1
+'   SQLX$ = "SELECT DISTINCT NUM_PROV "
+'   SQLX$ = SQLX$ + " FROM RELACODPROV WITH(NOLOCK) "
+'   SQLX$ = SQLX$ + " Where COD_INTE = " & CI1%
+'   Set RS = READSET(SQLX$)
+'   With RS
+'     Do While Not .EOF
+'       INFOSIAHP.MSF1.Rows = j& + 1
+'       '
+'       NPROV% = XVALO(!Num_Prov)
+'       VUELTA% = 0
+'       For U& = 1 To ULTREG&("VIASENTR")
+'         X$ = REGLEIDO$("VIASENTR", U&)
+'         VIA% = Asc(Left$(X$, 1))
+'         If VIA% > 0 Then
+'            'MUESTRA TODOS LOS QUE TIENEN ASIGNADO VIA DE ENTREGA Y TIENEN STOCK DISPONIBLE.
+'            ST = STOCK_PROV(NPROV%, CI1%, VIA%) ' STOCK POR PROVEEDOR
+'            ST_RESERVADO = RESERVAS_PEDIDAS_X_VIA_PROV(CI1%, VIA%, NPROV%)
+'            STDISPONIBLE = ST - ST_RESERVADO: If STDISPONIBLE < 0 Then STDISPONIBLE = 0
+'            '
+'            If STDISPONIBLE > 0 Then
+'                 'CARGO LA GRILLA
+'                 'CRITERIO: SE CARGA EL STOCK DE CADA PROVEEDOR Y SU VIA,
+'                 INFOSIAHP.MSF1.TextMatrix(j&, 1) = SAFETEXT$(TEL2CLI$(-1 * NPROV%))
+'                 INFOSIAHP.MSF1.TextMatrix(j&, 2) = ECOARCH$("VIASENTR", MKI$(VIA%))
+'                 INFOSIAHP.MSF1.TextMatrix(j&, 3) = STDISPONIBLE
+'                 INFOSIAHP.MSF1.TextMatrix(j&, 4) = ST_RESERVADO
+'                 If VUELTA% = 0 Then
+'                    COMPRAX = FORMATNUM$(COMPRA_PEND_DE_ENTR(NPROV%, CI1%), "F8.0")  ' CANTIDAD COMPRADA PENDIENTE DE ENTREGA
+'                    CANRECEP = FORMATNUM$(CANT_RECEP_PENDIENTE_APROB(NPROV%, CI1%), "F8.0")
+'
+'                    INFOSIAHP.MSF1.TextMatrix(j&, 5) = ST_TRANSITO
+'                    VUELTA% = 1
+'                 End If
+'
+'
+'                   INFOSIAHP.MSF1.TextMatrix(j&, 3) = CANRECEP: TOTCANRECEP = TOTCANRECEP + XVALO(CANRECEP)
+'                   INFOSIAHP.MSF1.TextMatrix(j&, 4) = COMPRAX: TOTCOMPRAX = TOTCOMPRAX + XVALO(COMPRAX)
+'
+'                   '
+'
+'                 PROYING = XVALO(COMPRAX) + XVALO(CANRECEP)
+'                 INFOSIAHP.MSF1.TextMatrix(j&, 5) = PROYING: TOTPROYING = TOTPROYING + XVALO(PROYING)
+'
+'            End If
+'         End If
+'
+'       ST = FORMATNUM$(STOCK_PROV(NPROV%, CI1%), "F8.0")  ' STOCK POR PROVEEDOR
+'
+'       CANPED = FORMATNUM$(CANT_PEDIDA_PENDIENTE(CI1%), "F8.0")      ' CANTIDAD PEDIDA PENDIENTE DE ENTREGA ' NO CONSIDERA PROVEEDOR
+'       COMPRAX = FORMATNUM$(COMPRA_PEND_DE_ENTR(NPROV%, CI1%), "F8.0")  ' CANTIDAD COMPRADA PENDIENTE DE ENTREGA
+'       CANRECEP = FORMATNUM$(CANT_RECEP_PENDIENTE_APROB(NPROV%, CI1%), "F8.0")
+'       '
+'       'CARGO LA GRILLA
+'       INFOSIAHP.MSF1.TextMatrix(j&, 1) = SAFETEXT$(TEL2CLI$(-1 * NPROV%))
+'       INFOSIAHP.MSF1.TextMatrix(j&, 2) = VIA 'ST: TOTST = TOTST + XVALO(ST)
+'       INFOSIAHP.MSF1.TextMatrix(j&, 3) = CANRECEP: TOTCANRECEP = TOTCANRECEP + XVALO(CANRECEP)
+'       INFOSIAHP.MSF1.TextMatrix(j&, 4) = COMPRAX: TOTCOMPRAX = TOTCOMPRAX + XVALO(COMPRAX)
+'       INFOSIAHP.MSF1.TextMatrix(j&, 6) = CANPED: TOTCANPED = TOTCANPED + XVALO(CANPED)
+'       Call COLOREAR_GRILLA_SOLACELDA(INFOSIAHP.MSF1, vbRed, j&, 6, 1)
+'       INFOSIAHP.MSF1.TextMatrix(j&, 6) = ""
+'       INFOSIAHP.MSF1.TextMatrix(j&, 7) = SAFETEXT$(NPROV%)
+'
+'      .MoveNext
+'     Loop
+'   End With
+'   RS.Close
+'   Set RS = Nothing
+'
+'   If CantRegistros&("RELACODPROV", CONDI$, "NOMESS") < 1 Then
+'       INFOSIAHP.MSF1.Rows = 2
+'       ST = FORMATNUM$(STOCKACT(CI1%), "F8.0")  ' STOCK POR PROVEEDOR
+'       CANPED = FORMATNUM$(CANT_PEDIDA_PENDIENTE(CI1%), "F8.0")      ' CANTIDAD PEDIDA PENDIENTE DE ENTREGA ' NO CONSIDERA PROVEEDOR
+'       COMPRAX = FORMATNUM$(COMPRA_PEND_DE_ENTR(0, CI1%), "F8.0")  ' CANTIDAD COMPRADA PENDIENTE DE ENTREGA
+'       CANRECEP = FORMATNUM$(CANT_RECEP_PENDIENTE_APROB(0, CI1%), "F8.0")
+'       '
+'       'CARGO LA GRILLA
+'       INFOSIAHP.MSF1.TextMatrix(j&, 1) = "Todos"
+'       INFOSIAHP.MSF1.TextMatrix(j&, 2) = ST
+'       INFOSIAHP.MSF1.TextMatrix(j&, 3) = CANRECEP
+'       INFOSIAHP.MSF1.TextMatrix(j&, 4) = COMPRAX
+'       INFOSIAHP.MSF1.TextMatrix(j&, 5) = XVALO(COMPRAX) + XVALO(CANRECEP)
+'       '
+'       INFOSIAHP.MSF1.TextMatrix(j&, 6) = CANPED
+'       INFOSIAHP.MSF1.TextMatrix(j&, 7) = FORMATNUM$(PESOX, "F10.3")
+'''       INFOSIAHP.MSF1.TextMatrix(j&, 10) = FECHATEX$(FECHA_COSTO_POR_PROV%(NPROV%, CI1%))
+'       INFOSIAHP.MSF1.TextMatrix(j&, 7) = ""
+'       GoTo 80
+'   End If
+'   '
+'   SQLX$ = "SELECT DISTINCT NUM_PROV "
+'   SQLX$ = SQLX$ + " FROM RELACODPROV WITH(NOLOCK) "
+'   SQLX$ = SQLX$ + " Where COD_INTE = " & CI1%
+'   '
+'   INFOSIAHP.MSF1.Rows = 1
+'   TOTST = 0: TOTCANRECEP = 0: TOTCOMPRAX = 0: TOTPROYING = 0: TOTCANPED = 0
+'   j& = 0
+'   Set RS = READSET(SQLX$)
+'   With RS
+'     Do While Not .EOF
+'       j& = j& + 1
+'       INFOSIAHP.MSF1.Rows = j& + 1
+'       '
+'       NPROV% = XVALO(!Num_Prov)
+'       '
+'       For U& = 1 To ULTREG&("VIASENTR")
+'         X$ = REGLEIDO$("VIASENTR", U&)
+'         COCO% = Asc(Left$(X$, 1))
+'         If VIA% > 0 Then
+'            ST = STOCK_PROV(NPROV%, CI1%, VIA%) ' STOCK POR PROVEEDOR
+'            If ST > 0 Then
+'                'CARGO LA GRILLA
+'                 'CRITERIO: SE CARGA EL STOCK DE CADA PROVEEDOR Y SU VIA,
+'                 INFOSIAHP.MSF1.TextMatrix(j&, 1) = SAFETEXT$(TEL2CLI$(-1 * NPROV%))
+'                 INFOSIAHP.MSF1.TextMatrix(j&, 2) = ECOARCH$("VIASENTR", MKI$(VIA%))
+'                 INFOSIAHP.MSF1.TextMatrix(j&, 3) = ST
+'                 If VUELTA% = 0 Then 'AL MENOS CARGA 1 VEZ PARA CADA PROYECCION
+'                   INFOSIAHP.MSF1.TextMatrix(j&, 3) = CANRECEP: TOTCANRECEP = TOTCANRECEP + XVALO(CANRECEP)
+'                   INFOSIAHP.MSF1.TextMatrix(j&, 4) = COMPRAX: TOTCOMPRAX = TOTCOMPRAX + XVALO(COMPRAX)
+'                   '
+'
+'                 PROYING = XVALO(COMPRAX) + XVALO(CANRECEP)
+'                 INFOSIAHP.MSF1.TextMatrix(j&, 5) = PROYING: TOTPROYING = TOTPROYING + XVALO(PROYING)
+'
+'            End If
+'         End If
+'
+'
+'
+'       CANPED = FORMATNUM$(CANT_PEDIDA_PENDIENTE(CI1%), "F8.0")      ' CANTIDAD PEDIDA PENDIENTE DE ENTREGA ' NO CONSIDERA PROVEEDOR
+'       COMPRAX = FORMATNUM$(COMPRA_PEND_DE_ENTR(NPROV%, CI1%), "F8.0")  ' CANTIDAD COMPRADA PENDIENTE DE ENTREGA
+'       CANRECEP = FORMATNUM$(CANT_RECEP_PENDIENTE_APROB(NPROV%, CI1%), "F8.0")
+'       '
+'       'CARGO LA GRILLA
+'       INFOSIAHP.MSF1.TextMatrix(j&, 1) = SAFETEXT$(TEL2CLI$(-1 * NPROV%))
+'       INFOSIAHP.MSF1.TextMatrix(j&, 2) = ST: TOTST = TOTST + XVALO(ST)
+'       INFOSIAHP.MSF1.TextMatrix(j&, 3) = CANRECEP: TOTCANRECEP = TOTCANRECEP + XVALO(CANRECEP)
+'       INFOSIAHP.MSF1.TextMatrix(j&, 4) = COMPRAX: TOTCOMPRAX = TOTCOMPRAX + XVALO(COMPRAX)
+'       PROYING = XVALO(COMPRAX) + XVALO(CANRECEP)
+'       INFOSIAHP.MSF1.TextMatrix(j&, 5) = PROYING: TOTPROYING = TOTPROYING + XVALO(PROYING)
+'
+'       If j& = 1 Then 'SI ES LA PRIMERA VEZ PONE LA CANTIDAD PEDIDA YA QUE LA MISMA ES A MODO GENERAL
+'          INFOSIAHP.MSF1.TextMatrix(j&, 6) = CANPED: TOTCANPED = TOTCANPED + XVALO(CANPED)
+'          Call COLOREAR_GRILLA_SOLACELDA(INFOSIAHP.MSF1, vbRed, j&, 6, 1)
+'       Else
+'          INFOSIAHP.MSF1.TextMatrix(j&, 6) = ""
+'       End If
+'       INFOSIAHP.MSF1.TextMatrix(j&, 7) = SAFETEXT$(NPROV%)
+'
+'       .MoveNext
+'     Loop
+'   End With
+'   '
+'   RS.Close
+'   Set RS = Nothing
+'   'TOTALIZO
+'   '
+'   INFOSIAHP.MSF1.Rows = j& + 2
+'   INFOSIAHP.MSF1.TextMatrix(j& + 1, 1) = "TODOS X FIFO"
+'   Call COLOREAR_GRILLA_SOLACELDA(INFOSIAHP.MSF1, &H80FFFF, j& + 1, 1)
+'   INFOSIAHP.MSF1.Row = j& + 1
+'   INFOSIAHP.MSF1.COL = 1
+'   INFOSIAHP.MSF1.CellFontUnderline = True 'subrayado
+'
+'   INFOSIAHP.MSF1.Rows = j& + 3
+'   INFOSIAHP.MSF1.TextMatrix(j& + 2, 1) = "TOTALES:"
+'   INFOSIAHP.MSF1.TextMatrix(j& + 2, 2) = TOTST
+'   INFOSIAHP.MSF1.TextMatrix(j& + 2, 3) = TOTCANRECEP
+'   INFOSIAHP.MSF1.TextMatrix(j& + 2, 4) = TOTCOMPRAX
+'   INFOSIAHP.MSF1.TextMatrix(j& + 2, 5) = TOTPROYING
+'   INFOSIAHP.MSF1.TextMatrix(j& + 2, 6) = TOTCANPED
+'   'COLOREO EL TEXTO
+'   Call COLOREAR_GRILLA_SOLAFILA(INFOSIAHP.MSF1, &HE0E0E0, j& + 2)
+'   Call COLOREAR_GRILLA_SOLACELDA(INFOSIAHP.MSF1, &H800000, j& + 2, 1, 1)
+'   Call COLOREAR_GRILLA_SOLACELDA(INFOSIAHP.MSF1, &H800000, j& + 2, 2, 1)
+'   Call COLOREAR_GRILLA_SOLACELDA(INFOSIAHP.MSF1, &H800000, j& + 2, 3, 1)
+'   Call COLOREAR_GRILLA_SOLACELDA(INFOSIAHP.MSF1, &H800000, j& + 2, 4, 1)
+'   Call COLOREAR_GRILLA_SOLACELDA(INFOSIAHP.MSF1, &H800000, j& + 2, 5, 1)
+'   Call COLOREAR_GRILLA_SOLACELDA(INFOSIAHP.MSF1, vbRed, j& + 2, 6, 1)
+'   '
+'   ''''''''''''''''''''''''''''''''3
+'   'CARGA LA INFO DE LA PRIMERA FILA DE MANERA AUTOMATICA,EN EL CASO QUE NO SEA EDICIION.
+'80 If FILA& < 1 Then
+'       CI1% = CODINT%(txtcodigo)
+'       NPROV% = XVALO(INFOSIAHP.MSF1.TextMatrix(1, 7))
+'       INFOSIAHP.TXTNUMEPROVE = SAFETEXT$(NPROV%)
+'       INFOSIAHP.TXTPROVEEDOR = INFOSIAHP.MSF1.TextMatrix(1, 1)
+'       KILOX = FORMATNUM$(PESUNI(CI1%), "F12.2")
+'        VIAX$ = INFOSIAHP.VIA_SEGUN_KG(NPROV%, KILOX)
+'        INFOSIAHP.TXCOMBO6.TEXT = VIAX$
+'        VIA% = XVALO(TRIM$(Left$(VIAX$, 2)))
+'       'TOMO EL COSTO SEGUN EL PROVEEDOR
+'       If TXTPROVEEDOR = "Todos" Or XVALO(TXTNUMEPROVE) < 1 Then
+'          COSTOX# = COSUNI(CI1%)
+'          MONEX% = MONECOSTO%(CI1%)
+'       Else
+'         'SI ES UN PROVEEDOR EXISTE EN LA TABLA DE RELACION CODIGO PROVEEDOR
+'         COSTOX# = INFOSIAHP.COSTO_X_PROV_DOLAR#(NPROV%, CI1%)
+'         TXTMONEDA = SAFETEXT$(2)
+'        End If
+'    ''''
+'       INFOSIAHP.TXTCOSTO.TEXT = FORMATNUM$(COSTOX#, "F12.2")
+'       INFOSIAHP.TXTFECHACOSTEO = FECHATEX$(INFOSIAHP.FECHACOSTO%(NPROV%, 0, CI1%))
+'       'TXTPRECIOVENTA = "SEGUN FORMULA" LO CARGA EN EL EVENTO CHANGE DEL COSTO
+'       INFOSIAHP.TXTDIASDEMORA = INFOSIAHP.DEMORA_X_VIA(VIA%, NPROV%)
+'       INFOSIAHP.TXTPESO.TEXT = KILOX
+'       Call INFOSIAHP.CARGARCOMBOVIAS(NPROV%, KILOX)
+'       INFOSIAHP.Text33(0) = INFOSIAHP.MSF1.TextMatrix(1, 2) 'STOCK
+'       PI = XVALO(INFOSIAHP.MSF1.TextMatrix(1, 3)) + XVALO(INFOSIAHP.MSF1.TextMatrix(1, 4))
+'       INFOSIAHP.Text33(1) = SAFETEXT$(PI) 'PROYECCION DE INGRESO
+'       INFOSIAHP.Text33(2) = INFOSIAHP.MSF1.TextMatrix(1, 6) 'PEDIDO ' REGISTRO 1 POR QUE ESTA SOLO UNA VEZ EN EL PRIMER REGISTRO
+'   End If
+'
+'   '''''''''''''''''''''''''''''''''''''''''''
+'   If FILA& > 0 Then
+'     LOTE$ = TRIM$(INFOSIAHP.MSF1.TextMatrix(j&, 13))
+'     Call CARGALOTES_ENGRILLA(FILA&)
+'   End If
+'
+   Call SELECCIONARFILA(INFOSIAHP.MSF1, 1)
+   
+90 INFOSIAHP.txtcodigo = txtcodigo
+   INFOSIAHP.TXTDESCRIPCION = TXTDESCRIPCION
+   Screen.MousePointer = 1
+   INFOSIAHP.FILAX& = FILA&
+   
+   INFOSIAHP.Show 1
+   
+End Sub
+
+Function PRECIOVENTA_X_FORMULA(COSTO1#, VIA%)
+   PRECIOVENTA_X_FORMULA = 0
+   Select Case VIA%
+    Case 1
+        X$ = FILTERGETRECORD("PORCCOEF", 1, MKI$(VIA%))
+        PORC = CVD(Mid$(X$, 5, 8))
+        PORC = 1 + (PORC / 100)
+        '
+        PRECIOVENTA_X_FORMULA = XVALO(TXTCOSTO) * PORC  '"SEGUN FORMULA"
+        Exit Function
+    Case Else
+        RFF$ = RECFILT$("PORCCOEF", 1, MKI$(VIA%))
+        For KKI% = 1 To Len(RFF$) Step 4
+         RELI& = CVS(Mid$(RFF$, KKI%, 4))
+         If RELI& > 0 Then
+           ZZ$ = REGLEIDO$("PORCCOEF", RELI&)
+           If CVI(Mid$(ZZ$, 3, 2)) = 2 Then
+               PORCSOBREFOB = CVD(Mid$(ZZ$, 5, 8))
+               If Abs(PORCSOBREFOB) < 0.005 Then
+                  Call COMUNI("Imposible Calcular Precio de Venta Según Fórmula - Falta Porcentaje Sobre Valor Fob")
+                  Exit Function
+               End If
+           ElseIf CVI(Mid$(ZZ$, 3, 2)) = 3 Then
+               COSTOKG = CVD(Mid$(ZZ$, 5, 8))
+               If Abs(COSTOKG) < 0.005 Then
+                  Call COMUNI("Imposible Calcular Precio de Venta Según Fórmula - Falta Costo x Kg.")
+                  Exit Function
+               End If
+           ElseIf CVI(Mid$(ZZ$, 3, 2)) = 4 Then
+               INVERSO = CVD(Mid$(ZZ$, 5, 8))
+               If Abs(INVERSO) < 0.005 Then
+                  Call COMUNI("Imposible Calcular Precio de Venta Según Fórmula - Falta Porcentaje Inverso")
+                  Exit Function
+               End If
+               
+           End If
+         End If
+        Next KKI%
+   End Select
+   'PVTA EN USD = (FOB * 1,3150 + KG de peso * 11,0625) / 0,70
+   PORCSOBREFOB = 1 + (PORCSOBREFOB / 100)
+   'VALOR1 = XVALO(TXTCOSTO.TEXT) * PORCSOBREFOB
+   VALOR2 = COSTOKG * XVALO(TXTPESO)
+   If INVERSO <> 0 Then
+      PRECIOVENTA_X_FORMULA = FORMATNUM$((VALOR1 + VALOR2) / INVERSO, "F12.2")
+   End If
+   
+End Function
+
+
+Sub PRINTPRES()
+
+    Call PRIPRESU(1)
+
+End Sub
+Sub PRIPRESU(VIPREVIA%)
+    '
+'    FORIPRE$ = "PRRS-AHP"
+    NOIMPRIMECODIGO% = 0
+    If COMALTER%("Desea Imprimir Códigos de Los Items de Este Presupuesto\\Sí, Imprimir Códigos\No, No imprimir Códigos") = 2 Then
+       NOIMPRIMECODIGO% = 1
+    End If
+    FORIPRE$ = TRIM$(Control$("", "FORPRERE"))
+    '
+    If EXISTE%(LUDAT$ + FORIPRE$ + ".FRM") < 1 Then
+       TX$ = "FALTA FORMULARIO DE IMPRESION DE PRESUPUESTOS"
+       TX$ = TX$ + "EL PRESUPUESTO SE HA GUARDADO, NO SALDRÁ IMPRESO"
+       MsgBox TX$
+       Exit Sub
+    End If
+    '
+    Call LIMPIATETAB
+    '
+
+    NUMEDOC$ = TRIM$(Str$(XVALO(Text17)))
+    NC% = XVALO(Text1.TEXT)
+    TIPODOC$ = "Presupuesto"
+    DESTIDOC% = NC%
+    FECHDOC$ = FECHATEX$(CVINT(DTPicker1.Value))
+'    CANCELPRINT% = 1
+    '
+    CODPARAM$(1) = "FECH-EMI": DOCPARAM$(1) = FECHATEX$(CVINT(DTPicker1.Value))   'FECHA
+    CODPARAM$(2) = "RASO-CLI": DOCPARAM$(2) = TRIM$(Text2)
+    CODPARAM$(3) = "DOMI-CLI": DOCPARAM$(3) = TRIM$(Text3)
+    CODPARAM$(4) = "LOCA-CLI": DOCPARAM$(4) = TRIM$(Text4)
+    CODPARAM$(5) = "TELE-CLI": DOCPARAM$(5) = TRIM$(Text8)
+    CODPARAM$(6) = "REF-MAT3":  DOCPARAM$(6) = TRIM$(TXTREFERENCIA) 'REFERENCIA
+    CODPARAM$(7) = "REF-MAT4":  DOCPARAM$(7) = TRIM$(Text5) 'CELLUALR
+    CODPARAM$(8) = "IMP-IVA":  DOCPARAM$(8) = TRIM$(Text31)
+    CODPARAM$(9) = "IMP-TOTA":  DOCPARAM$(9) = TRIM$(Text14.TEXT) 'NONTO TOTAL
+    CODPARAM$(10) = "NUME-COM":  DOCPARAM$(10) = Text17   'NUMERO DE DOCUMENTO
+    CODIPROVINCIA% = XVALO(VALOBADA("DEUDOR12", "Prov_Cli", CONDI$, "NOMESS"))
+'    CODPARAM$(11) = "PCIA-CLI":  DOCPARAM$(11) = ECOPROVINCIA$(CODIPROVINCIA%) 'PROVINCIA
+    CODPARAM$(12) = "OBSERVA": DOCPARAM$(12) = ENTRAOBS.Text28
+    CODPARAM$(13) = "PES-COMP": DOCPARAM$(13) = TXTTOTALPESO
+    CODPARAM$(14) = "IMP-NETO": DOCPARAM$(14) = TRIM$(Total(O))
+    CODPARAM$(15) = "POR-DESC": DOCPARAM$(15) = PORDESCU
+    CODPARAM$(16) = "IMP-DESC": DOCPARAM$(16) = TRIM$(Total(1))
+    CODPARAM$(17) = "IMPNEDES": DOCPARAM$(17) = TRIM$(Text33)
+    CODPARAM$(18) = "REF-MAT2": DOCPARAM$(18) = TRIM$(Text35) 'CONTACTO
+    CODPARAM$(19) = "REF-MAT4": DOCPARAM$(19) = TRIM$(Text18) 'MAIL
+    CODPARAM$(20) = "IMP-TOTA": DOCPARAM$(20) = TRIM$(Text14) ' TOTAL
+    '
+    CODPARAM$(21) = "COND-PAG": DOCPARAM$(21) = TRIM$(TXTDESCRIPAGO)
+    CODPARAM$(22) = "DESTINO": DOCPARAM$(22) = TRIM$(LENTREGA(0) + TRIM$(LENTREGA(1)))
+    CODPARAM$(23) = "FECH-VEN": DOCPARAM$(23) = TRIM$(Text28)
+    CODPARAM$(24) = "VENDEDOR": DOCPARAM$(24) = TRIM$(TXTNOMVENDEDOR) 'VENDEDOR
+
+    CAPARDOC% = 24
+    '
+    CACOLTAB1% = 1
+    CODTABU1$(1) = "CANTIDAD"
+    CODTABU1$(2) = "COD-MAT"
+    CODTABU1$(3) = "DES-MAT"
+    CODTABU1$(4) = "UNIMED"
+    CODTABU1$(5) = "PRE-LIST"
+    CODTABU1$(6) = "NET-ITEM"
+    CODTABU1$(7) = "REF-MAT5"
+    CODTABU1$(8) = "REF-MAT6"
+    '
+    '''''''''''''''''''''''''''
+    CODTABU1$(9) = "LAR-CUTE"  'VIA DE ENTREGA
+    CODTABU1$(10) = "LAR-MATE" 'PESO
+    CODTABU1$(11) = "ORD-ITEM" 'ORDEN
+    CODTABU1$(12) = "COD-MPRI" 'CODIGO DE CLIENTE
+    CACOLTAB1% = 12
+    '
+    CAITAB1% = 0
+    TIOPCI% = 0 ' BANDERA PARA IMPRIMIR TITULO DE OPCIONALES
+    For U& = 1 To MSF1.Rows - 1
+        CODE$ = TRIM$(MSF1.TextMatrix(U&, 1))
+        CODICLIENTE1$ = TRIM$(MSF1.TextMatrix(U&, 2))
+        CIIX% = CODINT%(CODE$)
+        DESCRIX$ = MSF1.TextMatrix(U&, 3)
+        CAN = XVALO(MSF1.TextMatrix(U&, 4))
+        NPROV& = XVALO(MSF1.TextMatrix(U&, 5))
+        NOM_FANTASIA$ = MSF1.TextMatrix(U&, 6)
+        COSTO# = XVALO(MSF1.TextMatrix(U&, 7))
+        PREUNI# = XVALO(MSF1.TextMatrix(U&, 8))
+        IMPORTX# = XVALO(MSF1.TextMatrix(U&, 9))
+        Via_Entrega$ = Mid$(MSF1.TextMatrix(U&, 10), 4)
+        VIA% = XVALO(Left$(MSF1.TextMatrix(U&, 10), 2))
+        STRINGLOTES = MSF1.TextMatrix(U&, 11)
+        CANTILOTES = XVALO(MSF1.TextMatrix(U&, 12))
+        DEMORAX$ = MSF1.TextMatrix(U&, 14)
+        If DEMORAX$ <> "Inmediata" Then
+           DEMORAX$ = DEMORAX$ + " Días"
+        End If
+        'ENTREGA$ = MSF1.TextMatrix(U&, 13)
+'               A = MSF1.TextMatrix(U&, 13)
+'                A = MSF1.TextMatrix(U&, 14)
+                
+        CAITAB1% = CAITAB1% + 1
+            TETABU1$(1, CAITAB1%) = TRIM$(FORMATNUM$(CAN, "F8.1"))
+            If NOIMPRIMECODIGO% = 0 Then
+               TETABU1$(2, CAITAB1%) = CODEXT$(CIIX%)
+               TETABU1$(12, CAITAB1%) = CODICLIENTE1$ ' CODIGO CLIENTE
+            Else
+               TETABU1$(2, CAITAB1%) = ""
+               TETABU1$(12, CAITAB1%) = ""
+            End If
+            '
+            'PARA QUE CORTE EN EL PRIMER ESPACIO LA DESCRIPCION, SOLICITADO POR ESTEBAN AHP
+            DESCRIX$ = TRIM$(DESCRIT0$(CIIX%))
+            POS1% = InStr(DESCRIX$, " ")
+            If POS1% > 0 Then
+               DESCRIX$ = Left$(DESCRIX$, POS1% - 1)
+            End If
+            '
+            TETABU1$(3, CAITAB1%) = DESCRIX$
+            TETABU1$(4, CAITAB1%) = TRIM$(UNIMED$(CIIX%))
+            TETABU1$(5, CAITAB1%) = FORMATNUM$(PREUNI#, "F12.2")
+            TETABU1$(6, CAITAB1%) = FORMATNUM$(IMPORTX#, "F12.2")
+            TETABU1$(7, CAITAB1%) = PRESENTA$
+            TETABU1$(8, CAITAB1%) = ""
+            TETABU1$(9, CAITAB1%) = CONDICOM$(-1 * NPROV&)
+            TETABU1$(10, CAITAB1%) = DEMORAX$
+            TETABU1$(11, CAITAB1%) = U& ' ORDEN
+             
+'        End If
+        '
+        Call CARLINSEP         'Carga linea de separacion entre codigo y codigo
+        '
+    Next U&
+    '
+'    ' VERIFICA SI EL CLIENTE TIENE MAIL. EN CASO AFIRMATIVO CONSULTA AL USUARIO SI QUIERE ENVIARLO POR ESTA VIA
+'    SENDBYMAIL$ = ""
+'    EMAIL$ = TRIM$(SAFETEXT$(VALOBADA("DEUDOR12", "Mail_Cli", "NUME_CLI=" & NC%)))
+'    If EMAIL$ <> "" Then
+'        RSP% = MsgBox("¿Desea enviar el presupuesto por mail?", vbQuestion + vbYesNo, "Envio por mail")
+'        If RSP% = 6 Then SENDBYMAIL$ = EMAIL$
+'    End If
+    Call PRINTDOC("@" + FORIPRE$)
+
+    SENDBYMAIL$ = ""
+    
+    'BUSCA EL DOCUMENTO EN LA TABLA SQL CON LA NUEVA FUNCION
+'    DOCUNU& = DOCID&("PRESUPUESTO", NUMEDOC$, "")
+    NPR& = XVALO(Text17)
+    Call MUESTRADOC(DOCUNU&, "", TIPODOC$, Str$(NPR&), Str$(NPR&))
+
+'5   Call MUESTRADOC(DOCUNU&)
+    CANCELPRINT% = 0
+
+99  Exit Sub
+    '
+End Sub
+
+
+
+
+Function VALIDAREPECODI%(CI1%)
+   VALIDAREPECODI% = 0
+   If EDICION% > 0 Then Exit Function
+   If CI1% > 0 Then
+      For I% = 1 To MSF1.Rows - 1
+         CI2% = CODINT%(MSF1.TextMatrix(I%, 1))
+         If CI1% = CI2% Then
+            VALIDAREPECODI% = I%
+         End If
+      Next I%
+   End If
+   
+End Function
+
+
+Private Sub CARGA_Click(Index As Integer)
+  CARGA(Index).ForeColor = &HFF&
+  CARGA(Index).FontUnderline = True
+  For I% = 0 To 2
+    If I% <> Index Then
+      CARGA(I%).ForeColor = &H80000008
+      CARGA(I%).FontUnderline = False
+    End If
+  Next I%
+    
+End Sub
+
+Private Sub Combo6_Click()
+    Text38.TEXT = Combo6.TEXT
+End Sub
+
+Sub Command1_Click()
+   Command1.Enabled = False
+   Call SELECHO("MASTER")
+   COD$ = TRIM$(VALACT1$("MASTER"))
+   If COD$ <> "" Then
+     txtcodigo = ""
+     txtcodigo = COD$
+     TXTCODCLIENTE = ""
+   End If
+   Command1.Enabled = True
+   
+
+End Sub
+
+Private Sub Command11_Click()
+   Command11.Enabled = False
+'   Call CARGA_INDICE_LPRECIO
+'   If RESPUESTA_BUSQUEDA$ <> "" Then Text23 = RESPUESTA_BUSQUEDA$
+'   Command11.Enabled = True
+   Command11.Enabled = True
+End Sub
+
+Private Sub Command19_Click()
+    If XVALO(Text20) > 0 Then Exit Sub 'si es modificacion
+    Command19.Enabled = False
+    Call SELECHO("DEUDOR1")
+    NCLIE% = XVALO(TRIM$(VALACT1$("DEUDOR1")))
+    If NCLIE% > 0 Then
+      Text1.TEXT = TRIM$(Str$(NCLIE%))
+      'Call CARDACLI
+      On Error Resume Next
+      txtcodigo.SetFocus
+      On Error GoTo 0
+    End If
+
+    Screen.MousePointer = 1
+    Command19.Enabled = True
+    
+    
+ 
+End Sub
+
+Private Sub Command2_Click()
+   Command2.Enabled = False
+   Call SELECHO("CONPAG")
+   VDEVU$ = VALACT1$("CONPAG")
+   If TRIM$(VDEVU$) <> "" Then
+      TXTCONDIPAGO = VDEVU$
+   End If
+   
+   
+   Command2.Enabled = True
+
+End Sub
+
+Private Sub Command4_Click()
+   Command4.Enabled = False
+   If DERACCE%("ALTACLI", "Alta de Nuevo Cliente") < 2 Then
+      Exit Sub
+   End If
+   '
+   Call APERBASDAT("CLIEN")
+
+   Dim Tranclie As ADODB.Recordset
+   '
+   Screen.MousePointer = 11
+   PRONUCLI& = XVALO(Control$("", "PRONUCLI"))
+   'If PRONUCLI& > 9999 Then PRONUCLI& = 0
+   NROPRO& = PRONUCLI&
+   If NROPRO& < 0 Then NROPRO& = 0
+3  NROPRO& = NROPRO& + 1
+   '
+   'Set Tranclie = Badaclie.OpenRecordset("SELECT Nume_Cli FROM Deudor12 WHERE Nume_Cli = " & PRONUCLI&")
+   'sql
+   Set Tranclie = FLEXCONN.Execute(FILTSQL$("SELECT Nume_Cli FROM Deudor12 WHERE Nume_Cli = " & NROPRO&))
+   If Not (Tranclie.EOF And Tranclie.BOF) Then 'si la encuentra (si el record no esta vacío)
+      GoTo 3
+   End If
+'   '
+   NCLIE = NROPRO&
+   VDEF$ = String$(128, 0)
+   Call REPLA(VDEF$, MKI$(Int(NCLIE)), 13, 2)
+   Call REPLA(VDEF$, Space$(62), 15, 62)
+   Call REPLA(VDEF$, Chr$(1), 77, 1)
+   Call REPLA(VDEF$, Space$(15), 78, 15)
+   '
+10 Screen.MousePointer = 1
+   OBX$ = OBJPLA$("ALTACLIENACC", VDEF$)
+   If OBX$ = "" Then GoTo 99
+   VDEF$ = OBX$
+   '
+   NCLINUE% = CVI(Mid$(OBX$, 13, 2))
+   If NCLINUE% < 1 Or NCLINUE% > 29999 Then
+      Call MENSERR(24, "Número de Cuenta no Válido.")
+      GoTo 10
+   End If
+   '
+   COCLINU$ = TRIM$(Left$(OBX$, 12))
+   If COCLINU$ = "" Then
+     COCLINU$ = "CLI-" + TRIM$(Str$(NCLINUE%))
+     Call REPLA(VDEF$, COCLINU$, 1, 12)
+     'Call MENSERR(24, "Codigo de Cuenta no Válido")
+     'GoTo 10
+   End If
+   '
+  
+   Set Tranclie = FLEXCONN.Execute(FILTSQL$("SELECT Codi_Cli FROM Deudor12 where Codi_cli='" & COCLINU$ & "'"))
+   If Not (Tranclie.EOF And Tranclie.BOF) Then
+      Call MENSERR(24, "Ingreso no Válido.\Código de Cuenta Pre-existente.")
+      GoTo 10
+   End If
+   '
+   Set Tranclie = FLEXCONN.Execute(FILTSQL$("SELECT Nume_Cli FROM Deudor12 where Nume_cli=" & NCLINUE))
+   If Not (Tranclie.EOF And Tranclie.BOF) Then
+      Call MENSERR(24, "Ingreso no Válido.\Número de Cuenta Pre-existente.")
+      GoTo 10
+   End If
+   '
+   DCLINUE$ = TRIM$(Mid$(OBX$, 15, 62))
+   If Len(DCLINUE$) < 1 Then
+      Call MENSERR(24, "Ingreso no Válido.\Falta Razón Social del Cliente")
+      GoTo 10
+   End If
+   '
+   PIVCLI% = Asc(Mid$(OBX$, 77, 1))
+   If PIVCLI% < 0 Or PIVCLI% > 7 Then
+      Call MENSERR(24, "Ingreso no Válido.\Posición IVA no Figura en Tablas.")
+      GoTo 10
+   End If
+   '
+   CUTT$ = TRIM$(Mid$(OBX$, 78, 15))
+   If VALICUIT%(CUTT$) <> 1 Then
+     If PIVCLI% <> 0 Then
+       If PIVCLI% <> 5 Then
+         Call MENSERR(24, "Ingreso no Válido.\Número de C.U.I.T. Incorrecto.")
+         GoTo 10
+       End If
+     End If
+   End If
+   '
+   If PIVCLI% = 0 And Len(CUTT$) > 12 Then
+        Call MENSERR(24, "El Límite Máximo Para Número de Documento es de 12 Dígitos")
+        GoTo 10
+   End If
+   '
+   If CUTT$ <> "" Then
+     'sql
+     Set Tranclie = FLEXCONN.Execute(FILTSQL$("SELECT Nume_Cli FROM Deudor12 WHERE Cuit_Cli = '" & CUTT$ & "'"))
+     If Not (Tranclie.EOF And Tranclie.BOF) Then
+         If Tranclie!NUME_CLI > 0 Then
+            NCLIX% = Tranclie!NUME_CLI
+            If COMALTER%("Existe Registrada una Cuenta con el Mismo C.U.I.T.\  \'" + TRIM$(RASOCLI$(NCLIX%)) + "' (" + TRIM$(Str$(NCLIX%)) + ")\\Cancelar\Registrar Igual") <> 2 Then
+                GoTo 10
+            End If
+         End If
+     End If
+   End If
+   '
+   Screen.MousePointer = 11
+   '
+   Dim Rdeudor12 As ADODB.Recordset
+   Set Rdeudor12 = New ADODB.Recordset
+   Rdeudor12.CursorType = adOpenKeyset
+   Rdeudor12.LockType = adLockPessimistic
+   Rdeudor12.Open FILTSQL$("Select * from Deudor12 where nume_cli=" & NCLINUE%), FLEXCONN, , , adCmdText
+   With Rdeudor12
+      .AddNew   ' YA CONVERTIDO
+      On Error Resume Next
+      !CodiEmpr = CodiEmp%
+      On Error GoTo 0
+      !NUME_CLI = TRIM$(Str$(NCLINUE%))
+      !Raso_Cli = DCLINUE$
+      !Codi_Cli = COCLINU$
+      !Cuit_Cli = CUTT$
+      !Piva_Cli = PIVCLI%
+      !Stat_Cli = 1
+      '
+      On Error Resume Next
+      .Update
+      If Err Then
+         Call MENSERR(24, "Alta no Procesada Correctamente")
+      End If
+      On Error GoTo 0
+   End With
+   '
+   Rdeudor12.Close
+   Set Rdeudor12 = Nothing
+   UPDATCLI% = 1
+   
+   Call CARGALISEL("DEUDOR1", "Deudor12", "Nume_Cli/F6.0>;Raso_Cli/A48", "Stat_Cli >= 0 and Nume_Cli>0 ORDER BY Raso_Cli")
+   '
+   Text1.TEXT = TRIM$(Str$(NCLINUE%))
+   
+99 Screen.MousePointer = 1
+   Command4.Enabled = True
+End Sub
+
+Private Sub Command5_Click()
+   Command5.Enabled = False
+   Text1.Locked = True
+   Command19.Enabled = False
+   CUENTA& = XVALO(Text1)
+   If CUENTA& < 1 Then
+      MsgBox "FALTA NÚMERO DE CLIENTE"
+      GoTo 99
+   End If
+   '
+   'VALIDACION DE DETALLE
+   If MSF1.Rows <= 1 Then
+     TTXX$ = "FALTA INGRESAR DETALLE DE PRESUPUESTO"
+     MsgBox TTXX$
+     GoTo 99
+   End If
+   '
+   'VALIDO QUE TODOS TENGAN PRECIO DE VENTA.
+   For I% = 1 To MSF1.Rows - 1
+         PRECIOVENTA# = XVALO(MSF1.TextMatrix(I%, 9))
+         If PRECIOVENTA# < 0.005 Then
+            Call COMUNI("Falta Precio de Venta en Fila: " & I%)
+            OPX% = COMALTER("Falta Precio de Venta en Fila: " & I% & "\\Continuar\Corregir")
+            If OPX% = 2 Then GoTo 99
+         End If
+   Next I%
+   
+   Call Grabar_Presupuesto
+   '
+   SENDBYMAIL$ = ""
+   NC = XVALO(Text1)
+   SENDBYMAIL$ = EMAILCLI$(NC)
+   'VALIDACION DE MAIL
+35 OPX% = COMALTER%("Envio por Mail\\Imprimir\ Enviar Por Mail")
+        If OPX% = 2 Then
+            SENDBYMAIL$ = TRIM$(InputBox("Envío de Mail", "Ingreso Mail Destinatario", SENDBYMAIL$))
+             If InStr(SENDBYMAIL$, "@") < 1 Then  'TIENE DIRECCION VALIDA
+                Call MENSERR(24, "Imposible Enviar por Mail.\  \Falta Direccion de Email o la Existente es Invalida.")
+                GoTo 35
+             End If
+        Else
+             SENDBYMAIL$ = ""
+        End If
+   
+   '
+   Call PRIPRESU(0)
+   '
+   Text1 = ""
+   Text17 = 1 + MAXNUMCOD&("PRESUVEN", "NroPres")
+   'Text20 = "-00"
+   Call LIMPIARPRESU
+   LIMPIAR_TEXT_DETALLE
+99 Command5.Enabled = True
+   Text1.Locked = False 'TEXT DE CUENTA DE CLIENTE
+   Command19.Enabled = True 'BOTON DE LISTA DE SELECCIN
+   If Text21.Visible = True Then Text21.Visible = False 'CARTEL DE MODIFICACION DE PRESUPUESTO
+   '
+End Sub
+
+Sub Grabar_Presupuesto()
+    '
+   OKX% = 0
+   Call BLOQARCH("PRESUPU")
+   '
+   If Text21.Visible = True Then MODIFICA% = 1
+   If MODIFICA% < 1 Then
+    NPP& = NUPRESUP&
+    If NPP& > XVALO(Text17.TEXT) Then
+       Call CIERRARCH("PRESUPU")
+       Call COMUNI("Número Ocupado")
+       Text11.TEXT = TRIM$(Str$(NPP&))
+       Exit Sub
+    End If
+   End If
+   '
+   Call ABREPRESVEN
+   '\\\OT-06-0168-WAR-FIN///
+   '
+   If VALICLIE% < 1 Then
+      MERRO$ = "Número de Cliente no Válido"
+      GoTo 98
+   End If
+   NCLIE% = XVALO(Text1.TEXT)
+   '
+   If XVALO(Total(0).TEXT) < 1 Then
+      MERRO$ = "Falta(n) Precio(s) de Lista"
+      GoTo 98
+   End If
+   '
+   If XVALO(Text14) < 1 Then
+      MERRO$ = "Importe no Válido"
+      GoTo 98
+   End If
+   '
+   HOII% = HOY(HOS$)
+   FEMI% = CVINT(DTPicker1.Value)
+   If FEMI% < 1 Or FEMI% > HOII% Then
+      MERRO$ = "Fecha de Emisión no Válida"
+      GoTo 98
+   End If
+   '
+   '
+   NUOIT% = 0
+   Call ABREPRESVEN
+   CONDI$ = "NroPres= " & XVALO(Text17.TEXT)
+   STRSQL = "Select * from Presuven"
+   STRSQL = STRSQL + " where " & CONDI$
+   Dim PresuVen As ADODB.Recordset
+   Set PresuVen = New ADODB.Recordset
+   PresuVen.Open FILTSQL$(STRSQL), FLEXCONN, adOpenKeyset, adLockPessimistic, adCmdText
+   On Error Resume Next
+   With PresuVen
+   If MODIFICA% < 1 Then
+    If Not (.EOF And .BOF) Then
+       Call CIERRARCH("PRESUPU")
+       Call COMUNI("Número Ocupado")
+       Text11.TEXT = TRIM$(Str$(NPP&))
+       Exit Sub
+    End If
+   End If
+
+   '
+   Call ACTUREGISTRO("PRESUVEN", "MARBORRA", CONDI$, 1, REGAF&, "NOMESS")
+   DESC$ = PORDESCU
+   COEFIDESCU = COEFDESCU(DESC$)
+   For U& = 1 To MSF1.Rows - 1
+         CIIX% = CODINT%(MSF1.TextMatrix(U&, 1))
+         CAN = XVALO(MSF1.TextMatrix(U&, 4))
+         INETO = XVALO(MSF1.TextMatrix(U&, 8)) * (100 - XVALO(COEFIDESCU)) / (100)
+
+         If CAN > 0.05 Then
+           .AddNew   ' YA CONVERTIDO
+           On Error Resume Next
+           !CodiEmpr = CodiEmp%
+           On Error GoTo 0
+             !NroPres = XVALO(Text17.TEXT)
+             '\\\OT-06-0168-WAR-09/05/06///
+             !NumeCRubro = 0
+             !Cod_Rubro = ""
+             !Cod_Anio = ""
+             '\\\OT-06-0168-WAR-FIN///
+             !FechEmis = CVDAT(FEMI%)
+             !NroClie = NCLIE%
+             !RasoClie = Left$(Text2, 64)
+             !Referen = "" 'Left$(Text10, 16)
+             !AteSen = "" 'Left$(Text12, 48)
+             !LisPre = XVALO(Text23)
+             !ConPag = XVALO(Text26)
+             !VENDED = 0
+             !MonedEmi = MONEMI%
+               MON% = MONEMI% '
+               If MONEMI% = 1 Then MON% = 2 'SI ES PESOS GUARDA LA COTIZACION EN DOLARES, SI NO LA QUE CORRESPONDE
+             !COTIZAMONEDA = FORMATNUM$(TICAMONE(MON%), "F12.4")
+             !NuOrdIt = NUOIT%
+               NUOIT% = NUOIT% + 1
+             !CodiInt = CIIX%
+             !CodiExt = Left$(CODEXT$(CIIX%), 16)
+             !Descrip = Left$(DESCRIT0$(CIIX%), 64)
+             !Especif = DESCRIT0$(CIIX%)
+             !PreList = INETO
+             !TDESCUEN = Left$(PORDESCU, 32)
+                DESC$ = PORDESCU
+                TTT1 = COEFDESCU(DESC$)
+             !PorcDesc = TTT1
+             !ImpoDesc = INETO * TTT1 / 100
+             !PreUnit = INETO * (1 - TTT1 / 100)
+             !Cantit = CAN
+             !ImToNe = CAN * INETO * (1 - TTT1 / 100)
+             !FechVent = CVDAT(0)
+             !NroPedi = 0
+             !NroFac_Cor = ""
+             !NroFac_Lar = ""
+             !Codi_Cli = CODICL$
+             !Vers_Presu = 0
+             !Num_Prov = XVALO(MSF1.TextMatrix(U&, 5))
+             !COSTO_UNIT = Val(MSF1.TextMatrix(U&, 7))
+             !Via_Entrega = XVALO(Left$(MSF1.TextMatrix(U&, 10), 2))
+             !LOTES_Reservados = MSF1.TextMatrix(U&, 11)
+             !Canti_Lotes = XVALO(MSF1.TextMatrix(U&, 12))
+             .Update
+'            TTXYZ$ = Space$(76)
+'            Call REPLA(TTXYZ$, "- " + CODEXT$(CIIX%), 11, 18)
+'            Call REPLA(TTXYZ$, DESCRIT0$(CIIX%), 29, 38)
+'            Call REPLA(TTXYZ$, CSTRING$(MKS$(CAN), 3, 10, 1, 2), 57, 10)
+'            Call AGREGA_ANOTAPROSPECT(CODICL$, TTXYZ$) ' AGREGA EL DETALLE EN EL ANOTADOR DEL PROSPECT
+         End If
+       Next U&
+''''     End If
+   End With
+   PresuVen.Close
+   Set PresuVen = Nothing
+   '
+   'RECORRE LA GRILLA PARA ACTUALIZAR EL PESO EN EL CASO QUE TENGA VALOR > 0
+   For U& = 1 To MSF1.Rows - 1
+      CI1% = CODINT%(MSF1.TextMatrix(U&, 1))
+      PESOX = XVALO(MSF1.TextMatrix(REG&, 13))
+      If PESOX > 0.005 Then
+        Call ACTUREGISTRO("MASTER", "PESUNI", "CODINT= " & CI1%, FORMATNUM$(POSOX, "F16.5"), REGAF&, "NOMESS")
+      End If
+   Next U&
+   'FIN ACTUALIZACION DE PESO UNITARIO DE MASTER
+   '
+   CONDI$ = CONDI$ & " AND MARBORRA = 1"
+   Call BORRAREGISTROS("PRESUVEN", CONDI$, REGAF&, "NOMESS")
+   MODIFICA% = 0
+   Call OPLIPRE07.ACTINDIPRES(XVALO(Text11))
+   Call CIERRARCH("PRESUPU")
+   '
+   '
+   OKX% = 1
+   Exit Sub
+   '
+98 Call CIERRARCH("PRESUPU")
+   Call CIERRARCH("INDIPRES")
+   Call MENSERR(24, MERRO$)
+   '
+End Sub
+
+
+Function VALICLIE%()
+   VCC% = 0
+   If XVALO(Text1.TEXT) > 0 Then
+     If XVALO(Text1.TEXT) <= 32767 Then
+       NCLIE% = XVALO(Text1.TEXT)
+       If REGICLI&(NCLIE%) > 0 Then
+         VCC% = 1
+       End If
+     End If
+   End If
+   If VCC% = 0 Then
+      CODIXX$ = TRIM$(Label26)
+      CODICL$ = SAFETEXT$(VALOBADA("BSEGCOM", "Codi_Cli", "Codi_Cli ='" & CODIXX$ & "'"))
+      If CODICL$ <> "" Then VCC% = 1
+   End If
+   '
+99 VALICLIE% = VCC%
+   '
+End Function
+
+
+Private Sub Command6_Click()
+
+  Command6.Enabled = False
+  Screen.MousePointer = 11
+  Call COLOREARSTOCKS(I&)
+'  For I& = 1 To MSF1.Rows - 1
+'       Call COLOREARSTOCKS(I&)
+'  Next I&
+  Call numerargrilla(FRMPRESUAHP.MSF1, 0)
+  Command6.Enabled = True
+  Screen.MousePointer = 1
+  
+End Sub
+
+Sub COLOREARSTOCKS(I&)
+        
+    '   TOMAR EL DISPONIBLE DEL LOTE E IR DESCONTANDO. (VER LA VALIDACION YA REALIZADA)
+    '   LOS CASOS QUE TIENEN PARTIDA SELECCIONADA SI NO HAY DE LOS QUE ESTAN GRABADOS O NO ALCANZAN VAN EN ROJO.
+    '   LOS CASOS QUE NO TIENEN PARTIDA SELECCIONADA SE VALIDA STOCK EN GENERAL SI NO POSEE SE PONEN EN ROJO, SI POSEE STOCK DISPONIBLE TOTAL O PARCIAL VA EN AMARILLO , PARA QUE SE ELIJA
+    '   LOS CASOS QUE NO TIENEN PARTIDA SELECCIONADA SE VALIDA
+    
+    '****************************************************************************
+     'PASO A UN GRID OCULTO PARTE DE LA INFORMACION PARA LUEGO ORDENARLA POR LOTE
+     MSF2.Cols = 6
+     Call numerargrilla(FRMPRESUAHP.MSF1, 0)
+     For I& = 1 To MSF1.Rows - 1
+       MSF2.Rows = I& + 1
+       Call COLOREAR_GRILLA_SOLAFILA(FRMPRESUAHP.MSF1, &HFFFF&, I&, 0, 1)
+       MSF2.TextMatrix(I&, 0) = XVALO(MSF1.TextMatrix(I&, 0)) ' ORDEN
+       MSF2.TextMatrix(I&, 1) = CODINT%(MSF1.TextMatrix(I&, 1)) 'CODIGO INTERNO
+       MSF2.TextMatrix(I&, 2) = XVALO(MSF1.TextMatrix(I&, 4))  'CANTIDAD
+       MSF2.TextMatrix(I&, 3) = XVALO(MSF1.TextMatrix(I&, 5)) 'NPROV
+       MSF2.TextMatrix(I&, 4) = MSF1.TextMatrix(I&, 11)       'LOTE
+     Next I&
+     '*************************************************************************
+     'ORDENAR POR LOTE
+     MSF2.COL = 4
+     MSF2.Sort = 7
+     '*************************************************************************
+     
+     'RECORRO GRILLA ORDENADA POR LOTE
+     For I& = 1 To MSF2.Rows - 1
+       NUORD = XVALO(MSF2.TextMatrix(I&, 0))
+       LOTE$ = MSF2.TextMatrix(I&, 4)
+       CI1% = XVALO(MSF2.TextMatrix(I&, 1))
+       CANTI = XVALO(MSF2.TextMatrix(I&, 2))
+       If TRIM$(LOTE$) <> "" Then 'SI TIENE LOTES
+          If LOTE_ANT$ = LOTE$ Then
+             ACUCANTI = ACUCANTI + CANTI
+          Else
+             ACUCANTI = CANTI
+             ST_RESERVADO = SALDO_LOTE_PEDIDO(CI1%, "", 0)
+             SLOTE = SaldoLote(CI1%, LOTE$, 0)
+             '
+             'CANRES = XVALO(!CanReser) + ST_RESERVADO
+             CANT_DISPONIBLE = SLOTE - ST_RESERVADO
+          End If
+          If CANT_DISPONIBLE < ACUCANTI Then
+             MSF2.TextMatrix(I&, 5) = "R"
+          Else
+             MSF2.TextMatrix(I&, 5) = "V"
+          End If
+          LOTE_ANT$ = LOTE$
+       Else
+          ST = FORMATNUM$(STOCKACT(CI1%), "F8.0")  ' STOCK POR PROVEEDOR
+          CANPED = CANT_PEDIDA_PENDIENTE(CI1%)    ' CANTIDAD PEDIDA PENDIENTE DE ENTREGA ' NO CONSIDERA PROVEEDOR
+          COMPRAX = COMPRA_PEND_DE_ENTR(0, CI1%)  ' CANTIDAD COMPRADA PENDIENTE DE ENTREGA
+          CANRECEP = CANT_RECEP_PENDIENTE_APROB(0, CI1%)
+          COLOXX$ = COLORSTATUS$(CANTI, ST, COMPRAX + CANRECEP, CANPED)
+          MSF2.TextMatrix(I&, 5) = COLOXX$
+       End If
+       COLO$ = MSF2.TextMatrix(I&, 5)
+       If COLO$ = "V" Then Call COLOREAR_GRILLA_SOLACELDA(FRMPRESUAHP.MSF1, vbGreen, NUORD, 0)
+       If COLO$ = "A" Then Call COLOREAR_GRILLA_SOLACELDA(FRMPRESUAHP.MSF1, vbYellow, NUORD, 0)
+       If COLO$ = "R" Then Call COLOREAR_GRILLA_SOLACELDA(FRMPRESUAHP.MSF1, vbRed, NUORD, 0)
+       Call COLOREAR_GRILLA_SOLAFILA(FRMPRESUAHP.MSF1, &HFEE7D6, NUORD, 0, 1)
+     Next I&
+     '
+99  Screen.MousePointer = 1
+End Sub
+
+Private Sub Command6_MouseDown(Button As Integer, Shift As Integer, X As Single, Y As Single)
+   If Shift = 1 Then
+     If Button = 2 Then
+       TXTO$ = "ACTUALIZA EL SEMAFORO SEGUN CASOS" & vbCrLf
+       TXTO$ = TXTO$ + "COLOR VERDE:  " + vbCrLf
+       TXTO$ = TXTO$ + "  a)-CARGADO CON STOCK O SE MANTIENE SITUACION DE LOTES ELEGIDOS."
+       TXTO$ = TXTO$ + Space$(10) + String$(40, "-") + vbCrLf
+
+       TXTO$ = TXTO$ + "COLOR AMARILLO:  " + vbCrLf
+       TXTO$ = TXTO$ + "  a)-CASO QUE SE CARGO EL PRESUPUESTO ORIGINAL SIN STOCK, Y AL MOMENTO"
+       TXTO$ = TXTO$ + "  -DE REFRESCAR HAY STOCK DISPONIBLE PARA SELECCIONAR."
+       TXTO$ = TXTO$ + "  b)-CASO QUE SE CARGO EL PRESUPUESTO ORIGINAL SIN STOCK, HAY CANTIDAD EN"
+       TXTO$ = TXTO$ + "  -TRANSITO TOTAL O PARCIAL."
+       TXTO$ = TXTO$ + Space$(10) + String$(40, "-") + vbCrLf
+       
+       TXTO$ = TXTO$ + "COLOR ROJO:  " + vbCrLf
+       TXTO$ = TXTO$ + "  a)-CASO QUE SE CARGO EL PRESUPUESTO ORIGINAL SIN STOCK Y ASI SE MANTIENE."
+       TXTO$ = TXTO$ + "  b)-CASO QUE LAS PARTIDAS SELECCIONADAS, NO ALCANCEN PARA CUMPLIR CON LA CANTIDAD SOLICITADA."
+       TXTO$ = TXTO$ + Space$(10) + String$(40, "-") + vbCrLf
+       TXTO$ = TXTO$ + Space$(10) + String$(40, "-") + vbCrLf
+       MsgBox TXTO$
+     End If
+   End If
+
+End Sub
+
+
+Private Sub Command7_Click()
+   Call txtcodigo_Change
+'  PROVEEDOR , VIA, DEMORA
+
+End Sub
+
+Private Sub Command8_Click()
+
+   Command8.Enabled = False
+   Call SELECHO("VENDEDOR")
+   VDEVU$ = VALACT1$("VENDEDOR")
+   If TRIM$(VDEVU$) <> "" Then
+      TXTNUMVENDEDOR = VDEVU$
+   End If
+   Command8.Enabled = True
+End Sub
+
+Private Sub Form_KeyUp(KeyCode As Integer, Shift As Integer)
+
+    Select Case KeyCode 'ESTO ES PARA QUE DESP
+        Case 113 'pulso  f2
+        Call Command1_Click
+        Case 116 'pulso  f5
+        Command5_Click
+    End Select
+    '
+End Sub
+
+Private Sub mnuconfig_Click()
+   Call CONECTA_CONSUL_PRE(TRIM$(UCase$(Name)))
+End Sub
+
+Private Sub mnucrt_Click()
+   Call ACONSUL_PRE(TRIM$(UCase$(Name)))
+End Sub
+
+Private Sub mnuP_Click()
+    Call CONECRUN("PEDIDO07", "PEDIDO DE CLIENTES")
+End Sub
+
+Private Sub mnusetup_Click()
+   OPPRES07.Show 1
+End Sub
+
+Private Sub mnutraz_Click()
+
+    If CLACONTRA% > 0 Then
+      Call PoneEnCeroNull("MASTER", "TRAZABLE", REGAF&, "NOMESS")
+      Call ACTUREGISTRO("MASTER", "TRAZABLE", " CODINT > 0 AND TRAZABLE < 1", 1, REGAF&, "NOMESS")
+      Call COMUNI("Se han Modificado: " & REGAF& & " Registros")
+    End If
+    '
+End Sub
+
+Private Sub MSF1_MouseDown(Button As Integer, Shift As Integer, X As Single, Y As Single)
+          '
+    Exit Sub
+    If Button = 2 Then
+        REG& = MSF1.MouseRow
+        If REG& < 1 Then Exit Sub
+        CI1% = CODINT%(MSF1.TextMatrix(REG&, 1))
+        Call PRESENTA_INFO_ARTICULO(CI1%, REG&)
+        Call cargar_datos
+        Exit Sub
+     End If
+     '
+     MSF1.ToolTipText = MSF1.TextMatrix(MSF1.Row, 0)
+     '
+End Sub
+Private Sub MSF1_MouseUp(Button As Integer, _
+         Shift As Integer, X As Single, Y As Single)
+          Static CurrentWidth As Single
+          If MSF1.Rows <= 1 Then Exit Sub
+          If MSF1.CellWidth <> CurrentWidth Then
+              On Error Resume Next
+              TXTMOVIL.Width = MSF1.CellWidth
+              CurrentWidth = MSF1.CellWidth
+              On Error GoTo 0
+          End If
+End Sub
+
+Private Sub MSFlexGrid1_Click()
+
+End Sub
+
+Private Sub Text1_KeyPress(KeyAscii As Integer)
+    If KeyAscii = 13 Then
+       SendKeys "{tab}"
+    End If
+
+End Sub
+
+Private Sub Text15_LostFocus()
+   Text15 = FORMATNUM$(XVALO(Text15), "F10.2")
+End Sub
+
+Private Sub Text35_KeyPress(KeyAscii As Integer)
+    If KeyAscii = 13 Then
+       SendKeys "{tab}"
+    End If
+End Sub
+
+
+Private Sub Timer1_Timer()
+ Call PINTATEXT(FRMPRESUAHP.Text1)
+ Timer1.Enabled = False
+End Sub
+
+Private Sub TXTCODCLIENTE_DblClick()
+   If TRIM$(TXTCODCLIENTE.TEXT) <> "" And TRIM$(txtcodigo) <> "" Then
+     OPX% = COMALTER%("Realmente Desea Eliminar Este Código de Cliente\\No, Cancelar\Sí Eliminar")
+     If OPX% = 2 Then
+        CONDI$ = "CODIGO_CLIENTE = '" & TRIM$(TXTCODCLIENTE.TEXT) & "' AND CODINT = " & CODINT%(TRIM$(txtcodigo))
+        Call BORRAREGISTROS("CODICLIENTE", CONDI$, REGAF&, "NOMESS")
+        If REGAF& > 0 Then
+           Call COMUNI("Código Eliminado Correctamente")
+           Call LIMPIAR_TEXT_DETALLE
+        Else
+           Call COMUNI("Código Relacionado Inexistente o no Válido")
+        End If
+     End If
+   End If
+End Sub
+
+
+Private Sub TXTCONDIPAGO_Change()
+   TXTDESCRIPAGO = ""
+   If XVALO(TXTCONDIPAGO) > 0 Then
+      TXTDESCRIPAGO = ECOARCH$("CONPAG", Chr(XVALO(TXTCONDIPAGO)))
+   End If
+End Sub
+
+Private Sub TXTMOVIL_GotFocus()
+     Call PINTATEXT(TXTMOVIL)
+End Sub
+Private Sub TXTMOVIL_KeyPress(KeyAscii As Integer)
+    'RUTINA PARA QUE AL DAR ENTRER O ESCAPE SAQUE EL FOCO Y PONGA COMO NO VISIBLE EL TEXT DE EDICION
+    If KeyAscii = 13 Or KeyAscii = 27 Then
+       REG& = XVALO(TXTMOVIL.ToolTipText)
+       If MSF1.Rows - 1 > REG& Then
+          MSF1.TextMatrix(REG&, 5) = FORMATNUM$(XVALO(TXTMOVIL.TEXT), "F10.1")
+          MSF1.Row = REG& + 1
+          
+          On Error Resume Next
+          TXTMOVIL.SetFocus
+          Call PINTATEXT(TXTMOVIL)
+          On Error GoTo 0
+          'Exit Sub
+          'Call MSF1_MouseDown(1, 0, 1, 1)
+       Else
+          MSF1.TextMatrix(REG&, 1) = FORMATNUM$(XVALO(TXTMOVIL.TEXT), "F10.1")
+          MSF1.COL = 1
+          
+          TXTMOVIL.Visible = False
+          
+       End If
+       '
+       MSF1.SetFocus
+       If TXTMOVIL.Visible = True Then TXTMOVIL.SetFocus
+    End If
+       
+End Sub
+
+Private Sub TXTMOVIL_LostFocus()
+     REG& = XVALO(TXTMOVIL.ToolTipText)
+     MSF1.TextMatrix(REG&, 5) = FORMATNUM$(XVALO(TXTMOVIL), "F10.1")
+End Sub
+Private Sub Form_Load()
+
+   'Call APLICAR_SKIN(Me, App.Path & "\SKINS\dogmax.skn")
+   'Call iniciar_variables
+
+    Call CENTRAFORM(Me)
+'    Show
+    Refresh
+    '
+    Call VERJOBID(OKEY%)
+    If OKEY% < 1 Then Call FINAL("")
+    '
+    '
+15  EPAC$ = TRIM$(EMPREAC$)
+    If EPAC$ <> "" Then
+       EMPRE_SIN_USUARIO$ = REPLACAR$(EPAC$, USERNAME$, "")
+       Caption = Caption + "  -  " + EMPRE_SIN_USUARIO$
+    End If
+    '
+'    HOII% = HOY(HOS$)
+'    Text9.TEXT = HOS$
+    Text17.TEXT = TRIM$(Str$(NUPRESUP&))
+    'Call NUCORUB
+    '
+    ARCHIPRE$ = "MASTER"
+    '
+    'DOLAR POR DEFECTO
+    MONEMI% = 2  ' DOLAR
+    MONEMIS = DEMONECO$(2)
+    MONEMIS.Visible = True
+    TICAMBIS = FORMATNUM$(TICAMONE(2), "F9.4")
+    MONEMIS.ToolTipText = "T.C.: " + TRIM$(FORMATNUM$(TICAMONE(MONEMI%), "F10.4")) + " - Doble-Click para Cambiar Moneda"
+    'CONVERPRECIO% = 1
+    TICAMBIS.Visible = True
+    Label11.Visible = True
+    '
+    If MONEMI% > 1 Then
+      MONEMIS.ForeColor = RGB(255, 0, 0)
+    End If
+    '
+    For U& = 1 To 2
+       X$ = REGLEIDO$("GRUPIVA", U&)
+       PRIVAX = CVS(Mid$(X$, 13, 4))
+       If U& = 1 Then
+           PORIVA0 = TRIM$(FORMATNUM$(PRIVAX, "F8.2"))
+         Else
+           PORIVA1 = TRIM$(FORMATNUM$(PRIVAX, "F8.2"))
+       End If
+    Next U&
+    Call CIERRARCH("GRUPIVA")
+    '
+    UTILIZA_SKIN% = 1
+    Call APLICACIONSKINS(Me)
+    '
+'
+    DTPicker1.Value = Date
+    
+    Text17 = NUPRESUP&
+    'Text20 = "-00"
+    '
+    Call CREARESECOTI ' CREA CAMPOS
+    Call CARGA_ENCABEZADO(FRMPRESUAHP.MSF1, "Código/A22;Cod.Cte/A22;Descripción/A22;Q/F4.A;Prov/AO;Proveedor/A12;Costo/F10.2;Pr.Venta/F8.2;Importe/F10.2;Via Apr./A10;LOTES/A12;CANTI/F7;NPROV/F7;KILOS/F7;DEMORA/F7", FRMPRESUAHP)
+    '1.CODIGO
+    '2.CODIGO CLIENTE
+    '3.DESCRIPCION
+    '4.CANTIDAD
+    '5.NUMERO PROVEEDOR ' OCULTO
+    '6.R.S.PROVEEDOR
+    '7.COSTO
+    '8.PR.VENTA
+    '9.IMPORTE
+    '10.VIA ENTREGA
+    '11.LOTES OCULTO
+    '12.CANTIDAD DE LOTES OCULTO
+    '13.NUMERO DE PROVEEDOR OCULTO
+    '14.KILOS OCULTO
+    '15.DEMORA OCULTO
+    Call CARGARCOMBOVIAS_TODOS
+    '
+    Timer1.Enabled = True
+End Sub
+Sub CARGARCOMBOVIAS_TODOS()
+     Combo6.Clear
+     FIN& = ULTREG&("KILOVIAS")
+     '
+     For I& = 1 To FIN&
+        X$ = REGLEIDO$("KILOVIAS", I&)
+        VIAX$ = TRIM$(CVI(Mid$(X$, 1, 2)))
+        REFVIA$ = ECOARCH$("VIASENTR", MKI$(XVALO(VIAX$)))
+        Call REPLA(TX$, VIAX$, 1, 2)
+        Call REPLA(TX$, "-", 3, 1)
+        Call REPLA(TX$, REFVIA$, 4, 8)
+        Combo6.AddItem TX$
+     Next I&
+     '
+
+End Sub
+    Sub CREARESECOTI()
+        Call CREACAMPO("VENTAS", "RESE_COTI", "NroPres", 6, 4)
+        Call CREACAMPO("VENTAS", "RESE_COTI", "Status", 3, 0)
+        Call CREACAMPO("VENTAS", "RESE_COTI", "CodiInt", 4, 0)
+        Call CREACAMPO("VENTAS", "RESE_COTI", "IDENLOTE", 10, 24)
+        Call CREACAMPO("VENTAS", "RESE_COTI", "CANTIDAD", 6, 0)
+        Call CREACAMPO("VENTAS", "RESE_COTI", "ESTADO", 3, 0)
+        Call CREACAMPO("VENTAS", "RESE_COTI", "USUARIO", 3, 0)
+    End Sub
+Function NUPRESUP&()
+   '
+   NPP& = 1
+   Call ABREPRESVEN
+   '
+   Dim MIRS As ADODB.Recordset
+   STRSQL = ("SELECT max(NroPres) as maximo FROM PresuVen")
+   Set MIRS = FLEXCONN.Execute(FILTSQL$(STRSQL))
+   If Not IsNull(MIRS!Maximo) Then
+      NPP& = 1 + MIRS!Maximo
+   End If
+   NUPRESUP& = NPP&
+   MIRS.Close
+   Set MIRS = Nothing
+   '
+End Function
+
+
+Private Sub mnuedit_Click()
+
+End Sub
+
+Private Sub Form_QueryUnload(Cancel As Integer, UnloadMode As Integer)
+   If XVALO(Text20) > 0 Then
+      'Call APLICAR_SKIN(Me, App.Path & "\SKINS\dogmax.skn")
+      Text1.Locked = False 'TEXT DE CUENTA DE CLIENTE
+      Command19.Enabled = True 'BOTON DE LISTA DE SELECCIN
+      If Text21.Visible = True Then Text21.Visible = False 'CARTEL DE MODIFICACION DE PRESUPUESTO
+      Text1 = ""
+   Else
+      Close
+      End
+   End If
+End Sub
+
+Sub CARGA_PRESUPUESTOS()
+    Screen.MousePointer = 11
+    RESPUESTA_BUSQUEDA$ = ""
+
+    'VALIDO POR SI NO HAY NINGUN DATO CARGADO
+    CONDI$ = "NroPres > 0 "
+    CNRG& = CantRegistros&("PRESUVENTA", CONDI$)
+    If CNRG& < 1 Then
+      MsgBox "No Hay Presupuestos Cargados"
+      Exit Sub
+    End If
+
+    '
+    LISTASELEC.List1.Clear
+    LISTASELEC.List2.Visible = False
+    LISTASELEC.List1.Visible = True
+    '
+    'ASIGNO EL ANCHO QUE VA A TENER CADA CAMPO A ESTAS 2 VARIABLES PUBLICAS
+    CODIGO_LONG% = 14
+    DESCRIP_LONG% = 48
+    
+    SQLX$ = " SELECT * "
+    SQLX$ = SQLX$ + " FROM PRESUVENTA "
+    SQLX$ = SQLX$ + " ORDER BY NroPres "
+
+    Set TABTMP = FLEXCONN.Execute(FILTSQL$(SQLX$))
+
+    With TABTMP
+        Do While (.EOF = False)
+          NPRX$ = SAFETEXT$(!NroPres_Version)
+          NCLIE& = XVALO(!NroClie)
+          RAZONCLI$ = SAFETEXT$(!RASOCLI)
+          FEX = CVINT(!FechEmis)
+          '
+          YY2$ = " - " + AJUSTI$(RAZONCLI$, 20)
+          YY2$ = YY2$ + " - " + AJUSTD$(FECHATEX$(FEX), 8)
+          COCU$ = TRIM$(NPRX$)
+          
+          Call REPLA(TTXX$, COCU$, 1, CODIGO_LONG%)
+          Call REPLA(TTXX$, YY2$, CODIGO_LONG% + 2, DESCRIP_LONG%)
+          JJ& = JJ& + 1
+          LISTASELEC.List1.AddItem TTXX$
+          '
+          If NPX& <> NPXA& Then
+            JJ& = JJ& + 1
+          End If
+          NPXA& = NPX&
+          '
+        .MoveNext
+        Loop
+      
+    End With
+    '
+    LISTASELEC.Caption = "INDICE DE PRESUPUESTOS"
+    LISTASELEC.List1.ListIndex = LISTASELEC.List1.ListCount - 1
+    Screen.MousePointer = 1
+60  LISTASELEC.Show 1
+
+End Sub
+
+
+Private Sub mnuabmcte_Click()
+    ABMCLIENTES.Show 1
+End Sub
+
+Private Sub MnuArt_Prov_Click()
+      '
+         Call GENERA_TABLA_RELACION_ART_PROV
+5        Call SELECHO("MASTER") ' DESPLIEGA LA LISTADO DE ARTICULOS
+         '
+         COD$ = TRIM$(VALACT1$("MASTER"))
+         If COD$ = "" Then Exit Sub
+         '
+         CI% = CODINT%(COD$)
+         ' BUSCO EN LA TABLA PROVEDCOD TODOS LOS REGISTROS QUE COINCIDAN CON EL CI%
+         SQLX$ = "SELECT * FROM RELACODPROV WITH (NOLOCK)"
+         SQLX$ = SQLX$ + "WHERE COD_INTE = " & CI% & " AND MARBORRA = 0 "
+         Dim RS As ADODB.Recordset
+         Set RS = FLEXCONN.Execute(FILTSQL$(SQLX$))
+         '
+         Call SETULTREG("!PROVIADE", 0)
+         JJ& = 0
+         With RS
+            Do While Not .EOF ' RECORRO LA TABLA Y GRABO EN EL ARCHIVO PARA MOSTRAR LA VENTANA
+                X$ = REGBLAN$("PROVIADE")
+                Call REPLA(X$, MKI(XVALO(!Num_Prov)), 1, 2)
+                Call REPLA(X$, MKD(XVALO(!Precio)), 3, 8)
+                Call REPLA(X$, Chr(XVALO(!MONEDA)), 11, 1)
+                Call REPLA(X$, MKI(CVINT(!FECHA)), 12, 2)
+                JJ& = JJ& + 1
+                Call GRAREG("!PROVIADE", X$, JJ&)
+            .MoveNext
+            Loop
+         End With
+         RS.Close
+         Set RS = Nothing
+         
+10       XYX% = VENTABU%("PROVIADE") ' MUESTRO LA VENTANA
+         If XYX% < 0 Then GoTo 5     ' SI CIERRA VUELVE AL SELECHO
+         '
+         Screen.MousePointer = 11
+         For U& = 1 To ULTREG&("!PROVIADE")
+            X$ = REGLEIDO$("!PROVIADE", U&)
+            COCO% = Asc(Left$(X$, 1))
+            If COCO% < 1 Then
+               Call MENSERR(24, "Código debe ser Numérico.")
+               GoTo 10
+            End If
+            '
+            DECO$ = TRIM$(Mid$(X$, 2, 32))
+            If DECO$ = "" Then
+               Call MENSERR(24, "Falta Descripción Para el Código Número '" + TRIM$(Str$(COCO%)) + "'.")
+               GoTo 10
+            End If
+         '
+         Next U&
+      
+         CONDI$ = "COD_INTE=" & CI%
+         Call ACTUREGISTRO("RELACODPROV", "MARBORRA", CONDI$, 1, REG&) ' HACE UN MARBORRA
+
+         SQLX$ = "SELECT * FROM RELACODPROV "
+         SQLX$ = SQLX$ + " WHERE COD_INTE = " & CI%
+         Set RS2 = New ADODB.Recordset
+         RS2.Open FILTSQL$(SQLX$), FLEXCONN, adOpenKeyset, adLockPessimistic, adCmdText
+          With RS2
+            For I& = 1 To ULTREG&("!PROVIADE") ' RECORRO EL ARCHIVO Y GRABO
+              XX$ = REGLEIDO$("!PROVIADE", I&) ' LA INFORMACION DE LA VENTANA
+              NPRO% = CVI(Mid$(XX$, 1, 2))
+              PRECIOX# = CVD(Mid$(XX$, 3, 8))
+              MON% = Asc(Mid$(XX$, 11, 1))
+              FE% = CVI(Mid$(XX$, 12, 2))
+              
+              .AddNew   ' YA CONVERTIDO
+              
+              On Error Resume Next
+              !CodiEmpr = CodiEmp%
+              On Error GoTo 0
+              !Num_Prov = NPRO%
+              !COD_INTE = CI%
+              !VIA = 0
+              !Precio = PRECIOX#
+
+              If ROUND(PRECIOX#, 2) <> ROUND(XVALO(!Precio), 2) Then
+                FE% = HOY(HO$)
+              End If
+              !MONEDA = MON%
+
+              '
+              If FE% < 1 Then FE% = HOY(HO$)
+              !FECHA = CVDAT(FE%)
+              !MarBorra = 0
+              .Update
+            Next I&
+          End With
+         RS2.Close
+         Set RS2 = Nothing
+         CONDI$ = "MARBORRA = 1"
+         Call BORRAREGISTROS("RELACODPROV", CONDI$, REG&) ' BORRO LOS MARCADOS CON 1
+
+         Call TRACENTRAL("PROVIADE", "")
+         Call FRESHECHO("PROVIADE")
+         Screen.MousePointer = 1
+         Call COMUNI("Grabación Finalizada")
+End Sub
+
+Private Sub mnuasigcoef_Click()
+      Call TRALOCAL("PORCCOEF", "")
+      '
+10    Screen.MousePointer = 1
+      VTB% = VENTABU%("PORCCOEF")
+      If VTB% < 0 Then Exit Sub
+      '
+      Screen.MousePointer = 11
+      For U& = 1 To ULTREG&("!PORCCOEF")
+         X$ = REGLEIDO$("!PORCCOEF", U&)
+         COCO% = Asc(Left$(X$, 1))
+         If COCO% < 1 Then
+            Call MENSERR(24, "Falta Código de Via de Aprovisionamiento - Fila: " & U&)
+            GoTo 10
+         End If
+         '
+         COCO2% = Asc(Mid$(X$, 3, 2))
+         If COCO2% < 1 Then
+            Call MENSERR(24, "Falta Código de Tipo de Coeficiente - Fila: " & U&)
+            GoTo 10
+         End If
+         '
+         PORC = Asc(Mid$(X$, 3, 2))
+         If PORC < 0.005 Then
+            Call MENSERR(24, "Falta Coeficiente - Fila: " & U&)
+            GoTo 10
+         End If
+
+      Next U&
+      '
+      Call TRACENTRAL("PORCCOEF", "")
+      Call FRESHECHO("PORCCOEF")
+       Screen.MousePointer = 1
+      Call COMUNI("Grabación Finalizada")
+
+
+End Sub
+
+Private Sub mnuDemora_Click()
+      '
+      'ORDENA POR PROVEEDOR
+      Call TRACENTRAL("DEMORAS", "")
+      Call FILESORT("DEMORAS", "", 1, 1)
+      '
+      Call TRALOCAL("DEMORAS", "")
+      '
+10    Screen.MousePointer = 1
+      '
+
+      VTB% = VENTABU%("DEMORAS/TITUPAN=Demoras Según Proveedor y Via de Entrega")
+      If VTB% < 0 Then Exit Sub
+      '
+      
+      Screen.MousePointer = 11
+      For U& = 1 To ULTREG&("!DEMORAS")
+         X$ = REGLEIDO$("!DEMORAS", U&)
+         COCO% = Asc(Mid$(X$, 3, 2))
+         If COCO% < 1 Then
+            Call MENSERR(24, "Código debe Vía de Entrega Debe ser NuméricoNo Válido en Fila: " & U&)
+            GoTo 10
+         End If
+         '
+      Next U&
+      '
+      For U& = 1 To ULTREG&("!DEMORAS")
+         X$ = REGLEIDO$("!DEMORAS", U&)
+         NP% = Asc(Mid$(X$, 1, 2))
+         If NP% < 1 Then
+            Call MENSERR(24, "Código de Proveedor No Válido en Fila: " & U&)
+            GoTo 10
+         End If
+         '
+      Next U&
+
+      'VALIDO QUE NO SE REPITA LA COMBINACION DE CODIGO PROVEEDOR Y VIA DE ENTREGA
+      For U& = 1 To ULTREG&("!DEMORAS")
+         X$ = REGLEIDO$("!DEMORAS", U&)
+         COCO% = Asc(Left$(X$, 2))
+         CODEMORA% = Asc(Mid$(X$, 3, 2))
+         For j& = 1 To ULTREG&("!DEMORAS")
+            If j& <> U& Then
+              X$ = REGLEIDO$("!DEMORAS", j&)
+              COCO2% = Asc(Left$(X$, 2))
+              CODEMORA2% = Asc(Mid$(X$, 3, 2))
+              If COCO% = COCO2% Then
+                If CODEMORA% = CODEMORA2% Then
+                   Call MENSERR(24, "Código Proveedor (" & COCO2% & ") y Código Demora  (" & CODEMORA% & ") Repetido.")
+                   GoTo 10
+                End If
+              End If
+            End If
+          Next j&
+      Next U&
+      '
+      Call TRACENTRAL("DEMORAS", "")
+      Call FRESHECHO("DEMORAS")
+      '
+      Screen.MousePointer = 1
+      Call COMUNI("Grabación Finalizada")
+      '
+End Sub
+
+
+ 
+
+
+Private Sub MNUEDITPRESUP_Click()
+    '
+    CONDI$ = "NroPres > 0 "
+10  Call CARGALISEL("INDICEPR", "PRESUVEN", "NROPRES/F6.0;NroClie/F6.0;RasoClie/A24", CONDI$, "DISTINCT")
+    Call SELECHO("INDICEPR/INDICE DE PRESUPUESTOS")
+    NPR& = XVALO(VALACT1("INDICEPR"))
+    If NPR& < 1 Then Exit Sub
+    
+    '
+    Text17 = TRIM(Str$(NPR&))
+    Text1 = XVALO(Left$(VALACT2("INDICEPR"), 6))
+    Text20 = "" 'para que siempre dispare el evento change
+    Text1.Locked = True
+    Command19.Enabled = False
+    '
+    Call PREPORCOP(NPR&)
+    CONDI$ = "NroPres = " & NPR&
+    NROPE& = XVALO(VALOBADA("PRESUVEN", "NroPedi", CONDI$, "NOMESS"))
+    If NROPE& < 1 Then
+       Text21.TEXT = "MODIFICACIÓN DE PRESUPUESTO "
+    Else
+       Text21.TEXT = "MODIFICACIÓN DE PRESUPUESTO - PEDIDO: " & NROPE&
+    End If
+    
+    Text21.Visible = True
+
+    '
+End Sub
+Function SIG_VERSION%(PRESUPUESTOX$)
+       'PR-00000063-00
+       NUMEPRE& = XVALO(Mid$(PRESUPUESTOX$, 4, 8))
+       CONDI$ = "NroPres = " & NUMEPRE&
+       SIG_VERSION% = 1 + VALOBADA("PRESUVENTA", "MAX(RIGHT(NroPres_Version,2))", CONDI$, "NOMESS")
+End Function
+
+Private Sub MnuLimvias_Click()
+      Call TRALOCAL("KILOVIAS", "")
+      '
+10    Screen.MousePointer = 1
+
+      VTB% = VENTABU%("KILOVIAS")
+      If VTB% < 0 Then Exit Sub
+      '
+      Screen.MousePointer = 11
+      For U& = 1 To ULTREG&("!KILOVIAS")
+         X$ = REGLEIDO$("!KILOVIAS", U&)
+         COCO% = Asc(Left$(X$, 2))
+         If COCO% < 1 Then
+            Call MENSERR(24, "Falta Código de Vía de Entrega")
+            GoTo 10
+         End If
+         '
+      Next U&
+      '
+      'VALIDO QUE NO SE REPITA LA COMBINACION DE CODIGO PROVEEDOR Y VIA DE ENTREGA
+      For U& = 1 To ULTREG&("!KILOVIAS")
+         X$ = REGLEIDO$("!KILOVIAS", U&)
+         COCO% = Asc(Left$(X$, 2))
+         For j& = 1 To ULTREG&("!KILOVIAS")
+            If j& <> U& Then
+              X$ = REGLEIDO$("!KILOVIAS", j&)
+              COCO2% = Asc(Left$(X$, 2))
+              If COCO% = COCO2% Then
+                 Call MENSERR(24, "Código Via Repetido (" & COCO2% & ") ")
+                 GoTo 10
+              End If
+            End If
+          Next j&
+      Next U&
+      '
+      Call TRACENTRAL("KILOVIAS", "")
+      Call FRESHECHO("KILOVIAS")
+      '
+      Screen.MousePointer = 1
+      Call COMUNI("Grabación Finalizada")
+      '
+End Sub
+
+Private Sub mnupcopia_Click()
+
+'   If XVALO(Text20) > 0 Then Exit Sub ' modo modificacion
+    CONDI$ = "NroPres > 0 "
+10  Call CARGALISEL("INDICEPR", "PRESUVEN", "NROPRES/F6.0;NroClie/F6.0;RasoClie/A24", CONDI$, "DISTINCT")
+    Call SELECHO("INDICEPR/INDICE DE PRESUPUESTOS")
+    NPR& = XVALO(VALACT1("INDICEPR"))
+    If NPR& < 1 Then Exit Sub
+    
+    Call SELECHO("DEUDOR1")
+    NCLIE% = XVALO(TRIM$(VALACT1$("DEUDOR1")))
+    If NCLIE% > 0 Then
+      Text1 = NCLIE%
+      Call PREPORCOP(XVALO(NPR&))
+    End If
+   '
+End Sub
+Sub PREPORCOP(NPRESU&)   '
+   NUCLI% = NCLIE% 'CVI(Mid$(XX$, 7, 2))'CLIENTE QUE SE ELIGIO
+   Call ABREPRESVEN
+   '
+   SQLX$ = " SELECT * "
+   SQLX$ = SQLX$ + " FROM PRESUVEN WITH(NOLOCK)"
+   SQLX$ = SQLX$ + " WHERE NroPres= " & NPRESU&
+   SQLX$ = SQLX$ + " ORDER BY NuOrdIt "
+   '
+   Dim PRESUTEMP As ADODB.Recordset
+   Set PRESUTEMP = READSET(SQLX$)
+    '
+   MSF1.Rows = 1
+   Screen.MousePointer = 11
+   With PRESUTEMP
+      Do While Not .EOF
+        I& = I& + 1
+        CI1% = XVALO(!CodiInt)
+        CODE$ = SAFETEXT$(!CodiExt)
+        DESCRIX$ = SAFETEXT$(!Descrip)
+        CANTI = XVALO(!Cantit)
+        INETO = XVALO(!PreUnit)
+        PREUNI# = INETO * (1 + TTT1 / 100)
+        IMPORTX# = CANTI * PREUNI#
+        MSF1.Rows = MSF1.Rows + 1
+        MSF1.TextMatrix(I&, 1) = CODE$
+        MSF1.TextMatrix(I&, 2) = "CODIGO CLIENTE"
+        MSF1.TextMatrix(I&, 3) = DESCRIX$
+        MSF1.TextMatrix(I&, 4) = TRIM$(FORMATNUM$(CANTI, "F8.1"))
+        MSF1.TextMatrix(I&, 5) = TRIM$(XVALO(!Num_Prov))
+        MSF1.TextMatrix(I&, 6) = TRIM$(RASOCLI(-1 * XVALO(!Num_Prov)))
+        MSF1.TextMatrix(I&, 7) = TRIM$(FORMATNUM$(XVALO(!COSTO_UNIT), "F12.2"))
+        MSF1.TextMatrix(I&, 8) = TRIM$(FORMATNUM$(PREUNI#, "F12.2"))
+        MSF1.TextMatrix(I&, 9) = TRIM$(FORMATNUM$(IMPORTX#, "F12.2"))
+        MSF1.TextMatrix(I&, 10) = SAFETEXT$(!Via_Entrega)
+        MSF1.TextMatrix(I&, 11) = SAFETEXT$(!LOTES_Reservados)
+        MSF1.TextMatrix(I&, 12) = FORMATNUM$(XVALO(!Canti_Lotes), "F7.1")
+
+
+        PORDESCU = SAFETEXT$(!PorcDesc)
+        
+
+      .MoveNext
+      Loop
+   End With
+   PRESUTEMP.Close
+   Set PRESUTEMP = Nothing
+   '
+   Screen.MousePointer = 1
+   Call ACTU_TOTAL
+   ALPORCOPIA% = 1 'MARCA PARA SABER SI ESTA EN ALTA POR COPIA
+End Sub
+
+Private Sub MnuProv_Art_Click()
+         '
+         Call GENERA_TABLA_RELACION_ART_PROV
+5        Call SELECHO("PROVED1")
+         '
+         NPRO% = XVALO(VALACT1("PROVED1"))
+         If NPRO% < 1 Then Exit Sub
+         '
+         SQLX$ = "SELECT * FROM RELACODPROV  WITH(NOLOCK)"
+         SQLX$ = SQLX$ + " WHERE NUM_PROV = " & NPRO% & " AND MARBORRA = 0 "
+         Set RS = READSET(SQLX$)
+         '
+         Call SETULTREG("!ARTPROVD", 0)
+         With RS
+            On Error Resume Next
+            .MoveFirst
+            If Err Then
+                On Error GoTo 0
+                GoTo 10
+            End If
+            JJ& = 0
+             Do While (.EOF = False)
+                X$ = REGBLAN$("ARTPROVD")
+                Q = !VIA
+                Call REPLA(X$, MKI(XVALO(!COD_INTE)), 1, 2)
+                Call REPLA(X$, MKD(XVALO(!Precio)), 3, 8)
+                Call REPLA(X$, Chr$(XVALO(!MONEDA)), 11, 1)
+                Call REPLA(X$, MKI(CVINT(!FECHA)), 12, 2)
+                JJ& = JJ& + 1
+                Call GRAREG("!ARTPROVD", X$, JJ&)
+            .MoveNext
+            Loop
+         End With
+         RS.Close
+         Set RS = Nothing
+         '
+10       XYX% = VENTABU%("ARTPROVD")
+         If XYX% < 0 Then GoTo 5
+         '
+         CONDI$ = "NUM_PROV =" & NPRO%
+         Call ACTUREGISTRO("RELACODPROV", "MARBORRA", CONDI$, 1, REG&)
+    
+         
+         SQLX$ = "SELECT * FROM RELACODPROV "
+         SQLX$ = SQLX$ + " WHERE NUM_PROV = " & NPRO%
+         Set RS1 = New ADODB.Recordset
+         RS1.Open FILTSQL$(SQLX$), FLEXCONN, adOpenKeyset, adLockPessimistic, adCmdText
+           With RS1
+             For I& = 1 To ULTREG&("!ARTPROVD")
+               XX$ = REGLEIDO$("!ARTPROVD", I&)
+               
+               CI% = CVI(Mid$(XX$, 1, 2))
+               PRECIOX# = CVD(Mid$(XX$, 3, 8))
+               MON% = Asc(Mid$(XX$, 11, 1))
+               FE% = CVI(Mid$(XX$, 12, 2))
+               CI% = CVI(Mid$(XX$, 1, 2))
+               .AddNew   ' YA CONVERTIDO
+               On Error Resume Next
+               !CodiEmpr = CodiEmp%
+               On Error GoTo 0
+               !Num_Prov = NPRO%
+               !COD_INTE = CI%
+               !Precio = PRECIOX#
+               !MONEDA = MON%
+               If FE% < 1 Then FE% = FE% = HOY(HO$)
+               If ROUND(PRECIOX#, 2) <> ROUND(XVALO(!Precio)) Then FE% = HOY(HO$)
+               !FECHA = CVDAT(FE%)
+               !VIA = 0
+               !MarBorra = 0
+               .Update
+             Next I&
+           End With
+         RS1.Close
+         Set RS1 = Nothing
+         CONDI$ = CONDI + "AND  MARBORRA = 1  "
+         Call BORRAREGISTROS("RELACODPROV", CONDI$, REG&)
+         
+         Call TRACENTRAL("ARTPROVD", "")
+         Call FRESHECHO("ARTPROVD")
+         Screen.MousePointer = 1
+         Call COMUNI("Grabación Finalizada")
+
+End Sub
+
+Private Sub MnuTabEntr_Click()
+      Call TRALOCAL("VIASENTR", "")
+      '
+10    Screen.MousePointer = 1
+      VTB% = VENTABU%("VIASENTR")
+      If VTB% < 0 Then Exit Sub
+      '
+      Screen.MousePointer = 11
+      For U& = 1 To ULTREG&("!VIASENTR")
+         X$ = REGLEIDO$("!VIASENTR", U&)
+         COCO% = Asc(Left$(X$, 1))
+         If COCO% < 1 Then
+            Call MENSERR(24, "Código debe ser Numérico.")
+            GoTo 10
+         End If
+         '
+         DECO$ = TRIM$(Mid$(X$, 2, 32))
+         If DECO$ = "" Then
+            Call MENSERR(24, "Falta Descripción Para el Código Número '" + TRIM$(Str$(COCO%)) + "'.")
+            GoTo 10
+         End If
+         '
+      Next U&
+      '
+      Call TRACENTRAL("VIASENTR", "")
+      Call FRESHECHO("VIASENTR")
+       Screen.MousePointer = 1
+      Call COMUNI("Grabación Finalizada")
+      'POSICIONES
+      'DE PORCENTAJE 35,8
+     '
+End Sub
+
+Private Sub mnutcoef_Click()
+      Call TRALOCAL("TIPOCOEF", "")
+      '
+10    Screen.MousePointer = 1
+      VTB% = VENTABU%("TIPOCOEF")
+      If VTB% < 0 Then Exit Sub
+      '
+      Screen.MousePointer = 11
+      For U& = 1 To ULTREG&("!TIPOCOEF")
+         X$ = REGLEIDO$("!TIPOCOEF", U&)
+         COCO% = Asc(Left$(X$, 1))
+         If COCO% < 1 Then
+            Call MENSERR(24, "Código debe ser Numérico.")
+            GoTo 10
+         End If
+         '
+         DECO$ = TRIM$(Mid$(X$, 2, 32))
+         If DECO$ = "" Then
+            Call MENSERR(24, "Falta Descripción Para el Código Número '" + TRIM$(Str$(COCO%)) + "'.")
+            GoTo 10
+         End If
+         '
+      Next U&
+      '
+      Call TRACENTRAL("TIPOCOEF", "")
+      Call FRESHECHO("TIPOCOEF")
+       Screen.MousePointer = 1
+      Call COMUNI("Grabación Finalizada")
+
+End Sub
+
+Private Sub mnuvisualiza_Click()
+
+    CONDI$ = "NroPres > 0 "
+10  Call CARGALISEL("INDICEPR", "PRESUVEN", "NROPRES/F6.0;NroClie/F6.0;RasoClie/A24", CONDI$, "DISTINCT")
+    Call SELECHO("INDICEPR/INDICE DE PRESUPUESTOS")
+    NPR& = XVALO(VALACT1("INDICEPR"))
+    If NPR& < 1 Then Exit Sub
+
+    TIDOCUM$ = "Presupuesto "
+'    NUDOCU$ = SAFETEXT$(NPR&)
+'    While Len(NUDOCU$) < 6: NUDOCU$ = "0" + NUDOCU$: Wend
+'    NUDOCU$ = NUDOCU$ + " "
+
+    Screen.MousePointer = 11
+    DOCUNU& = DOCID&(TIDOCUM$, Str$(NPR&), NUDOCU$)
+      If DOCUNU& < 1 Then
+           Screen.MousePointer = 1
+           Call COMUNI("No se Encontró el Documento Impreso\Correspondiente a la " & DOCUMENTO_ELEGIDO$ & " .\  \Si se Trata de un Pedido Pendiente de Entrega\Puede Refrescarlo con la Opción\'Modificación de Pedido en Curso'.")
+           On Error Resume Next
+           OPPED07.Command46.SetFocus
+           OPPED07.Show 1
+           If Err Then
+            On Error GoTo 0
+           End If
+           GoTo 99
+      End If
+      Call MUESTRADOC(DOCUNU&, "", TIDOCUM$, Str$(NPR&), Str$(NPR&))
+'    '
+'    For UI& = ULTREG&("PDOCLST") To 1 Step -1
+'      XX$ = Left$(REGLEIDO$("PDOCLST", UI&), 64)
+'      If InStr(XX$, TIDOCUM$) > 4 Then
+'        PPXX% = InStr(XX$, "Nro.")
+'        If PPXX% > 0 Then
+'          XX$ = Left$(XX$, PPXX% - 1) + " " + Mid$(XX$, PPXX% + 4)
+'        End If
+'        POS1% = InStr(XX$, "Presupuesto")
+'        If POS1% > 0 Then
+'           NUMECOMPA$ = TRIM$(Mid$(XX$, POS1% + 12))
+'           If NUMECOMPA$ = TRIM$(NUDOCU$) Then
+'                DOCUNU& = CVS(Left$(XX$, 4))
+'                GoTo 5
+'           End If
+'        End If
+'      End If
+'     Next UI&
+'     Screen.MousePointer = 1
+'     Call COMUNI("DOCMENTO NO ENCONTRADO")
+'     GoTo 10
+'     '
+'5    Call MUESTRADOC(DOCUNU&)
+     GoTo 10
+     '
+99
+End Sub
+
+
+Private Sub MONEMIS_DblClick()
+   '
+   TICAMBIS.Visible = False
+   'VALIDO QUE NO HAYA NINGUN DATO EN LOS CASILLEROS DE ARRIBA ANTES DE MODIFICAR LA MONEDA X Q ESTA YA ESTA CONVERTIDA A LA MONEDA ACTIVA.
+   If TRIM$(txtcodigo) <> "" Then
+      Call COMUNI("Imposible Cambiar de Moneda Cuando Hay Información en Casilleros de Ingreso\Borre la Información y Vuelva a Intentar")
+      Exit Sub
+   End If
+   
+   Static CAMON%, DMONE$(), TCMONE()
+   If CAMON% < 1 Then
+     CAMON% = ULTREG&("TAMONED")
+     If CAMON% < 1 Then
+         CAMON% = 1
+         ReDim DMONE$(CAMON%), TCMONE(CAMON%)
+         DMONE$(1) = "Pesos"
+         TCMONE(1) = 1
+       Else
+         ReDim DMONE$(CAMON%), TCMONE(CAMON%)
+         For U& = 1 To CAMON%
+           XX$ = REGLEIDO$("TAMONED", U&)
+           DMX$ = TRIM$(Left$(XX$, 8)) + " "
+           PPXX% = InStr(DMX$, " ")
+           DMX$ = Left$(DMX$, PPXX% - 1)
+           '
+           VHX = CVS(Mid$(XX$, 29, 4)): If VHX < 0.005 Then VHX = 1
+           DMONE$(U&) = DMX$
+           TCMONE(U) = VHX
+         Next U&
+     End If
+   End If
+   '
+   MONEMIA% = MONEMI%
+15 MONEMI% = MONEMI% + 1
+   If MONEMI% > CAMON% Then MONEMI% = 1
+   If DMONE$(MONEMI%) = "" Then GoTo 15
+   '
+   MONEMIS = DMONE$(MONEMI%)
+   MONEMIS.ForeColor = RGB(0, 0, 255)
+   If MONEMI% > 1 Then
+      MONEMIS.ForeColor = RGB(255, 0, 0)
+   End If
+   '
+   MONEMIS.ToolTipText = "T.C.: " + TRIM$(FORMATNUM$(TICAMONE(MONEMI%), "F10.4")) + " - Doble-Click para Cambiar Moneda"
+   TICAMBIS = FORMATNUM$(TICAMONE(MONEMI%), "F9.4")
+   '
+   If MONEMI% > 1 Then
+     TICAMBIS.Visible = True
+     'TICAMBIS.Enabled = False
+   End If
+   '
+   Total(0) = FORMATNUM$(XVALO(Total(0)) * TICAMONE(MONEMIA%) / TICAMONE(MONEMI%), "F12.2")
+   '
+      COEFCON = TICAMONE(MONEMIA%) / TICAMONE(MONEMI%)
+      For U& = 1 To MSF1.Rows - 1
+
+        CAN = XVALO(MSF1.TextMatrix(U&, 3))
+        'PORDESCUIN = CVS(Mid$(X$, 69, 4))
+        COSTOX# = COEFCON * XVALO(MSF1.TextMatrix(U&, 7))
+        PRECVENTA# = COEFCON * XVALO(MSF1.TextMatrix(U&, 8))
+        IMPORTEX# = COEFCON * XVALO(MSF1.TextMatrix(U&, 9))
+        MSF1.TextMatrix(U&, 7) = FORMATNUM$(COSTOX#, "F12.3")
+        MSF1.TextMatrix(U&, 8) = FORMATNUM$(PRECVENTA#, "F12.3")
+        MSF1.TextMatrix(U&, 9) = FORMATNUM$(IMPORTEX#, "F12.2")
+        
+      Next U&
+      '
+      Call ACTU_TOTAL
+'      Call CARLISPRES
+'      Call CIERRARCH("!CARDETPR")
+'      Call CALTOPRES
+'   End If
+   '
+End Sub
+
+
+
+
+Private Sub MSF1_DblClick()
+    I& = MSF1.MouseRow
+    j& = MSF1.MouseCol
+    If I& = 0 Or I& > MSF1.Rows Then Exit Sub
+    '
+    On Error Resume Next
+    MSF1.Row = I&
+    MSF1.COL = j&
+    On Error Resume Next
+
+    REG& = I&
+    If REG& < 1 Then
+        Exit Sub
+    End If
+    '
+    '
+    OPX% = COMALTER%("Artículo Seleccionado: " & MSF1.TextMatrix(REG&, 3) & " \\Cancelar\Quitar\Editar")
+    If OPX% < 2 Then
+       Exit Sub
+    ElseIf OPX% = 2 Then
+       REGI% = REG&
+       Call borrafila(REGI%, FRMPRESUAHP, MSF1)
+    ElseIf OPX% = 3 Then
+       REGI% = REG&
+       EDICION% = 1
+       INFOSIAHP.Command3.Visible = True
+40     Call MOVER_ARRIBA(REG&) 'SUBE LA INFORMACION A LOS CASILLEROS DE ARRIBA.
+       REGI% = REG&
+       Call TXTCANTIDAD_KeyPress(13) 'CARGA LOS DATOS EN LA GRILLA
+       If EDICION% > 0 Then 'SI ES EDICION BORRA EL REGISTRO EN EL QUE SE CLIKEO POR QUE EN EL PASO ANTERIOR LO AGREGO AL FINAL
+         Call borrafila(REGI%, FRMPRESUAHP, MSF1)
+       End If
+       EDICION% = 0
+       Call CONTROL_CANT_LOTE_MSF1(OK%)
+       If OK% < 1 Then
+         REG& = MSF1.Rows - 1
+         GoTo 40
+       End If
+    End If
+    '
+    Call ACTU_TOTAL
+    '
+    On Error Resume Next
+    VISIROWS = (MSF1.Height / MSF1.RowHeight(j&)) - 4
+    If Err > 0 Then
+      VISIROWS = 1
+    End If
+    On Error GoTo 0
+    '
+    If VISIROWS > 0 Then
+       If MSF1.TopRow < MSF1.Row - VISIROWS Then
+          MSF1.TopRow = MSF1.Row - VISIROWS
+       End If
+    End If
+
+
+End Sub
+
+Sub CONTROL_CANT_LOTE_MSF1(OK%)
+   OK% = 1
+   CI1% = CODINT(txtcodigo)
+   For I& = 1 To MSF1.Rows - 1
+        LOTE$ = MSF1.TextMatrix(I&, 13)
+        ST = XVALO(MSF1.TextMatrix(I&, 12))
+        CANTI = XVALO(MSF1.TextMatrix(I&, 11))
+        '
+        If CANTI > ST Then
+             Call COMUNI("Cantidad Seleccionada para Lote: " & LOTE$ & " Supera el Stock del Mismo.")
+             OK% = 0
+             Exit For
+        End If
+        '
+        'VALIDA SI HAY CANTIDAD YA SELECCIONADA EN EL PRESUPUESTO + LA SELECCIONADA SI ALCANZA EL STOCKS
+        CANTIGRI = CANTILOTE_EN_GRILLA(CI1%, LOTE$) ' CANTIDAD YA INGRESADA EN GRILLA DE PRESUPUESTO DEL MISMO LOTE
+        If CANTIGRI > 0 Then
+           If (CANTI + CANTIGRI) > ST Then
+              TX$ = "La Cantidad (" & CANTI & ") Seleccionada para Lote: " & LOTE$
+              TX$ = TX$ + "\Sumada a La Cantidad (" & CANTIGRI & ") Ya ingresada en Detalle de Presupuesto Activo"
+              TX$ = TX$ + "\Supera La Cantidad (" & ST & ") del Stock Disponible."
+              Call COMUNI(TX$)
+              OK% = 0
+              Exit For
+           End If
+        End If
+   Next I&
+End Sub
+Function CANTILOTE_EN_GRILLA(CI1%, LOTEPARAM$)
+    ACUCANTI = 0
+    With FRMPRESUAHP
+        LOTEPARAM$ = TRIM$(LOTEPARAM$)
+        For I& = 1 To .MSF1.Rows - 1
+           STRINGLOTES$ = .MSF1.TextMatrix(I&, 11)
+           If InStr(STRINGLOTES$, LOTEPARAM$) > 0 Then
+                  CANTI = XVALO(.MSF1.TextMatrix(I&, 11))
+                  ACUCANTI = ACUCANTI + CANTI
+           End If
+        Next I&
+    End With
+    '
+    CANTILOTE_EN_GRILLA = ACUCANTI
+    '
+End Function
+
+
+Function CARGADO_ENGRILLA(LOTEPARAM$, Optional FILA&)
+    'RECORRO LA GRILLA DEL PRESUPUESTO Y ACUMULO LA CANTIDAD YA CARGADA
+    ACUCANTI = 0
+    With FRMPRESUAHP
+        LOTEPARAM$ = TRIM$(LOTEPARAM$)
+        For I& = 1 To .MSF1.Rows - 1
+           If FILA& = I& Then GoTo 50 'SI VIENE CON VALOR DE FILA NO SUMA LA FILA PARAMETRO
+           STRINGLOTES$ = MSF1.TextMatrix(I&, 11)
+           If STRINGLOTES$ = LOTEPARAM$ Then
+              CANTI = XVALO(MSF1.TextMatrix(I&, 4))
+              ACUCANTI = ACUCANTI + CANTI
+           End If
+50      Next I&
+    End With
+    '
+    CARGADO_ENGRILLA = ACUCANTI
+    '
+End Function
+
+Private Sub MSFlexGrid2_Click()
+
+End Sub
+
+'Private Sub MSF1_MouseDown(Button As Integer, Shift As Integer, X As Single, Y As Single)
+'     If Button = 2 Then
+'        REG& = MSF1.MouseRow
+'        If REG& < 1 Then Exit Sub
+'        CI1% = CODINT%(MSF1.TextMatrix(REG&, 1))
+'        Call PRESENTA_INFO_ARTICULO(CI1%)
+'        Call cargar_datos
+'     End If
+'
+'End Sub
+
+Private Sub PORDESCU_Change()
+   Call ACTU_TOTAL
+End Sub
+
+Private Sub Text1_Change()
+   
+   Call LIMPIAR_TEXT_DETALLE
+   Call LIMPIARPRESU
+   MSF1.Rows = 1
+   
+   If TRIM$(Text1.TEXT) <> "" Then
+      Call CARGADATOS_CLIENTE
+   End If
+   NC% = XVALO(Text1)
+   'VALIDO SI LA LISTA ACTIVA ES VALIDA
+   If XVALO(Text1) > 0 Then
+    NLIST% = XVALO(Text23)
+   End If
+   Label26 = CODICLI$(NC%)
+   '
+   'FECHA
+   DTPicker1.Value = Date
+   For KKI% = 0 To 1
+     LENTREGA(KKI%) = LUENTRECLI$(NC%, KKI%)
+   Next KKI%
+   '
+  FRMPRESUAHP.TXTCONDIPAGO = TRIM$(Str$(CPAGCLI%(NC%)))
+  FRMPRESUAHP.TXTNUMVENDEDOR = TRIM$(Str$(VENDCLI%(NC%)))
+
+'   If Command1.Enabled = True Then
+'       Call FRMPRESUAHP.Command1_Click
+'   End If
+End Sub
+
+Sub LIMPIARPRESU() 'SE LE PUEDE PASAR UN TEXTBOX QUE ESTE NO SE LIMPIE
+    
+    Text2 = ""
+    Text3 = ""
+    Text4 = ""
+    Text5 = ""
+    Text8 = ""
+    Text18 = ""
+    ENTRAOBS.Text28 = ""
+    Text14 = ""
+    Text19 = ""
+    Text23 = ""
+    Text20 = ""
+    '
+    Total(0) = ""
+    Total(1) = ""
+    Text31 = ""
+    Text33 = ""
+    PORDESCU = ""
+    TXTTOTALPESO = ""
+    MONEMI% = 2
+    MONEMIS.Caption = Left$(DEMONECO$(MONEMI%), 8)
+    TICAMBIS = FORMATNUM$(TICAMONE(MONEMI%), "F9.4")
+    MONEMIS.ToolTipText = "T.C.: " + TRIM$(FORMATNUM$(TICAMONE(MONEMI%), "F10.4")) + " - Doble-Click para Cambiar Moneda"
+    MONEMIS.ForeColor = RGB(0, 0, 255)
+'    TICAMBIS.Visible = False
+
+End Sub
+Sub CARGADATOS_CLIENTE()
+   CUENTA& = XVALO(Text1)
+   If CUENTA& < 1 Then: Call LIMPIARPRESU: Exit Sub
+   '
+   CONDI$ = "Nume_Cli = " & CUENTA&
+   '
+   'VALIDO SI EXISTE
+   CNRG& = CantRegistros&("DEUDOR12", CONDI$)
+   If CNRG& < 1 Then Call LIMPIARPRESU: Exit Sub
+   '
+   'CARGO DATOS DE CLIENTE
+   Text2 = VALOBADA("DEUDOR12", "Raso_Cli", CONDI$, "NOMESS")
+   Text3 = VALOBADA("DEUDOR12", "Domi_Cli", CONDI$, "NOMESS")
+   Text4 = VALOBADA("DEUDOR12", "LOCA_CLI", CONDI$, "NOMESS")
+   Text8 = VALOBADA("DEUDOR12", "Tele_Cli", CONDI$, "NOMESS")
+   Text5 = VALOBADA("DEUDOR12", "CELU_CLI", CONDI$, "NOMESS")
+   Text18 = VALOBADA("DEUDOR12", "Mail_Cli", CONDI$, "NOMESS")
+   Text19 = VALOBADA("DEUDOR12", "Nota_Cli", CONDI$, "NOMESS")
+   Text23 = CEROIGUALVACIO(XVALO(VALOBADA("DEUDOR12", "Lpre_Cli", CONDI$, "NOMESS")))
+   '
+
+End Sub
+
+Private Sub Text20_Change()
+  If XVALO(Text20) > 0 Then
+     Text21.Visible = True
+     'Call APLICAR_SKIN(Me, App.Path & "\SKINS\GOLDEN.skn")
+  Else
+     'Call APLICAR_SKIN(Me, App.Path & "\SKINS\dogmax.skn")
+     Text21.Visible = False
+  End If
+End Sub
+
+
+Private Sub Text21_DblClick()
+   Text1 = ""
+   Text17 = 1 + MAXNUMCOD&("PRESUVEN", "NroPres")
+   'Text20 = "-00"
+
+   Text1.Locked = False 'TEXT DE CUENTA DE CLIENTE
+   Command19.Enabled = True 'BOTON DE LISTA DE SELECCIN
+   If Text21.Visible = True Then Text21.Visible = False 'CARTEL DE MODIFICACION DE PRESUPUESTO
+   MSF1.Rows = 1
+   On Error Resume Next
+   Unload INFOSIAHP
+   On Error GoTo 0
+   Call ACTU_TOTAL
+   PORDESCU = ""
+   
+   
+End Sub
+
+
+Private Sub Text23_Change()
+'   CODI% = XVALO(Text23)
+'   Text22 = ECOLPRECIOS$(CODI%)
+
+End Sub
+
+Private Sub TICAMBIS_DblClick()
+   If DERACCE%("COTILOCA", "Ajustar Tipo de Cambio Local") >= 2 Then
+      ENTRATICA.Frame4.Caption = "Cotización Local para " + MONEMIS.Caption
+      ENTRATICA.Text4 = TICAMBIS.Caption
+      ENTRATICA.Text4 = FORMATNUM(XVALO(ENTRATICA.Text4), "F10.4")
+      ENTRATICA.Show 1
+      If TRIM$(ENTRATICA.Text4) <> "" Then
+        TICAMBIS = TRIM$(ENTRATICA.Text4)
+      End If
+   End If
+   '
+
+End Sub
+
+
+Private Sub TICAMBIS_Change()
+   If TICAMBIS.Enabled = True Then
+     TICACH(MONEMI%) = XVALO(TICAMBIS)
+   End If
+   TICAMBX# = 1
+   If MONEMI% > 1 Then
+     TICAMBX# = XVALO(TICAMBIS)
+   End If
+End Sub
+
+Private Sub TICAMBIS_LostFocus()
+   TICAMBIS = FORMATNUM(XVALO(TICAMBIS), "F9.4")
+End Sub
+
+Private Sub TXTCANTIDAD_Change()
+
+   Resultado# = XVALO(TXTCANTIDAD) * XVALO(TXTPREUNIT)
+   TXTIMPORTE = FORMATNUM$(Resultado#, "F14.2")
+   '
+End Sub
+
+Private Sub TXTCANTIDAD_KeyPress(KeyAscii As Integer)
+    If KeyAscii = 27 Then
+        KeyAscii = 0
+        Call LIMPIAR_TEXT_DETALLE
+    End If
+
+
+    If KeyAscii = 13 Then
+        KeyAscii = 0
+        '
+        'VALIDO EL CODIGO
+        CI1% = CODINT%(txtcodigo)
+        If CI1% < 1 Then
+           CONDI$ = "Codigo_Cliente = '" & TRIM$(txtcodigo) & "'"
+           EXISTECODNUE% = CantRegistros&("CODICLIENTE", CONDI$, "NOMESS")
+           If EXISTECODNUE% < 1 Then
+             Call COMUNI("CÓDIGO INEXISTENTE O NO VÁLIDO")
+             Exit Sub
+           End If
+        End If
+        'VALIDA REPETICION DE CODIGO
+        LINEA% = VALIDAREPECODI%(CODINT%(txtcodigo))
+        If LINEA% > 0 Then
+           Call COMUNI("Código Repetido en Fila: " & LINEA%)
+'           txtcodigo.SetFocus
+'           Exit Sub
+        End If
+
+        'VALIDO QUE TENGA INGRESADA CANTIDAD
+        If XVALO(TXTCANTIDAD.TEXT) < 0.05 Then
+           Call COMUNI("FALTA CANTIDAD")
+           TXTCANTIDAD.SetFocus
+           Exit Sub
+        End If
+        '
+        'VERIFICA SI HAY STOCKS
+        If DISPONIB_LIBRE(CI1%) < 1 Then
+          INFOSIAHP.Frame1.Top = 1920
+          INFOSIAHP.Height = 6500
+          INFOSIAHP.Text6(3).Visible = True
+          INFOSIAHP.TXTNUMEPROVE.Visible = True
+          INFOSIAHP.Command5.Visible = True
+          INFOSIAHP.Text1.Visible = True
+          INFOSIAHP.Command3.Visible = True
+          Call PRESENTA_INFO_ARTICULO(CI1%, 0, 1)
+          
+          If INFOSIAHP.MODO1$ = "CANCEL" Then
+            INFOSIAHP.MODO1$ = ""
+            Exit Sub ' CASO QUE CIERRE EL FRM INFOSIAHP
+          End If
+          
+'          Call cargar_datos_sin_stock
+          txtcodigo = ""
+          txtcodigo.SetFocus
+          Call LIMPIAR_TEXT_DETALLE
+          Exit Sub
+        End If
+        '
+        If CARGA(2) = False Then
+           TXTPREUNIT.Locked = False
+           TXTPREUNIT.BackColor = &H80000005
+           TXTPREUNIT.SetFocus
+           Exit Sub
+        Else
+          'OPCION DE CARGA CON SELECCION MANUAL DE LOTES
+          INFOSIAHP.Frame1.Top = 4560
+          INFOSIAHP.Height = 9135
+          INFOSIAHP.Text6(3).Visible = False
+          INFOSIAHP.TXTNUMEPROVE.Visible = False
+          INFOSIAHP.Command5.Visible = False
+          INFOSIAHP.Text1.Visible = False
+          INFOSIAHP.Command3.Visible = False
+
+          Call PRESENTA_INFO_ARTICULO(CI1%)
+          If INFOSIAHP.MODO1$ = "CANCEL" Then
+            INFOSIAHP.MODO1$ = ""
+            Exit Sub ' CASO QUE CIERRE EL FRM INFOSIAHP
+          End If
+        End If
+        '
+        TXTPREUNIT.BackColor = &HE0E0E0 'CAMBIA A GRIS
+        TXTPREUNIT.Locked = True 'DESHABILITO
+        
+        If CARGA(0).Value = True Then Call cargar_datos   ' CARGA RAPIDA
+        txtcodigo = ""
+        txtcodigo.SetFocus
+50      Call LIMPIAR_TEXT_DETALLE
+        '
+        'CIERRO EL FORMULARIO DE DETALLE DE STOCKS
+        Unload INFOSIAHP
+        '
+
+    End If
+
+
+    
+
+End Sub
+Private Sub cargar_datos_ANTERIOR()
+    '
+    
+    MSF1.Rows = MSF1.Rows + 1
+    MSF1.Row = MSF1.Rows - 1
+    CI1% = CODINT%(txtcodigo.TEXT)
+    CANTI = XVALO(TXTCANTIDAD)
+    If CARGA(1) = True Then 'VALIDA STOCKS
+        ST = FORMATNUM$(STOCKACT(CI1%), "F8.0")
+        CANPED = FORMATNUM$(CANT_PEDIDA_PENDIENTE(CI1%), "F8.0")      ' CANTIDAD PEDIDA PENDIENTE DE ENTREGA ' NO CONSIDERA PROVEEDOR
+        COMPRAX = FORMATNUM$(COMPRA_PEND_DE_ENTR(0, CI1%), "F8.0")  ' CANTIDAD COMPRADA PENDIENTE DE ENTREGA
+        CANRECEP = FORMATNUM$(CANT_RECEP_PENDIENTE_APROB(0, CI1%), "F8.0")
+        COLO$ = COLORSTATUS$(CANTI, ST, COMPRAX + CANRECEP, CANPED)
+        '
+        MSF1.TextMatrix(MSF1.Rows - 1, 0) = COLO$
+        If COLO$ = "V" Then Call COLOREAR_GRILLA_SOLACELDA(FRMPRESUAHP.MSF1, vbGreen, MSF1.Rows - 1, 0)
+        If COLO$ = "A" Then Call COLOREAR_GRILLA_SOLACELDA(FRMPRESUAHP.MSF1, vbYellow, MSF1.Rows - 1, 0)
+        If COLO$ = "R" Then Call COLOREAR_GRILLA_SOLACELDA(FRMPRESUAHP.MSF1, vbRed, FRMPRESUAHP.MSF1.Rows - 1, 0)
+    End If
+    '
+    MSF1.TextMatrix(MSF1.Rows - 1, 1) = txtcodigo.TEXT
+    MSF1.TextMatrix(MSF1.Rows - 1, 2) = INFOSIAHP.TXTCODICLIENTE.TEXT
+    MSF1.TextMatrix(MSF1.Rows - 1, 3) = DESCRIT0$(CI1%)
+    MSF1.TextMatrix(MSF1.Rows - 1, 4) = FORMATNUM$(TXTCANTIDAD.TEXT, "F10.1")
+    MSF1.TextMatrix(MSF1.Rows - 1, 5) = INFOSIAHP.TXTCOSTO
+    MSF1.TextMatrix(MSF1.Rows - 1, 5) = INFOSIAHP.TXTNUMEPROVE
+    MSF1.TextMatrix(MSF1.Rows - 1, 6) = INFOSIAHP.TXTPROVEEDOR
+    If CARGA(2) = True Then 'CASO QUE ES CARGA DE SELECCION MANUAL DE LOTES TRAE LA INFO DE INFOSIAHP
+        MSF1.TextMatrix(MSF1.Rows - 1, 7) = FORMATNUM$(INFOSIAHP.TXTCOSTO.TEXT, "f12.2")
+        MSF1.TextMatrix(MSF1.Rows - 1, 8) = FORMATNUM$(INFOSIAHP.TXTPRECIOVENTA, "f12.2")
+        MSF1.TextMatrix(MSF1.Rows - 1, 9) = FORMATNUM$(XVALO(INFOSIAHP.TXTPRECIOVENTA) * XVALO(TXTCANTIDAD), "f14.2")
+        MSF1.TextMatrix(MSF1.Rows - 1, 11) = CARGALOTES$
+        MSF1.TextMatrix(REG&, 12) = CANTI_ACUMU_LOTES ' FUNCION
+        CANTILOTES = XVALO(MSF1.TextMatrix(REG&, 12))
+        CANTISOLICI = XVALO(MSF1.TextMatrix(REG&, 4))
+        If CANTILOTES <= CANTISOLICI Then COLO$ = "A"
+        If CANTILOTES = 0 Then COLO$ = "R"
+        If CANTILOTES >= CANTISOLICI Then COLO$ = "V"
+        MSF1.TextMatrix(REG&, 0) = COLO$
+
+    Else
+        MSF1.TextMatrix(MSF1.Rows - 1, 7) = FORMATNUM$(Text15.TEXT, "f12.2")
+        MSF1.TextMatrix(MSF1.Rows - 1, 8) = FORMATNUM$(TXTPREUNIT, "f12.2")
+        MSF1.TextMatrix(MSF1.Rows - 1, 9) = FORMATNUM$(XVALO(TXTPREUNIT) * XVALO(TXTCANTIDAD), "f14.2")
+    End If
+    MSF1.TextMatrix(MSF1.Rows - 1, 10) = Text38
+    
+'    MSF1.TextMatrix(MSF1.Rows - 1, 6) = "0" ' INDICADOR DE CODIGO OPCIONAL
+'    If Check1.Value = 1 Then
+'        MSF1.TextMatrix(MSF1.Rows - 1, 6) = "1"
+'        MSF1.TextMatrix(MSF1.Rows - 1, 5) = ""
+'    End If
+'    MSF1.ColWidth(6) = 0 ' OCULTA LA COLUMNA
+'    Check1.Value = 0 ' SETEA NO OPCIONAL POR DEFAULT
+    '
+    ' ORDENA GRILLA POR COLUMNA 6 Y EN FORMA ASCENDENTE (VALOR 7 DE SORT DATOS DE TIPO STRING)
+'    MSF1.Col = 6
+'    MSF1.Sort = 7
+    '
+    'SUMO EL IMPORTE
+    Call ACTU_TOTAL
+    '
+    On Error Resume Next
+    VISIROWS = (MSF1.Height / MSF1.RowHeight(j&)) - 4
+    If Err > 0 Then
+      VISIROWS = 1
+    End If
+    On Error GoTo 0
+    If VISIROWS > 0 Then
+       If MSF1.TopRow < MSF1.Row - VISIROWS Then
+          MSF1.TopRow = MSF1.Row - VISIROWS
+       End If
+    End If
+    '
+    'desplazo verticalmente a la ultima columna
+    'MSF1.LeftCol = MSF1.Cols - 1
+End Sub
+ Sub cargar_datos_sin_stock()
+    '
+    CI1% = CODINT%(txtcodigo.TEXT)
+    If INFOSIAHP.MODO1$ = "CANCEL" Then
+      INFOSIAHP.MODO1$ = ""
+      Exit Sub
+    End If
+    REG& = MSF1.Rows
+    '
+    If INFOSIAHP.FILAX& > 0 Then
+       MSF1.Row = INFOSIAHP.FILAX&
+       REG& = INFOSIAHP.FILAX&
+       TXTCANTIDAD = INFOSIAHP.TXTSOLICITADA
+       MSF1.TextMatrix(REG&, 0) = FILAX&
+       INFOSIAHP.FILAX& = 0
+    Else
+       MSF1.Rows = MSF1.Rows + 1
+       'TXTCANTIDAD = INFOSIAHP.TXTSOLICITADA
+       MSF1.TextMatrix(REG&, 0) = REG&
+    End If
+
+    CANTI = XVALO(TXTCANTIDAD)
+    '
+    MSF1.TextMatrix(REG&, 1) = txtcodigo.TEXT
+    MSF1.TextMatrix(REG&, 2) = INFOSIAHP.TXTCODICLIENTE.TEXT
+    MSF1.TextMatrix(REG&, 3) = DESCRIT0$(CI1%)
+    MSF1.TextMatrix(REG&, 4) = FORMATNUM$(XVALO(TXTCANTIDAD), "F10.1")
+      NPROV = XVALO(INFOSIAHP.TXTNUMEPROVE)
+    MSF1.TextMatrix(REG&, 5) = NPROV
+    MSF1.TextMatrix(REG&, 6) = TEL2CLI$(-1 * NPROV)
+    MSF1.TextMatrix(REG&, 7) = FORMATNUM$(Text15.TEXT, "f12.2")
+    MSF1.TextMatrix(REG&, 8) = FORMATNUM$(TXTPREUNIT, "f12.2")
+    MSF1.TextMatrix(REG&, 9) = FORMATNUM$(XVALO(TXTPREUNIT) * XVALO(TXTCANTIDAD), "F14.2")
+'    MSF1.TextMatrix(REG&, 0) = ""
+    MSF1.TextMatrix(REG&, 10) = Text38
+    Call ACTUPESO
+    '
+    'SUMO EL IMPORTE
+    Call ACTU_TOTAL
+    '
+    '
+    On Error Resume Next
+    VISIROWS = (MSF1.Height / MSF1.RowHeight(j&)) - 4
+    If Err > 0 Then
+      VISIROWS = 1
+    End If
+    On Error GoTo 0
+    If VISIROWS > 0 Then
+       If MSF1.TopRow < MSF1.Row - VISIROWS Then
+          MSF1.TopRow = MSF1.Row - VISIROWS
+       End If
+    End If
+    '
+    'desplazo verticalmente a la ultima columna
+    'MSF1.LeftCol = MSF1.Cols - 1
+End Sub
+ Sub cargar_datos()
+    '
+    CI1% = CODINT%(txtcodigo.TEXT)
+    If INFOSIAHP.MODO1$ = "CANCEL" Then
+      INFOSIAHP.MODO1$ = ""
+      Exit Sub
+    End If
+    REG& = MSF1.Rows
+    '
+    If INFOSIAHP.FILAX& > 0 Then
+       MSF1.Row = INFOSIAHP.FILAX&
+       REG& = INFOSIAHP.FILAX&
+       TXTCANTIDAD = INFOSIAHP.TXTSOLICITADA
+       MSF1.TextMatrix(REG&, 0) = FILAX&
+       INFOSIAHP.FILAX& = 0
+    Else
+       MSF1.Rows = MSF1.Rows + 1
+       'TXTCANTIDAD = INFOSIAHP.TXTSOLICITADA
+       MSF1.TextMatrix(REG&, 0) = REG&
+    End If
+
+    CANTI = XVALO(TXTCANTIDAD)
+    '
+    MSF1.TextMatrix(REG&, 1) = txtcodigo.TEXT
+    MSF1.TextMatrix(REG&, 2) = INFOSIAHP.TXTCODICLIENTE.TEXT
+    MSF1.TextMatrix(REG&, 3) = DESCRIT0$(CI1%)
+    MSF1.TextMatrix(REG&, 4) = FORMATNUM$(XVALO(TXTCANTIDAD), "F10.1")
+'      NPROV = PROVELOTE%(LOTE$)
+'    MSF1.TextMatrix(REG&, 5) = NPROV
+'    MSF1.TextMatrix(REG&, 6) = TEL2CLI$(-1 * NPROV)
+    MSF1.TextMatrix(REG&, 7) = FORMATNUM$(Text15.TEXT, "f12.2")
+    MSF1.TextMatrix(REG&, 8) = FORMATNUM$(TXTPREUNIT, "f12.2")
+    MSF1.TextMatrix(REG&, 9) = FORMATNUM$(XVALO(TXTPREUNIT) * XVALO(TXTCANTIDAD), "F14.2")
+'    MSF1.TextMatrix(REG&, 0) = ""
+    MSF1.TextMatrix(REG&, 10) = Text38
+    Call ACTUPESO
+    '
+    'SUMO EL IMPORTE
+    Call ACTU_TOTAL
+    '
+    '
+    On Error Resume Next
+    VISIROWS = (MSF1.Height / MSF1.RowHeight(j&)) - 4
+    If Err > 0 Then
+      VISIROWS = 1
+    End If
+    On Error GoTo 0
+    If VISIROWS > 0 Then
+       If MSF1.TopRow < MSF1.Row - VISIROWS Then
+          MSF1.TopRow = MSF1.Row - VISIROWS
+       End If
+    End If
+    '
+    'desplazo verticalmente a la ultima columna
+    'MSF1.LeftCol = MSF1.Cols - 1
+End Sub
+
+Private Sub cargar_datos_respaldo()
+    '
+'    MSF1.Rows = MSF1.Rows + 1
+'    MSF1.Row = MSF1.Rows - 1
+    CI1% = CODINT%(txtcodigo.TEXT)
+    If INFOSIAHP.MODO1$ = "CANCEL" Then
+      INFOSIAHP.MODO1$ = ""
+      Exit Sub
+    End If
+    REG& = MSF1.Rows
+    
+    
+    If INFOSIAHP.FILAX& > 0 Then
+       MSF1.Row = INFOSIAHP.FILAX&
+       REG& = INFOSIAHP.FILAX&
+       TXTCANTIDAD = INFOSIAHP.Text55
+       MSF1.TextMatrix(REG&, 0) = FILAX&
+       INFOSIAHP.FILAX& = 0
+    Else
+       MSF1.Rows = MSF1.Rows + 1
+       MSF1.TextMatrix(REG&, 0) = REG&
+    End If
+
+    CANTI = XVALO(TXTCANTIDAD)
+    If CARGA(1) = True Then 'VALIDA STOCKS
+'        ST = FORMATNUM$(STOCKACT(CI1%), "F8.0")
+'        CANPED = FORMATNUM$(CANT_PEDIDA_PENDIENTE(CI1%), "F8.0")      ' CANTIDAD PEDIDA PENDIENTE DE ENTREGA ' NO CONSIDERA PROVEEDOR
+'        COMPRAX = FORMATNUM$(COMPRA_PEND_DE_ENTR(0, CI1%), "F8.0")  ' CANTIDAD COMPRADA PENDIENTE DE ENTREGA
+'        CANRECEP = FORMATNUM$(CANT_RECEP_PENDIENTE_APROB(0, CI1%), "F8.0")
+'        COLO$ = COLORSTATUS$(CANTI, ST, COMPRAX + CANRECEP, CANPED)
+'        '
+'        MSF1.TextMatrix(REG&, 0) = COLO$
+'        If COLO$ = "V" Then Call COLOREAR_GRILLA_SOLACELDA(FRMPRESUAHP.MSF1, vbGreen, REG&, 0)
+'        If COLO$ = "A" Then Call COLOREAR_GRILLA_SOLACELDA(FRMPRESUAHP.MSF1, vbYellow, REG&, 0)
+'        If COLO$ = "R" Then Call COLOREAR_GRILLA_SOLACELDA(FRMPRESUAHP.MSF1, vbRed, REG&, 0)
+    End If
+    '
+    
+    MSF1.TextMatrix(REG&, 1) = txtcodigo.TEXT
+    MSF1.TextMatrix(REG&, 2) = INFOSIAHP.TXTCODICLIENTE.TEXT
+    MSF1.TextMatrix(REG&, 3) = DESCRIT0$(CI1%)
+    MSF1.TextMatrix(REG&, 4) = FORMATNUM$(XVALO(TXTCANTIDAD), "F10.1")
+    'MSF1.TextMatrix(REG&, 5) = INFOSIAHP.TXTCOSTO
+    MSF1.TextMatrix(REG&, 5) = INFOSIAHP.TXTNUMEPROVE
+    MSF1.TextMatrix(REG&, 6) = INFOSIAHP.TXTPROVEEDOR
+    If CARGA(2).Value = True Then 'CASO QUE ES CARGA DE SELECCION MANUAL DE LOTES TRAE LA INFO DE INFOSIAHP
+        MSF1.TextMatrix(REG&, 7) = FORMATNUM$(INFOSIAHP.TXTCOSTO.TEXT, "f12.2")
+        MSF1.TextMatrix(REG&, 8) = FORMATNUM$(INFOSIAHP.TXTPRECIOVENTA, "f12.2")
+        MSF1.TextMatrix(REG&, 9) = FORMATNUM$(XVALO(INFOSIAHP.TXTPRECIOVENTA) * XVALO(TXTCANTIDAD), "f14.2")
+        MSF1.TextMatrix(REG&, 11) = CARGALOTES$  ' FUNCION
+        MSF1.TextMatrix(REG&, 12) = CANTI_ACUMU_LOTES  ' FUNCION
+        'Call CANTI_SEGUN_LOTES_SELECCIONADOS(CARGALOTES$) 'ACA HABRIA QUE DECODIFICAR LA CANTIDAD DE LOTES SELECCIONADOS
+        ' **** Y QUE HACER EL COLORSTATUS PARA VER QUE COLOR DEVUELVE, EN ESTE CASO NO SE DEBERIA CONTEMPLAR LA CANTIDAD EN TRANSITO.
+        'VALIDA EL COLOR
+'        Call COLOREARSTOCKS(REG&)
+'        COLO$ = COLORSTATUS$(TXTCANTIDAD, XVALO(MSF1.TextMatrix(REG&, 12)), 0, 0)
+'        CANTILOTES = XVALO(MSF1.TextMatrix(REG&, 12))
+'        CANTISOLICI = XVALO(MSF1.TextMatrix(REG&, 4))
+'        If CANTILOTES <= CANTISOLICI Then COLO$ = "A"
+'        If CANTILOTES = 0 Then COLO$ = "R"
+'        If CANTILOTES >= CANTISOLICI Then COLO$ = "V"
+'        MSF1.TextMatrix(REG&, 0) = COLO$
+        '
+    Else
+        MSF1.TextMatrix(REG&, 7) = FORMATNUM$(Text15.TEXT, "f12.2")
+        MSF1.TextMatrix(REG&, 8) = FORMATNUM$(TXTPREUNIT, "f12.2")
+        MSF1.TextMatrix(REG&, 9) = FORMATNUM$(XVALO(TXTPREUNIT) * XVALO(TXTCANTIDAD), "f14.2")
+        MSF1.TextMatrix(REG&, 0) = ""
+
+    End If
+    MSF1.TextMatrix(REG&, 10) = Text38
+    MSF1.TextMatrix(REG&, 13) = TXTPESOP
+    MSF1.TextMatrix(REG&, 14) = INFOSIAHP.TXTDIASDEMORA
+    Call ACTUPESO
+    '
+    'SUMO EL IMPORTE
+    Call ACTU_TOTAL
+    '
+    If CARGA(0).Value <> True Then
+       Call COLOREARSTOCKS(REG&)
+    End If
+    '
+    On Error Resume Next
+    VISIROWS = (MSF1.Height / MSF1.RowHeight(j&)) - 4
+    If Err > 0 Then
+      VISIROWS = 1
+    End If
+    On Error GoTo 0
+    If VISIROWS > 0 Then
+       If MSF1.TopRow < MSF1.Row - VISIROWS Then
+          MSF1.TopRow = MSF1.Row - VISIROWS
+       End If
+    End If
+    '
+    'desplazo verticalmente a la ultima columna
+    'MSF1.LeftCol = MSF1.Cols - 1
+End Sub
+
+
+Function CANTI_ACUMU_LOTES()
+   'SUMA LA CANTIDAD SELECCIONADA ACUMULADA DE LOTES
+   '
+   CANTI_ACUMU_LOTES = 0
+   With INFOSIAHP
+      For I& = 1 To .MSF5.Rows - 1
+        LOTE$ = TRIM$(.MSF5.TextMatrix(I&, 1))
+        CANTI = XVALO(.MSF5.TextMatrix(I&, 5))
+        If LOTE$ <> "" Then
+          If CANTI > 0 Then
+            CANTI_ACUMU_LOTES = CANTI_ACUMU_LOTES + CANTI
+          End If
+        End If
+      Next
+   End With
+   '
+End Function
+
+Function CARGALOTES$()
+   'CARGA LOS LOTES SELECCIONADOS PARA EL ITEM - SOLO MODO DE CARGA MANUAL
+   With INFOSIAHP
+      For I& = 1 To .MSF5.Rows - 1
+        LOTE$ = TRIM$(.MSF5.TextMatrix(I&, 1))
+        CANTIX$ = SAFETEXT$(XVALO(.MSF5.TextMatrix(I&, 5)))
+'        If LOTE$ <> "" Then
+          If XVALO(CANTIX$) > 0 Then
+            CARGALOTES$ = CARGALOTES$ & LOTE$ & ";" & CANTIX$ & ";"
+          End If
+'        End If
+      Next
+   End With
+   '
+
+   If InStrRev(CARGALOTES$, ";") = Len(CARGALOTES$) And CARGALOTES$ <> "" Then
+      CARGALOTES$ = Left$(CARGALOTES$, Len(CARGALOTES$) - 1)
+   End If
+   '
+   Debug.Print CARGALOTES$
+   '
+End Function
+
+Sub CARGALOTES_ENGRILLA(FILA&)
+   Exit Sub
+   If FILA& < 1 Then Exit Sub
+   '
+'   INFOSIAHP.MSF1.Rows = 1
+'   CADENA_LOTES$ = TRIM$(MSF1.TextMatrix(FILA&, 15))
+'   If CADENA_LOTES$ <> "" Then
+'      Call TEXTOLOTES(CADENA_LOTES$, ";")
+'      CI1% = CODINT%(MSF1.TextMatrix(FILA&, 1))
+'      NECESIDAD = XVALO(MSF1.TextMatrix(FILA&, 4))
+'     For I% = 1 To UBound(CADENATEX$) Step 2
+'      LOTE$ = CADENATEX$(I%)
+'      CANTI = CADENATEX$(I% + 1)
+'      ACUMUCANTI = ACUMUCANTI + XVALO(CANTI)
+'      STOCK1 = SaldoLote(CI1%, LOTE$)
+'      'OBTENER ESTOS DATOS Y CALCULAR EL PRECIO DE VENTA
+'      COSTOLOTE = 0
+'      VIADEENTREGA = 0
+'      PRECIOVENTA = 0
+'      GASTODENACION = 0
+      '
+      'SI NO ESTA SELECCIONADO AGREGO A NUEVA LISTA
+      'RECORRO LA GRILLA DE PRESUPUESTO
+      For I& = 1 To INFOSIAHP.MSF1.Rows - 1
+        LOTE_EN_PRESUP$ = TRIM$(FRMPRESUAHP.MSF1.TextMatrix(FILA&, 11))
+        LOTE_EN_INFOSIAHP$ = TRIM$(INFOSIAHP.MSF1.TextMatrix(I&, 13))
+        If LOTE_EN_PRESUP$ = LOTE_EN_INFOSIAHP$ Then
+             INFOSIAHP.MSF1.TextMatrix(I&, 11) = TRIM$(FRMPRESUAHP.MSF1.TextMatrix(FILA&, 4))
+        End If
+      Next I&
+'     If NECESIDAD < 1 Then NECESIDAD = ACUMUCANTI
+     INFOSIAHP.TXTSOLICITADA = NECESIDAD
+     INFOSIAHP.TXTSELECCIONADA = ACUMUCANTI
+   
+    '1.CODIGO
+    '2.CODIGO CLIENTE
+    '3.DESCRIPCION
+    '4.CANTIDAD
+    '5.NUMERO PROVEEDOR ' OCULTO
+    '6.R.S.PROVEEDOR
+    '7.COSTO
+    '8.PR.VENTA
+    '9.IMPORTE
+    '10.VIA ENTREGA
+    '11.LOTES OCULTO
+    '12.CANTIDAD DE LOTES OCULTO
+    '13.NUMERO DE PROVEEDOR OCULTO
+    '14.KILOS OCULTO
+    '15.DEMORA OCULTO
+
+End Sub
+
+
+Sub ACTU_TOTAL()
+
+
+   '
+   Static CLIA$, RNI%, APLIVA%
+   If Text1.TEXT <> CLIA$ Then
+     CLIA$ = Text1.TEXT: NCLIE% = XVALO(CLIA$)
+     RNI% = 0: APLIVA% = 1
+     If NCLIE% > 0 Then
+       PVCLI% = PIVACLI%(NCLIE%)
+       If PVCLI% = 2 Then RNI% = 1
+       If PVCLI% = 5 Or PVCLI% = 7 Then APLIVA% = 0
+     End If
+   End If
+   '
+   SUTOTPED# = 0: SUIVA# = 0: SUIVARNI# = 0: TOIVA# = 0: TOTOTA# = 0
+   For U& = 1 To MSF1.Rows - 1
+     CIXXI% = CODINT%(MSF1.TextMatrix(U&, 1))
+     CAN = XVALO(MSF1.TextMatrix(U&, 4))
+'     PORDESCUIN = CVS(Mid$(X$, 69, 4))
+'     If PORDESCUEIN < 0 Or PORDESCUEIN > 99 Then PORDESCUEIN = 0
+     If CAN > 0.05 Then
+       PRELI = XVALO(MSF1.TextMatrix(U&, 8))
+       'If PRELI < 0.01 Then
+       '  PRELI = PRELISTA(ARCHIPRE$, CIXXI%)
+       'End If
+       PREUNI = PRELI * (100 - PORDESCUIN) / 100
+       TOT# = CDbl(CAN * PREUNI)
+       SUTOTPED# = SUTOTPED# + TOT#
+       SUIVA# = SUIVA# + (Int(TOT# * PORCEIVA(CIXXI%) + 0.5)) / 100
+'       Call REPLA(X$, MKS$(PREUNI) + MKD$(TOT#), 51, 12)
+'       Call GRAREG("!CARDETPR", X$, U&)
+     End If
+   Next U&
+   '
+   Total(0).TEXT = FORMATNUM$(SUTOTPED#, "F12.2")
+   Total(0).Refresh
+   '
+   DESC$ = TRIM$(PORDESCU.TEXT)
+   PODES = COEFDESCU(DESC$)
+   TTTX# = SUNEFA2# * (100 - PODES) / 100
+3   TTT1 = XVALO(Total(0).TEXT) * PODES / 100
+   Total(1).TEXT = CSTRING$(MKS$(TTT1), 3, 11, 2, 2)
+   '
+   TTT3 = XVALO(Total(0).TEXT) - XVALO(Total(1).TEXT)
+   '
+    ACUMU_IMPORTE# = 0
+'    For I& = 1 To MSF1.Rows - 1
+'        IMPORTE# = XVALO(MSF1.TextMatrix(I&, 5))
+'        ACUMU_IMPORTE# = ACUMU_IMPORTE# + IMPORTE#
+'    Next I&
+    TTTX# = SUIVA# * (100 - PODES) / 100
+    Text33 = FORMATNUM$(XVALO(Total(0)) - XVALO(Total(1)), "F12.2")
+    Text31 = FORMATNUM$(TTTX#, "f12.2")
+    Text14 = FORMATNUM$(XVALO(Text33) + XVALO(Text31), "F12.2")
+
+End Sub
+
+Private Sub txtcodigo_Change()
+
+    TXTDESCRIPCION = ""
+    TXTCANTIDAD = ""
+    TXTPREUNIT = ""
+    TXTIMPORTE = ""
+    Text15 = "" ' COSTO
+    'TXTCODCLIENTE = ""
+    'DESHABILITO EL TEXT DE PRECIO UNITARIO
+    TXTPREUNIT.BackColor = &HE0E0E0 'CAMBIA A GRIS
+    TXTPREUNIT.Locked = True 'DESHABILITO
+    'MSF3.Rows = 1
+    TXTPREUNIT.ToolTipText = ""
+
+    If TRIM$(txtcodigo) = "" Then Exit Sub
+    'VALIDO SI LA LISTA ACTIVA ES VALIDA
+    NLIST% = XVALO(Text23)
+    If NLIST% < 1 Or TRIM$(Text22) = "" Then
+      NLIST% = 1
+    End If
+    '
+    'BUSCO LOS DATOS
+    CI1% = CODINT%(txtcodigo)
+    If CI1% < 1 Then
+       Exit Sub
+    Else
+       TXTDESCRIPCION = DESCRIT0$(CI1%)
+       Text15 = FORMATNUM$(actualiza_costo(CI1%), "F10.2")
+    End If
+    '
+'    INFOSIAHP.FILAX = 0
+'    On Error Resume Next
+'    Call PINTATEXT(TXTCANTIDAD)
+'    TXTCANTIDAD.SetFocus
+'    On Error GoTo 0
+    
+'    CONDI$ = " CODINT = " & CI1%
+  
+    
+    
+End Sub
+
+
+
+Private Sub txtcodigo_GotFocus()
+'   If TRIM$(txtcodigo.TEXT) <> "" Then
+'       Command1_Click
+'   End If
+End Sub
+
+
+Private Sub TXTNUMVENDEDOR_Change()
+    TXTNOMVENDEDOR = ""
+    If XVALO(TXTNUMVENDEDOR) > 0 Then
+       TXTNOMVENDEDOR = ECOARCH$("VENDEDOR", Chr(XVALO(TXTNUMVENDEDOR)))
+    End If
+    '
+End Sub
+
+'Private Sub txtcodigo_KeyPress(KeyAscii As Integer)
+'   If KeyAscii = 13 Then
+'     CI1% = CODINT(txtcodigo)
+'     If CI1% < 1 Then
+'        Call COMUNI("Código Inexistente o No válido")
+'        Exit Sub
+'     End If
+'
+'     If KeyAscii = 13 Then
+'        TXTDESCRIPCION = DESCRIT0(CI1%)
+'        TXTCANTIDAD = ""
+'        'TXTPREUNIT = FORMATNUM$(PRELISTA(TRIM$(Str$(NLIST%)), CI1%), "F12.2")
+'        TXTIMPORTE = ""
+'        '
+'        Call PRESENTA_INFO_ARTICULO(CI1%)
+'        '
+'        ' SI SE SELECCIONO DE LA LISTA PASA EL FOCO A LA CANTIDAD
+'
+'        If Command1.Enabled = False Then
+'           TXTCANTIDAD.SetFocus
+'        End If
+'     End If
+'   End If
+'End Sub
+
+Private Sub TXTPREUNIT_Change()
+
+   Resultado# = XVALO(TXTCANTIDAD) * XVALO(TXTPREUNIT)
+   TXTIMPORTE = FORMATNUM$(Resultado#, "F14.2")
+
+End Sub
+Sub LIMPIAR_TEXT_DETALLE()
+    TXTDESCRIPCION = ""
+    TXTCANTIDAD = ""
+    TXTPREUNIT = ""
+    TXTIMPORTE = ""
+    txtcodigo = ""
+    TXTCODCLIENTE = ""
+    'DESHABILITO EL TEXT DE PRECIO UNITARIO
+    TXTPREUNIT.Locked = False
+    TXTPREUNIT.ToolTipText = ""
+    Text35 = ""
+    Text15 = ""
+    Text38 = ""
+    
+End Sub
+
+Sub TXTPREUNIT_DblClick()
+
+    If TXTPREUNIT.Locked = False Then
+       TXTPREUNIT.BackColor = &HE0E0E0
+       TXTPREUNIT.Locked = True
+    Else
+       TXTPREUNIT.Locked = False
+       TXTPREUNIT.BackColor = &H80000005
+       Call PINTATEXT(TXTPREUNIT)
+    End If
+    
+End Sub
+
+Sub TEXT15_DblClick()
+
+    If Text15.Locked = False Then
+       Text15.BackColor = &HE0E0E0
+       Text15.Locked = True
+    Else
+       Text15.Locked = False
+       Text15.BackColor = &H80000005
+       Call PINTATEXT(Text15)
+    End If
+    
+End Sub
+
+Private Sub TXTPREUNIT_KeyPress(KeyAscii As Integer)
+
+
+    If TXTPREUNIT.Locked = True Then Exit Sub
+    '
+    
+    If KeyAscii = 27 Then
+        KeyAscii = 0
+        Call LIMPIAR_TEXT_DETALLE
+    End If
+    
+    If KeyAscii = 13 Then
+        KeyAscii = 0
+        If XVALO(TXTCANTIDAD.TEXT) < 0.05 Then
+           KeyAscii = 0
+           MsgBox "FALTA CANTIDAD"
+           TXTCANTIDAD.SetFocus
+           Exit Sub
+        End If
+        
+        LINEA% = VALIDAREPECODI%(CODINT%(txtcodigo))
+        If LINEA% > 0 Then
+           Call COMUNI("Código Repetido en Fila: " & LINEA%)
+'           txtcodigo.SetFocus
+'           Exit Sub
+        End If
+
+'        If XVALO(TXTPREUNIT.TEXT) < 0.05 Then
+'           KeyAscii = 0
+'           MsgBox "FALTA PRECIO UNITARIO"
+'           TXTPREUNIT.SetFocus
+'           Exit Sub
+'        End If
+
+'        If VALIDA_COD_GRID(txtcodigo, FRMPRESU.MSF1, 1) > 0 Then
+'         MsgBox "MODIFIQUE DATOS SOBRE EL MISMO"
+'         GoTo 50
+'        End If
+        TXTPREUNIT.BackColor = &HE0E0E0 'CAMBIA A GRIS
+        TXTPREUNIT.Locked = True 'DESHABILITO
+        If CARGA(2).Value <> True Then
+          cargar_datos
+        Else
+          TXTCANTIDAD_KeyPress (13) 'CASO QUE ESTE PARADO EN PREUNIT Y SELECCIONADO CARGA MANUAL
+          Exit Sub
+        End If
+        
+        txtcodigo = ""
+        txtcodigo.SetFocus
+50      Call LIMPIAR_TEXT_DETALLE
+'        If Command1.Enabled = True Then
+'           Call FRMPRESUAHP.Command1_Click
+'        End If
+
+     End If
+    
+End Sub
+   
+Private Sub TXTPREUNIT_KeyUp(KeyCode As Integer, Shift As Integer)
+    Select Case KeyCode 'ESTO ES PARA QUE DESP
+        Case 115 'pulso  f4
+        Call TXTPREUNIT_DblClick
+
+    End Select
+
+End Sub
+Private Sub txtcodigo_KeyPress(KeyAscii As Integer)
+    If KeyAscii = 13 Then
+     CI1% = CODINT(txtcodigo)
+     If CI1% < 1 Then
+        CICLI& = CODICLIENTE&(txtcodigo)
+        If CICLI& > 0 Then
+          CI1% = CICLI&
+          TXTCODCLIENTE = txtcodigo ' CONMUTO LA POSICION PARA QUE SIGA HABITUALMENTE
+          txtcodigo.TEXT = CODEXT$(CI1%) 'CON EL CODIGO ORIGINAL
+        Else
+          OPX% = COMALTER("Código Inexistente o No Válido\\Dar de Alta\Cancelar")
+          If OPX% = 1 Then
+            'ALTA DE CODIGO Y/O RELACION
+            Call ALTACODIRELA
+          End If
+          Exit Sub
+        End If
+     End If
+     
+     TXTDESCRIPCION = DESCRIT0(CI1%)
+     TXTCANTIDAD = ""
+     'TXTPREUNIT = FORMATNUM$(PRELISTA(TRIM$(Str$(NLIST%)), CI1%), "F12.2")
+     TXTIMPORTE = ""
+     '
+     'VALIDA REPETICION DE CODIGO
+     LINEA% = VALIDAREPECODI%(CI1%)
+     If LINEA% > 0 Then
+        Call COMUNI("Código Repetido en Fila: " & LINEA%)
+     End If
+     '
+     ' SI SE SELECCIONO DE LA LISTA PASA EL FOCO A LA CANTIDAD
+'     If Command1.Enabled = False Then
+       TXTCANTIDAD.SetFocus
+'     End If
+   End If
+End Sub
+Function actualiza_costo#(CI1%)
+     'PASA ACTUALIZA EL COSTO A LA MONEDA ACTIVA.
+     MONEI% = MONECOSTO%(CI1%)
+     COSTOX# = COSUNI(CI1%)
+     COEFCON = 1
+     If MONEI% <> MONEMI% Then
+        COEFCON = TICAMONE(MONEI%) / TICAMONE(MONEMI%)
+     End If
+     actualiza_costo# = COEFCON * XVALO(COSTOX#)
+End Function
+'
+Sub ALTACODIRELA()
+    VDEF$ = String$(101, 0)
+    CODI$ = TRIM$(txtcodigo)
+    Call REPLA(VDEF$, CODI$, 77, 24)
+    Call REPLA(VDEF$, MKI$(1 + NUMAS%), 1, 2)
+10  OBX$ = OBJPLA$("RELACODI", VDEF$)
+    If OBX$ = "" Then Exit Sub
+    
+    Call ALTARELACODIGO(OBX$, OK%)
+    If OK% = 1 Then
+      Call COMUNI("Alta Realizada Correctamente")
+    ElseIf OK% = 2 Then
+      Call COMUNI("Código Relacionado Correctamente")
+    Else
+      VDEF$ = OBX$
+      GoTo 10
+    End If
+    '
+    UPDATMASTER% = 1
+    Call GENECOMAS
+   
+    
+End Sub
+
+Private Sub TXTREFERENCIA_KeyPress(KeyAscii As Integer)
+    If KeyAscii = 13 Then
+       SendKeys "{tab}"
+    End If
+End Sub
+
+

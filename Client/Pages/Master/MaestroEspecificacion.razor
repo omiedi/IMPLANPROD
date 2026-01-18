@@ -1,0 +1,392 @@
+@page "/master/especificacion/{Id}"
+
+@using IMPLANPROD.Shared.Entities
+@inject NavigationManager navigationManager
+@inject HttpClient Http
+@inject SweetAlertService sweetAlertService
+@inject IRepository repository
+
+@using System.Net.Http.Headers
+@using IMPLANPROD.Shared
+@inject IJSRuntime JS
+
+<style>
+    .tabs-container {
+    width: 100%;
+    margin-bottom: 20px;
+    }
+
+    .tabs-header {
+    display: flex;
+    gap: 5px;
+    margin-bottom: 20px;
+    border-bottom: 1px solid #dee2e6;
+    padding-bottom: 5px;
+    }
+
+    .tab-button {
+    padding: 10px 20px;
+    border: 1px solid #dee2e6;
+    background: white;
+    border-radius: 4px 4px 0 0;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    }
+
+    .tab-button:hover {
+    background-color: #f8f9fa;
+    }
+
+    .tab-button.active {
+    background-color: #007bff;
+    color: white;
+    border-color: #007bff;
+    }
+
+    .tab-content {
+    padding: 20px;
+    border: 1px solid #dee2e6;
+    border-radius: 0 0 4px 4px;
+    }
+</style>
+
+<h3>Especificaciones</h3>
+<div class="d-flex justify-content-between align-items-stretch mb-3 gap-3">
+    <h3 style="background-color: #217346; color: white; padding: 10px; margin-bottom: 0; border-radius: 4px; flex-grow: 1;">
+        Elaboración del Producto: @resultado
+    </h3>
+    <div class="d-flex gap-2">
+        <button type="button"
+        class="btn d-flex align-items-center justify-content-center gap-2"
+        style="width: 4cm; font-size: 20px; font-weight: bold; background-color: #0d6efd; color: white; border: none;"
+        onmouseover="this.style.backgroundColor='#0b5ed7'; this.style.transform='scale(1.05)';"
+        onmouseout="this.style.backgroundColor='#0d6efd'; this.style.transform='scale(1)';"
+        @onclick="GuardarCambios">
+            <i class="fas fa-save"></i> Grabar
+        </button>
+        <button type="button"
+        class="btn d-flex align-items-center justify-content-center"
+        style="width: 4cm; font-size: 20px; font-weight: bold; background-color: #207245; color: white; border: none;"
+        onmouseover="this.style.backgroundColor='#1A5A38'; this.style.transform='scale(1.05)';"
+        onmouseout="this.style.backgroundColor='#207245'; this.style.transform='scale(1)';"
+        @onclick="Regresar">
+            Regresar
+        </button>
+    </div>
+</div>
+<div class="tabs-container">
+    <div class="tabs-header">
+        <button type="button" class="tab-button @(activeTab == "Especificaciones" ? "active" : "")"
+        @onclick="@(() => activeTab = "Especificaciones")">
+            Especificación
+        </button>
+        <button type="button" class="tab-button @(activeTab == "solapa2" ? "active" : "")" 
+        @onclick="@(() => activeTab = "solapa2")">
+            Información Adjunta
+        </button>
+    </div>
+</div>
+
+<div class="tab-content">
+    @if (activeTab == "Especificaciones")
+    {
+        <div class="form-group">
+            <label for="especificacionTextarea">Especificación:</label>
+            <textarea class="form-control" id="especificacionTextarea" rows="30"
+            @bind="productoTerminado!.Especificacion"></textarea>
+        </div>
+    }
+    else if (activeTab == "solapa2")
+    {
+        <h3>Adjuntar archivos</h3>
+        <br /><br />
+        @*         <InputFile OnChange="@OnInputFileChange" multiple />
+ *@   
+        <label class="btn btn-primary d-flex align-items-center gap-2">
+            <i class="fas fa-file-upload"></i> Seleccionar archivo
+            <InputFile OnChange="@OnInputFileChange" multiple style="display:none" />
+        </label>
+
+        <br />
+
+        <br />
+        <table class="table table-dark table-striped">
+            <thead>
+                <tr>
+                    <th scope="col">Nombre</th>
+                    <th scope="col">Fecha Subida</th>
+                    <th scope="col">Descargar</th>
+                    <th scope="col">Eliminar</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var i in CaracteristicasArchivo)
+                {
+                    <tr>
+                        <td>@i.Nombre</td>
+
+                        <td>@i.FechaSubida</td>
+                        <td>
+                            <button class="btn btn-success" @onclick="(()=>DownloadFileFromUploadRes(i))">
+                                <i class="fas fa-download"></i> Descargar
+                            </button>
+                        </td>
+                        <td>
+                            <button class="btn btn-danger" @onclick="(()=>EliminarArchivo(i.Id))">
+                                <i class="fas fa-trash-alt"></i> Eliminar
+                            </button>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
+</div>
+
+@if (productoTerminado == null)
+
+{
+    <div class="d-flex justify-content-center align-items-center" style="height: 200px;">
+        <div class="spinner-border text-primary" role="status" style="width: 3rem; height: 3rem;">
+            <span class="sr-only">Cargando...</span>
+        </div>
+    </div>
+}
+else{
+    <div class="card">
+        <div class="card-body">
+
+        </div>
+    </div>
+}
+@code {
+
+
+
+
+
+
+
+    [Parameter]
+    public string? Id { get; set; }
+    private Master? productoTerminado;
+    private string resultado = string.Empty;
+    private int masterCodint =0;
+    private int maxAllowedFiles = int.MaxValue;
+    private long maxFileSize = long.MaxValue;
+    private List<string> fileNames = new();
+    private List<UploadMaster> uploadResults = new();
+
+    private bool loading = false;
+    private string errorMessage = string.Empty;
+    private string activeTab = "Especificaciones";
+    public static List<UploadMaster> CaracteristicasArchivo = new List<UploadMaster>();
+
+    protected override async Task OnInitializedAsync()
+
+    {
+        await CargarProductoTerminado();
+
+        await CargarArchivosAdjuntos();
+    }
+
+    // protected override async Task OnParametersSetAsync()
+    // {
+    //     await CargarProductoTerminado();
+    // }
+
+    private async Task CargarProductoTerminado()
+    {
+        if (string.IsNullOrEmpty(Id))
+        {
+            await sweetAlertService.FireAsync("Error", "No se ha especificado el código del producto", SweetAlertIcon.Error);
+            return;
+        }
+
+        var responseHttp = await repository.Get<Master>($"/api/master/{Id}");
+
+        if (responseHttp.Error)
+        {
+            var mensajeError = await responseHttp.GetErrorMessageAsync();
+            await sweetAlertService.FireAsync("Error", mensajeError, SweetAlertIcon.Error);
+            return;
+        }
+
+        productoTerminado = responseHttp.Response;
+        masterCodint = productoTerminado!.Codint;
+        resultado = $"{productoTerminado!.Codigo} - {productoTerminado.Descripcion}";
+
+    }
+
+    private void Regresar()
+    {
+        if (!string.IsNullOrEmpty(Id))
+        {
+            navigationManager.NavigateTo($"/master/edit/{Id}");
+        }
+        else
+        {
+            navigationManager.NavigateTo("/master");
+        }
+    }
+    string NombreBuscado = "";
+    async Task ObtenerArchivos()
+    {
+        var resultadoArch = await Http.GetFromJsonAsync<List<UploadMaster>>($"api/File/FileList{masterCodint}");
+        if (resultadoArch != null)
+            CaracteristicasArchivo = resultadoArch;
+    }
+
+
+    private async Task DownloadFileFromUploadRes(UploadMaster upResult)
+    {
+
+        var response = await Http.PostAsJsonAsync("/api/File/getFile", upResult);
+
+        if (!response.IsSuccessStatusCode)
+        {
+            await JS.InvokeVoidAsync("alert", "File not found.");
+        }
+        else
+        {
+            var fileStream = response.Content.ReadAsStream();
+            using var streamRef = new DotNetStreamReference(stream: fileStream);
+            await JS.InvokeVoidAsync("downloadFileFromStream", upResult.Nombre, streamRef);
+
+            await ObtenerArchivos();
+        }
+    }
+
+    //  MANEJO DE ARCHIVOS //
+     private async Task CargarArchivosAdjuntos()
+    {
+        try
+        {
+            var resultadoArch = await Http.GetFromJsonAsync<List<UploadMaster>>($"api/File/FileList/{masterCodint}");
+            if (resultadoArch != null)
+                CaracteristicasArchivo = resultadoArch;
+            else
+                CaracteristicasArchivo = new List<UploadMaster>(); // también cubre el caso de null
+        }
+        catch (Exception ex)
+        {   //solo limpia la lista no muestra mensaje, si no se estaba manteniendo la informacion anterior 
+            CaracteristicasArchivo = new List<UploadMaster>(); // limpia la lista si hay error
+        }
+    }
+
+    private async Task GuardarCambios()
+    {
+        if (productoTerminado == null)
+        {
+            await sweetAlertService.FireAsync("Error", "No hay datos del producto para guardar", SweetAlertIcon.Error);
+            return;
+        }
+
+        try
+        {
+            // Llamar al endpoint para actualizar la especificación
+            var response = await Http.PutAsJsonAsync($"api/master/{Id}/especificacion", productoTerminado.Especificacion);
+
+            if (response.IsSuccessStatusCode)
+            {
+                await sweetAlertService.FireAsync("Éxito", "Especificación guardada correctamente", SweetAlertIcon.Success);
+            }
+            else
+            {
+                var errorMessage = await response.Content.ReadAsStringAsync();
+                await sweetAlertService.FireAsync("Error", $"Error al guardar la especificación: {errorMessage}", SweetAlertIcon.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            await sweetAlertService.FireAsync("Error", $"Error: {ex.Message}", SweetAlertIcon.Error);
+        }
+    }
+
+    private async Task OnInputFileChange(InputFileChangeEventArgs e)
+    {
+        using var content = new MultipartFormDataContent();
+
+        foreach (var file in e.GetMultipleFiles(maxAllowedFiles))
+        {
+            var fileContent = new StreamContent(file.OpenReadStream(maxFileSize));
+            fileContent.Headers.ContentType = new MediaTypeHeaderValue(file.ContentType);
+
+            fileNames.Add(file.Name);
+
+            content.Add(
+            content: fileContent,
+            name: "\"files\"",
+            fileName: file.Name);
+        }
+
+        int codint = masterCodint;
+        var response = await Http.PostAsync($"/api/File?codint={codint}", content);
+        var newUploadResults = await response.Content.ReadFromJsonAsync<List<UploadMaster>>();
+
+        if (newUploadResults is not null)
+        {
+            uploadResults = uploadResults.Concat(newUploadResults).ToList();
+        }
+
+        await CargarArchivosAdjuntos();
+
+    }
+
+    private string? GetStoredFileName(string fileName)
+    {
+        var uploadResult = uploadResults.SingleOrDefault(f => f.Nombre == fileName);
+        if (uploadResult is not null)
+            return uploadResult.StoredFileName;
+
+        return "File not found.";
+    }
+    private async Task DownloadFile(string nombre)
+    {
+
+        var response = await Http.GetAsync($"/api/File/{nombre}");
+
+        if (!response.IsSuccessStatusCode)
+        {
+            await JS.InvokeVoidAsync("alert", "File not found.");
+        }
+        else
+        {
+            var fileStream = response.Content.ReadAsStream();
+            using var streamRef = new DotNetStreamReference(stream: fileStream);
+            await JS.InvokeVoidAsync("downloadFileFromStream", NombreBuscado, streamRef);
+        }
+    }
+    private async Task EliminarArchivo(int archivoId)
+    {
+        try
+        {
+            var response = await repository.Delete($"/api/File/DeleteFile/{archivoId}");
+            if (!response.Error)
+            {
+                CaracteristicasArchivo?.RemoveAll(a => a.Id == archivoId);
+                await sweetAlertService.FireAsync("Éxito", "Archivo eliminado correctamente.", SweetAlertIcon.Success);
+
+
+
+                await CargarArchivosAdjuntos();
+                // No se realiza ninguna navegación, se mantiene en la misma página y pestaña
+            }
+            else
+            {
+                var mensaje = await response.GetErrorMessageAsync();
+                await sweetAlertService.FireAsync("Error", mensaje, SweetAlertIcon.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            await sweetAlertService.FireAsync("Error", ex.Message, SweetAlertIcon.Error);
+        }
+    }
+  
+
+
+
+}
+
+

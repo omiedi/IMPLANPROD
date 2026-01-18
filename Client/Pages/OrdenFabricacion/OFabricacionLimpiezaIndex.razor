@@ -1,0 +1,775 @@
+@page "/ofabricacion-limpieza"
+@page "/ofabricacion-limpieza/{Page:int?}"
+@using IMPLANPROD.Shared.DTOs
+@using IMPLANPROD.Shared.Entities
+@using IMPLANPROD.Client.Shared.Components
+@using System.Globalization
+@inject IRepository repository
+@inject SweetAlertService sweetAlertService
+@inject NavigationManager navigationManager
+
+<PageTitle>O. Fabricación - Limpieza</PageTitle>
+
+<div class="container-fluid">
+    <div class="mb-4">
+        <h2 class="text-center fw-bold text-primary">
+            O. FABRICACIÓN - LIMPIEZA
+        </h2>
+        <hr class="border-primary border-2 opacity-50" />
+    </div>
+
+    <div style="height: 60px;" class="d-flex justify-content-center align-items-center">
+        @if (isLoading)
+        {
+            <div class="spinner-border" role="status">
+                <span class="visually-hidden">Cargando...</span>
+            </div>
+        }
+        else
+        {
+            <div style="height: 100%;"></div>
+        }
+    </div>
+
+    <div class="mb-3">
+        <div class="row">
+            <div class="col-md-6">
+                <label>Filtro (x O.F.):</label>
+                <div class="input-group">
+                    <input type="text" class="form-control" @bind-value="filter" @bind-value:event="oninput" placeholder="Buscar..." />
+                    <button class="btn btn-outline-primary" type="button" @onclick="ApplyFilterAsync">
+                        <i class="oi oi-magnifying-glass"></i>
+                    </button>
+                    <button class="btn btn-outline-danger" type="button" @onclick="CleanFilterAsync">
+                        <i class="oi oi-ban"></i>
+                    </button>
+                </div>
+            </div>
+            <div class="col-md-6 text-end d-flex align-items-end justify-content-end gap-2">
+                <button class="btn btn-secondary" @onclick="Volver">
+                    <i class="oi oi-arrow-left"></i> Volver
+                </button>
+                <button class="btn btn-primary" @onclick="ConsultarAsync">
+                    <i class="oi oi-magnifying-glass"></i> Consultar
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <Pagination CurrentPage="currentPage"
+                TotalPages="totalPages"
+                SelectedPage="SelectedPageAsync" />
+
+    @if (ordenes == null || !ordenes.Any())
+    {
+        @if (!isLoading)
+        {
+            <div class="alert alert-info mt-3">
+                <i class="oi oi-info me-2"></i> No se encontraron registros que coincidan con la búsqueda.
+            </div>
+        }
+    }
+    else
+    {
+        <div class="table-responsive">
+            <table class="table table-striped">
+                <thead>
+                    <tr>
+                        <th>O.Fab.</th>
+                        <th>Estado</th>
+                        <th>Código</th>
+                        <th>Unidad</th>
+                        <th>F.Ent.Sol</th>
+                        <th>F.Lanz.</th>
+                        <th>F.Cierre</th>
+                        <th class="text-end">Cant.Proy.</th>
+                        <th class="text-end">CanT.Apr.</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var item in ordenes)
+                    {
+                        <tr>
+                            <td>@item.IdSubOr</td>
+                            <td>@GetEstadoTexto(item.StatuOrf)</td>
+                            <td>@item.Cod_Exte</td>
+                            <td>@item.Unidad</td>
+                            <td>@FormatDate(item.FechEnSol)</td>
+                            <td>@FormatDate(item.FechLan)</td>
+                            <td>@FormatDate(item.FechCierr)</td>
+                            <td class="text-end">@FormatDecimal(item.CanProy)</td>
+                            <td class="text-end">@FormatDecimal(item.CanApro)</td>
+                            <td class="text-end">
+                                <button class="btn btn-sm btn-outline-secondary me-1" title="Editar" @onclick="(() => AbrirEditarAsync(item.IdSubOr))">
+                                    <i class="oi oi-pencil"></i>
+                                </button>
+                                <button class="btn btn-sm btn-outline-primary me-1" title="Ver detalle" @onclick="(() => AbrirDetalleAsync(item.IdSubOr))">
+                                    <i class="oi oi-eye"></i>
+                                </button>
+                                <button class="btn btn-sm btn-success" title="Cerrar O.F." @onclick="(() => IrACerrarOF(item.IdSubOr, item.FechLan))">
+                                    <i class="oi oi-check"></i>
+                                </button>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+
+    @if (editarVisible)
+    {
+        <div class="modal fade show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5);">
+            <div class="modal-dialog modal-lg">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title">Editar O.F. Limpieza @editarIdSubOr</h5>
+                        <button type="button" class="btn-close" aria-label="Close" @onclick="CerrarEditar" disabled="@editarGuardando"></button>
+                    </div>
+                    <div class="modal-body">
+                        @if (editarLoading)
+                        {
+                            <div class="text-center p-4">
+                                <div class="spinner-border text-primary" role="status">
+                                    <span class="visually-hidden">Cargando...</span>
+                                </div>
+                                <p class="mt-2">Cargando...</p>
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="row g-3">
+                                <div class="col-md-4">
+                                    <label class="form-label fw-bold">Mano de obra</label>
+                                    <input type="number" class="form-control text-end" step="0.0001" @bind-value="editarManoDeObra" @bind-value:event="oninput" disabled="@editarGuardando" />
+                                </div>
+
+                                <div class="col-md-8 d-flex align-items-end justify-content-end">
+                                    <button class="btn btn-outline-primary" type="button" @onclick="AbrirSelectorProductoEditar" disabled="@editarGuardando">
+                                        <i class="oi oi-plus"></i> Agregar producto
+                                    </button>
+                                </div>
+
+                                <div class="col-12">
+                                    <div class="table-responsive">
+                                        <table class="table table-sm table-striped align-middle">
+                                            <thead class="table-dark">
+                                                <tr>
+                                                    <th style="width: 140px;">Código</th>
+                                                    <th>Descripción</th>
+                                                    <th class="text-end" style="width: 140px;">Cantidad</th>
+                                                    <th class="text-center" style="width: 90px;">Acción</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                @if (!editarItems.Any())
+                                                {
+                                                    <tr>
+                                                        <td colspan="4" class="text-center text-muted">No hay productos agregados</td>
+                                                    </tr>
+                                                }
+                                                else
+                                                {
+                                                    @foreach (var it in editarItems)
+                                                    {
+                                                        <tr>
+                                                            <td><strong>@it.Codigo</strong></td>
+                                                            <td>@it.Descripcion</td>
+                                                            <td class="text-end">
+                                                                <input type="number" class="form-control form-control-sm text-end" step="0.0001" @bind-value="it.Cantidad" @bind-value:event="oninput" disabled="@editarGuardando" />
+                                                            </td>
+                                                            <td class="text-center">
+                                                                <button type="button" class="btn btn-sm btn-outline-danger" @onclick="(() => QuitarItemEditar(it.CodInte))" disabled="@editarGuardando">
+                                                                    <i class="oi oi-trash"></i>
+                                                                </button>
+                                                            </td>
+                                                        </tr>
+                                                    }
+                                                }
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            </div>
+                        }
+                    </div>
+                    <div class="modal-footer">
+                        <button class="btn btn-secondary" @onclick="CerrarEditar" disabled="@editarGuardando">Cancelar</button>
+                        <button class="btn btn-primary" @onclick="GuardarEditarAsync" disabled="@(editarGuardando || editarLoading)">
+                            @if (editarGuardando)
+                            {
+                                <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
+                                <span class="ms-1">Guardando...</span>
+                            }
+                            else
+                            {
+                                <i class="oi oi-check"></i>
+                                <span class="ms-1">Guardar</span>
+                            }
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+
+    <SelectorProductos @ref="selectorProductosEditarRef"
+                      PermitirCantidad="true"
+                      PermitirPrecio="false"
+                      CantidadDefault="1"
+                      OnProductoSeleccionadoCantidad="OnProductoSeleccionadoEditar"
+                      OnClose="OnCloseSelectorProductosEditar" />
+
+    @if (detalleVisible)
+    {
+        <div class="modal fade show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5);">
+            <div class="modal-dialog modal-xl">
+                <div class="modal-content">
+                    <div class="modal-header bg-primary text-white">
+                        <h5 class="modal-title">Detalle O/F: @detalleIdSubOr</h5>
+                        <button type="button" class="btn-close btn-close-white" @onclick="CerrarDetalle"></button>
+                    </div>
+
+                    <div class="modal-body">
+                        @if (detalleLoading)
+                        {
+                            <div class="text-center p-4">
+                                <div class="spinner-border text-primary" role="status">
+                                    <span class="visually-hidden">Cargando...</span>
+                                </div>
+                                <p class="mt-2">Cargando detalle...</p>
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="row">
+                                <div class="col-12 mb-3">
+                                    <div class="card">
+                                        <div class="card-header bg-secondary text-white">
+                                            <h6 class="mb-0">Operaciones</h6>
+                                        </div>
+                                        <div class="card-body p-0">
+                                            <div class="table-responsive" style="@GetScrollStyle(detalleOperaciones?.Count)">
+                                                <table class="table table-striped table-hover mb-0">
+                                                    <thead class="table-dark sticky-top">
+                                                        <tr>
+                                                            <th class="text-end">Oper</th>
+                                                            <th>Descripción</th>
+                                                            <th class="text-end">CantProg</th>
+                                                            <th class="text-end">TiemVari</th>
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody>
+                                                        @if (detalleOperaciones != null && detalleOperaciones.Any())
+                                                        {
+                                                            @foreach (var op in detalleOperaciones)
+                                                            {
+                                                                <tr>
+                                                                    <td class="text-end">@op.NumeOper</td>
+                                                                    <td>@op.Descrip</td>
+                                                                    <td class="text-end">@FormatDecimal(op.CantProg)</td>
+                                                                    <td class="text-end">@FormatDecimal(op.TiemVari)</td>
+                                                                </tr>
+                                                            }
+                                                        }
+                                                        else
+                                                        {
+                                                            <tr>
+                                                                <td colspan="4" class="text-center text-muted p-3">Sin operaciones</td>
+                                                            </tr>
+                                                        }
+                                                    </tbody>
+                                                </table>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div class="col-12">
+                                    <div class="card">
+                                        <div class="card-header bg-secondary text-white">
+                                            <h6 class="mb-0">Reservas</h6>
+                                        </div>
+                                        <div class="card-body p-0">
+                                            <div class="table-responsive" style="@GetScrollStyle(detalleReservas?.Count)">
+                                                <table class="table table-striped table-hover mb-0">
+                                                    <thead class="table-dark sticky-top">
+                                                        <tr>
+                                                            <th>Código</th>
+                                                            <th>Descripción</th>
+                                                            <th class="text-end">CantRes</th>
+                                                            <th class="text-end">CantCons</th>
+                                                            <th class="text-end">Saldo</th>
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody>
+                                                        @if (detalleReservas != null && detalleReservas.Any())
+                                                        {
+                                                            @foreach (var r in detalleReservas)
+                                                            {
+                                                                <tr>
+                                                                    <td>@r.Cod_Exte</td>
+                                                                    <td>@r.Descrip</td>
+                                                                    <td class="text-end">@FormatDecimal(r.CantRes)</td>
+                                                                    <td class="text-end">@FormatDecimal(r.CantCons)</td>
+                                                                    <td class="text-end">@FormatDecimal((r.CantRes ?? 0) - (r.CantCons ?? 0))</td>
+                                                                </tr>
+                                                            }
+                                                        }
+                                                        else
+                                                        {
+                                                            <tr>
+                                                                <td colspan="5" class="text-center text-muted p-3">Sin reservas</td>
+                                                            </tr>
+                                                        }
+                                                    </tbody>
+                                                </table>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        }
+                    </div>
+
+                    <div class="modal-footer">
+                        <button class="btn btn-secondary" @onclick="CerrarDetalle">Cerrar</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+
+    [Parameter]
+    public string? Page { get; set; }
+
+    private int currentPage = 1;
+    private int totalPages;
+    private int recordsNumber = 10;
+    private List<OrdefabrIndexDTO>? ordenes;
+    private string filter = string.Empty;
+    private bool isLoading = true;
+
+    private bool detalleVisible;
+    private bool detalleLoading;
+    private string? detalleIdSubOr;
+    private List<OperfabOperacionDTO>? detalleOperaciones;
+    private List<Reserva>? detalleReservas;
+
+    private bool editarVisible;
+    private bool editarLoading;
+    private bool editarGuardando;
+    private string? editarIdSubOr;
+    private decimal editarManoDeObra;
+    private List<ItemOFLimpiezaEdit> editarItems = new List<ItemOFLimpiezaEdit>();
+    private SelectorProductos? selectorProductosEditarRef;
+
+    private class OperfabOperacionDTO
+    {
+        public short? NumeOper { get; set; }
+        public string Descrip { get; set; } = string.Empty;
+        public decimal? CantProg { get; set; }
+        public decimal? TiemVari { get; set; }
+    }
+
+    private class EditarOFLimpiezaResponseDTO
+    {
+        public string IdSubOr { get; set; } = string.Empty;
+        public decimal ManoDeObra { get; set; }
+        public List<EditarOFLimpiezaItemDTO> Items { get; set; } = new List<EditarOFLimpiezaItemDTO>();
+    }
+
+    private class EditarOFLimpiezaItemDTO
+    {
+        public int CodInte { get; set; }
+        public string Cod_Exte { get; set; } = string.Empty;
+        public string Descrip { get; set; } = string.Empty;
+        public decimal Cantidad { get; set; }
+    }
+
+    private class EditarOFLimpiezaRequestDTO
+    {
+        public decimal ManoDeObra { get; set; }
+        public List<GenerarOFLimpiezaItemDTO> Items { get; set; } = new List<GenerarOFLimpiezaItemDTO>();
+    }
+
+    private class GenerarOFLimpiezaItemDTO
+    {
+        public int CodInte { get; set; }
+        public decimal Cantidad { get; set; }
+    }
+
+    private class ItemOFLimpiezaEdit
+    {
+        public int CodInte { get; set; }
+        public string Codigo { get; set; } = string.Empty;
+        public string Descripcion { get; set; } = string.Empty;
+        public decimal Cantidad { get; set; }
+    }
+
+    private string GetScrollStyle(int? count)
+    {
+        if (count.HasValue && count.Value > 8)
+        {
+            return "max-height: 320px; overflow-y: auto;";
+        }
+
+        return "overflow-y: visible;";
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadAsync();
+    }
+
+    private string FormatDecimal(decimal? value)
+    {
+        if (!value.HasValue)
+        {
+            return string.Empty;
+        }
+
+        return value.Value.ToString("N2", CultureInfo.CurrentCulture);
+    }
+
+    private string FormatDate(DateTime? value)
+    {
+        if (!value.HasValue)
+        {
+            return string.Empty;
+        }
+
+        return value.Value.ToString("dd/MM/yyyy");
+    }
+
+    private string GetEstadoTexto(short? statuOrf)
+    {
+        if (!statuOrf.HasValue)
+        {
+            return string.Empty;
+        }
+
+        if (statuOrf.Value == 0 || statuOrf.Value == 1)
+        {
+            return "ACTIVA";
+        }
+
+        if (statuOrf.Value == 3)
+        {
+            return "CERRADA";
+        }
+
+        if (statuOrf.Value == 9)
+        {
+            return "ANULADA";
+        }
+
+        return statuOrf.Value.ToString();
+    }
+
+    private async Task LoadAsync(int page = 1)
+    {
+        try
+        {
+            isLoading = true;
+
+            if (!string.IsNullOrWhiteSpace(Page))
+            {
+                page = Convert.ToInt32(Page);
+            }
+
+            currentPage = page;
+
+            string url1 = $"api/ordefabr?page={page}&recordsNumber={recordsNumber}&statuOrf=0&idSubOrPrefix=DL-";
+            string url2 = $"api/ordefabr/totalPages?recordsNumber={recordsNumber}&statuOrf=0&idSubOrPrefix=DL-";
+
+            if (!string.IsNullOrWhiteSpace(filter))
+            {
+                url1 += $"&filter={filter}";
+                url2 += $"&filter={filter}";
+            }
+
+            var responseHttp = await repository.Get<List<OrdefabrIndexDTO>>(url1);
+            var responseHttp2 = await repository.Get<int>(url2);
+
+            if (responseHttp.Error)
+            {
+                await sweetAlertService.FireAsync("Error", await responseHttp.GetErrorMessageAsync(), SweetAlertIcon.Error);
+                ordenes = new List<OrdefabrIndexDTO>();
+                totalPages = 1;
+                return;
+            }
+
+            ordenes = responseHttp.Response!;
+            totalPages = responseHttp2.Response!;
+        }
+        catch (Exception ex)
+        {
+            await sweetAlertService.FireAsync("Error", ex.Message, SweetAlertIcon.Error);
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private async Task SelectedPageAsync(int page)
+    {
+        await LoadAsync(page);
+    }
+
+    private async Task ApplyFilterAsync()
+    {
+        await LoadAsync(1);
+    }
+
+    private async Task CleanFilterAsync()
+    {
+        filter = string.Empty;
+        await LoadAsync(1);
+    }
+
+    private async Task ConsultarAsync()
+    {
+        await LoadAsync(1);
+    }
+
+    private void Volver()
+    {
+        navigationManager.NavigateTo("/ficha-reparacion");
+    }
+
+    private void IrACerrarOF(string? idSubOr, DateTime? fechaLanzamiento)
+    {
+        if (string.IsNullOrWhiteSpace(idSubOr))
+        {
+            navigationManager.NavigateTo("/ordenfabricacion");
+            return;
+        }
+
+        // Construir URL con parámetros de filtro
+        var fechaDesde = fechaLanzamiento?.ToString("yyyy-MM-dd") ?? DateTime.Today.AddMonths(-1).ToString("yyyy-MM-dd");
+        var fechaHasta = fechaLanzamiento?.ToString("yyyy-MM-dd") ?? DateTime.Today.ToString("yyyy-MM-dd");
+        
+        var url = $"/ordenfabricacion?estado=0&fechaDesde={fechaDesde}&fechaHasta={fechaHasta}&filtro={Uri.EscapeDataString(idSubOr)}";
+        navigationManager.NavigateTo(url);
+    }
+
+    private async Task AbrirDetalleAsync(string? idSubOr)
+    {
+        if (string.IsNullOrWhiteSpace(idSubOr))
+        {
+            return;
+        }
+
+        detalleVisible = true;
+        detalleLoading = true;
+        detalleIdSubOr = idSubOr;
+        detalleOperaciones = null;
+        detalleReservas = null;
+
+        try
+        {
+            var operacionesResponse = await repository.Get<List<OperfabOperacionDTO>>($"api/ordefabr/operaciones/por-of/{idSubOr}");
+            if (operacionesResponse.Error)
+            {
+                await sweetAlertService.FireAsync("Error", await operacionesResponse.GetErrorMessageAsync(), SweetAlertIcon.Error);
+                return;
+            }
+
+            detalleOperaciones = operacionesResponse.Response ?? new List<OperfabOperacionDTO>();
+
+            var reservasResponse = await repository.Get<List<Reserva>>($"api/reservas/por-of/{idSubOr}");
+            if (reservasResponse.Error)
+            {
+                await sweetAlertService.FireAsync("Error", await reservasResponse.GetErrorMessageAsync(), SweetAlertIcon.Error);
+                return;
+            }
+
+            detalleReservas = reservasResponse.Response ?? new List<Reserva>();
+        }
+        catch (Exception ex)
+        {
+            await sweetAlertService.FireAsync("Error", ex.Message, SweetAlertIcon.Error);
+        }
+        finally
+        {
+            detalleLoading = false;
+        }
+    }
+
+    private void CerrarDetalle()
+    {
+        detalleVisible = false;
+        detalleLoading = false;
+        detalleIdSubOr = null;
+        detalleOperaciones = null;
+        detalleReservas = null;
+    }
+
+    private async Task AbrirEditarAsync(string? idSubOr)
+    {
+        if (string.IsNullOrWhiteSpace(idSubOr))
+        {
+            return;
+        }
+
+        editarVisible = true;
+        editarLoading = true;
+        editarGuardando = false;
+        editarIdSubOr = idSubOr;
+        editarManoDeObra = 0m;
+        editarItems = new List<ItemOFLimpiezaEdit>();
+
+        try
+        {
+            var resp = await repository.Get<EditarOFLimpiezaResponseDTO>($"api/ordefabr/limpieza/{idSubOr}/edit");
+            if (resp.Error)
+            {
+                await sweetAlertService.FireAsync("Error", await resp.GetErrorMessageAsync(), SweetAlertIcon.Error);
+                return;
+            }
+
+            var data = resp.Response;
+            if (data == null)
+            {
+                await sweetAlertService.FireAsync("Error", "No se pudieron obtener datos de edición.", SweetAlertIcon.Error);
+                return;
+            }
+
+            editarManoDeObra = data.ManoDeObra;
+            editarItems = data.Items.Select(x => new ItemOFLimpiezaEdit
+            {
+                CodInte = x.CodInte,
+                Codigo = string.IsNullOrWhiteSpace(x.Cod_Exte) ? x.CodInte.ToString() : x.Cod_Exte,
+                Descripcion = x.Descrip,
+                Cantidad = x.Cantidad
+            }).ToList();
+        }
+        catch (Exception ex)
+        {
+            await sweetAlertService.FireAsync("Error", ex.Message, SweetAlertIcon.Error);
+        }
+        finally
+        {
+            editarLoading = false;
+        }
+    }
+
+    private void CerrarEditar()
+    {
+        editarVisible = false;
+        editarLoading = false;
+        editarGuardando = false;
+        editarIdSubOr = null;
+        editarManoDeObra = 0m;
+        editarItems = new List<ItemOFLimpiezaEdit>();
+    }
+
+    private async Task AbrirSelectorProductoEditar()
+    {
+        if (selectorProductosEditarRef == null)
+        {
+            await sweetAlertService.FireAsync("Error", "No se pudo abrir el selector de productos.", SweetAlertIcon.Error);
+            return;
+        }
+
+        await selectorProductosEditarRef.AbrirModal();
+    }
+
+    private Task OnProductoSeleccionadoEditar(SelectorProductos.SeleccionProducto seleccion)
+    {
+        if (seleccion == null)
+        {
+            return Task.CompletedTask;
+        }
+
+        if (seleccion.Producto == null)
+        {
+            return Task.CompletedTask;
+        }
+
+        var codInte = seleccion.Producto.Codint;
+
+        if (editarItems.Any(x => x.CodInte == codInte))
+        {
+            return Task.CompletedTask;
+        }
+
+        editarItems.Add(new ItemOFLimpiezaEdit
+        {
+            CodInte = codInte,
+            Codigo = seleccion.Producto.Codigo,
+            Descripcion = seleccion.Producto.Descripcion,
+            Cantidad = seleccion.Cantidad
+        });
+
+        return Task.CompletedTask;
+    }
+
+    private void OnCloseSelectorProductosEditar()
+    {
+    }
+
+    private void QuitarItemEditar(int codInte)
+    {
+        var item = editarItems.FirstOrDefault(x => x.CodInte == codInte);
+        if (item != null)
+        {
+            editarItems.Remove(item);
+        }
+    }
+
+    private async Task GuardarEditarAsync()
+    {
+        if (string.IsNullOrWhiteSpace(editarIdSubOr))
+        {
+            return;
+        }
+
+        if (!editarItems.Any())
+        {
+            await sweetAlertService.FireAsync("Error", "Debe agregar al menos un producto.", SweetAlertIcon.Error);
+            return;
+        }
+
+        if (editarItems.Any(x => x.Cantidad <= 0))
+        {
+            await sweetAlertService.FireAsync("Error", "Hay productos con cantidad inválida.", SweetAlertIcon.Error);
+            return;
+        }
+
+        editarGuardando = true;
+        try
+        {
+            var request = new EditarOFLimpiezaRequestDTO
+            {
+                ManoDeObra = editarManoDeObra,
+                Items = editarItems.Select(x => new GenerarOFLimpiezaItemDTO { CodInte = x.CodInte, Cantidad = x.Cantidad }).ToList()
+            };
+
+            var resp = await repository.Put<EditarOFLimpiezaRequestDTO>($"api/ordefabr/limpieza/{editarIdSubOr}/edit", request);
+            if (resp.Error)
+            {
+                await sweetAlertService.FireAsync("Error", await resp.GetErrorMessageAsync(), SweetAlertIcon.Error);
+                return;
+            }
+
+            await sweetAlertService.FireAsync("OK", "O/F Limpieza actualizada.", SweetAlertIcon.Success);
+            CerrarEditar();
+            await LoadAsync(currentPage);
+        }
+        catch (Exception ex)
+        {
+            await sweetAlertService.FireAsync("Error", ex.Message, SweetAlertIcon.Error);
+        }
+        finally
+        {
+            editarGuardando = false;
+        }
+    }
+}

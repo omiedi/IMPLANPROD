@@ -1,0 +1,560 @@
+@using IMPLANPROD.Shared.DTOs
+@inject IRepository repository
+@inject SweetAlertService sweetAlertService
+@inject IModalService modalService
+
+<div class="modal fade show" style="display:block; background-color: rgba(0,0,0,0.5)">
+    <div class="modal-dialog modal-xl" style="max-height: 95vh;">
+        <div class="modal-content" style="max-height: 95vh; display: flex; flex-direction: column;">
+            <div class="modal-header" style="background-color: #1F7246; color: white;">
+                <h5 class="modal-title">Recepción Provisoria de Orden de Compra</h5>
+                <button type="button" class="btn-close btn-close-white" @onclick="Cancelar"></button>
+            </div>
+
+            <div class="modal-body" style="overflow-y: auto; flex: 1 1 auto;">
+                <div class="container">
+                    <div class="row mb-3">
+                        <div class="col">
+                            <h4>Proveedor: @RazonSocial</h4>
+                        </div>
+                    </div>
+
+                    <div class="row mb-3">
+                        <div class="col">
+                            <button type="button" class="btn @(ordenarPorCodigo ? "btn-primary" : "btn-outline-primary")" @onclick="CambiarOrdenamiento">
+                                Ordenar por @(ordenarPorCodigo ? "O.Compra" : "Código")
+                                <i class="oi @(ordenarPorCodigo ? "oi-sort-ascending" : "oi-random")"></i>
+                            </button>
+                            <button type="button" class="btn btn-outline-success ms-2" @onclick="AbrirModalImpresion">
+                                <i class="oi oi-print"></i> Imprimir/Exp.Excel
+                            </button>
+                        </div>
+                    </div>
+
+                    @if (!modoRecepcion)
+                    {
+                        <div class="row mb-3">
+                            <div class="col">
+                                <div class="btn-group" role="group">
+                                    <button type="button" class="btn @(filtroSeleccion == "todos" ? "btn-primary" : "btn-outline-primary")" 
+                                    @onclick='() => CambiarFiltro("todos")'>
+                                        Todos
+                                    </button>
+                                    <button type="button" class="btn @(filtroSeleccion == "seleccionados" ? "btn-primary" : "btn-outline-primary")" 
+                                    @onclick='() => CambiarFiltro("seleccionados")'>
+                                        Seleccionados
+                                    </button>
+                                    <button type="button" class="btn @(filtroSeleccion == "noseleccionados" ? "btn-primary" : "btn-outline-primary")" 
+                                    @onclick='() => CambiarFiltro("noseleccionados")'>
+                                        No Seleccionados
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    }
+
+                    @if (ordenesPendientes == null)
+                    {
+                        <div class="text-center">
+                            <div class="spinner-border text-primary" role="status">
+                                <span class="visually-hidden">Cargando...</span>
+                            </div>
+                        </div>
+                    }
+                    else if (!ordenesPendientes.Any())
+                    {
+                        <div class="alert alert-info">
+                            No hay órdenes pendientes para este proveedor.
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="table-responsive">
+                            <table class="table table-sm table-hover">
+                                <thead>
+                                    <tr>
+                                        <th>O/C</th>
+                                        <th>Ítem</th>
+                                        <th>Código</th>
+                                        <th>Descripción</th>
+                                        <th>Cantidad Ordenada</th>
+                                        <th>Cantidad Recibida</th>
+                                        <th>Cantidad Pendiente</th>
+                                        <th>Cantidad a Recibir</th>
+                                        <th>Fecha Entrega</th>
+                                        @if (!modoRecepcion)
+                                        {
+                                            <th>
+                                                <div class="form-check">
+                                                    <input class="form-check-input" type="checkbox" 
+                                                           @bind="seleccionarTodos" 
+                                                           @bind:after="SeleccionarTodos"
+                                                           title="Seleccionar/Deseleccionar todos" />
+                                                    <label class="form-check-label">Todos</label>
+                                                </div>
+                                            </th>
+                                        }
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var orden in ordenesAMostrar)
+                                    {
+                                        <tr>
+                                            <td>@orden.NumeroOrdenCompra</td>
+                                            <td>@orden.NumeroOrdenItem</td>
+                                            <td>@orden.Cod_Exte</td>
+                                            <td>@orden.Descritem</td>
+                                            <td>@orden.CantidadOrdenada.ToString("N2")</td>
+                                            <td>@orden.CantidadRecibida.ToString("N2")</td>
+                                            <td>@orden.CantidadPendiente.ToString("N2")</td>
+                                            <td>
+                                                <input type="number" class="form-control form-control-sm" 
+                                                value="@orden.CantidadARecibir" 
+                                                @onchange="@((ChangeEventArgs e) => ActualizarCantidadARecibir(orden, e))"
+                                                disabled="@(!orden.Seleccionado && !modoRecepcion)" />
+                                            </td>
+                                            <td>@(orden.FechaEntregaSolicitada?.ToString("dd/MM/yyyy") ?? "-")</td>
+                                            @if (!modoRecepcion)
+                                            {
+                                                <td>
+                                                    <div class="form-check">
+                                                        <input class="form-check-input" type="checkbox" 
+                                                        @bind="orden.Seleccionado" 
+                                                        @bind:after="ActualizarSeleccionTodos" />
+                                                    </div>
+                                                </td>
+                                            }
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <div class="modal-footer">
+                            @if (!modoRecepcion)
+                            {
+                                <button type="button" class="btn btn-secondary" @onclick="Cancelar">Cancelar</button>
+                                <button class="btn btn-primary" @onclick="Aceptar" 
+                                disabled="@(!ordenesPendientes.Any(o => o.Seleccionado))">
+                                    Aceptar
+                                </button>
+                            }
+                            else
+                            {
+                                <button type="button" class="btn btn-secondary" @onclick="Volver">
+                                    Volver
+                                </button>
+                               @*  <button type="button" class="btn btn-success" @onclick="RecibirYAprobar" 
+                                disabled="@(!ordenesAMostrar.All(o => o.CantidadARecibir > 0))">
+                                    Recibir y Aprobar
+                                </button> *@
+                                <button class="btn btn-success" @onclick="RecibirSinAprobar"
+                                        disabled="@(!ordenesAMostrar.All(o => o.CantidadARecibir > 0))">
+                                    Recibir
+                                </button>
+                            }
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@* Componente de impresión *@
+<ImpresionRecepcion Datos="@(ordenesPendientes ?? new List<OrdenCompraPendienteDTO>())"
+                    Encabezados="@encabezadosRecepcion"
+                    Titulo="Órdenes Pendientes de Recepción"
+                    RazonSocial="@RazonSocial"
+                    MostrarModal="@mostrarModalImpresion"
+                    OnCerrar="@CerrarModalImpresion" />
+
+@code {
+
+    [Parameter] public int NumeroProveedor { get; set; }
+    [Parameter] public string RazonSocial { get; set; }
+    [CascadingParameter] BlazoredModalInstance Modal { get; set; }
+
+    // Lista que almacena las órdenes de compra pendientes de recepción
+    private List<OrdenCompraPendienteDTO> ordenesPendientes;
+    // Lista que almacena los materiales que se van a recibir en la transacción actual
+    private List<RecepcionMaterialDTO> materialesARecibir;
+    // Lista que almacena la respuesta del backend con los números de boleta y lotes generados
+    private List<BolrecepResponseDTO> boletasRecepcion;
+
+    private string filtroSeleccion = "todos";
+    private bool modoRecepcion = false;
+    private bool ordenarPorCodigo = false;
+    private bool seleccionarTodos = false;
+    int deposito = 0;
+    string numeroRemito = "";
+    private int? numeroBoleta = null;
+
+    // Variables para impresión
+    private bool mostrarModalImpresion = false;
+    private Dictionary<string, string> encabezadosRecepcion = new()
+    {
+        { "NumeroOrdenCompra", "O/C" },
+        { "NumeroOrdenItem", "Ítem" },
+        { "Cod_Exte", "Código" },
+        { "Descritem", "Descripción" },
+        { "CantidadOrdenada", "Cant. Ordenada" },
+        { "CantidadRecibida", "Cant. Recibida" },
+        { "CantidadPendiente", "Cant. Pendiente" },
+        { "FechaEntregaSolicitada", "Fecha Entrega" }
+    };
+
+    /// <summary>
+    /// Propiedad que gestiona la visualización y ordenamiento de órdenes de compra pendientes
+    /// </summary>
+    private IEnumerable<OrdenCompraPendienteDTO> ordenesAMostrar
+    {
+        get
+        {
+            // Determina qué órdenes mostrar según el modo y los filtros
+            var ordenes = modoRecepcion ? 
+                // En modo recepción: muestra solo las órdenes seleccionadas
+                ordenesPendientes?.Where(o => o.Seleccionado) ?? Enumerable.Empty<OrdenCompraPendienteDTO>() :
+                // Si no está en modo recepción, aplica filtros según el criterio seleccionado
+                filtroSeleccion switch
+                {
+                    // Muestra solo las órdenes que están seleccionadas
+                    "seleccionados" => ordenesPendientes?.Where(o => o.Seleccionado) ?? Enumerable.Empty<OrdenCompraPendienteDTO>(),
+                    // Muestra solo las órdenes que NO están seleccionadas
+                    "noseleccionados" => ordenesPendientes?.Where(o => !o.Seleccionado) ?? Enumerable.Empty<OrdenCompraPendienteDTO>(),
+                    // Caso por defecto: muestra todas las órdenes sin filtrar
+                    _ => ordenesPendientes ?? Enumerable.Empty<OrdenCompraPendienteDTO>()
+                };
+
+            // Aplica el ordenamiento según el criterio establecido
+            return ordenarPorCodigo ? 
+                // Si ordenarPorCodigo es verdadero: ordena por código externo
+                ordenes.OrderBy(o => o.Cod_Exte) : 
+                // Si no: ordena primero por número de orden de compra y luego por número de ítem
+                ordenes.OrderBy(o => o.NumeroOrdenCompra).ThenBy(o => o.NumeroOrdenItem);
+        }
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        await CargarOrdenesPendientes();
+    }
+
+    private async Task CargarOrdenesPendientes()
+    {
+        var responseHttp = await repository.Get<List<OrdenCompraPendienteDTO>>($"api/ocomdeta/pendientes/detalle/{NumeroProveedor}");
+        if (responseHttp.Error)
+        {
+            var mensaje = await responseHttp.GetErrorMessageAsync();
+            await sweetAlertService.FireAsync("Error", mensaje, SweetAlertIcon.Error);
+            return;
+        }
+
+        ordenesPendientes = responseHttp.Response;
+    }
+
+    private void CambiarFiltro(string filtro)
+    {
+        filtroSeleccion = filtro;
+        StateHasChanged();
+    }
+
+    private void CambiarOrdenamiento()
+    {
+        ordenarPorCodigo = !ordenarPorCodigo;
+        StateHasChanged();
+    }
+
+    private void SeleccionarTodos()
+    {
+        if (ordenesAMostrar != null)
+        {
+            foreach (var orden in ordenesAMostrar)
+            {
+                orden.Seleccionado = seleccionarTodos;
+            }
+            StateHasChanged();
+        }
+    }
+
+    private void ActualizarSeleccionTodos()
+    {
+        // Actualizar el estado del checkbox "Todos" basado en si todos los items están seleccionados
+        if (ordenesAMostrar != null && ordenesAMostrar.Any())
+        {
+            seleccionarTodos = ordenesAMostrar.All(o => o.Seleccionado);
+        }
+    }
+
+    private void ActualizarCantidadARecibir(OrdenCompraPendienteDTO orden, ChangeEventArgs e)
+    {
+        if (decimal.TryParse(e.Value?.ToString(), out decimal cantidad))
+        {
+            if (cantidad <= orden.CantidadPendiente && cantidad > 0)
+            {
+                orden.CantidadARecibir = cantidad;
+            }
+            else
+            {
+                orden.CantidadARecibir = orden.CantidadPendiente;
+                StateHasChanged();
+            }
+        }
+    }
+
+    private void Aceptar()
+    {
+        if (ordenesPendientes.Any(o => o.Seleccionado))
+        {
+            modoRecepcion = true;
+            StateHasChanged();
+        }
+    }
+
+    private void Volver()
+    {
+        modoRecepcion = false;
+        StateHasChanged();
+    }
+
+    private async Task Cancelar()
+    {
+        await Modal.CancelAsync();
+    }
+
+    /// <summary>
+    /// Método que realiza la recepción de materiales sin aprobar el movimiento de stock.
+    /// Esta operación solo genera las boletas de recepción (Bolrecep) pero no registra
+    /// los movimientos en la tabla Movisto.
+    /// </summary>
+    private async Task Recibir(int status = 0)
+    {
+        try
+        {
+            // Obtiene los materiales que el usuario ha seleccionado en la interfaz
+            var materialesSeleccionados = ordenesPendientes.Where(o => o.Seleccionado).ToList();
+            if (!materialesSeleccionados.Any())
+            {
+                await sweetAlertService.FireAsync("", "No hay materiales seleccionados para recibir", SweetAlertIcon.Warning);
+                return;
+            }
+
+            // Validación: todas las cantidades deben ser mayores a 0
+            if (!materialesSeleccionados.All(o => o.CantidadARecibir > 0))
+            {
+                await sweetAlertService.FireAsync("Error", "Todas las cantidades a recibir deben ser mayores a 0", SweetAlertIcon.Error);
+                return;
+            }
+
+            // Abre el diálogo para seleccionar el depósito donde se recibirán los materiales
+            var parameters = new ModalParameters()
+                .Add(nameof(SeleccionDepositoDialog.NumeroProveedor), NumeroProveedor);
+
+            var depositoModal = modalService.Show<SeleccionDepositoDialog>("", parameters);
+            var depositoResult = await depositoModal.Result;
+
+            if (depositoResult.Cancelled)
+                return;
+
+            // Extrae los datos del depósito y número de remito seleccionados
+            var depositoData = (dynamic)depositoResult.Data!;
+            deposito = depositoData!.Deposito;
+            numeroRemito = depositoData.NumeroRemito;
+
+            // Prepara la lista de materiales para enviar al backend
+            materialesARecibir = materialesSeleccionados
+                .Select(o => new RecepcionMaterialDTO
+                    {
+                        NumeroOrdenCompra = o.NumeroOrdenCompra,
+                        NumeroOrdenItem = o.NumeroOrdenItem,
+                        Cod_Inte = o.CodigoInterno,
+                        CodigoExterno = o.Cod_Exte,
+                        Descripcion = o.Descritem,
+                        CantidadRecibida = o.CantidadARecibir,
+                        Deposito = deposito,
+                        IdentificadorLote = "TEMP", // Valor temporal, el backend generará el real
+                        NumeroRemito = numeroRemito,
+                        NumeroProveedor = NumeroProveedor,
+                        Status = status,
+                        CanToApro= status == 1 ? o.CantidadARecibir : 0 //Si status es 1, cantaoapro = cantidadrecibida, si no 0
+                        
+                    })
+                .ToList();
+
+            // Envía los datos al backend y espera la respuesta con los números de boleta generados
+            var responseHttp = await repository.Post<List<RecepcionMaterialDTO>, List<BolrecepResponseDTO>>("api/bolrecep/recibir", materialesARecibir);
+            if (responseHttp.Error)
+            {
+                var mensaje = await responseHttp.GetErrorMessageAsync();
+                await sweetAlertService.FireAsync("Error", mensaje, SweetAlertIcon.Error);
+                return;
+            }
+
+            // Almacena la respuesta del backend que contiene los números de boleta y lotes
+            boletasRecepcion = responseHttp.Response;
+            // Guarda el número de boleta principal para referencia
+            numeroBoleta = boletasRecepcion.FirstOrDefault()?.Numebore;
+
+            // Si status es 0 (recibir sin aprobar), mostrar mensaje y cerrar modal
+            if (status == 0)
+            {
+                await sweetAlertService.FireAsync("Éxito", "Materiales recibidos correctamente", SweetAlertIcon.Success);
+                
+                // Guardar el resultado antes de limpiar
+                var resultado = materialesARecibir;
+                LimpiarListas();
+                
+                // Cerrar el modal y volver a la pantalla inicial
+                await Modal.CloseAsync(ModalResult.Ok(resultado));
+            }
+            // Si status es 1 (recibir y aprobar), no cerrar porque continuará con movimientos
+        }
+        catch (Exception ex)
+        {
+            await sweetAlertService.FireAsync("Error", ex.Message, SweetAlertIcon.Error);
+        }
+    }
+
+    /// <summary>
+    /// Método que realiza la recepción de materiales Y registra los movimientos de stock.
+    /// Esta operación es una combinación de dos pasos:
+    /// 1. Genera las boletas de recepción (Bolrecep)
+    /// 2. Registra los movimientos en la tabla Movisto
+    /// </summary>
+    private async Task RecibirYAprobar()
+    {
+        try
+        {
+            // Validaciones iniciales de materiales seleccionados
+            var materialesSeleccionados = ordenesPendientes.Where(o => o.Seleccionado).ToList();
+            if (!materialesSeleccionados.Any())
+            {
+                await sweetAlertService.FireAsync("", "No hay materiales seleccionados para recibir", SweetAlertIcon.Warning);
+                return;
+            }
+
+            // Validación: todas las cantidades deben ser mayores a 0
+            if (!materialesSeleccionados.All(o => o.CantidadARecibir > 0))
+            {
+                await sweetAlertService.FireAsync("Error", "Todas las cantidades a recibir deben ser mayores a 0", SweetAlertIcon.Error);
+                return;
+            }
+
+            // Paso 1: Realizar la recepción normal que genera las boletas
+            await Recibir(1);//1 LE INDICA EL STATUS QUE DEBE GUARDAR, TAMBIEN SE USA COMO BANDERA PARA QUE ASIGNE A CANTIDAD APROBADA LA MISMA QUE LA INGRESADA
+
+            // Verificación de que la recepción fue exitosa y tenemos todos los datos necesarios
+            if (materialesARecibir == null || !materialesARecibir.Any() || !numeroBoleta.HasValue || boletasRecepcion == null)
+            {
+                await sweetAlertService.FireAsync("Error", "No se pudo completar la recepción de materiales", SweetAlertIcon.Error);
+                return;
+            }
+
+            Console.WriteLine($"Iniciando registro de movimientos de stock para boleta: {numeroBoleta}");
+
+            // Paso 2: Registrar los movimientos de stock para cada material
+            for (int i = 0; i < materialesARecibir.Count; i++)
+            {
+                var material = materialesARecibir[i];
+                var boleta = boletasRecepcion[i];  // Obtiene la boleta correspondiente al material actual
+
+                Console.WriteLine($"Procesando material: {material.CodigoExterno}");
+                Console.WriteLine($"Cantidad a recibir: {material.CantidadRecibida}");
+
+                // Prepara el objeto de movimiento de stock con los datos de la boleta
+                var movimientoStock = new MovistoDTO
+                {
+                    FeReMovi = DateTime.Now,
+                    FechMov = DateTime.Now,
+                    CodiMovi = "BR",  // BR = Boleta de Recepción
+                    Cod_Inte = material.Cod_Inte,
+                    Cod_exte = material.CodigoExterno,
+                    Descrip = material.Descripcion,
+                    DepoMovi = material.Deposito,
+                    CantIngre = material.CantidadRecibida,
+                    CantSalid = null,  // No hay salida en una recepción
+                    ReferCor = material.NumeroRemito,
+                    IdenLote = boleta.Idenlote,  // Usa el identificador de lote generado por el backend
+                    DoPriCor = $"BR-{boleta.Numebore}",  // Referencia a la boleta de recepción
+                    DoPriLar = $"BR-{boleta.Numebore}",  // Referencia a la boleta de recepción
+                    DoSecCor = material.NumeroRemito,
+                    DoSecLar = material.NumeroRemito,
+                    Nume_Prov = material.NumeroProveedor,
+                };
+
+                // Envía el movimiento de stock al backend
+                var movistoResponse = await repository.Post("api/movisto/movistock", movimientoStock);
+                if (movistoResponse.Error)
+                {
+                    var mensaje = await movistoResponse.GetErrorMessageAsync();
+                    await sweetAlertService.FireAsync("Error", $"Error al registrar movimiento de stock: {mensaje}", SweetAlertIcon.Error);
+                    return;
+                }
+
+                Console.WriteLine($"Movimiento de stock registrado exitosamente para material: {material.CodigoExterno}");
+            }
+
+            // Todo el proceso se completó exitosamente
+            await sweetAlertService.FireAsync("Éxito", "Materiales recibidos y movimientos de stock registrados correctamente", SweetAlertIcon.Success);
+            // Guardar el resultado antes de limpiar las listas
+            var resultado = materialesARecibir;
+
+            // Limpiar las listas para liberar memoria
+            LimpiarListas();
+
+            await Modal.CloseAsync(ModalResult.Ok(resultado));
+            //await Modal.CloseAsync(ModalResult.Ok(materialesARecibir));
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error en RecibirYAprobar: {ex.Message}");
+            await sweetAlertService.FireAsync("Error", ex.Message, SweetAlertIcon.Error);
+        }
+    }
+    /// <summary>
+    /// Método auxiliar para limpiar las listas y liberar memoria
+    /// </summary>
+    private void LimpiarListas()
+    {
+        if (materialesARecibir != null)
+        {
+            materialesARecibir.Clear();
+            materialesARecibir = null;
+        }
+        if (boletasRecepcion != null)
+        {
+            boletasRecepcion.Clear();
+            boletasRecepcion = null;
+        }
+        if (ordenesPendientes != null)
+        {
+            ordenesPendientes.Clear();
+            ordenesPendientes = null;
+        }
+    }
+    /// <summary>
+    /// Método específico para el botón de recibir sin aprobar
+    /// </summary>
+    private Task RecibirSinAprobar()
+    {
+        return Recibir(0);
+    }
+
+    /// <summary>
+    /// Abre el modal de impresión
+    /// </summary>
+    private void AbrirModalImpresion()
+    {
+        mostrarModalImpresion = true;
+        StateHasChanged();
+    }
+
+    /// <summary>
+    /// Cierra el modal de impresión
+    /// </summary>
+    private void CerrarModalImpresion()
+    {
+        mostrarModalImpresion = false;
+        StateHasChanged();
+    }
+}

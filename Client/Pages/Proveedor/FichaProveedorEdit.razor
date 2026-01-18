@@ -1,0 +1,21 @@
+@page "/ficha-proveedor-edit/{Id:int}"
+@using IMPLANPROD.Shared.Entities
+@using Microsoft.AspNetCore.Components
+
+<!--
+    Componente: FichaProveedorEdit.razor
+    Descripción: Página para editar un proveedor utilizando el formulario reutilizable.
+    Autor: IA Cascade (solicitud de Omar)
+    Fecha: 22/04/2025
+    Sigue el estándar ABM del proyecto.
+-->
+
+<!-- Este archivo es una copia adaptada de FichaClienteEdit.razor para proveedores -->
+<!-- Aquí irá la edición de proveedores usando la entidad Proved12 -->
+
+<FichaProveedorForm Id="@Id" />
+
+@code {
+    [Parameter]
+    public int Id { get; set; }
+}

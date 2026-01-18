@@ -1,0 +1,267 @@
+@page "/master/componentes/{Id}"
+@using IMPLANPROD.Shared.Entities
+@using IMPLANPROD.Client.Shared.Components
+@inject IRepository repository
+@inject HttpClient Http
+@inject NavigationManager navigation
+@inject SweetAlertService sweetAlertService
+
+
+<h3 style="background-color: #217346; color: white; padding: 10px; margin-bottom: 20px; border-radius: 4px;">Componentes del Producto: @resultado</h3>
+
+<div class="card">
+    <div class="card-header bg-light">
+        <div class="d-flex justify-content-between align-items-center">
+            <h5 class="mb-0">Gestión de Componentes</h5>
+            <button class="btn btn-success" @onclick="ReturnAction">Regresar</button>
+        </div>
+    </div>
+    <div class="card-body">
+        @if (productoTerminado != null)
+        {
+            <div class="mb-3 d-flex justify-content-end">
+                <button class="btn btn-primary" @onclick="() => mostrarBuscador = !mostrarBuscador">
+                    <i class="fas fa-plus-circle me-2"></i>Agregar Componente
+                </button>
+            </div>
+
+            @if (mostrarBuscador)
+            {
+                <div class="mb-3">
+                    <div class="card">
+                        <div class="card-header">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <h5 class="mb-0">Buscar Componente</h5>
+                                <button class="btn btn-outline-secondary btn-sm" @onclick="() => mostrarBuscador = false">
+                                    <i class="fas fa-times"></i>
+                                </button>
+                            </div>
+                        </div>
+                        <div class="card-body">
+                            <MasterSearchComponent OnRepuestoSelected="AgregarComponente" />
+                        </div>
+                    </div>
+                </div>
+            }
+
+            @if (componentesAsignados.Count == 0)
+            {
+                <div class="alert alert-info">No hay componentes asignados</div>
+            }
+            else
+            {
+                <div class="table-responsive">
+                    <table class="table table-striped">
+                        <thead>
+                            <tr>
+                                <th>Códint</th>
+                                <th>Código</th>
+                                <th>Descripción</th>
+                                <th>Cantidad</th>
+                                <th>Unidad</th>
+                                <th>Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var componente in componentesAsignados)
+                            {
+                                <tr>
+                                    <td>@componente.CodiElem</td>
+                                    <td>@componente.CodXElem</td>
+                                    <td>@componente.MasterDescripcion</td>
+
+                                    <td>
+                                        <input type="number" class="form-control form-control-sm" style="width: 100px"
+                                            @bind="componente.Unis_Form" @bind:event="oninput" />
+                                    </td>
+                                    <td>@componente.UMED_FORM</td>
+                                    <td>
+                                        <button class="btn btn-danger btn-sm" @onclick="() => EliminarComponente(componente)">
+                                            <i class="fas fa-trash"></i>
+                                        </button>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+
+                <div class="mt-3">
+                    <button class="btn btn-primary" @onclick="GuardarCambios">Guardar Cambios</button>
+                </div>
+            }
+        }
+        else
+        {
+            <div class="alert alert-info">Cargando información del producto...</div>
+        }
+    </div>
+</div>
+
+@code {
+    [Parameter]
+    public string? Id { get; set; }
+
+    private Master? productoTerminado;
+    private List<Formulas> componentesAsignados = new();
+    private string resultado = string.Empty;
+    private bool mostrarBuscador = false;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await CargarProductoTerminado();
+        if (productoTerminado != null)
+        {
+            await CargarComponentes();
+        }
+    }
+    private async Task<string> ObtenerDescripcion(int codielem)
+    {
+        try
+        {
+            var response = await Http.GetStringAsync($"api/masterfunciones/descripcion/{codielem}"); // con GetStringAsync por que con
+            var descripcion = response?.Trim() ?? string.Empty;                                     //ar response = await repository.Get<string>($"api/masterfunciones/descripcion/{codInte}");
+                                                                                                   // daba error
+        if (descripcion != null)
+        {
+            return descripcion!; //  Guardamos la descripción
+        }
+        
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error al obtener descripción: {ex.Message}");
+        }
+        return string.Empty;
+    }
+
+    private class DescripcionResponse
+    {
+        public string Descripcion { get; set; } = string.Empty;
+    }
+    private async Task CargarProductoTerminado()
+    {
+        if (string.IsNullOrEmpty(Id))
+        {
+            await sweetAlertService.FireAsync("Error", "No se ha especificado el código del producto", SweetAlertIcon.Error);
+            return;
+        }
+
+        var responseHttp = await repository.Get<Master>($"/api/master/{Id}");
+
+        if (responseHttp.Error)
+        {
+            var mensajeError = await responseHttp.GetErrorMessageAsync();
+            await sweetAlertService.FireAsync("Error", mensajeError, SweetAlertIcon.Error);
+            return;
+        }
+
+        productoTerminado = responseHttp.Response;
+        resultado = $"{productoTerminado!.Codigo} - {productoTerminado.Descripcion}";
+    }
+
+    private async Task CargarComponentes()
+    {
+        if (productoTerminado == null) return;
+
+        var responseHttp = await repository.Get<List<Formulas>>($"/api/formulas/conjunto/{productoTerminado.Codint}");
+        if (!responseHttp.Error && responseHttp.Response != null)
+        {
+            componentesAsignados = responseHttp.Response;
+            
+            // Obtener la descripción para cada componente
+            foreach (var componente in componentesAsignados)
+            {
+                if (componente.CodiElem.HasValue)
+                {
+                    componente.MasterDescripcion = await ObtenerDescripcion(componente.CodiElem.Value);
+                }
+            }
+        }
+        else
+        {
+            componentesAsignados = new List<Formulas>();
+        }
+    }
+
+    private async Task AgregarComponente(Master componente)
+    {
+        if (productoTerminado == null || string.IsNullOrEmpty(componente.Codigo) || string.IsNullOrEmpty(Id)) return;
+
+        // Verificar si el componente ya existe
+        if (int.TryParse(componente.Codigo, out int codigoInt) && 
+            componentesAsignados.Any(c => c.CodiElem == codigoInt))
+        {
+            await sweetAlertService.FireAsync("Aviso", "Este componente ya está agregado", SweetAlertIcon.Warning);
+            return;
+        }
+
+        // Crear nuevo componente
+        var nuevoComponente = new Formulas
+        {
+            CodIConj = productoTerminado.Codint,
+            CodXConj = productoTerminado.Codigo ?? string.Empty,
+            CodiElem = componente.Codint,
+            CodXElem = componente.Codigo,
+            NuorIt = (short)(componentesAsignados.Count + 1),
+            Unis_Form = 1,
+            UsoBruto = 1,
+            UMED_FORM = componente.Umedida ?? string.Empty,
+            COMPONENTE = string.Empty,
+            CodiEmpr = 0 // Valor por defecto para empresa
+        };
+
+        // Obtener y asignar la descripción del componente
+        nuevoComponente.MasterDescripcion = await ObtenerDescripcion(componente.Codint);
+        
+        componentesAsignados.Add(nuevoComponente);
+        StateHasChanged();
+    }
+
+    private void EliminarComponente(Formulas componente)
+    {
+        if (componentesAsignados == null) return;
+
+        componentesAsignados.Remove(componente);
+        ReordenarComponentes();
+        StateHasChanged();
+    }
+
+    private void ReordenarComponentes()
+    {
+        if (componentesAsignados == null) return;
+
+        for (int i = 0; i < componentesAsignados.Count; i++)
+        {
+            componentesAsignados[i].NuorIt = (short)(i + 1);
+        }
+    }
+
+    private async Task GuardarCambios()
+    {
+        if (componentesAsignados == null || productoTerminado == null) return;
+
+        try
+        {
+            var responseHttp = await repository.Post($"/api/formulas/conjunto/{productoTerminado.Codint}", componentesAsignados);
+            if (responseHttp.Error)
+            {
+                var mensajeError = await responseHttp.GetErrorMessageAsync();
+                await sweetAlertService.FireAsync("Error", mensajeError, SweetAlertIcon.Error);
+                return;
+            }
+
+            await sweetAlertService.FireAsync("Éxito", "Los componentes se han guardado correctamente", SweetAlertIcon.Success);
+        }
+        catch (Exception ex)
+        {
+            await sweetAlertService.FireAsync("Error", ex.Message, SweetAlertIcon.Error);
+        }
+    }
+
+    private void ReturnAction()
+    {
+        navigation.NavigateTo($"/master/edit/{Id}");
+    }
+}
+

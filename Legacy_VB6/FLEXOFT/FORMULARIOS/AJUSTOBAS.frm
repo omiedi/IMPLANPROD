@@ -1,0 +1,1138 @@
+VERSION 5.00
+Begin VB.Form AJUSTOBAS 
+   BackColor       =   &H00EEEEB0&
+   BorderStyle     =   3  'Fixed Dialog
+   Caption         =   "Ajustes de Stocks"
+   ClientHeight    =   6705
+   ClientLeft      =   45
+   ClientTop       =   300
+   ClientWidth     =   5565
+   ClipControls    =   0   'False
+   ControlBox      =   0   'False
+   LinkTopic       =   "Form1"
+   MaxButton       =   0   'False
+   MinButton       =   0   'False
+   ScaleHeight     =   6705
+   ScaleWidth      =   5565
+   ShowInTaskbar   =   0   'False
+   StartUpPosition =   1  'CenterOwner
+   Begin VB.CommandButton Command15 
+      Caption         =   "Kardex"
+      BeginProperty Font 
+         Name            =   "MS Sans Serif"
+         Size            =   8.25
+         Charset         =   0
+         Weight          =   700
+         Underline       =   0   'False
+         Italic          =   0   'False
+         Strikethrough   =   0   'False
+      EndProperty
+      Height          =   855
+      Left            =   4515
+      Picture         =   "AJUSTOBAS.frx":0000
+      Style           =   1  'Graphical
+      TabIndex        =   28
+      Top             =   2100
+      Width           =   870
+   End
+   Begin VB.PictureBox MARCOBARRA 
+      BackColor       =   &H000000FF&
+      Height          =   135
+      Left            =   4515
+      ScaleHeight     =   75
+      ScaleWidth      =   795
+      TabIndex        =   26
+      Top             =   5775
+      Width           =   855
+      Begin VB.Frame BARRATRAZA 
+         BackColor       =   &H00FF0000&
+         BorderStyle     =   0  'None
+         Height          =   500
+         Left            =   0
+         TabIndex        =   27
+         Top             =   0
+         Width           =   12000
+      End
+   End
+   Begin VB.CommandButton Command29 
+      Caption         =   "Help"
+      BeginProperty Font 
+         Name            =   "MS Sans Serif"
+         Size            =   8.25
+         Charset         =   0
+         Weight          =   700
+         Underline       =   0   'False
+         Italic          =   0   'False
+         Strikethrough   =   0   'False
+      EndProperty
+      Height          =   855
+      Left            =   4515
+      Picture         =   "AJUSTOBAS.frx":030A
+      Style           =   1  'Graphical
+      TabIndex        =   9
+      Top             =   1155
+      Width           =   855
+   End
+   Begin VB.CommandButton Command1 
+      Caption         =   "Exit"
+      BeginProperty Font 
+         Name            =   "MS Sans Serif"
+         Size            =   8.25
+         Charset         =   0
+         Weight          =   700
+         Underline       =   0   'False
+         Italic          =   0   'False
+         Strikethrough   =   0   'False
+      EndProperty
+      Height          =   855
+      Left            =   4515
+      Picture         =   "AJUSTOBAS.frx":0614
+      Style           =   1  'Graphical
+      TabIndex        =   8
+      Top             =   210
+      Width           =   855
+   End
+   Begin VB.Frame Frame5 
+      BackColor       =   &H00EEEEB0&
+      Caption         =   "Identificación"
+      BeginProperty Font 
+         Name            =   "MS Sans Serif"
+         Size            =   9.75
+         Charset         =   0
+         Weight          =   700
+         Underline       =   -1  'True
+         Italic          =   0   'False
+         Strikethrough   =   0   'False
+      EndProperty
+      Height          =   1850
+      Left            =   210
+      TabIndex        =   20
+      Top             =   2835
+      Width           =   4110
+      Begin VB.Frame Frame7 
+         BackColor       =   &H00EEEEB0&
+         Caption         =   "Motivo - Referencia"
+         BeginProperty Font 
+            Name            =   "MS Sans Serif"
+            Size            =   8.25
+            Charset         =   0
+            Weight          =   700
+            Underline       =   0   'False
+            Italic          =   0   'False
+            Strikethrough   =   0   'False
+         EndProperty
+         Height          =   750
+         Left            =   140
+         TabIndex        =   23
+         Top             =   945
+         Width           =   3820
+         Begin VB.TextBox Text5 
+            BeginProperty Font 
+               Name            =   "MS Sans Serif"
+               Size            =   9.75
+               Charset         =   0
+               Weight          =   700
+               Underline       =   0   'False
+               Italic          =   0   'False
+               Strikethrough   =   0   'False
+            EndProperty
+            Height          =   285
+            Left            =   210
+            TabIndex        =   25
+            TabStop         =   0   'False
+            Top             =   315
+            Width           =   3480
+         End
+      End
+      Begin VB.TextBox Text4 
+         BackColor       =   &H00E0E0E0&
+         BeginProperty Font 
+            Name            =   "MS Sans Serif"
+            Size            =   9.75
+            Charset         =   0
+            Weight          =   700
+            Underline       =   0   'False
+            Italic          =   0   'False
+            Strikethrough   =   0   'False
+         EndProperty
+         Height          =   285
+         Left            =   340
+         TabIndex        =   22
+         TabStop         =   0   'False
+         Top             =   580
+         Width           =   3480
+      End
+      Begin VB.TextBox Text10 
+         BeginProperty Font 
+            Name            =   "MS Sans Serif"
+            Size            =   9.75
+            Charset         =   0
+            Weight          =   700
+            Underline       =   0   'False
+            Italic          =   0   'False
+            Strikethrough   =   0   'False
+         EndProperty
+         Height          =   285
+         Left            =   2730
+         TabIndex        =   21
+         TabStop         =   0   'False
+         Top             =   580
+         Width           =   1065
+      End
+      Begin VB.Label Label3 
+         BackStyle       =   0  'Transparent
+         Caption         =   "Depósito:"
+         BeginProperty Font 
+            Name            =   "MS Sans Serif"
+            Size            =   8.25
+            Charset         =   0
+            Weight          =   700
+            Underline       =   -1  'True
+            Italic          =   0   'False
+            Strikethrough   =   0   'False
+         EndProperty
+         Height          =   225
+         Left            =   210
+         TabIndex        =   24
+         Top             =   315
+         Width           =   1065
+      End
+   End
+   Begin VB.CommandButton Command4 
+      Caption         =   "."
+      BeginProperty Font 
+         Name            =   "MS Sans Serif"
+         Size            =   12
+         Charset         =   0
+         Weight          =   700
+         Underline       =   0   'False
+         Italic          =   0   'False
+         Strikethrough   =   0   'False
+      EndProperty
+      Height          =   285
+      Left            =   2730
+      TabIndex        =   1
+      Top             =   210
+      Width           =   175
+   End
+   Begin VB.TextBox Text3 
+      BackColor       =   &H00E0E0E0&
+      BeginProperty Font 
+         Name            =   "MS Sans Serif"
+         Size            =   9.75
+         Charset         =   0
+         Weight          =   700
+         Underline       =   0   'False
+         Italic          =   0   'False
+         Strikethrough   =   0   'False
+      EndProperty
+      Height          =   645
+      Left            =   210
+      MultiLine       =   -1  'True
+      TabIndex        =   13
+      TabStop         =   0   'False
+      Top             =   630
+      Width           =   4110
+   End
+   Begin VB.TextBox Text2 
+      BackColor       =   &H00E0E0E0&
+      BeginProperty Font 
+         Name            =   "MS Sans Serif"
+         Size            =   9.75
+         Charset         =   0
+         Weight          =   700
+         Underline       =   0   'False
+         Italic          =   0   'False
+         Strikethrough   =   0   'False
+      EndProperty
+      Height          =   285
+      Left            =   3675
+      TabIndex        =   12
+      TabStop         =   0   'False
+      Top             =   210
+      Width           =   645
+   End
+   Begin VB.TextBox Text1 
+      BeginProperty Font 
+         Name            =   "MS Sans Serif"
+         Size            =   9.75
+         Charset         =   0
+         Weight          =   700
+         Underline       =   0   'False
+         Italic          =   0   'False
+         Strikethrough   =   0   'False
+      EndProperty
+      Height          =   285
+      Left            =   1050
+      TabIndex        =   0
+      TabStop         =   0   'False
+      Top             =   210
+      Width           =   1695
+   End
+   Begin VB.ListBox List1 
+      BackColor       =   &H00FFFFFF&
+      BeginProperty Font 
+         Name            =   "Fixedsys"
+         Size            =   9
+         Charset         =   0
+         Weight          =   400
+         Underline       =   0   'False
+         Italic          =   0   'False
+         Strikethrough   =   0   'False
+      EndProperty
+      Height          =   1185
+      Left            =   210
+      TabIndex        =   2
+      Top             =   1470
+      Width           =   4110
+   End
+   Begin VB.Frame Frame2 
+      BackColor       =   &H00EEEEB0&
+      Caption         =   "Ingreso de Ajustes"
+      BeginProperty Font 
+         Name            =   "MS Sans Serif"
+         Size            =   9.75
+         Charset         =   0
+         Weight          =   700
+         Underline       =   -1  'True
+         Italic          =   0   'False
+         Strikethrough   =   0   'False
+      EndProperty
+      Height          =   1850
+      Left            =   210
+      TabIndex        =   14
+      Top             =   4725
+      Width           =   4110
+      Begin VB.TextBox Text7 
+         BeginProperty Font 
+            Name            =   "MS Sans Serif"
+            Size            =   9.75
+            Charset         =   0
+            Weight          =   700
+            Underline       =   0   'False
+            Italic          =   0   'False
+            Strikethrough   =   0   'False
+         EndProperty
+         Height          =   285
+         Left            =   1785
+         TabIndex        =   3
+         TabStop         =   0   'False
+         Top             =   735
+         Width           =   1170
+      End
+      Begin VB.TextBox Text8 
+         BeginProperty Font 
+            Name            =   "MS Sans Serif"
+            Size            =   9.75
+            Charset         =   0
+            Weight          =   700
+            Underline       =   0   'False
+            Italic          =   0   'False
+            Strikethrough   =   0   'False
+         EndProperty
+         Height          =   285
+         Left            =   1785
+         TabIndex        =   4
+         Top             =   1050
+         Width           =   1170
+      End
+      Begin VB.TextBox Text6 
+         BackColor       =   &H00E0E0E0&
+         BeginProperty Font 
+            Name            =   "MS Sans Serif"
+            Size            =   9.75
+            Charset         =   0
+            Weight          =   700
+            Underline       =   0   'False
+            Italic          =   0   'False
+            Strikethrough   =   0   'False
+         EndProperty
+         Height          =   285
+         Left            =   1785
+         TabIndex        =   15
+         TabStop         =   0   'False
+         Top             =   420
+         Width           =   1170
+      End
+      Begin VB.TextBox Text9 
+         BeginProperty Font 
+            Name            =   "MS Sans Serif"
+            Size            =   9.75
+            Charset         =   0
+            Weight          =   700
+            Underline       =   0   'False
+            Italic          =   0   'False
+            Strikethrough   =   0   'False
+         EndProperty
+         Height          =   285
+         Left            =   1785
+         TabIndex        =   5
+         Top             =   1365
+         Width           =   1170
+      End
+      Begin VB.CommandButton Command2 
+         BeginProperty Font 
+            Name            =   "MS Sans Serif"
+            Size            =   8.25
+            Charset         =   0
+            Weight          =   700
+            Underline       =   0   'False
+            Italic          =   0   'False
+            Strikethrough   =   0   'False
+         EndProperty
+         Height          =   600
+         Left            =   3255
+         Picture         =   "AJUSTOBAS.frx":075E
+         Style           =   1  'Graphical
+         TabIndex        =   7
+         Top             =   420
+         Width           =   645
+      End
+      Begin VB.CommandButton Command3 
+         BeginProperty Font 
+            Name            =   "MS Sans Serif"
+            Size            =   8.25
+            Charset         =   0
+            Weight          =   700
+            Underline       =   0   'False
+            Italic          =   0   'False
+            Strikethrough   =   0   'False
+         EndProperty
+         Height          =   600
+         Left            =   3255
+         Picture         =   "AJUSTOBAS.frx":0A68
+         Style           =   1  'Graphical
+         TabIndex        =   6
+         Top             =   1080
+         Width           =   645
+      End
+      Begin VB.Label Label9 
+         Alignment       =   1  'Right Justify
+         BackStyle       =   0  'Transparent
+         Caption         =   "Entrada:"
+         BeginProperty Font 
+            Name            =   "MS Sans Serif"
+            Size            =   8.25
+            Charset         =   0
+            Weight          =   700
+            Underline       =   0   'False
+            Italic          =   0   'False
+            Strikethrough   =   0   'False
+         EndProperty
+         Height          =   225
+         Left            =   105
+         TabIndex        =   19
+         Top             =   735
+         Width           =   1590
+      End
+      Begin VB.Label Label8 
+         Alignment       =   1  'Right Justify
+         BackStyle       =   0  'Transparent
+         Caption         =   "Salida:"
+         BeginProperty Font 
+            Name            =   "MS Sans Serif"
+            Size            =   8.25
+            Charset         =   0
+            Weight          =   700
+            Underline       =   0   'False
+            Italic          =   0   'False
+            Strikethrough   =   0   'False
+         EndProperty
+         Height          =   225
+         Left            =   105
+         TabIndex        =   18
+         Top             =   1050
+         Width           =   1590
+      End
+      Begin VB.Label Label5 
+         Alignment       =   1  'Right Justify
+         BackStyle       =   0  'Transparent
+         Caption         =   "StockTeórico:"
+         BeginProperty Font 
+            Name            =   "MS Sans Serif"
+            Size            =   8.25
+            Charset         =   0
+            Weight          =   700
+            Underline       =   0   'False
+            Italic          =   0   'False
+            Strikethrough   =   0   'False
+         EndProperty
+         Height          =   225
+         Left            =   105
+         TabIndex        =   17
+         Top             =   420
+         Width           =   1590
+      End
+      Begin VB.Label Label6 
+         Alignment       =   1  'Right Justify
+         BackStyle       =   0  'Transparent
+         Caption         =   "Stock Ajustado:"
+         BeginProperty Font 
+            Name            =   "MS Sans Serif"
+            Size            =   8.25
+            Charset         =   0
+            Weight          =   700
+            Underline       =   0   'False
+            Italic          =   0   'False
+            Strikethrough   =   0   'False
+         EndProperty
+         Height          =   225
+         Left            =   105
+         TabIndex        =   16
+         Top             =   1365
+         Width           =   1590
+      End
+   End
+   Begin VB.Image Image2 
+      Height          =   510
+      Left            =   3950
+      Picture         =   "AJUSTOBAS.frx":0D72
+      Top             =   6050
+      Width           =   2010
+   End
+   Begin VB.Label Label2 
+      Alignment       =   1  'Right Justify
+      BackStyle       =   0  'Transparent
+      Caption         =   "U-M:"
+      BeginProperty Font 
+         Name            =   "MS Sans Serif"
+         Size            =   8.25
+         Charset         =   0
+         Weight          =   700
+         Underline       =   0   'False
+         Italic          =   0   'False
+         Strikethrough   =   0   'False
+      EndProperty
+      Height          =   225
+      Left            =   2730
+      TabIndex        =   11
+      Top             =   255
+      Width           =   855
+   End
+   Begin VB.Label Label1 
+      Alignment       =   1  'Right Justify
+      BackStyle       =   0  'Transparent
+      Caption         =   "Código:"
+      BeginProperty Font 
+         Name            =   "MS Sans Serif"
+         Size            =   8.25
+         Charset         =   0
+         Weight          =   700
+         Underline       =   0   'False
+         Italic          =   0   'False
+         Strikethrough   =   0   'False
+      EndProperty
+      Height          =   225
+      Left            =   105
+      TabIndex        =   10
+      Top             =   255
+      Width           =   855
+   End
+End
+Attribute VB_Name = "AJUSTOBAS"
+Attribute VB_GlobalNameSpace = False
+Attribute VB_Creatable = False
+Attribute VB_PredeclaredId = True
+Attribute VB_Exposed = False
+
+Private Sub BOTSEL_Click(Index As Integer)
+    Call SELECHO("SELFECHA")
+    If VALACT1$("SELFECHA") <> "" Then
+        If Index = 0 Then
+            Text11.TEXT = VALACT1$("SELFECHA")
+          Else
+            Text12.TEXT = VALACT1$("SELFECHA")
+        End If
+    End If
+End Sub
+
+Private Sub Command1_Click()
+    PREPA% = 0
+    Hide
+End Sub
+
+Private Sub Command13_Click()
+    Command13.Enabled = False
+    Call CONECRUN("ESTASTOK", "Estadísticas de Stocks")
+    Command13.Enabled = True
+End Sub
+
+Private Sub Command14_Click()
+    Command14.Enabled = False
+    If App.EXEName = "INVENT02" Then
+        PREPA% = 0
+        Hide
+      Else
+        ACONEC$ = "INVENT02"
+        If EXISTE%(ACONEC$ + ".EXE") < 1 Then ACONEC$ = "INVENTAR"
+        Call CONECRUN(ACONEC$, "Inventarios Físicos y Valorizados")
+    End If
+    Command14.Enabled = True
+End Sub
+
+Private Sub COMMAND15_CLICK()
+    Command15.Enabled = False
+    If NUEWINTA% = 1 Then
+        Call CONECRUN("*KARDEX/" + Text1, "Ficha Kardex de Movimientos")
+      Else
+        Call GENKARDEX(Text1)
+    End If
+    Command15.Enabled = True
+End Sub
+
+Private Sub Command2_Click()
+    COD$ = ""
+    CI% = 0
+    Text1.TEXT = ""
+    Text2.TEXT = ""
+    Text3.TEXT = ""
+    Text6.TEXT = ""
+    Text7.TEXT = ""
+    Text8.TEXT = ""
+    Text9.TEXT = ""
+    Text1.SetFocus
+End Sub
+
+
+Private Sub Command29_Click()
+    Call HELPONLINE("AJUSTOCK")
+End Sub
+
+Private Sub Command3_Click()
+    Call AJUSTO3
+    Call AJUSTO2
+    Text6.TEXT = Text9.TEXT
+    Text7.TEXT = ""
+    Text8.TEXT = ""
+    Text1.SetFocus
+End Sub
+
+Private Sub Command4_Click()
+    '
+    Call SELECHO("MASTER")
+    COD$ = VALACT1$("MASTER")
+    Text1.TEXT = COD$
+    CI% = CODINT%(COD$)
+    Text3.TEXT = DESCRIT$(CI%)
+    Text2.TEXT = UNIMED$(CI%)
+    '
+End Sub
+'
+
+Private Sub Command7_Click()
+    '
+    DESNUM& = 1: If Val(Text14.TEXT) > 0 Then DESNUM& = Val(Text14.TEXT)
+    HASNUM& = 999999
+    If TRIM$(Text13.TEXT) <> "" Then
+        If Val(Text13.TEXT) >= DESNUM& Then HASNUM& = Val(Text13.TEXT)
+    End If
+    DESFE% = 0: If FECHANUM(TRIM$(Text11.TEXT)) > 0 Then DESFE% = FECHANUM(TRIM$(Text11.TEXT))
+    HASFE% = 32767
+    If TRIM$(Text12.TEXT) <> "" Then
+        If FECHANUM(TRIM$(Text12.TEXT)) >= DESFE% Then HASFE% = FECHANUM(TRIM$(Text12.TEXT))
+    End If
+    '
+    Screen.MousePointer = 11
+    Call BLANARCH("LISTRAJ")
+    FIN& = ULTREG&("AJUSTOCK")
+    For I& = 1 To FIN&
+        Call TRACE(20, I&, FIN&)
+        X$ = REGLEIDO$("AJUSTOCK", I&)
+        FF% = CVI(Left$(X$, 2))
+        NRO& = CVS(Mid$(X$, 3, 4))
+        If FF% >= DESFE% Then
+          If FF% <= HASFE% Then
+            NRO& = CVS(Mid$(X$, 3, 4))
+            If NRO& >= DESNUM& Then
+              If NRO& <= HASNUM& Then
+                REFE$ = Mid$(X$, 34, 47)
+                CI1% = CVI(Mid$(X$, 7, 2))
+                DP1% = Asc(Mid$(X$, 33, 1))
+                CAN# = CVD(Mid$(X$, 25, 8))
+                Y$ = REGBLAN$("LISTRAJ")
+                Call REPLA(Y$, MKI$(FF%), 1, 2)
+                Call REPLA(Y$, REFE$, 3, 48)
+                Call REPLA(Y$, MKS$(NRO&), 51, 4)
+                Call REPLA(Y$, MKI$(CI1%), 55, 2)
+                Call REPLA(Y$, UNIMED$(CI1%), 57, 4)
+                If CAN# > 0 Then
+                    Call REPLA(Y$, MKD$(CAN#), 61, 8)
+                    Call REPLA(Y$, MKD$(0), 69, 8)
+                  Else
+                    Call REPLA(Y$, MKD$(0), 61, 8)
+                    Call REPLA(Y$, MKD$(Abs(CAN#)), 69, 8)
+                End If
+                Call REPLA(Y$, Chr$(DP1%), 80, 1)
+                Call REGAPP("LISTRAJ", Y$)
+              End If
+            End If
+          End If
+        End If
+    Next I&
+    Call CIERRARCH("LISTRAJ")
+    Screen.MousePointer = 1
+    '
+    OPCI% = 1
+    If Option4.Value = True Then OPCI% = 2
+    If OPCI% = 1 Then
+        Call OPNOIN("")
+        'Call CONECRUN("*COTRAST", "")
+      ElseIf OPCI% = 2 Then
+        Call CONECRUN("*LIAJUST", "")
+    End If
+    '
+
+End Sub
+
+Private Sub Form_Load()
+    Call TRANSLABELS(Name)
+    HOII% = HOY(HOS$)
+    Text10.TEXT = HOS$
+    Call AJUSTO1
+End Sub
+'
+
+Private Sub List1_Click()
+    '
+    ILISTA& = List1.ListIndex
+    Text4.TEXT = Left$(List1.TEXT, 20)
+    Text6.TEXT = TRIM$(Mid$(List1.TEXT, 21))
+    '
+    Text7.TEXT = ""
+    Text8.TEXT = ""
+    Text9.TEXT = TRIM$(Mid$(List1.TEXT, 21))
+    If Val(Text9.TEXT) < 0 Then
+        Text7.TEXT = TRIM$(CSTRING$(MKD$((-1) * Val(Text9.TEXT)), 4, 10, 1, 2))
+        Text9.TEXT = "0.0"
+    End If
+    Text9.SetFocus
+End Sub
+
+Private Sub Text1_Change()
+    '
+    Text2.TEXT = ""
+    Text3.TEXT = ""
+    If CODINT%(Text1.TEXT) > 0 Then
+        COD$ = TRIM$(Text1.TEXT)
+        CI% = CODINT%(COD$)
+        Text2.TEXT = UNIMED$(CI%)
+        Text3.TEXT = DESCRIT$(CI%)
+        Call AJUSTO2               ' recalcular existencias a fecha
+    End If
+    '
+End Sub
+'
+
+Private Sub Text1_DblClick()
+    '
+    Call SELECHO("MASTER")
+    COD$ = VALACT1$("MASTER")
+    Text1.TEXT = COD$
+    CI% = CODINT%(COD$)
+    Text3.TEXT = DESCRIT$(CI%)
+    Text2.TEXT = UNIMED$(CI%)
+    '
+End Sub
+'
+
+Private Sub Text1_LostFocus()
+    COD$ = TRIM$(Text1.TEXT)
+    CI% = CODINT%(COD$)
+    Text3.TEXT = DESCRIT$(CI%)
+    Text2.TEXT = UNIMED$(CI%)
+End Sub
+
+Private Sub Text10_Change()
+    If Visible = True Then
+        If FECHANUM(Text10.TEXT) > 0 Then
+            Call AJUSTO2
+        End If
+    End If
+End Sub
+
+Private Sub Text11_DblClick()
+    Call SELECHO("SELFECHA")
+    If VALACT1$("SELFECHA") <> "" Then
+        Text11.TEXT = VALACT1$("SELFECHA")
+    End If
+End Sub
+
+Private Sub Text12_DblClick()
+    Call SELECHO("SELFECHA")
+    If VALACT1$("SELFECHA") <> "" Then
+        Text12.TEXT = VALACT1$("SELFECHA")
+    End If
+End Sub
+
+Private Sub Text2_GotFocus()
+    Text7.SetFocus
+
+End Sub
+
+Private Sub Text3_GotFocus()
+    Text7.SetFocus
+
+End Sub
+
+Private Sub Text4_GotFocus()
+    Text7.SetFocus
+
+End Sub
+
+Private Sub Text6_GotFocus()
+    COD$ = Text1.TEXT
+    If CODINT%(COD$) < 1 Then
+        Text1.SetFocus
+        Exit Sub
+    End If
+    ILISTA& = List1.ListIndex
+    If ILISTA& < 0 Then
+        List1.SetFocus
+        Exit Sub
+    End If
+    Text9.SetFocus
+End Sub
+'
+
+Private Sub Text7_Change()
+    If MODENTRAJU% = 7 Then
+        Text8.TEXT = ""
+        CAJUS# = Val(Text6.TEXT) + Val(Text7.TEXT) - Val(Text8.TEXT)
+        Text9.TEXT = Str$(CAJUS#)
+    End If
+End Sub
+'
+
+Private Sub Text8_Change()
+    If MODENTRAJU% = 8 Then
+        Text7.TEXT = ""
+        CAJUS# = Val(Text6.TEXT) + Val(Text7.TEXT) - Val(Text8.TEXT)
+        Text9.TEXT = Str$(CAJUS#)
+    End If
+End Sub
+'
+
+Private Sub Text9_Change()
+    If MODENTRAJU% = 9 Then
+       DIFER# = Val(Text9.TEXT) - Val(Text6.TEXT)
+       Text7.TEXT = ""
+       Text8.TEXT = ""
+       If DIFER# > 0 Then
+           Text7.TEXT = Str$(DIFER#)
+         ElseIf DIFER# < 0 Then
+           Text8.TEXT = Str$(Abs(DIFER#))
+       End If
+    End If
+End Sub
+'
+Private Sub Text7_GotFocus()
+    COD$ = Text1.TEXT
+    If CODINT%(COD$) < 1 Then
+        Text1.SetFocus
+        Exit Sub
+    End If
+    ILISTA& = List1.ListIndex
+    If ILISTA& < 0 Then
+        List1.SetFocus
+        Exit Sub
+    End If
+    Text7.SelStart = 0
+    Text7.SelLength = Len(Text7.TEXT)
+    MODENTRAJU% = 7
+End Sub
+
+Private Sub Text8_GotFocus()
+    COD$ = Text1.TEXT
+    If CODINT%(COD$) < 1 Then
+        Text1.SetFocus
+        Exit Sub
+    End If
+    ILISTA& = List1.ListIndex
+    If ILISTA& < 0 Then
+        List1.SetFocus
+        Exit Sub
+    End If
+    Text8.SelStart = 0
+    Text8.SelLength = Len(Text8.TEXT)
+    MODENTRAJU% = 8
+End Sub
+'
+
+Private Sub Text9_GotFocus()
+    COD$ = Text1.TEXT
+    If CODINT%(COD$) < 1 Then
+        Text1.SetFocus
+        Exit Sub
+    End If
+    ILISTA& = List1.ListIndex
+    If ILISTA& < 0 Then
+        List1.SetFocus
+        Exit Sub
+    End If
+    Text9.SelStart = 0
+    Text9.SelLength = Len(Text9.TEXT)
+    MODENTRAJU% = 9
+End Sub
+
+Private Sub Text9_KeyPress(KeyAscii As Integer)
+    If KeyAscii = 13 Then
+        Command3.SetFocus
+    End If
+End Sub
+
+'
+Sub AJUSTO1()
+    '
+    HOOI% = HOY(HOS$)
+    '
+    List1.Clear
+    Call CARDEPOS
+    '
+111 If NUSU% < 1 Then
+        Call MENSERR(24, "Falta Definir\Depósitos y Sucursales.")
+        Hide
+        Call FRESHALL
+        PREPA% = 0
+        Exit Sub
+    End If
+    '
+115 Text10.TEXT = HOS$
+    Text5.TEXT = "Diferencia de Inventario"
+    '
+End Sub
+'
+
+Sub AJUSTO2()
+    '
+    FF% = FECHANUM(Text10.TEXT)
+    '
+    If CI% > 0 Then
+       If CI% <= NUMAS% Then
+          '
+          Screen.MousePointer = 11
+          Call VESARRAS(CI%)
+          For KI% = 1 To 62
+             CATEO#(KI%) = 0
+             CAFIN#(KI%) = 0
+          Next KI%
+          '
+          RGM$ = RECFILT$("MOVISTO", 2, MKI$(CI%))
+          URE& = ULTREG&("MOVISTO")
+          For K& = 1 To Len(RGM$) Step 4
+             REG& = CVS(Mid$(RGM$, K&, 4))
+             If REG& <= URE& Then
+                MVS$ = REGLEIDO$("MOVISTO", REG&)
+                If CVI(Mid$(MVS$, 3, 2)) <> CI% Then
+                   Screen.MousePointer = 1
+                   OPXX% = COMALTER%("Se ha Detectado un Error\de Indexación de Archivo 'MOVISTO.DAT'\\Recuperar\Abandonar Ajustes")
+                   If OPXX% = 1 Then
+                      MVS$ = REGLEIDO$("MOVISTO", 1)
+                      Call GRAREG("MOVISTO", MVS$, 1)
+                   End If
+                   Screen.MousePointer = 11
+                   Call CIERRARCH("MOVISTO")
+                   Call CIERRARCH("*.*")
+                   Screen.MousePointer = 1
+                   Exit Sub
+                End If
+                '
+                CANTI# = (Int(10 * (CVD(Mid$(MVS$, 88, 8)) - CVD(Mid$(MVS$, 96, 8))) + 0.5)) / 10
+                DEP% = Asc(Mid$(MVS$, 83, 1))
+                LOT$ = Mid$(MVS$, 5, 16)
+                '
+                COLUX% = 1
+                For KI% = 1 To NUSU%
+                   If DEP% = COSU%(KI%) Then COLUX% = KI%
+                Next KI%
+                '
+                CAFIN#(COLUX%) = CAFIN#(COLUX%) + CANTI#
+                If CVI(Left$(MVS$, 2)) <= FF% Then
+                   CATEO#(COLUX%) = CATEO#(COLUX%) + CANTI#
+                End If
+             End If
+          Next K&
+          '
+       End If
+    End If
+    '
+    List1.Clear
+    For U& = 1 To NUSU%
+       CAN = CATEO#(U&)
+       List1.AddItem SUCU$(U&) + CSTRING$(MKS$(CAN), 4, 10, 1, 2)
+    Next U&
+    '
+    List1.ListIndex = ILISTA&
+    List1.Refresh
+    Text4.TEXT = Left$(List1.TEXT, 20)
+    Text6.TEXT = TRIM$(Mid$(List1.TEXT, 21))
+    Text7.TEXT = ""
+    Text8.TEXT = ""
+    Text9.TEXT = TRIM$(Mid$(List1.TEXT, 21))
+    If Val(Text9.TEXT) < 0 Then
+        Text7.TEXT = TRIM$(CSTRING$(MKD$((-1) * Val(Text9.TEXT)), 4, 10, 1, 2))
+        Text9.TEXT = "0.0"
+    End If
+    Text9.SetFocus
+    '
+    Screen.MousePointer = 1
+    '
+End Sub
+'
+
+Sub AJUSTO3()
+    '
+    Static YAFORI%, FORIPRE$, UREMOVI&
+    '
+    If UREMOVI& < 1 Then
+       UREMOVI& = ULTREG&("MOVISTO")
+       Call CIERRARCH("MOVISTO")
+    End If
+    '
+    FORIPRE$ = TRIM$(CONTROL$("", "FORAJUST"))
+    YAFORI% = 1
+    If FORIPRE$ <> "" Then
+       LU$ = LUDAT$
+       If EXISTE%(LU$ + FORIPRE$ + ".FRM") <> 1 Then
+            RMCC$ = REPLACAR$(LU$ + FORIPRE$ + ".FRM", "\", "/")
+            Call COMUNI("Error de Configuración:\  \No Existe Formulario de Impresión\de Vale de Ajuste de Stocks:\  \'" + RMCC$ + "'.")
+            YAFORI% = (-1)
+       End If
+    End If
+    '
+    REGXX& = ULTREG&("AJUSTOCK")
+    NRO& = 1
+    If REGXX& > 0 Then
+        NRO& = 1 + CVS(Mid$(REGLEIDO$("AJUSTOCK", REGXX&), 3, 4))
+    End If
+    If NRO& <= REGXX& Then
+        Screen.MousePointer = 11
+        For U& = 1 To REGXX&
+            X0$ = REGLEIDO$("AJUSTOCK", U&)
+            If CVS(Mid$(X0$, 3, 4)) >= NRO& Then
+                NRO& = 1 + CVS(Mid$(X0$, 3, 4))
+            End If
+        Next U&
+        Screen.MousePointer = 1
+    End If
+    '
+    CAVIE = Val(Text6.TEXT)
+    CANUE = Val(Text9.TEXT)
+    '
+    FF% = FECHANUM(Text10.TEXT)
+    If FF% < 1 Then
+        Call MENSERR(24, "Fecha Incorrecta")
+        Text10.SetFocus
+        Exit Sub
+    End If
+    '
+    CIII% = CODINT%(Text1.TEXT)
+    If CIII% < 1 Then
+        Call MENSERR(24, "Falta Código de Material")
+        Text1.SetFocus
+        Exit Sub
+    End If
+    '
+    LTX$ = LOTE$
+    If Left$(UCase$(LOTE$), 5) = "TODOS" Or TRIM$(LOTE$) = "" Then
+        LTX$ = Space$(16)
+    End If
+    DEPO% = COSU%(ILISTA& + 1)
+    FECHA% = FF%
+    CANTI = CANUE - CAVIE
+    '
+    If Abs(CANTI) >= 0.05 Then
+        Call CIERRARCH("AJUSTOCK")
+        Call CIERRARCH("MOVISTO")
+        Call BLOQARCH("AJUSTOCK")
+        Call BLOQARCH("MOVISTO")
+        '
+        If ULTREG&("MOVISTO") < UREMOVI& Then
+           Call CIERRARCH("*.*")
+           Call MENSERR(24, "Imposible Registrar este Ajuste.\  \Cierre la Aplicación y Vuelva a Intentarlo.")
+           Call FINAL("")
+        End If
+        '
+        CMOV$ = TRIM$(CONTROL$("", "CODAJUST"))
+        If CMOV$ = "" Then CMOV$ = "AJ"
+        DOSEC$ = "AJ." + Mid$(HO$, 7, 2) + Mid$(HO$, 4, 2) + Left$(HO$, 2)
+        DOPRI$ = "AS." + TRIM$(Str$(NRO&))
+        VUNI# = 0
+        MONE$ = ""
+        NC% = 0
+        REFE$ = Text5.TEXT
+        If TRIM$(REFE$) = "" Then
+            REFE$ = "Ajuste de Inventario"
+        End If
+        '
+        Call MOVISTO(FF%, CIII%, LTX$, CMOV$, DOPRI$, DOSEC$, REFE$, VUNI#, MONE$, NC%, DEPO%, CANTI)
+        UREMOVI& = ULTREG&("MOVISTO")
+        Call CIERRARCH("MOVISTO")
+        '
+        XX$ = REGBLAN$("AJUSTOCK")
+        Call REPLA(XX$, MKI$(FECHA%), 1, 2)
+        Call REPLA(XX$, MKS$(NRO&), 3, 4)
+        Call REPLA(XX$, MKI$(CIII%), 7, 2)
+        Call REPLA(XX$, LTX$, 9, 16)
+        Call REPLA(XX$, MKD$(CDbl(CANTI)), 25, 8)
+        Call REPLA(XX$, Chr$(DEPO%), 33, 1)
+        Call REPLA(XX$, REFE$, 34, 47)
+        Call REGAPP("AJUSTOCK", XX$)
+        Call CIERRARCH("AJUSTOCK")
+        '
+        ' IMPRIMIR FORMULARIO
+        '
+237     If TRIM$(FORIPRE$) <> "" Then
+          If YAFORI% > 0 Then
+             LU$ = LUDAT$
+             CODFOR$ = TRIM$(UCase$(FORIPRE$))
+             '
+             YAC = Val(ATRIFORM$(CODFOR$, "DETDESMM"))
+             MARIZW = Val(ATRIFORM$(CODFOR$, "MARIZQMM"))
+             MARSUW = Val(ATRIFORM$(CODFOR$, "MARSUPMM"))
+             '
+             INTERLI = Val(ATRIFORM$(CODFOR$, "INTERLIN"))
+             If INTERLI < 1 Then
+                Call COMUNI("Error de Configuración de Interlinea\en Formulario '" + CODFOR$ + ".FRM'.")
+                INTERLI = 1
+             End If
+             '
+             CACOPI% = Val(ATRIFORM$(CODFOR$, "CAN-COP"))
+             If CACOPI% < 1 Or CACOPI% > 6 Then
+                Call COMUNI("Error de Configuración de Cantidad de Copias\en Formulario '" + CODFOR$ + ".FRM'.")
+                CACOPI% = 1
+             End If
+             '
+             For COP% = 1 To CACOPI%
+               '
+               Call CARFORWIN
+               '
+               FEX = FECHA%
+               Call PRINTFORWIN(FECHATEX$(FEX), "FECH-EMI", 0, 0)
+               Call PRINTFORWIN(Time$, "HORA-EMI", 0, 0)
+               Call PRINTFORWIN(USERNAME$, "USUARIO", 0, 0)
+               Call PRINTFORWIN(Str$(NRO&), "NUME-COM", 0, 0)
+               Call PRINTFORWIN(TRIM$(CODEXT$(CIII%)), "COD-MAT", 0, 0)
+               Call PRINTFORWIN(DESCRIT$(CIII%), "DES-MAT", 0, 0)
+               Call PRINTFORWIN(UNIMED$(CIII%), "UNIMED", 0, 0)
+               Call PRINTFORWIN(ECOARCH$("ECODEP", Chr$(DEPO%)), "DEPOSITO", 0, 0)
+               Call PRINTFORWIN(LTX$, "NRO-LOTE", 0, 0)
+               CANS$ = CSTRING$(MKS$(CANTI), 3, 9, 1, 2)
+               Call PRINTFORWIN(CANS$, "CANTIDAD", 0, 0)
+               Call PRINTFORWIN(REFE$, "REF-MAT1", 0, 0)
+               '
+               'Printer.EndDoc
+               Call SETSPOOL("ENDDOC", "")
+               '
+             Next COP%
+             Call SAVESPOOL("Ajuste de Stocks" + Str$(NRO&), OKX%)
+          End If
+        End If
+        '
+        Call COMUNI("Ajuste Número" + Str$(NRO&) + "\Completo y Verificado")
+        '
+299 End If
+    '
+    Call CIERRARCH("*.*")
+    '
+End Sub
+

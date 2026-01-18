@@ -1,0 +1,99 @@
+@page "/UsuariosSectorProd/edit/{Id:int}"
+@inject IRepository repository
+@inject NavigationManager navigationManager
+@inject SweetAlertService sweetAlertService
+@inject IModalService Modal
+
+<h3>Editar Asignación Usuario - Sector Productivo</h3>
+
+@if (usuariosSectorProd is null)
+{
+    <div class="align-items-center">
+        <img src="https://media0.giphy.com/media/3oEjI6SIIHBdRxXI40/giphy.gif?cid=ecf05e47q4b7z67j4s1jr2t1uymf1mh3kq8sxpgmj89wf4xg&rid=giphy.gif&ct=g" />
+    </div>
+}
+else
+{
+    <UsuariosSectorProdForm @ref="usuariosSectorProdForm" usuariosSectorProd="usuariosSectorProd" OnValidSubmit="Edit" ReturnAction="Return" IsEdit="true" />
+}
+
+@code {
+    /// <summary>
+    /// Modelo de datos de la asignación usuario-sector productivo a editar
+    /// </summary>
+    private UsuariosSectorProd? usuariosSectorProd;
+    
+    /// <summary>
+    /// Referencia al componente formulario
+    /// </summary>
+    private UsuariosSectorProdForm? usuariosSectorProdForm;
+
+    /// <summary>
+    /// ID de la asignación a editar
+    /// </summary>
+    [Parameter]
+    public int Id { get; set; }
+
+    /// <summary>
+    /// Instancia del modal de Blazored
+    /// </summary>
+    [CascadingParameter]
+    BlazoredModalInstance BlazoredModal { get; set; } = default!;
+
+    /// <summary>
+    /// Inicialización del componente - carga los datos de la asignación a editar
+    /// </summary>
+    protected override async Task OnInitializedAsync()
+    {
+        var responseHttp = await repository.Get<UsuariosSectorProd>($"/api/usuariossectorprod/{Id}");
+        if (responseHttp.Error)
+        {
+            if (responseHttp.HttpResponseMessage.StatusCode == System.Net.HttpStatusCode.NotFound)
+            {
+                navigationManager.NavigateTo("/UsuariosSectorProd");
+                return;
+            }
+
+            var message = await responseHttp.GetErrorMessageAsync();
+            await sweetAlertService.FireAsync("Error", message, SweetAlertIcon.Error);
+            return;
+        }
+        usuariosSectorProd = responseHttp.Response;
+    }
+
+    /// <summary>
+    /// Actualiza la asignación usuario-sector productivo existente
+    /// </summary>
+    private async Task Edit()
+    {
+        // Validar que no exista ya la misma asignación (excluyendo el registro actual)
+        var responseValidacion = await repository.Get<bool>($"api/usuariossectorprod/existe/{usuariosSectorProd.IdFlexoft}/{usuariosSectorProd.CodigoSecProd}/{usuariosSectorProd.Id}");
+        if (!responseValidacion.Error && responseValidacion.Response)
+        {
+            await sweetAlertService.FireAsync("Error", "Ya existe una asignación para este usuario y sector productivo.", SweetAlertIcon.Error);
+            return;
+        }
+
+        // Actualizar la asignación
+        var responseHttp = await repository.Put("/api/usuariossectorprod", usuariosSectorProd);
+        if (responseHttp.Error)
+        {
+            var message = await responseHttp.GetErrorMessageAsync();
+            await sweetAlertService.FireAsync("Error", message, SweetAlertIcon.Error);
+            return;
+        }
+
+        await sweetAlertService.FireAsync("Éxito", "Asignación actualizada correctamente.", SweetAlertIcon.Success);
+        await BlazoredModal.CloseAsync(ModalResult.Ok());
+        Return();
+    }
+
+    /// <summary>
+    /// Regresa a la pantalla principal de asignaciones
+    /// </summary>
+    private void Return()
+    {
+        usuariosSectorProdForm!.FormPostedSuccessfully = true;
+        navigationManager.NavigateTo("/UsuariosSectorProd");
+    }
+}

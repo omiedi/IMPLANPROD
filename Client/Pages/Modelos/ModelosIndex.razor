@@ -1,0 +1,285 @@
+@page "/modelos"
+@using IMPLANPROD.Shared.Entities
+@using Microsoft.AspNetCore.Components.Web
+@inject IRepository repository
+@inject NavigationManager NavigationManager
+@inject SweetAlertService sweetAlertService
+
+<PageTitle>Almacén de Modelos</PageTitle>
+
+<!--
+Componente: ModelosIndex.razor
+Descripción: Listado paginado de modelos (BADAMODE) con opciones de edición y gestión.
+Autor: Sistema IMPLANPROD
+Fecha: 2026-01-08
+
+Este componente sigue el estándar de páginas ABM definido en el proyecto.
+Se muestran las columnas: Código, Descripción, Ubicación, Material, Cant.Piezas.
+Incluye paginación y botones para editar y crear nuevo modelo.
+-->
+
+<div class="bg-primary bg-opacity-10 p-3 rounded-3 mb-3">
+    <h3 class="m-0 text-primary">
+        <i class="fas fa-cubes me-2"></i>
+        Almacén de Modelos
+    </h3>
+</div>
+
+<div class="row mb-3">
+    <div class="col">
+        <button class="btn btn-primary" @onclick="NuevoModelo">
+            <i class="oi oi-plus"></i> Nuevo Modelo
+        </button>
+        <button class="btn btn-secondary" @onclick="ModelosBaja">
+            <i class="oi oi-trash"></i> Modelos dados de baja
+        </button>
+    </div>
+</div>
+
+<div class="row mb-3">
+    <div class="col-md-6">
+        <div class="input-group">
+            <input type="text" 
+                   class="form-control" 
+                   placeholder="Buscar por código o descripción..." 
+                   @bind-value="Filter" 
+                   @onkeyup="HandleKeyPress" />
+            <button class="btn btn-outline-secondary" type="button" @onclick="ApplyFilterAsync">
+                <i class="oi oi-magnifying-glass"></i> Buscar
+            </button>
+            <button type="button" class="btn btn-outline-danger" @onclick="CleanFilterAsync">
+                Limpiar
+            </button>
+        </div>
+    </div>
+</div>
+
+@if (Modelos is null)
+{
+    <div class="spinner-border text-primary" role="status">
+        <span class="sr-only">Cargando...</span>
+    </div>
+}
+else
+{
+    <Pagination CurrentPage="currentPage"
+                TotalPages="totalPages"
+                SelectedPage="SelectedPageAsync" />
+
+    <GenericList MyList="Modelos">
+        <Body>
+            <table class="table table-striped table-hover">
+                <thead class="table-primary">
+                    <tr>
+                        <th>Código</th>
+                        <th>Descripción</th>
+                        <th>Ubicación</th>
+                        <th>Material</th>
+                        <th>Cant.Piezas</th>
+                        <th>Próx.Control</th>
+                        <th>Acciones</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var modelo in Modelos!)
+                    {
+                        <tr>
+                            <td>@modelo.Cod_Mod</td>
+                            <td>@modelo.Descripcion</td>
+                            <td>@modelo.Ubic</td>
+                            <td>@modelo.Desc_Mat</td>
+                            <td class="text-end">@modelo.CantPiezas?.ToString("N2")</td>
+                            <td>@modelo.FechPro_Con?.ToString("dd/MM/yyyy")</td>
+                            <td>
+                                <button class="btn btn-sm btn-outline-primary me-1" 
+                                        @onclick="() => EditarModelo(modelo.Id)"
+                                        title="Editar">
+                                    <i class="fas fa-edit"></i>
+                                </button>
+                                <button class="btn btn-sm btn-outline-danger" 
+                                        @onclick="() => ConfirmarBajaAsync(modelo)"
+                                        title="Dar de baja">
+                                    <i class="fas fa-trash"></i>
+                                </button>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </Body>
+    </GenericList>
+
+    <Pagination CurrentPage="currentPage"
+                TotalPages="totalPages"
+                SelectedPage="SelectedPageAsync" />
+}
+
+@code {
+    private List<Badamode>? Modelos;
+    private bool isLoading = true;
+
+    [Parameter]
+    [SupplyParameterFromQuery]
+    public string Page { get; set; } = string.Empty;
+
+    [Parameter]
+    [SupplyParameterFromQuery]
+    public string Filter { get; set; } = string.Empty;
+
+    private int currentPage = 1;
+    private int totalPages;
+
+    /// <summary>
+    /// Maneja la tecla Enter para buscar
+    /// </summary>
+    private async Task HandleKeyPress(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+        {
+            await ApplyFilterAsync();
+        }
+    }
+
+    /// <summary>
+    /// Inicialización del componente
+    /// </summary>
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadAsync();
+    }
+
+    /// <summary>
+    /// Carga la lista de modelos con paginación
+    /// </summary>
+    private async Task LoadAsync(int page = 1)
+    {
+        try
+        {
+            isLoading = true;
+
+            if (!string.IsNullOrWhiteSpace(Page))
+            {
+                page = Convert.ToInt32(Page);
+            }
+
+            currentPage = page;
+            string url1 = string.Empty;
+            string url2 = string.Empty;
+
+            if (string.IsNullOrEmpty(Filter))
+            {
+                url1 = $"api/badamode?page={page}";
+                url2 = $"api/badamode/totalPages";
+            }
+            else
+            {
+                url1 = $"api/badamode?page={page}&filter={Filter}";
+                url2 = $"api/badamode/totalPages?filter={Filter}";
+            }
+
+            var responseHttp = await repository.Get<List<Badamode>>(url1);
+            var responseHttp2 = await repository.Get<int>(url2);
+
+            if (responseHttp.Error)
+            {
+                await sweetAlertService.FireAsync("Error", await responseHttp.GetErrorMessageAsync(), SweetAlertIcon.Error);
+            }
+            else
+            {
+                Modelos = responseHttp.Response!;
+                totalPages = responseHttp2.Response!;
+            }
+        }
+        catch (Exception ex)
+        {
+            await sweetAlertService.FireAsync("Error", ex.Message, SweetAlertIcon.Error);
+        }
+        finally
+        {
+            isLoading = false;
+            StateHasChanged();
+        }
+    }
+
+    /// <summary>
+    /// Limpia el filtro de búsqueda
+    /// </summary>
+    private async Task CleanFilterAsync()
+    {
+        Filter = string.Empty;
+        await ApplyFilterAsync();
+    }
+
+    /// <summary>
+    /// Navega a la página de modelos dados de baja
+    /// </summary>
+    private void ModelosBaja()
+    {
+        NavigationManager.NavigateTo("/modelos-baja");
+    }
+
+    /// <summary>
+    /// Aplica el filtro de búsqueda
+    /// </summary>
+    private async Task ApplyFilterAsync()
+    {
+        currentPage = 1;
+        await LoadAsync(currentPage);
+    }
+
+    /// <summary>
+    /// Cambia de página
+    /// </summary>
+    private async Task SelectedPageAsync(int page)
+    {
+        currentPage = page;
+        await LoadAsync(page);
+    }
+
+    /// <summary>
+    /// Navega a la página de creación de nuevo modelo
+    /// </summary>
+    private void NuevoModelo()
+    {
+        NavigationManager.NavigateTo("/modelos-create");
+    }
+
+    /// <summary>
+    /// Navega a la página de edición de modelo
+    /// </summary>
+    private void EditarModelo(int id)
+    {
+        NavigationManager.NavigateTo($"/modelos-edit/{id}");
+    }
+
+    /// <summary>
+    /// Confirma y ejecuta la baja de un modelo
+    /// </summary>
+    private async Task ConfirmarBajaAsync(Badamode modelo)
+    {
+        var result = await sweetAlertService.FireAsync(new SweetAlertOptions
+        {
+            Title = "Confirmar baja",
+            Text = $"¿Está seguro de dar de baja el modelo {modelo.Cod_Mod}?",
+            Icon = SweetAlertIcon.Warning,
+            ShowCancelButton = true,
+            ConfirmButtonText = "Sí, dar de baja",
+            CancelButtonText = "Cancelar"
+        });
+
+        if (result.IsConfirmed)
+        {
+            var responseHttp = await repository.Delete($"api/badamode/{modelo.Id}");
+
+            if (responseHttp.Error)
+            {
+                await sweetAlertService.FireAsync("Error", await responseHttp.GetErrorMessageAsync(), SweetAlertIcon.Error);
+            }
+            else
+            {
+                await sweetAlertService.FireAsync("Éxito", "Modelo dado de baja correctamente", SweetAlertIcon.Success);
+                await LoadAsync(currentPage);
+            }
+        }
+    }
+}

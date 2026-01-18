@@ -1,0 +1,1626 @@
+@using IMPLANPROD.Shared.Entities
+@using IMPLANPROD.Shared.DTOs
+@using IMPLANPROD.Client.Repositories
+@using IMPLANPROD.Client.Shared.Components
+@using IMPLANPROD.Client.Services
+@using System.Linq
+@inject IRepository repository
+@inject NavigationManager NavigationManager
+@inject SweetAlertService sweetAlertService
+@inject CambiosNoGuardadosService cambiosService
+@inject FiltrosPedidosService filtrosService
+
+
+<div class="container-fluid">
+    <EditForm Model="pedido" OnValidSubmit="HandleValidSubmit">
+        <DataAnnotationsValidator />
+
+        <!-- Encabezado del pedido -->
+        <div class="card mb-3">
+            <div class="card-header text-white" style="background: linear-gradient(135deg, #6fa8dc 0%, #9fc5e8 100%); box-shadow: 0 2px 8px rgba(111, 168, 220, 0.3);">
+                <h5 class="mb-0">
+                    <i class="fas fa-shopping-cart"></i> 
+                    @(IsEdit ? $"Editar Pedido N° {pedido.NroPed}" : "Nuevo Pedido de Venta")
+                </h5>
+            </div>
+            <div class="card-body" style="background-color: #e9ecef; box-shadow: inset 0 2px 4px rgba(0,0,0,0.1);">
+                <div class="row">
+                    <!-- Información del Cliente -->
+                    <div class="col-md-6">
+                        <div class="card h-100">
+                            <div class="card-header bg-light">
+                                <h6 class="mb-0"><i class="fas fa-user"></i> Cliente</h6>
+                            </div>
+                            <div class="card-body">
+                                <div class="row mb-2">
+                                    <div class="col-md-4">
+                                        <label class="form-label">Cliente:</label>
+                                        <div class="input-group">
+                                            <input type="text" class="form-control" @bind="clienteSeleccionado" placeholder="Cliente seleccionado..." readonly />
+                                            <button type="button" class="btn btn-outline-secondary" @onclick="LimpiarCliente" title="Limpiar Cliente" disabled="@IsEdit">
+                                                <i class="fas fa-times"></i>
+                                            </button>
+                                            <button type="button" class="btn btn-outline-primary" @onclick="AbrirSelectorClientes" title="Seleccionar Cliente" disabled="@IsEdit">
+                                                <i class="fas fa-users"></i>
+                                            </button>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-8">
+                                        <label class="form-label">Razón Social:</label>
+                                        <input type="text" class="form-control" @bind="pedido.RasoClie" placeholder="Razón social del cliente" readonly />
+                                    </div>
+                                </div>
+                                <div class="row mb-2">
+                                    <div class="col-md-6">
+                                        <label class="form-label">Domicilio:</label>
+                                        <input type="text" class="form-control" readonly @bind="domicilioCliente" placeholder="Domicilio del cliente" />
+                                    </div>
+                                    <div class="col-md-6">
+                                        <label class="form-label">Localidad:</label>
+                                        <input type="text" class="form-control" readonly @bind="localidadCliente" placeholder="Localidad del cliente" />
+                                    </div>
+                                </div>
+                                <div class="row mb-2">
+                                    <div class="col-md-6">
+                                        <label class="form-label">Código Postal:</label>
+                                        <input type="text" class="form-control" readonly @bind="codigoPostalCliente" placeholder="Código postal" />
+                                    </div>
+                                    <div class="col-md-6">
+                                        <label class="form-label">Código Cliente:</label>
+                                        <input type="text" class="form-control" readonly @bind="codigoCliente" placeholder="Código del cliente" />
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Información del Pedido -->
+                    <div class="col-md-6">
+                        <div class="card h-100">
+                            <div class="card-header bg-light">
+                                <h6 class="mb-0"><i class="fas fa-file-alt"></i> Datos del Pedido</h6>
+                            </div>
+                            <div class="card-body">
+                                <div class="row mb-2">
+                                    <div class="col-md-4">
+                                        <label class="form-label">Fecha:</label>
+                                        <input type="date" class="form-control" @bind="fechaEmision" />
+                                    </div>
+                                    <div class="col-md-4">
+                                        <label class="form-label">Motivo:</label>
+                                        <select class="form-select" @bind="pedido.OV_Motivo" @bind:after="AsignarVenRepSegunMotivo">
+                                            <option value="">Seleccionar...</option>
+                                            <option value="1">Venta</option>
+                                            <option value="2">Reparación</option>
+                                        </select>
+                                    </div>
+                                    <div class="col-md-4">
+                                        <label class="form-label">Pedido Nro:</label>
+                                        <input type="number" class="form-control" @bind="pedido.NroPed" readonly />
+                                    </div>
+                                </div>
+                                <div class="row mb-2">
+                                    <div class="col-md-4">
+                                        <label class="form-label">Orden de Compra:</label>
+                                        <input type="text" class="form-control" @bind="pedido.NroOcom" placeholder="N° OC" />
+                                    </div>
+                                    <div class="col-md-4">
+                                        <label class="form-label">Referencia:</label>
+                                        <input type="text" class="form-control" @bind="pedido.Referencia" placeholder="Referencia" />
+                                    </div>
+                                    <div class="col-md-4">
+                                        <label class="form-label">Cond. de Pago:</label>
+                                        <select class="form-select" @bind="pedido.CondPag">
+                                            <option value="">Seleccionar...</option>
+                                            @if (condicionesPago != null)
+                                            {
+                                                @foreach (var condicion in condicionesPago)
+                                                {
+                                                    <option value="@condicion.NumCondPag">@condicion.DescCondPag</option>
+                                                }
+                                            }
+                                        </select>
+                                    </div>
+                                </div>
+                                <div class="row mb-2">
+                                    <div class="col-md-4">
+                                        <label class="form-label">Vendedor:</label>
+                                        <select class="form-select" @bind="pedido.Vended">
+                                            <option value="">Seleccionar...</option>
+                                            @if (vendedores != null)
+                                            {
+                                                @foreach (var vendedor in vendedores)
+                                                {
+                                                    <option value="@vendedor.NumVendedor">@vendedor.NombreVendedor</option>
+                                                }
+                                            }
+                                        </select>
+                                    </div>
+                                    <div class="col-md-4">
+                                        <label class="form-label">Fecha Entrega:</label>
+                                        <input type="date" class="form-control" @bind="fechaEntrega" />
+                                    </div>
+                                    <div class="col-md-4">
+                                        <label class="form-label">Moneda:</label>
+                                        <InputSelect class="form-select" @bind-Value="CodigoMonedaSeleccionado">
+                                            <option value="0">Seleccionar...</option>
+                                            @if (monedas != null)
+                                            {
+                                                @foreach (var moneda in monedas)
+                                                {
+                                                    <option value="@moneda.CodigoMoneda">
+                                                        @moneda.CodigoMoneda - @moneda.Descripcion (Cotiz: @moneda.Cotizacion.ToString("F4"))
+                                                    </option>
+                                                }
+                                            }
+                                        </InputSelect>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Detalle del Pedido -->
+        <div class="card mb-3">
+            <div class="card-header text-white" style="background: linear-gradient(135deg, #a4c2a5 0%, #c9d6ca 100%); box-shadow: 0 2px 8px rgba(164, 194, 165, 0.3);">
+                <h5 class="mb-0"><i class="fas fa-list"></i> Detalle del Pedido</h5>
+            </div>
+            <div class="card-body" style="background: linear-gradient(135deg, #f0f4f0 0%, #f8faf8 100%); box-shadow: inset 0 2px 4px rgba(164, 194, 165, 0.1);">
+                <div class="d-flex justify-content-between mb-3">
+                    <div>
+                        <button type="button" class="btn btn-primary btn-sm" @onclick="AbrirBuscadorProductos">
+                            <i class="oi oi-plus"></i> Agregar Producto
+                        </button>
+                    </div>
+                    <div>
+                        <span class="text-muted">Items: @productosPedido.Count</span>
+                    </div>
+                </div>
+
+                <div class="table-responsive" style="height: 400px; overflow-y: auto; border: 1px solid #dee2e6;">
+                    <table class="table table-sm table-striped align-middle mb-0">
+                        <thead class="table-dark sticky-top">
+                            <tr>
+                                <th style="width: 90px;">Cód.Int.</th>
+                                <th style="width: 140px;">Código</th>
+                                <th>Descripción</th>
+                                <th style="width: 140px;" class="text-end">Cantidad</th>
+                                @if (IsEdit)
+                                {
+                                    <th style="width: 100px;" class="text-end">Cant. Entregada</th>
+                                }
+                                <th style="width: 140px;" class="text-end">Precio</th>
+                                <th style="width: 140px;" class="text-end">Importe</th>
+                                <th style="width: 90px;">U.M.</th>
+                                <th style="width: 140px;">Fecha Entrega</th>
+                                <th style="width: 90px;">Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @if (productosPedido.Count == 0)
+                            {
+                                <tr>
+                                    <td colspan="@(IsEdit ? 9 : 8)" class="text-center text-muted">No hay productos para mostrar.</td>
+                                </tr>
+                            }
+                            else
+                            {
+                                @foreach (var det in productosPedido)
+                                {
+                                    <tr>
+                                        <td>@det.CodInt</td>
+                                        <td>@det.Codigo</td>
+                                        <td>@det.Descripcion</td>
+                                        <td>
+                                            @if (IsEdit)
+                                            {
+                                                <input class="form-control form-control-sm text-end" 
+                                                type="number" 
+                                                step="0.0001" 
+                                                @bind-value="det.Cantidad" 
+                                                min="@det.CantidadEntregada"
+                                                title="@(det.CantidadEntregada > 0 ? $"Cantidad mínima: {det.CantidadEntregada} (ya entregada)" : "Cantidad del pedido")" />
+                                            }
+                                            else
+                                            {
+                                                <input class="form-control form-control-sm text-end" type="number" step="0.0001" @bind-value="det.Cantidad" />
+                                            }
+                                        </td>
+                                        @if (IsEdit)
+                                        {
+                                            <td class="text-end">
+                                                <span class="@(det.CantidadEntregada > 0 ? "text-warning fw-bold" : "text-muted")">@det.CantidadEntregada.ToString("F4")</span>
+                                            </td>
+                                        }
+                                        <td>
+                                            <input class="form-control form-control-sm text-end" type="number" step="0.0001" @bind-value="det.Precio" />
+                                        </td>
+                                        <td class="text-end">
+                                            @((det.Cantidad * det.Precio).ToString("F4"))
+                                        </td>
+                                        <td>
+                                            <input class="form-control form-control-sm" @bind="det.Unidad" readonly="@IsEdit" />
+                                        </td>
+                                        <td>
+                                            <input class="form-control form-control-sm" type="date" @bind-value="det.FechaEntrega" />
+                                        </td>
+                                        <td>
+                                            @if (IsEdit && det.CantidadEntregada > 0)
+                                            {
+                                                <button type="button" class="btn btn-warning btn-sm" 
+                                                title="No se puede eliminar: tiene cantidad entregada. Sugerencia: marcar como cumplido" 
+                                                @onclick="(() => MostrarMensajeCumplido(det))">
+                                                    <i class="oi oi-warning"></i>
+                                                </button>
+                                            }
+                                            else
+                                            {
+                                                <button type="button" class="btn btn-danger btn-sm" title="Quitar" @onclick="(() => QuitarProducto(det))">
+                                                    <i class="oi oi-trash"></i>
+                                                </button>
+                                            }
+                                        </td>
+                                    </tr>
+                                }
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+
+        <!-- Configuración del Pedido -->
+        <div class="row mb-3">
+            <!-- Columna Izquierda -->
+            <div class="col-md-6">
+                <div class="card h-100">
+                    <div class="card-header" style="background: linear-gradient(135deg, #a4c2a5 0%, #b8d4b9 100%); color: white; box-shadow: 0 2px 8px rgba(164, 194, 165, 0.3);">
+                        <h6 class="mb-0">OBSERVACIONES</h6>
+                    </div>
+                    <div class="card-body" style="background: linear-gradient(135deg, #f0f4f0 0%, #f8faf8 100%); box-shadow: inset 0 2px 4px rgba(164, 194, 165, 0.1);">
+                        <div class="d-flex flex-column h-100">
+                            <textarea class="form-control flex-grow-1" @bind="pedido.Observa" placeholder="Observaciones del pedido" style="resize: vertical; min-height: 200px;"></textarea>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Columna Derecha -->
+            <div class="col-md-6">
+                <div class="card h-100">
+                    <div class="card-header" style="background: linear-gradient(135deg, #a4c2a5 0%, #b8d4b9 100%); color: white; box-shadow: 0 2px 8px rgba(164, 194, 165, 0.3);">
+                        <h6 class="mb-0">RESUMEN FINAL</h6>
+                    </div>
+                    <div class="card-body" style="background: linear-gradient(135deg, #f0f4f0 0%, #f8faf8 100%); box-shadow: inset 0 2px 4px rgba(164, 194, 165, 0.1);">
+                        <!-- Campo de descuento en texto -->
+                        <div class="mb-3">
+                            <label class="form-label">Descuento (texto)</label>
+                            <input type="text" class="form-control" @bind="DescuentoTexto" @bind:event="oninput" placeholder="Ej: 10 o 10 + 5" />
+                            <small class="text-muted">Ingrese número o expresiones como "10 + 5" para descuentos sucesivos.</small>
+                        </div>
+
+                        <!-- Layout mejorado con etiquetas a la izquierda e inputs a la derecha -->
+                        <div class="row mb-2 align-items-center">
+                            <div class="col-6">
+                                <label class="form-label mb-0">Total Neto:</label>
+                            </div>
+                            <div class="col-6">
+                                <input type="text" class="form-control text-end" readonly value="@TotalNeto.ToString("F4")" />
+                            </div>
+                        </div>
+
+                        <div class="row mb-2 align-items-center">
+                            <div class="col-4">
+                                <label class="form-label mb-0">Descuento %:</label>
+                            </div>
+                            <div class="col-2">
+                                <input type="text" class="form-control text-end" readonly value="@descuentoPorcentaje.ToString("F2")" style="max-width: 2cm;" />
+                            </div>
+                            <div class="col-2">
+                                <label class="form-label mb-0 text-end">Descuento:</label>
+                            </div>
+                            <div class="col-4">
+                                <input type="text" class="form-control text-end" readonly value="@descuentoMonto.ToString("F4")" />
+                            </div>
+                        </div>
+
+                        <div class="row mb-3 align-items-center">
+                            <div class="col-6">
+                                <label class="form-label mb-0">Total con Descuento:</label>
+                            </div>
+                            <div class="col-6">
+                                <input type="text" class="form-control text-end fw-bold" readonly value="@TotalConDescuento.ToString("F4")" style="background-color: #e9ecef;" />
+                            </div>
+                        </div>
+
+                        <div class="row align-items-center">
+                            <div class="col-6">
+                                <label class="form-label mb-0">Tipo de cambio:</label>
+                            </div>
+                            <div class="col-6">
+                                <input type="number" class="form-control text-end" @bind="pedido.TipoCam" step="0.0001" readonly />
+                            </div>
+                        </div>
+                    </div> <!-- /card-body -->
+                </div> <!-- /card -->
+            </div> <!-- /col-md-6 derecha -->
+        </div> <!-- /row Configuración del Pedido -->
+
+        <!-- Sección de Entrega -->
+        <div class="card mb-3">
+            <div class="card-header bg-success text-white">
+                <h6 class="mb-0">ENTREGA</h6>
+            </div>
+            <div class="card-body">
+                <div class="row align-items-center">
+                    <div class="col-md-4">
+                        <div class="row align-items-center">
+                            <div class="col-4">
+                                <label class="form-label mb-0">Domicilio:</label>
+                            </div>
+                            <div class="col-8">
+                                <input type="text" class="form-control" @bind="pedido.DomiEnt" @bind:after="MarcarCambio" placeholder="Domicilio de entrega" />
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="row align-items-center">
+                            <div class="col-4">
+                                <label class="form-label mb-0">Localidad:</label>
+                            </div>
+                            <div class="col-8">
+                                <input type="text" class="form-control" @bind="pedido.LocaEnt" placeholder="Localidad de entrega" />
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="row align-items-center">
+                            <div class="col-4">
+                                <label class="form-label mb-0">Transporte:</label>
+                            </div>
+                            <div class="col-8">
+                                <select class="form-select" @bind="pedido.NTranspo" @bind:after="OnTransporteChanged">
+                                    <option value="">Seleccionar...</option>
+                                    @if (transportes != null)
+                                    {
+                                        @foreach (var transpo in transportes)
+                                        {
+                                            <option value="@transpo.Codi_Tra">@transpo.Deno_Tra</option>
+                                        }
+                                    }
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Botones de Acción -->
+        <div class="card">
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-8">
+                        <div class="btn-group" role="group">
+                            <button type="submit" class="btn btn-success">
+                                <i class="fas fa-save"></i> Guardar Pedido
+                            </button>
+                            @if (IsEdit && pedido.NroPed.HasValue)
+                            {
+
+                                <button type="button" class="btn btn-info" @onclick="ImprimirPedido">
+                                    <i class="fas fa-print"></i> Imprimir Pedido
+                                </button>
+                                <button type="button" class="btn btn-success" @onclick="ImprimirOrdenDespacho">
+                                    <i class="fas fa-truck"></i> O. Despacho
+                                </button>
+                            }
+                        </div>
+                    </div>
+                    <div class="col-md-4 text-end">
+                        <button type="button" class="btn btn-secondary" @onclick="Cancelar">
+                            <i class="fas fa-times"></i> Cancelar
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <ValidationSummary />
+    </EditForm>
+</div>
+
+<!-- Componentes modales -->
+<SelectorClientes @ref="selectorClientes" OnClienteSeleccionado="OnClienteSeleccionado" />
+<SelectorProductos @ref="selectorProductosProd"
+PermitirCantidad="true"
+CantidadDefault="1"
+PermitirPrecio="true"
+PrecioDefault="0"
+OnProductoSeleccionadoCantidad="OnProductoSeleccionadoCantidad"
+OnClose="TerminarCicloSeleccionProductos" />
+
+@code {
+
+    // ===== Parámetros del componente =====
+    /// <summary>
+    /// Modelo del pedido (encabezado).
+    /// </summary>
+    [Parameter] public Pedenca pedido { get; set; } = new();
+
+    /// <summary>
+    /// Evento para burbujear el submit válido hacia el padre (si corresponde).
+    /// </summary>
+    [Parameter] public EventCallback OnValidSubmit { get; set; }
+
+    /// <summary>
+    /// Evento para cancelar la operación y notificar al padre.
+    /// </summary>
+    [Parameter] public EventCallback OnCancel { get; set; }
+
+    /// <summary>
+    /// Indica si el formulario está en modo edición.
+    /// </summary>
+    [Parameter] public bool IsEdit { get; set; } = false;
+
+    /// <summary>
+    /// Manejador local para OnValidSubmit del EditForm.
+    /// - En modo creación: construye el DTO y guarda encabezado + detalle llamando al backend.
+    /// - En modo edición: construye el DTO de actualización y guarda encabezado + detalle.
+    /// </summary>
+    private async Task HandleValidSubmit()
+    {
+        if (!IsEdit)
+        {
+            await CrearPedidoConDetalleAsync();
+            return;
+        }
+
+        await EditarPedidoConDetalleAsync();
+    }
+
+    /// <summary>
+    /// Construye el DTO PedidoVentaCreateDTO con los datos del encabezado (pedido)
+    /// y el detalle (productosPedido) y lo envía al endpoint 'api/pedenca/crear-con-detalle'.
+    /// Usa IRepository según el patrón del proyecto.
+    /// </summary>
+    private async Task CrearPedidoConDetalleAsync()
+    {
+        try
+        {
+            // Validaciones básicas previas
+            if (pedido.NroClie is null || string.IsNullOrWhiteSpace(pedido.RasoClie))
+            {
+                await sweetAlertService.FireAsync("Datos incompletos", "Debe seleccionar un cliente.", SweetAlertIcon.Warning);
+                return;
+            }
+            if (pedido.CondPag is null || pedido.Vended is null)
+            {
+                await sweetAlertService.FireAsync("Datos incompletos", "Condición de pago y vendedor son obligatorios.", SweetAlertIcon.Warning);
+                return;
+            }
+            if (productosPedido.Count == 0)
+            {
+                await sweetAlertService.FireAsync("Detalle vacío", "Debe agregar al menos un producto al pedido.", SweetAlertIcon.Warning);
+                return;
+            }
+
+            // Determinar VenRep a partir del motivo seleccionado en encabezado (1: Venta, 2: Reparación)
+            string? motivoTexto = pedido.OV_Motivo switch
+            {
+                1 => "V",
+                2 => "R",
+                _ => null
+            };
+
+            // Armar DTO de creación (encabezado)
+            var dto = new PedidoVentaCreateDTO
+            {
+                FeSolEnt = fechaEntrega,
+                NroClie = pedido.NroClie!.Value,
+                RasoClie = pedido.RasoClie ?? string.Empty,
+                NroOcom = pedido.NroOcom,
+                CondPag = pedido.CondPag!.Value,
+                Vended = pedido.Vended!.Value,
+                PorComVend = pedido.PorComVend,
+                ListPre = (short)(pedido.ListPre ?? 1),
+                // Guardamos literal lo ingresado por el usuario en PEDENCA.TDescApli
+                TDescApli = pedido.TDescApli?.Trim(),
+                Motivo = motivoTexto,
+                MoneEmis = pedido.MoneEmis,
+                TipoCam = pedido.TipoCam,
+                Items = new()
+            };
+
+            // Armar lista de ítems del detalle a partir de productosPedido
+            short orden = 1;
+            foreach (var det in productosPedido)
+            {
+                dto.Items.Add(new PedidoVentaItemDTO
+                {
+                    NuOrItem = orden++,
+                    CodiInt = det.CodInt,
+                    CodiExt = det.Codigo,
+                    SubCod = string.Empty,
+                    Descrip = det.Descripcion,
+                    TColor = string.Empty,
+                    TTalle = string.Empty,
+                    TLargo = 0,
+                    TAncho = 0,
+                    TEspesor = 0,
+                    VenRep = motivoTexto,
+                    MoneEmis = pedido.MoneEmis,
+                    TipoCam = pedido.TipoCam,
+                    ListaDeItem = 1,
+                    PreList = det.Precio,
+                    CanAsig = det.Cantidad,
+                    CanPed = det.Cantidad,
+                    PreUnid = det.Precio,
+                    ImpoTot = det.Cantidad * det.Precio,
+                    NumeroSerie = string.Empty,
+                    ObservaItem = string.Empty,
+                    SinCargo = 0,
+                    FeSolEnt = det.FechaEntrega
+                });
+            }
+
+            // Enviar al backend usando IRepository
+            var response = await repository.Post("api/pedenca/crear-con-detalle", dto);
+            if (response.Error)
+            {
+                var msg = await response.GetErrorMessageAsync();
+                await sweetAlertService.FireAsync("Error", msg, SweetAlertIcon.Error);
+                return;
+            }
+
+            // Éxito - marcar como guardado
+            cambiosService.MarcarGuardado();
+            await sweetAlertService.FireAsync("Confirmación", "Pedido creado exitosamente.", SweetAlertIcon.Success);
+            NavigationManager.NavigateTo("/pedidos-venta");
+        }
+        catch (Exception ex)
+        {
+            await sweetAlertService.FireAsync("Error inesperado", ex.Message, SweetAlertIcon.Error);
+        }
+    }
+    private DateTime? fechaEmision;
+    private DateTime? fechaEntrega;
+
+    // Variables para datos del cliente
+    private string domicilioCliente = string.Empty;
+    private string localidadCliente = string.Empty;
+    private string codigoPostalCliente = string.Empty;
+    private string codigoCliente = string.Empty;
+    private List<CondPag>? condicionesPago;
+    private List<Vendedor>? vendedores;
+    private string clienteSeleccionado = string.Empty;
+
+    private List<Tamoned>? monedas;
+    private List<Transporte>? transportes;
+
+    // ===== Detalle del Pedido (UI local, sin persistencia) =====
+    private List<ProductoPedido> productosPedido = new();
+    private SelectorProductos? selectorProductosProd;
+    private bool cicloSeleccionProductos = false;
+
+    // ===== Resumen y Descuentos =====
+    // Monto de descuento editable en $ y % (sincronizados)
+    private decimal descuentoMonto = 0m;
+    private decimal descuentoPorcentaje = 0m;
+
+    // Total Neto calculado como suma(Cantidad * Precio)
+    private decimal TotalNeto => productosPedido.Sum(p => p.Cantidad * p.Precio);
+
+    // Total con descuento aplicado, no menor que 0
+    private decimal TotalConDescuento => Math.Max(0m, TotalNeto - descuentoMonto);
+
+    /// <summary>
+    /// Propiedad intermediaria para el campo de texto de descuento.
+    /// Cuando se modifica, actualiza pedido.TDescApli y recalcula automáticamente
+    /// los valores de descuentoPorcentaje y descuentoMonto.
+    /// </summary>
+    private string DescuentoTexto
+    {
+        get => pedido.TDescApli ?? string.Empty;
+        set
+        {
+            pedido.TDescApli = value;
+            RecalcularDescuentoDesdeTexto();
+        }
+    }
+
+
+    /// <summary>
+    /// Handler cuando cambia el porcentaje de descuento. Actualiza el monto en $ en base al TotalNeto.
+    /// </summary>
+    private void ActualizarDesdePorcentaje(ChangeEventArgs e)
+    {
+        if (!decimal.TryParse(e.Value?.ToString(), out var valor))
+        {
+            return;
+        }
+        // Limitar rango 0..100
+        if (valor < 0) valor = 0;
+        if (valor > 100) valor = 100;
+        descuentoPorcentaje = valor;
+        descuentoMonto = Math.Round(TotalNeto * (descuentoPorcentaje / 100m), 4);
+        StateHasChanged();
+    }
+
+    /// <summary>
+    /// Handler cuando cambia el monto de descuento. Actualiza el % en base al TotalNeto.
+    /// </summary>
+    private void ActualizarDesdeMonto(ChangeEventArgs e)
+    {
+        if (!decimal.TryParse(e.Value?.ToString(), out var valor))
+        {
+            return;
+        }
+        // Limitar entre 0 y TotalNeto
+        if (valor < 0) valor = 0;
+        var total = TotalNeto;
+        if (valor > total) valor = total;
+        descuentoMonto = Math.Round(valor, 4);
+        descuentoPorcentaje = total == 0m ? 0m : Math.Round((descuentoMonto / total) * 100m, 4);
+        StateHasChanged();
+    }
+
+    /// <summary>
+    /// Interpreta el texto de descuento ingresado en PEDENCA.TDescApli y recalcula
+    /// descuentoPorcentaje y descuentoMonto sobre el TotalNeto actual.
+    /// Reglas:
+    /// - Si es vacío o texto no numérico: 0%.
+    /// - Si es número (entero/decimal): se toma literal como %.
+    /// - Si tiene forma "a + b + c": aplica descuentos sucesivos: base*(1-a%)*(1-b%)*(1-c%).
+    /// </summary>
+    private void RecalcularDescuentoDesdeTexto(ChangeEventArgs? e = null)
+    {
+        try
+        {
+            var texto = pedido.TDescApli?.Trim() ?? string.Empty;
+            if (string.IsNullOrWhiteSpace(texto))
+            {
+                descuentoPorcentaje = 0m;
+                descuentoMonto = 0m;
+                StateHasChanged();
+                return;
+            }
+
+            decimal baseNeto = TotalNeto;
+            if (baseNeto <= 0m)
+            {
+                descuentoPorcentaje = 0m;
+                descuentoMonto = 0m;
+                StateHasChanged();
+                return;
+            }
+
+            // Intentar número simple primero
+            if (decimal.TryParse(texto, System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out var porcSimple))
+            {
+                if (porcSimple < 0) porcSimple = 0;
+                if (porcSimple > 100) porcSimple = 100;
+                descuentoPorcentaje = Math.Round(porcSimple, 4);
+                descuentoMonto = Math.Round(baseNeto * (descuentoPorcentaje / 100m), 4);
+                StateHasChanged();
+                return;
+            }
+
+            // Intentar con expresiones separadas por '+'
+            var partes = texto.Split('+', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+            if (partes.Length > 1)
+            {
+                decimal acumulado = baseNeto;
+                bool algunaParteValida = false;
+                foreach (var parte in partes)
+                {
+                    var ptxt = parte.Replace(',', '.');
+                    if (decimal.TryParse(ptxt, System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out var p))
+                    {
+                        if (p < 0) p = 0;
+                        if (p > 100) p = 100;
+                        acumulado = Math.Round(acumulado * (1m - (p / 100m)), 4);
+                        algunaParteValida = true;
+                    }
+                }
+
+                if (algunaParteValida)
+                {
+                    descuentoMonto = Math.Max(0m, baseNeto - acumulado);
+                    descuentoPorcentaje = baseNeto == 0m ? 0m : Math.Round((descuentoMonto / baseNeto) * 100m, 4);
+                    StateHasChanged();
+                    return;
+                }
+            }
+
+            // Si no se pudo interpretar: descuento 0
+            descuentoPorcentaje = 0m;
+            descuentoMonto = 0m;
+            StateHasChanged();
+        }
+        catch
+        {
+            // En cualquier error, evitar lanzar excepciones a la UI y dejar descuento en 0
+            descuentoPorcentaje = 0m;
+            descuentoMonto = 0m;
+            StateHasChanged();
+        }
+    }
+
+    /// <summary>
+    /// Abre el modal para seleccionar productos (SelectorProductos)
+    /// </summary>
+    private async Task AbrirBuscadorProductos()
+    {
+        // Activa el ciclo hasta que el usuario cierre manualmente el modal
+        cicloSeleccionProductos = true;
+        if (selectorProductosProd != null)
+        {
+            await selectorProductosProd.AbrirModal();
+        }
+    }
+
+    /// <summary>
+    /// Evento que recibe el Master seleccionado desde el modal y lo agrega a la lista local
+    /// </summary>
+    private async void OnProductoSeleccionado(Master master)
+    {
+        // Mapeo básico: se pueden agregar más campos según necesidad
+        productosPedido.Add(new ProductoPedido
+        {
+            CodInt = master.Codint,
+            Codigo = master.Codigo,
+            Descripcion = master.Descripcion,
+            Unidad = master.Umedida ?? string.Empty,
+            Cantidad = 1
+        });
+        StateHasChanged();
+
+        // Recalcular descuento al cambiar el total neto
+        RecalcularDescuentoDesdeTexto();
+
+        // Si el ciclo sigue activo, reabrimos el modal para permitir agregar otro producto
+        if (cicloSeleccionProductos && selectorProductosProd != null)
+        {
+            // Espera corta para permitir cerrar y re-renderizar antes de reabrir
+            await Task.Delay(100);
+            await selectorProductosProd.AbrirModal();
+        }
+    }
+
+    /// <summary>
+    /// Evento que recibe un producto con cantidad desde el SelectorProductos y lo agrega al detalle
+    /// </summary>
+    private async void OnProductoSeleccionadoCantidad(SelectorProductos.SeleccionProducto sel)
+    {
+        var p = sel.Producto;
+        var cantidad = sel.Cantidad <= 0 ? 1 : sel.Cantidad;
+
+        productosPedido.Add(new ProductoPedido
+        {
+            CodInt = p.Codint,
+            Codigo = p.Codigo,
+            Descripcion = p.Descripcion,
+            Unidad = p.Umedida ?? string.Empty,
+            Cantidad = cantidad,
+            Precio = sel.Precio,
+            CantidadEntregada = 0, // Productos nuevos no tienen entregas
+            FechaEntrega = fechaEntrega, // Usar la fecha de entrega del encabezado por defecto
+            EsItemNuevo = IsEdit // Si estamos en edición, es un item nuevo
+        });
+
+        StateHasChanged();
+
+        // Recalcular descuento al cambiar el total neto
+        RecalcularDescuentoDesdeTexto();
+
+        if (cicloSeleccionProductos && selectorProductosProd != null)
+        {
+            await Task.Delay(100);
+            await selectorProductosProd.AbrirModal();
+        }
+    }
+
+    /// <summary>
+    /// Finaliza el ciclo de selección múltiple cuando el usuario cierra manualmente el modal
+    /// </summary>
+    private void TerminarCicloSeleccionProductos()
+    {
+        cicloSeleccionProductos = false;
+    }
+
+    /// <summary>
+    /// Quita un producto del detalle local con validaciones para edición
+    /// </summary>
+    private async Task QuitarProducto(ProductoPedido det)
+    {
+        // Validar si tiene cantidad entregada en modo edición
+        if (IsEdit && det.CantidadEntregada > 0)
+        {
+            await sweetAlertService.FireAsync(
+                "No se puede eliminar", 
+                $"Este item tiene {det.CantidadEntregada:F4} unidades entregadas. No se puede eliminar.\n\nSugerencia: Marque el item como cumplido en lugar de eliminarlo.", 
+                SweetAlertIcon.Warning);
+            return;
+        }
+
+        // Confirmar eliminación
+        var result = await sweetAlertService.FireAsync(new SweetAlertOptions
+        {
+            Title = "Confirmar eliminación",
+            Text = $"¿Está seguro de eliminar el item {det.Codigo} - {det.Descripcion}?",
+            Icon = SweetAlertIcon.Question,
+            ShowCancelButton = true,
+            ConfirmButtonText = "Sí, eliminar",
+            CancelButtonText = "Cancelar"
+        });
+
+        if (result.IsConfirmed)
+        {
+            productosPedido.Remove(det);
+            // Recalcular descuento al cambiar el total neto
+            RecalcularDescuentoDesdeTexto();
+            StateHasChanged();
+        }
+    }
+
+    /// <summary>
+    /// Muestra mensaje de sugerencia para marcar como cumplido
+    /// </summary>
+    private async Task MostrarMensajeCumplido(ProductoPedido det)
+    {
+        await sweetAlertService.FireAsync(
+            "Item con entregas", 
+            $"El item {det.Codigo} - {det.Descripcion} tiene {det.CantidadEntregada:F4} unidades entregadas.\n\n" +
+            "No se puede eliminar porque ya tiene entregas realizadas.\n\n" +
+            "Sugerencia: En lugar de eliminar, considere marcar este item como cumplido o completado.", 
+            SweetAlertIcon.Info);
+    }
+
+    /// <summary>
+    /// Modelo local para un ítem del detalle del pedido
+    /// </summary>
+    private class ProductoPedido
+    {
+        public int CodInt { get; set; }
+        public string Codigo { get; set; } = string.Empty;
+        public string Descripcion { get; set; } = string.Empty;
+        public decimal Cantidad { get; set; }
+        public decimal Precio { get; set; }
+        public string Unidad { get; set; } = string.Empty;
+        /// <summary>
+        /// Cantidad entregada (solo para edición) - no puede ser modificada
+        /// </summary>
+        public decimal CantidadEntregada { get; set; } = 0;
+        /// <summary>
+        /// Fecha de entrega del item
+        /// </summary>
+        public DateTime? FechaEntrega { get; set; }
+        /// <summary>
+        /// Indica si es un item nuevo (agregado en edición)
+        /// </summary>
+        public bool EsItemNuevo { get; set; } = false;
+    }
+
+    /// <summary>
+    /// Referencia al componente selector de clientes
+    /// </summary>
+    private SelectorClientes? selectorClientes;
+
+    /// <summary>
+    /// Convierte los precios de todos los items cuando se cambia la moneda
+    /// </summary>
+    /// <param name="monedaOrigen">Código de moneda origen</param>
+    /// <param name="monedaDestino">Código de moneda destino</param>
+    private async Task ConvertirPreciosMonedaAsync(int monedaOrigen, int monedaDestino)
+    {
+        try
+        {
+            if (monedaOrigen == monedaDestino || !productosPedido.Any())
+                return;
+
+            // Obtener cotizaciones
+            var cotizacionOrigen = await ObtenerCotizacionMonedaAsync(monedaOrigen);
+            var cotizacionDestino = await ObtenerCotizacionMonedaAsync(monedaDestino);
+
+            // Convertir precios de cada item
+            foreach (var item in productosPedido)
+            {
+                // Convertir precio
+                if (item.Precio > 0)
+                {
+                    // Convertir a pesos (moneda base) y luego a la moneda destino
+                    var precioEnPesos = item.Precio * cotizacionOrigen;
+                    item.Precio = Math.Round(precioEnPesos / cotizacionDestino, 4);
+                }
+
+                // Recalcular importe total (se calcula automáticamente por la propiedad ImporteTotal)
+                // No es necesario asignar manualmente ya que es una propiedad calculada
+            }
+
+            // Recalcular descuentos basados en el nuevo total
+            RecalcularDescuentoDesdeTexto();
+
+            // Marcar cambios
+            cambiosService.MarcarCambios();
+            StateHasChanged();
+
+            // Mostrar mensaje de confirmación
+            var monedaOrigenNombre = monedas?.FirstOrDefault(m => m.CodigoMoneda == monedaOrigen)?.Descripcion ?? "Desconocida";
+            var monedaDestinoNombre = monedas?.FirstOrDefault(m => m.CodigoMoneda == monedaDestino)?.Descripcion ?? "Desconocida";
+
+            await sweetAlertService.FireAsync(
+                "Conversión Realizada", 
+                $"Los precios han sido convertidos de {monedaOrigenNombre} a {monedaDestinoNombre}", 
+                SweetAlertIcon.Success);
+        }
+        catch (Exception ex)
+        {
+            await sweetAlertService.FireAsync("Error", $"Error al convertir precios: {ex.Message}", SweetAlertIcon.Error);
+        }
+    }
+
+    /// <summary>
+    /// Obtiene la cotización de una moneda específica
+    /// </summary>
+    /// <param name="codigoMoneda">Código de la moneda</param>
+    /// <returns>Cotización de la moneda</returns>
+    private async Task<decimal> ObtenerCotizacionMonedaAsync(int codigoMoneda)
+    {
+        try
+        {
+            var moneda = monedas?.FirstOrDefault(m => m.CodigoMoneda == codigoMoneda);
+            return moneda?.Cotizacion ?? 1;
+        }
+        catch
+        {
+            return 1; // Cotización por defecto
+        }
+    }
+
+    /// <summary>
+    /// Inicialización del componente
+    /// </summary>
+    protected override async Task OnInitializedAsync()
+    {
+        // Limpiar estado de cambios al inicializar
+        cambiosService.LimpiarEstado();
+
+        // Cargar condiciones de pago y vendedores
+        await CargarCondicionesPago();
+        await CargarVendedores();
+        await CargarMonedas();
+        await CargarTransportes();
+
+        // Configurar fechas
+        fechaEmision = pedido.FechEmis ?? DateTime.Now;
+        fechaEntrega = pedido.FeSolEnt;
+
+        // Si es un nuevo pedido, establecer valores por defecto
+        if (!IsEdit)
+        {
+            pedido.FechEmis = DateTime.Now;
+            pedido.Status = 1; // Estado activo
+                               // pedido.CodiEmpr = 1; // Empresa por defecto
+            pedido.OV_Motivo = 1; // Motivo por defecto: Venta
+
+            // Asignar VenRep según el motivo seleccionado
+            AsignarVenRepSegunMotivo();
+
+            // Establecer moneda por defecto solo para pedidos nuevos
+            await EstablecerMonedaPorDefecto();
+
+            // En nuevos pedidos, los campos de cliente están vacíos
+            domicilioCliente = string.Empty;
+            localidadCliente = string.Empty;
+            codigoPostalCliente = string.Empty;
+        }
+        else
+        {
+            // En edición, cargar datos desde el pedido existente
+            if (!string.IsNullOrEmpty(pedido.RasoClie))
+            {
+                clienteSeleccionado = $"{pedido.NroClie} - {pedido.RasoClie}";
+            }
+
+            // Cargar domicilio y localidad desde el pedido
+            domicilioCliente = pedido.DomiEnt ?? string.Empty;
+            localidadCliente = pedido.LocaEnt ?? string.Empty;
+            codigoPostalCliente = string.Empty; // Código postal vacío en edición como solicitado
+
+
+
+            // Además, si tenemos NroClie en edición, obtener el código de cliente desde Deudor12
+            if (pedido.NroClie.HasValue)
+            {
+                _ = CargarDatosCliente(pedido.NroClie.Value);
+            }
+
+            // Cargar detalle desde PEDDETA para mostrarlo como en creación
+            await CargarDetalleEdicionAsync();
+        }
+    }
+
+    /// <summary>
+    /// Abre el modal selector de clientes
+    /// </summary>
+    private async Task AbrirSelectorClientes()
+    {
+        if (selectorClientes != null)
+        {
+            await selectorClientes.AbrirModal();
+        }
+    }
+
+    /// <summary>
+    /// Maneja la selección de un cliente desde el selector
+    /// </summary>
+    private async Task OnClienteSeleccionado(SelectorClientes.ClienteSeleccionado cliente)
+    {
+        // Establecer el cliente seleccionado
+        clienteSeleccionado = $"{cliente.NumeCli} - {cliente.RazonSocial}";
+
+        // Actualizar datos del pedido
+        pedido.NroClie = cliente.NumeCli;
+        pedido.RasoClie = cliente.RazonSocial;
+
+        // Cargar datos adicionales del cliente desde Deudor12
+        await CargarDatosCliente(cliente.NumeCli);
+
+        StateHasChanged();
+    }
+
+    /// <summary>
+    /// Limpia la selección de cliente
+    /// </summary>
+    private void LimpiarCliente()
+    {
+        clienteSeleccionado = string.Empty;
+        pedido.NroClie = null;
+        pedido.RasoClie = string.Empty;
+
+        // Limpiar datos del cliente
+        domicilioCliente = string.Empty;
+        localidadCliente = string.Empty;
+        codigoPostalCliente = string.Empty;
+
+        StateHasChanged();
+    }
+
+    /// <summary>
+    /// Carga datos adicionales del cliente desde la tabla Deudor12
+    /// </summary>
+    private async Task CargarDatosCliente(int numeroCliente)
+    {
+        try
+        {
+            var responseHttp = await repository.Get<Deudor12>($"api/deudor12/numero/{numeroCliente}");
+
+            if (!responseHttp.Error && responseHttp.Response != null)
+            {
+                var cliente = responseHttp.Response;
+
+                // Cargar datos de Deudor12 para nuevos pedidos
+                if (!IsEdit)
+                {
+                    domicilioCliente = cliente.Domi_Cli ?? string.Empty;
+                    localidadCliente = cliente.Loca_Cli ?? string.Empty;
+                    codigoPostalCliente = cliente.Cpos_Cli ?? string.Empty;
+                }
+
+                // Siempre actualizar el código de cliente (visible y readonly en UI)
+                codigoCliente = cliente.Codi_Cli ?? string.Empty;
+            }
+            else
+            {
+                // Si no se encuentran datos del cliente, limpiar todos los casilleros
+                if (!IsEdit)
+                {
+                    domicilioCliente = string.Empty;
+                    localidadCliente = string.Empty;
+                    codigoPostalCliente = string.Empty;
+
+                    await sweetAlertService.FireAsync("Información", "No se encontraron datos adicionales para este cliente.", SweetAlertIcon.Info);
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            // En caso de error, limpiar los casilleros para nuevos pedidos
+            if (!IsEdit)
+            {
+                domicilioCliente = string.Empty;
+                localidadCliente = string.Empty;
+                codigoPostalCliente = string.Empty;
+            }
+
+            await sweetAlertService.FireAsync("Error", $"Error al cargar datos del cliente: {ex.Message}", SweetAlertIcon.Error);
+        }
+    }
+
+
+    /// <summary>
+    /// Carga las condiciones de pago activas desde la API
+    /// </summary>
+    private async Task CargarCondicionesPago()
+    {
+        try
+        {
+            // Uso de IRepository (patrón obligatorio): obtener combos desde backend
+            var responseHttp = await repository.Get<List<CondPag>>("api/condpag/combo");
+            if (!responseHttp.Error && responseHttp.Response != null)
+            {
+                condicionesPago = responseHttp.Response;
+            }
+            else
+            {
+                var msg = await responseHttp.GetErrorMessageAsync();
+                await sweetAlertService.FireAsync("Error", $"No se pudieron cargar las condiciones de pago: {msg}", SweetAlertIcon.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            await sweetAlertService.FireAsync("Error", $"Error al cargar condiciones de pago: {ex.Message}", SweetAlertIcon.Error);
+        }
+    }
+
+    /// <summary>
+    /// Carga los vendedores activos desde la API
+    /// </summary>
+    private async Task CargarVendedores()
+    {
+        try
+        {
+            // Uso de IRepository (patrón obligatorio): obtener combos desde backend
+            var responseHttp = await repository.Get<List<Vendedor>>("api/vendedores/combo");
+            if (!responseHttp.Error && responseHttp.Response != null)
+            {
+                vendedores = responseHttp.Response;
+            }
+            else
+            {
+                var msg = await responseHttp.GetErrorMessageAsync();
+                await sweetAlertService.FireAsync("Error", $"No se pudieron cargar los vendedores: {msg}", SweetAlertIcon.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            await sweetAlertService.FireAsync("Error", $"Error al cargar vendedores: {ex.Message}", SweetAlertIcon.Error);
+        }
+    }
+
+    /// <summary>
+    /// Asigna VenRep según el motivo seleccionado: V para Venta (1), R para Reparación (2)
+    /// </summary>
+    private void AsignarVenRepSegunMotivo()
+    {
+        if (pedido.OV_Motivo.HasValue)
+        {
+            switch (pedido.OV_Motivo.Value)
+            {
+                case 1: // Venta
+                    pedido.VenRep = "V";
+                    break;
+                case 2: // Reparación
+                    pedido.VenRep = "R";
+                    break;
+                default:
+                    pedido.VenRep = string.Empty;
+                    break;
+            }
+        }
+        else
+        {
+            pedido.VenRep = string.Empty;
+        }
+    }
+
+    /// <summary>
+    /// Actualiza las fechas en el modelo cuando cambian en el formulario
+    /// </summary>
+    protected override void OnParametersSet()
+    {
+        if (fechaEmision.HasValue)
+            pedido.FechEmis = fechaEmision.Value;
+
+        if (fechaEntrega.HasValue)
+            pedido.FeSolEnt = fechaEntrega.Value;
+    }
+
+
+
+    /// <summary>
+    /// Cancela la operación actual con confirmación si hay cambios no guardados
+    /// </summary>
+    private async Task Cancelar()
+    {
+        if (cambiosService.TieneCambiosNoGuardados)
+        {
+            var result = await sweetAlertService.FireAsync(new SweetAlertOptions
+            {
+                Title = "Cambios sin guardar",
+                Text = "Hay cambios sin guardar. ¿Desea salir sin guardar los cambios?",
+                Icon = SweetAlertIcon.Warning,
+                ShowCancelButton = true,
+                ConfirmButtonText = "Sí, salir",
+                CancelButtonText = "Cancelar"
+            });
+
+            if (!result.IsConfirmed)
+            {
+                return; // El usuario decidió no salir
+            }
+        }
+
+        // Limpiar estado de cambios y volver con filtros
+        cambiosService.LimpiarEstado();
+        NavigationManager.NavigateTo("/pedidos-venta");
+    }
+
+    /// <summary>
+    /// Carga el detalle del pedido desde PEDDETA cuando el formulario está en modo edición.
+    /// Mapea los ítems a la lista local productosPedido para que el usuario pueda modificar cantidades/precios.
+    /// </summary>
+    private async Task CargarDetalleEdicionAsync()
+    {   
+        try
+        {
+            if (pedido.NroPed is null || pedido.NroPed <= 0)
+            {
+                return;
+            }
+
+            var responseHttp = await repository.Get<List<Peddeta>?>($"api/pedenca/detalle/{pedido.NroPed}");
+            if (!responseHttp.Error && responseHttp.Response != null)
+            {    
+
+                productosPedido.Clear();
+                foreach (var d in responseHttp.Response)
+                {
+                    productosPedido.Add(new ProductoPedido
+                    {
+                        CodInt = d.CodiInt ?? 0,
+                        Codigo = d.CodiExt ?? string.Empty,
+                        Descripcion = d.Descrip ?? string.Empty,
+                        Cantidad = d.CanPed ?? 0,
+                        Precio = d.PreUnid ?? 0,
+                        Unidad = string.Empty,
+                        CantidadEntregada = d.CantEnt ?? 0,
+                        FechaEntrega = d.FeSolEnt,
+                        EsItemNuevo = false, // Items existentes
+                        });
+                }
+                
+                // Recalcular descuento según el texto literal cargado en el encabezado
+                RecalcularDescuentoDesdeTexto();
+                
+                // Establecer TranspEnt basado en NTranspo si no está ya establecido
+                if (pedido.NTranspo.HasValue && string.IsNullOrEmpty(pedido.TranspEnt))
+                {
+                    var transporteSeleccionado = transportes?.FirstOrDefault(t => t.Codi_Tra == pedido.NTranspo.Value);
+                    pedido.TranspEnt = transporteSeleccionado?.Deno_Tra ?? string.Empty;
+                }
+                // Verificar y mantener la moneda del pedido existente desde el primer item del detalle
+                if (responseHttp.Response.Any())
+                {
+                    var primerItem = responseHttp.Response.First();
+                    
+                    // Tomar la moneda y tipo de cambio del primer item del detalle (todos son iguales en un pedido)
+                    if (primerItem.MoneEmis.HasValue && primerItem.MoneEmis > 0)
+                    {
+                        pedido.MoneEmis = primerItem.MoneEmis;
+                        pedido.TipoCam = primerItem.TipoCam ?? 1;
+                        Console.WriteLine($"Pedido en edición - Moneda cargada desde PEDDETA: {pedido.MoneEmis}, TipoCam: {pedido.TipoCam}");
+                    }
+                    else
+                    {
+                        // Si no tiene moneda en el detalle, usar pesos por defecto
+                        await EstablecerMonedaPorDefecto();
+                        Console.WriteLine($"Moneda no establecida en PEDDETA, usando por defecto: {pedido.MoneEmis}");
+                    }
+                }
+                else
+                {
+                    // Si no hay items en el detalle, usar pesos por defecto
+                    await EstablecerMonedaPorDefecto();
+                    Console.WriteLine($"Sin items en detalle, usando moneda por defecto: {pedido.MoneEmis}");
+                }
+            }
+            else if (responseHttp.Error)
+            {
+                var msg = await responseHttp.GetErrorMessageAsync();
+                await sweetAlertService.FireAsync("Error", $"No se pudo cargar el detalle del pedido: {msg}", SweetAlertIcon.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            await sweetAlertService.FireAsync("Error", $"Error al cargar el detalle del pedido: {ex.Message}", SweetAlertIcon.Error);
+        }
+    }
+
+    /// <summary>
+    /// Construye el DTO PedidoVentaUpdateDTO y envía la actualización completa (encabezado + detalle)
+    /// al endpoint api/pedenca/editar-con-detalle.
+    /// </summary>
+    private async Task EditarPedidoConDetalleAsync()
+    {
+        try
+        {
+            if (pedido.NroPed is null || pedido.NroPed <= 0)
+            {
+                await sweetAlertService.FireAsync("Datos inválidos", "El número de pedido es inválido.", SweetAlertIcon.Warning);
+                return;
+            }
+
+            if (pedido.NroClie is null || string.IsNullOrWhiteSpace(pedido.RasoClie))
+            {
+                await sweetAlertService.FireAsync("Datos incompletos", "Debe seleccionar un cliente.", SweetAlertIcon.Warning);
+                return;
+            }
+            if (pedido.CondPag is null || pedido.Vended is null)
+            {
+                await sweetAlertService.FireAsync("Datos incompletos", "Condición de pago y vendedor son obligatorios.", SweetAlertIcon.Warning);
+                return;
+            }
+            if (productosPedido.Count == 0)
+            {
+                await sweetAlertService.FireAsync("Detalle vacío", "Debe existir al menos un producto en el pedido.", SweetAlertIcon.Warning);
+                return;
+            }
+
+            // Validar cantidades en edición: no pueden ser menores a las entregadas
+            foreach (var item in productosPedido)
+            {
+                if (item.Cantidad < item.CantidadEntregada)
+                {
+                    await sweetAlertService.FireAsync(
+                        "Cantidad inválida", 
+                        $"El item {item.Codigo} - {item.Descripcion} tiene una cantidad ({item.Cantidad:F4}) menor a la cantidad ya entregada ({item.CantidadEntregada:F4}).\n\nDebe ingresar una cantidad igual o mayor a la entregada.", 
+                        SweetAlertIcon.Warning);
+                    return;
+                }
+            }
+
+            // Determinar motivo (VenRep) desde encabezado
+            string? motivoTexto = pedido.OV_Motivo switch
+            {
+                1 => "V",
+                2 => "R",
+                _ => pedido.VenRep
+            };
+
+            var dto = new PedidoVentaUpdateDTO
+            {
+                NroPed = pedido.NroPed.Value,
+                FeSolEnt = fechaEntrega,
+                NroClie = pedido.NroClie!.Value,
+                RasoClie = pedido.RasoClie ?? string.Empty,
+                NroOcom = pedido.NroOcom,
+                CondPag = pedido.CondPag!.Value,
+                Vended = pedido.Vended!.Value,
+                PorComVend = pedido.PorComVend,
+                ListPre = (short)(pedido.ListPre ?? 1),
+                // Guardamos literal lo ingresado por el usuario en PEDENCA.TDescApli
+                TDescApli = pedido.TDescApli?.Trim(),
+                Motivo = motivoTexto,
+                MoneEmis = pedido.MoneEmis,
+                TipoCam = pedido.TipoCam,
+                NTranspo = pedido.NTranspo,
+                TranspEnt = pedido.TranspEnt,
+                Items = new()
+            };
+
+            short orden = 1;
+            foreach (var det in productosPedido)
+            {
+                dto.Items.Add(new PedidoVentaItemDTO
+                {
+                    NuOrItem = orden++,
+                    CodiInt = det.CodInt,
+                    CodiExt = det.Codigo,
+                    SubCod = string.Empty,
+                    Descrip = det.Descripcion,
+                    TColor = string.Empty,
+                    TTalle = string.Empty,
+                    TLargo = 0,
+                    TAncho = 0,
+                    TEspesor = 0,
+                    VenRep = motivoTexto,
+                    MoneEmis = pedido.MoneEmis,
+                    TipoCam = pedido.TipoCam,
+                    ListaDeItem = 1,
+                    PreList = det.Precio,
+                    CanAsig = det.Cantidad,
+                    CanPed = det.Cantidad,
+                    PreUnid = det.Precio,
+                    ImpoTot = det.Cantidad * det.Precio,
+                    NumeroSerie = string.Empty,
+                    ObservaItem = string.Empty,
+                    SinCargo = 0,
+                    FeSolEnt = det.FechaEntrega
+                });
+            }
+
+            var response = await repository.Put("api/pedenca/editar-con-detalle", dto);
+            if (response.Error)
+            {
+                var msg = await response.GetErrorMessageAsync();
+                await sweetAlertService.FireAsync("Error", msg, SweetAlertIcon.Error);
+                return;
+            }
+
+            // Éxito - marcar como guardado
+            cambiosService.MarcarGuardado();
+            await sweetAlertService.FireAsync("Confirmación", "Pedido actualizado exitosamente.", SweetAlertIcon.Success);
+            NavigationManager.NavigateTo("/pedidos-venta");
+        }
+        catch (Exception ex)
+        {
+            await sweetAlertService.FireAsync("Error inesperado", ex.Message, SweetAlertIcon.Error);
+        }
+    }
+    /// <summary>
+    /// Establece la moneda por defecto (PESOS con código 1 y tipo de cambio 1)
+    /// </summary>
+    private async Task EstablecerMonedaPorDefecto()
+    {
+        try
+        {
+            // Buscar la moneda PESOS (código 1) en la lista de monedas
+            var monedaPesos = monedas?.FirstOrDefault(m => m.CodigoMoneda == 1);
+
+            if (monedaPesos != null)
+            {
+                // Establecer PESOS como moneda por defecto
+                pedido.MoneEmis = Convert.ToInt16(monedaPesos.CodigoMoneda);
+                pedido.TipoCam = monedaPesos.Cotizacion;
+            }
+            else
+            {
+                // Si no se encuentra PESOS, establecer valores por defecto
+                pedido.MoneEmis = 1; // Código 1 para PESOS
+                pedido.TipoCam = 1; // Tipo de cambio 1
+            }
+        }
+        catch (Exception ex)
+        {
+            // En caso de error, establecer valores por defecto
+            pedido.MoneEmis = 1;
+            pedido.TipoCam = 1;
+            await sweetAlertService.FireAsync("Advertencia", $"Se estableció la moneda por defecto debido a un error: {ex.Message}", SweetAlertIcon.Warning);
+        }
+    }
+    /// <summary>
+    /// Propiedad que maneja la selección de moneda en el combo desplegable.
+    /// Actúa como intermediario entre el InputSelect y el modelo pedido.
+    /// Cuando se selecciona una moneda, automáticamente actualiza el tipo de cambio correspondiente.
+    /// </summary>
+    private int CodigoMonedaSeleccionado
+    {
+        // Getter: Devuelve el código de moneda actualmente seleccionado
+        get => pedido.MoneEmis ?? 0;
+        set
+        {
+            // Guardar moneda anterior para conversión
+            var monedaAnterior = pedido.MoneEmis ?? 1;
+            
+            // Setter: Actualiza el código de moneda en el modelo
+            pedido.MoneEmis = checked((short)value);
+
+            // Si se seleccionó una moneda válida (mayor a 0)
+            if (value > 0)
+            {
+                // Busca la moneda completa en la lista para obtener su cotización
+                var moneda = monedas?.FirstOrDefault(m => m.CodigoMoneda == value);
+                // Actualiza el tipo de cambio en el modelo
+                pedido.TipoCam = moneda?.Cotizacion ?? 1;
+                
+                // Si es un pedido existente y cambió la moneda, convertir precios
+                if (IsEdit && monedaAnterior != value && productosPedido.Any())
+                {
+                    _ = ConvertirPreciosMonedaAsync(monedaAnterior, value);
+                }
+            }
+            else
+            {
+                // Si no se seleccionó ninguna moneda válida, establece tipo de cambio en 1
+                pedido.TipoCam = 1;
+            }
+        }
+    }
+    /// <summary>
+    /// Carga las monedas activas desde la API usando el patrón repository
+    /// </summary>
+    private async Task CargarMonedas()
+    {
+        try
+        {
+            var responseHttp = await repository.Get<List<Tamoned>>("/api/tamoneds/combo");
+            if (!responseHttp.Error && responseHttp.Response != null)
+            {
+                monedas = responseHttp.Response;
+            }
+            else
+            {
+                await sweetAlertService.FireAsync("Error", "Error al cargar las monedas disponibles.", SweetAlertIcon.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            await sweetAlertService.FireAsync("Error", $"Error al cargar monedas: {ex.Message}", SweetAlertIcon.Error);
+        }
+    }
+    /// <summary>
+    /// Carga las monedas activas desde la API usando el patrón repository
+    /// </summary>
+    private async Task CargarTransportes()
+    {
+        try
+        {
+            var responseHttp = await repository.Get<List<Transporte>>("/api/transportes/combo");
+            if (!responseHttp.Error && responseHttp.Response != null)
+            {
+                transportes = responseHttp.Response;
+            }
+            else
+            {
+                await sweetAlertService.FireAsync("Error", "Error al cargar los transportes disponibles.", SweetAlertIcon.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            await sweetAlertService.FireAsync("Error", $"Error al cargar transportes: {ex.Message}", SweetAlertIcon.Error);
+        }
+    }
+
+    /// <summary>
+    /// Maneja el cambio de transporte y actualiza TranspEnt automáticamente
+    /// </summary>
+    private void OnTransporteChanged()
+    {
+        if (pedido.NTranspo.HasValue)
+        {
+            // Buscar el transporte seleccionado y asignar su denominación a TranspEnt
+            var transporteSeleccionado = transportes?.FirstOrDefault(t => t.Codi_Tra == pedido.NTranspo.Value);
+            pedido.TranspEnt = transporteSeleccionado?.Deno_Tra ?? string.Empty;
+        }
+        else
+        {
+            pedido.TranspEnt = string.Empty;
+        }
+    }
+
+    /// <summary>
+    /// Navega a la página de impresión del pedido
+    /// </summary>
+    private void ImprimirPedido()
+    {
+        if (pedido.NroPed.HasValue)
+        {
+            NavigationManager.NavigateTo($"/pedido-impresion/{pedido.NroPed.Value}/pedido");
+        }
+    }
+
+    /// <summary>
+    /// Navega a la página de impresión de orden de despacho
+    /// </summary>
+    private void ImprimirOrdenDespacho()
+    {
+        if (pedido.NroPed.HasValue)
+        {
+            NavigationManager.NavigateTo($"/pedido-impresion/{pedido.NroPed.Value}/despacho");
+        }
+    }
+
+    /// <summary>
+    /// Marca que se han realizado cambios en el formulario
+    /// </summary>
+    private void MarcarCambio()
+    {
+        cambiosService.MarcarCambios();
+    }
+}

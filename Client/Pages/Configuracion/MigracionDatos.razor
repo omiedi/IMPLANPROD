@@ -1,0 +1,439 @@
+@page "/configuracion/migracion"
+@inject IMPLANPROD.Client.Repositories.IRepository Repository
+@inject IJSRuntime JS
+
+<div class="container-fluid mt-4">
+    <div class="card shadow mb-4">
+        <div class="card-header py-3 bg-primary text-white">
+            <h6 class="m-0 font-weight-bold">Migración de Datos Legacy</h6>
+        </div>
+        <div class="card-body">
+            <!-- Campo editable para la ruta de archivos -->
+            <div class="card mb-4 border-primary">
+                <div class="card-header bg-primary text-white">
+                    <h6 class="mb-0"><i class="fas fa-folder-open me-2"></i>Ruta de Archivos .DAT</h6>
+                </div>
+                <div class="card-body">
+                    <div class="row align-items-center">
+                        <div class="col-md-10">
+                            <label for="migrationBasePath" class="form-label"><strong>Carpeta de archivos legacy:</strong></label>
+                            <input type="text" 
+                                   class="form-control" 
+                                   id="migrationBasePath" 
+                                   @bind="migrationBasePath" 
+                                   @bind:event="oninput"
+                                   placeholder="Ej: C:\Users\Omar\source\repos\omardemaio\IMPLANPROD\Legacy_VB6\ArchivosDat" />
+                            <small class="text-muted">
+                                <i class="fas fa-info-circle me-1"></i>
+                                Ingrese la ruta de la carpeta donde se encuentran los archivos .DAT. El sistema seleccionará automáticamente el archivo según la migración.
+                            </small>
+                        </div>
+                        <div class="col-md-2 text-end">
+                            <button class="btn btn-outline-primary btn-sm" @onclick="SavePath" title="Guardar ruta">
+                                <i class="fas fa-save me-1"></i>Guardar
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="row">
+                <div class="col-md-6">
+                    <div class="card">
+                        <div class="card-body">
+                            <h5 class="card-title">Tabla INDIREP</h5>
+                            <p class="card-text">Migrar datos desde el archivo legacy <code>INDIREP.DAT</code> a la tabla SQL <code>INDIREP</code>.</p>
+                            <p class="text-muted small">Nota: La migración solo se realizará si la tabla destino está vacía.</p>
+                            
+                            @if (loadingIndirep)
+                            {
+                                <div class="spinner-border text-primary" role="status">
+                                    <span class="visually-hidden">Cargando...</span>
+                                </div>
+                            }
+                            else
+                            {
+                                <button class="btn btn-primary" @onclick="MigrateIndirep">
+                                    <i class="fas fa-database me-2"></i> Iniciar Migración
+                                </button>
+                            }
+
+                            @if (!string.IsNullOrEmpty(messageIndirep))
+                            {
+                                <div class="alert @alertClassIndirep mt-3" role="alert">
+                                    @messageIndirep
+                                </div>
+                            }
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="card">
+                        <div class="card-body">
+                            <h5 class="card-title">Tabla REPUESRE</h5>
+                            <p class="card-text">Migrar datos desde el archivo legacy <code>REPUESRE.DAT</code> a la tabla SQL <code>REPUESRE</code>.</p>
+                            <p class="text-muted small">Nota: La migración solo se realizará si la tabla destino está vacía.</p>
+                            
+                            @if (loadingRepuesre)
+                            {
+                                <div class="spinner-border text-primary" role="status">
+                                    <span class="visually-hidden">Cargando...</span>
+                                </div>
+                            }
+                            else
+                            {
+                                <button class="btn btn-primary" @onclick="MigrateRepuesre">
+                                    <i class="fas fa-database me-2"></i> Iniciar Migración
+                                </button>
+                            }
+
+                            @if (!string.IsNullOrEmpty(messageRepuesre))
+                            {
+                                <div class="alert @alertClassRepuesre mt-3" role="alert">
+                                    @messageRepuesre
+                                </div>
+                            }
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="row mt-3">
+                <div class="col-md-6">
+                    <div class="card">
+                        <div class="card-body">
+                            <h5 class="card-title">Tabla SECOPREP</h5>
+                            
+                            <div class="row">
+                                <!-- Columna izquierda: Migración SECOPREP -->
+                                <div class="col-md-6">
+                                    <h6 class="text-primary mb-3">Migración SECOPREP</h6>
+                                    <p class="card-text">Migrar datos desde el archivo legacy <code>SECOPREP.DAT</code> a la tabla SQL <code>SECOPREP</code>.</p>
+                                    <p class="text-muted small">Nota: La migración solo se realizará si la tabla destino está vacía.</p>
+                                    
+                                    @if (loadingSecoprep)
+                                    {
+                                        <div class="spinner-border text-primary" role="status">
+                                            <span class="visually-hidden">Cargando...</span>
+                                        </div>
+                                    }
+                                    else
+                                    {
+                                        <button class="btn btn-primary" @onclick="MigrateSecoprep">
+                                            <i class="fas fa-database me-2"></i> Iniciar Migración
+                                        </button>
+                                    }
+
+                                    @if (!string.IsNullOrEmpty(messageSecoprep))
+                                    {
+                                        <div class="alert @alertClassSecoprep mt-3" role="alert">
+                                            @messageSecoprep
+                                        </div>
+                                    }
+                                </div>
+
+                                <!-- Columna derecha: Actualizar con OBSOPREP -->
+                                <div class="col-md-6 border-start">
+                                    <h6 class="text-warning mb-3">Actualizar con OBSOPREP</h6>
+                                    <p class="card-text">Actualizar observaciones desde el archivo legacy <code>OBSOPREP.DAT</code> en la tabla SQL <code>SECOPREP</code>.</p>
+                                    <p class="text-muted small">Nota: Esta migración debe ejecutarse DESPUÉS de migrar SECOPREP. Actualiza el campo Observacion.</p>
+                                    <p class="text-warning small"><strong>Orden de ejecución, luego de migrar SECOPREP</strong></p>
+                                    
+                                    @if (loadingObsoprep)
+                                    {
+                                        <div class="spinner-border text-primary" role="status">
+                                            <span class="visually-hidden">Cargando...</span>
+                                        </div>
+                                    }
+                                    else
+                                    {
+                                        <button class="btn btn-warning" @onclick="MigrateObsoprep">
+                                            <i class="fas fa-sync-alt me-2"></i> Actualizar Observaciones
+                                        </button>
+                                    }
+
+                                    @if (!string.IsNullOrEmpty(messageObsoprep))
+                                    {
+                                        <div class="alert @alertClassObsoprep mt-3" role="alert">
+                                            @messageObsoprep
+                                        </div>
+                                    }
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+
+            <div class="row">
+                <!-- Card Migración DESCREP -->
+                <div class="col-xl-6 col-md-6 mb-4">
+                    <div class="card border-left-info shadow h-100 py-2">
+                        <div class="card-body">
+                            <div class="row no-gutters align-items-center">
+                                <div class="col mr-2">
+                                    <div class="text-xs font-weight-bold text-info text-uppercase mb-1">
+                                        4. Tabla DESCREP (Descripciones)
+                                    </div>
+                                    <div class="h5 mb-0 font-weight-bold text-gray-800">
+                                        Migrar Descripciones
+                                    </div>
+                                    <p class="text-muted small mt-2">Migra datos desde <code>DESCREP.DAT</code> a la tabla <code>DESCREP</code>. Concatena líneas de texto.</p>
+                                    
+                                    @if (loadingDescrep)
+                                    {
+                                        <div class="spinner-border text-info" role="status">
+                                            <span class="visually-hidden">Cargando...</span>
+                                        </div>
+                                    }
+                                    else
+                                    {
+                                        <button class="btn btn-info text-white" @onclick="MigrateDescrep">
+                                            <i class="fas fa-file-alt me-2"></i> Iniciar Migración
+                                        </button>
+                                    }
+
+                                    @if (!string.IsNullOrEmpty(messageDescrep))
+                                    {
+                                        <div class="alert @alertClassDescrep mt-3" role="alert">
+                                            @messageDescrep
+                                        </div>
+                                    }
+                                </div>
+                                <div class="col-auto">
+                                    <i class="fas fa-align-left fa-2x text-gray-300"></i>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    private bool loadingIndirep = false;
+    private string messageIndirep = "";
+    private string alertClassIndirep = "alert-info";
+
+    private bool loadingRepuesre = false;
+    private string messageRepuesre = "";
+    private string alertClassRepuesre = "alert-info";
+
+    private bool loadingSecoprep = false;
+    private string messageSecoprep = "";
+    private string alertClassSecoprep = "alert-info";
+
+    private bool loadingObsoprep = false;
+    private string messageObsoprep = "";
+    private string alertClassObsoprep = "alert-info";
+
+    private bool loadingDescrep = false;
+    private string messageDescrep = "";
+    private string alertClassDescrep = "alert-info";
+
+    // Ruta base para archivos de migración
+    private string migrationBasePath = @"C:\Users\Omar\source\repos\omardemaio\IMPLANPROD\Legacy_VB6\ArchivosDat";
+    private const string STORAGE_KEY = "migrationBasePath";
+
+    protected override async Task OnInitializedAsync()
+    {
+        // Cargar ruta desde localStorage
+        try
+        {
+            var savedPath = await JS.InvokeAsync<string>("localStorage.getItem", STORAGE_KEY);
+            if (!string.IsNullOrEmpty(savedPath))
+            {
+                migrationBasePath = savedPath;
+            }
+        }
+        catch
+        {
+            // Si falla, usar ruta por defecto
+        }
+    }
+
+    private async Task SavePath()
+    {
+        try
+        {
+            await JS.InvokeVoidAsync("localStorage.setItem", STORAGE_KEY, migrationBasePath);
+            await JS.InvokeVoidAsync("alert", "Ruta guardada correctamente");
+        }
+        catch (Exception ex)
+        {
+            await JS.InvokeVoidAsync("alert", $"Error al guardar la ruta: {ex.Message}");
+        }
+    }
+
+    private async Task MigrateIndirep()
+    {
+        try
+        {
+            loadingIndirep = true;
+            messageIndirep = "";
+            StateHasChanged();
+
+            var response = await Repository.Post<object>($"api/Migration/indirep?basePath={Uri.EscapeDataString(migrationBasePath)}", new { });
+            
+            if (!response.Error)
+            {
+                var content = await response.HttpResponseMessage.Content.ReadAsStringAsync();
+                alertClassIndirep = "alert-success";
+                messageIndirep = content;
+            }
+            else
+            {
+                var content = await response.HttpResponseMessage.Content.ReadAsStringAsync();
+                alertClassIndirep = "alert-danger";
+                messageIndirep = $"Error: {content}";
+            }
+        }
+        catch (Exception ex)
+        {
+            alertClassIndirep = "alert-danger";
+            messageIndirep = $"Error de conexión: {ex.Message}";
+        }
+        finally
+        {
+            loadingIndirep = false;
+        }
+    }
+
+    private async Task MigrateRepuesre()
+    {
+        try
+        {
+            loadingRepuesre = true;
+            messageRepuesre = "";
+            StateHasChanged();
+
+            var response = await Repository.Post<object>($"api/Migration/repuesre?basePath={Uri.EscapeDataString(migrationBasePath)}", new { });
+            
+            if (!response.Error)
+            {
+                var content = await response.HttpResponseMessage.Content.ReadAsStringAsync();
+                alertClassRepuesre = "alert-success";
+                messageRepuesre = content;
+            }
+            else
+            {
+                var content = await response.HttpResponseMessage.Content.ReadAsStringAsync();
+                alertClassRepuesre = "alert-danger";
+                messageRepuesre = $"Error: {content}";
+            }
+        }
+        catch (Exception ex)
+        {
+            alertClassRepuesre = "alert-danger";
+            messageRepuesre = $"Error de conexión: {ex.Message}";
+        }
+        finally
+        {
+            loadingRepuesre = false;
+        }
+    }
+
+    private async Task MigrateSecoprep()
+    {
+        try
+        {
+            loadingSecoprep = true;
+            messageSecoprep = "";
+            StateHasChanged();
+
+            var response = await Repository.Post<object>($"api/Migration/secoprep?basePath={Uri.EscapeDataString(migrationBasePath)}", new { });
+            
+            if (!response.Error)
+            {
+                var content = await response.HttpResponseMessage.Content.ReadAsStringAsync();
+                alertClassSecoprep = "alert-success";
+                messageSecoprep = content;
+            }
+            else
+            {
+                var content = await response.HttpResponseMessage.Content.ReadAsStringAsync();
+                alertClassSecoprep = "alert-danger";
+                messageSecoprep = $"Error: {content}";
+            }
+        }
+        catch (Exception ex)
+        {
+            alertClassSecoprep = "alert-danger";
+            messageSecoprep = $"Error de conexión: {ex.Message}";
+        }
+        finally
+        {
+            loadingSecoprep = false;
+        }
+    }
+
+    private async Task MigrateObsoprep()
+    {
+        try
+        {
+            loadingObsoprep = true;
+            messageObsoprep = "";
+            StateHasChanged();
+
+            var response = await Repository.Post<object>($"api/Migration/obsoprep?basePath={Uri.EscapeDataString(migrationBasePath)}", new { });
+            
+            if (!response.Error)
+            {
+                var content = await response.HttpResponseMessage.Content.ReadAsStringAsync();
+                alertClassObsoprep = "alert-success";
+                messageObsoprep = content;
+            }
+            else
+            {
+                var content = await response.HttpResponseMessage.Content.ReadAsStringAsync();
+                alertClassObsoprep = "alert-danger";
+                messageObsoprep = $"Error: {content}";
+            }
+        }
+        catch (Exception ex)
+        {
+            alertClassObsoprep = "alert-danger";
+            messageObsoprep = $"Error de conexión: {ex.Message}";
+        }
+        finally
+        {
+            loadingObsoprep = false;
+        }
+    }
+
+    private async Task MigrateDescrep()
+    {
+        try
+        {
+            loadingDescrep = true;
+            messageDescrep = "";
+            StateHasChanged();
+
+            var response = await Repository.Post<object>($"api/Migration/descrep?basePath={Uri.EscapeDataString(migrationBasePath)}", new { });
+            
+            if (!response.Error)
+            {
+                var content = await response.HttpResponseMessage.Content.ReadAsStringAsync();
+                alertClassDescrep = "alert-success";
+                messageDescrep = content;
+            }
+            else
+            {
+                var content = await response.HttpResponseMessage.Content.ReadAsStringAsync();
+                alertClassDescrep = "alert-danger";
+                messageDescrep = $"Error: {content}";
+            }
+        }
+        catch (Exception ex)
+        {
+            alertClassDescrep = "alert-danger";
+            messageDescrep = $"Error de conexión: {ex.Message}";
+        }
+        finally
+        {
+            loadingDescrep = false;
+        }
+    }
+}

@@ -1,0 +1,74 @@
+@using IMPLANPROD.Shared.DTOs
+@inject IRepository repository
+
+<div class="container">
+    <div class="row">
+        <div class="col">
+            <div class="form-group">
+                <input type="text" 
+                       class="form-control" 
+                       @bind-value="terminoBusqueda" 
+                       @bind-value:event="oninput"
+                       placeholder="Buscar depósito...*" />
+            </div>
+        </div>
+    </div>
+
+    <div class="row mt-3">
+        <div class="col">
+            <table class="table table-sm table-hover">
+                <thead>
+                    <tr>
+                        <th>Código</th>
+                        <th>Nombre</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @if (depositos != null)
+                    {
+                        @foreach (var deposito in depositos)
+                        {
+                            <tr class="@(deposito.Id == CodigoSeleccionado ? "table-primary" : "")">
+                                <td>@deposito.Id</td>
+                                <td>@deposito.Nombre</td>
+                                <td>
+                                    <button class="btn btn-sm btn-primary" @onclick="() => SeleccionarDeposito(deposito)">
+                                        Seleccionar
+                                    </button>
+                                </td>
+                            </tr>
+                        }
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+@code {
+    [CascadingParameter] BlazoredModalInstance Modal { get; set; }
+    [Parameter] public int CodigoSeleccionado { get; set; }
+
+    private List<DepositoDTO> depositos;
+    private string terminoBusqueda;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await CargarDepositos();
+    }
+
+    private async Task CargarDepositos()
+    {
+        var response = await repository.Get<List<DepositoDTO>>("api/tadepo");
+        if (!response.Error)
+        {
+            depositos = response.Response;
+        }
+    }
+
+    private async Task SeleccionarDeposito(DepositoDTO deposito)
+    {
+        await Modal.CloseAsync(ModalResult.Ok(deposito));
+    }
+}

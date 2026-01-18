@@ -1,0 +1,120 @@
+@page "/modelos-edit/{Id:int}"
+@using IMPLANPROD.Shared.Entities
+@inject IRepository repository
+@inject NavigationManager NavigationManager
+@inject SweetAlertService sweetAlertService
+
+<PageTitle>Editar Modelo</PageTitle>
+
+<!--
+Componente: ModelosEdit.razor
+Descripción: Página para editar un modelo existente (BADAMODE)
+Autor: Sistema IMPLANPROD
+Fecha: 2026-01-08
+-->
+
+<div class="bg-primary bg-opacity-10 p-3 rounded-3 mb-3">
+    <h3 class="m-0 text-primary">
+        <i class="fas fa-edit me-2"></i>
+        Editar Modelo
+    </h3>
+</div>
+
+@if (modelo is null)
+{
+    <div class="spinner-border text-primary" role="status">
+        <span class="sr-only">Cargando...</span>
+    </div>
+}
+else
+{
+    <ModelosForm Modelo="modelo"
+                 OnValidSubmit="EditAsync"
+                 OnCancel="Cancel"
+                 IsEdit="true" />
+}
+
+@code {
+    [Parameter]
+    public int Id { get; set; }
+
+    private Badamode? modelo;
+
+    /// <summary>
+    /// Inicialización - Carga el modelo a editar
+    /// </summary>
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadModeloAsync();
+    }
+
+    /// <summary>
+    /// Carga el modelo desde el servidor
+    /// </summary>
+    private async Task LoadModeloAsync()
+    {
+        try
+        {
+            var responseHttp = await repository.Get<Badamode>($"api/badamode/{Id}");
+
+            if (responseHttp.Error)
+            {
+                var message = await responseHttp.GetErrorMessageAsync();
+                await sweetAlertService.FireAsync("Error", message, SweetAlertIcon.Error);
+                NavigationManager.NavigateTo("/modelos");
+            }
+            else
+            {
+                modelo = responseHttp.Response;
+            }
+        }
+        catch (Exception ex)
+        {
+            await sweetAlertService.FireAsync("Error", ex.Message, SweetAlertIcon.Error);
+            NavigationManager.NavigateTo("/modelos");
+        }
+    }
+
+    /// <summary>
+    /// Actualiza el modelo
+    /// </summary>
+    private async Task EditAsync()
+    {
+        try
+        {
+            if (modelo == null) return;
+
+            // Validar que el código no esté vacío
+            if (string.IsNullOrWhiteSpace(modelo.Cod_Mod))
+            {
+                await sweetAlertService.FireAsync("Error", "El código del modelo es obligatorio", SweetAlertIcon.Error);
+                return;
+            }
+
+            var responseHttp = await repository.Put($"api/badamode/{Id}", modelo);
+
+            if (responseHttp.Error)
+            {
+                var message = await responseHttp.GetErrorMessageAsync();
+                await sweetAlertService.FireAsync("Error", message, SweetAlertIcon.Error);
+            }
+            else
+            {
+                await sweetAlertService.FireAsync("Éxito", "Modelo actualizado correctamente", SweetAlertIcon.Success);
+                NavigationManager.NavigateTo("/modelos");
+            }
+        }
+        catch (Exception ex)
+        {
+            await sweetAlertService.FireAsync("Error", ex.Message, SweetAlertIcon.Error);
+        }
+    }
+
+    /// <summary>
+    /// Cancela la edición y vuelve al listado
+    /// </summary>
+    private void Cancel()
+    {
+        NavigationManager.NavigateTo("/modelos");
+    }
+}

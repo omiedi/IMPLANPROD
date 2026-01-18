@@ -1,0 +1,577 @@
+@page "/masterForm"
+@inject SweetAlertService sweetAlertService
+@using IMPLANPROD.Shared.Entities
+@inject IRepository repository
+@inject NavigationManager navigation
+@using Microsoft.AspNetCore.Components.Forms
+
+
+
+<NavigationLock OnBeforeInternalNavigation="OnBeforeInternalNavigation"></NavigationLock>
+
+<EditForm EditContext="editContext" OnValidSubmit="OnValidSubmit">
+    <div class="d-flex justify-content-end mt-4">
+        <button type="submit" class="btn btn-primary me-2">Guardar</button>
+        <button class="btn btn-success" @onclick="ReturnAction">Regresar</button>
+    </div>
+    <DataAnnotationsValidator />
+
+    <!-- Cabecera del formulario -->
+    <div class="row g-3 mb-3 align-items-end">
+        <div class="col-md-2">
+            <label>Código:</label>
+            <InputText class="form-control" @bind-Value="@master.Codigo" disabled="@IsEdit" />
+            <ValidationMessage For="@(() =>master.Codigo)" />
+        </div>
+        <div class="col-md-8">
+            <label>Descripción:</label>
+            <InputText class="form-control" @bind-Value="@master.Descripcion" />
+            <ValidationMessage For="@(() =>master.Descripcion)" />
+        </div>
+        <div class="col-md-2">
+            <label>N° Plano:</label>
+            <InputText class="form-control" @bind-Value="@master.NPlano" />
+            <ValidationMessage For="@(() =>master.NPlano)" />
+        </div>
+        <div class="d-flex gap-4">
+            <button type="button"
+                class="btn"
+                style="height: 2cm; width: 8cm; font-size: 20px; font-weight: bold; background-color: #207245; color: white; border: none;"
+                onmouseover="this.style.backgroundColor='#1A5A38'; this.style.transform='scale(1.05)';"
+                onmouseout="this.style.backgroundColor='#207245'; this.style.transform='scale(1)';"
+                @onclick="NavigateToComponentes">
+                Componentes
+            </button>
+
+            <button type="button"
+                class="btn"
+                style="height: 2cm; width: 8cm; font-size: 20px; font-weight: bold; background-color: #207245; color: white; border: none;"
+                onmouseover="this.style.backgroundColor='#1A5A38'; this.style.transform='scale(1.05)';"
+                onmouseout="this.style.backgroundColor='#207245'; this.style.transform='scale(1)';"
+                @onclick="NavigateToElaboracion">
+                Elaboración
+            </button>
+
+            <button type="button"
+                class="btn"
+                style="height: 2cm; width: 8cm; font-size: 20px; font-weight: bold; background-color: #207245; color: white; border: none;"
+                onmouseover="this.style.backgroundColor='#1A5A38'; this.style.transform='scale(1.05)';"
+                onmouseout="this.style.backgroundColor='#207245'; this.style.transform='scale(1)';"
+                @onclick="NavigateToEspecificacion">
+                Especificaciones
+            </button>
+        </div>
+    </div>
+
+
+    <!-- Secciones CARACTERISTICAS y REPOSICION -->
+    <div class="row g-3">
+        <!-- Sección CARACTERISTICAS -->
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header bg-black text-white">
+                    <h5 class="mb-0">CARACTERISTICAS</h5>
+                </div>
+                <div class="card-body" style="height: 400px;">
+                    <div class="row g-2">
+                        <div class="col-6">
+                            <label>Tipo de Material:</label>
+                            <div class="d-flex gap-2">
+                                <InputSelect class="form-control" @bind-Value="master.Timate">
+                                    <option value="0">Seleccione un tipo...</option>
+                                    @if (tiposMaterial != null)
+                                    {
+                                        @foreach (var tipo in tiposMaterial)
+                                        {
+                                            <option value="@tipo.Id">@tipo.Descripcion</option>
+                                        }
+                                    }
+                                </InputSelect>
+                            </div>
+                        </div>
+                        <div class="col-6">
+                            <label>Grupo de Familias:</label>
+                            <div class="d-flex gap-2">
+                                <InputSelect class="form-control" @bind-Value="master.Familia">
+                                    <option value="0">Seleccione una familia...</option>
+                                    @if (familias != null)
+                                    {
+                                        @foreach (var familia in familias)
+                                        {
+                                            <option value="@familia.Id">@familia.Descripcion</option>
+                                        }
+                                    }
+                                </InputSelect>
+                            </div>
+                        </div>
+                        <div class="col-6">
+                            <label>Unidad de Medida:</label>
+                            <div class="d-flex gap-2">
+                                <InputSelect class="form-control" @bind-Value="master.Umedida">
+                                    <option value="0">Seleccione unidad...</option>
+                                    @if (umedida != null)
+                                    {
+                                        @foreach (var um in umedida)
+                                        {
+                                            <option value="@um.DescripcionAbreviada">@um.Descripcion</option>
+                                        }
+                                    }
+                                </InputSelect>
+                                <div class="form-control" style="max-width: 80px;">@master.Umedida</div>
+                            </div>
+                        </div>
+
+                        <div class="col-6">
+                            <label>Grupo I.V.A.:</label>
+                            <InputSelect class="form-control" @bind-Value="master.Grupiva">
+                                <option value="0">Seleccione grupo...</option>
+                                @if (gruposIva != null)
+                                {
+                                    @foreach (var grupo in gruposIva)
+                                    {
+                                        <option value="@grupo.Id">@grupo.Referencia</option>
+                                    }
+                                }
+                            </InputSelect>
+                        </div>
+
+                        <div class="col-12">
+                            <label>Código Interno:</label>
+                            <InputText class="form-control" @bind-Value="master.Cod_Interna" />
+                        </div>
+
+                        <div class="col-12">
+                            <div class="row g-2">
+                                <div class="col-6">
+                                    <label>Kilos/Metro:</label>
+                                    <InputNumber class="form-control" @bind-Value="master.PesMetro" />
+                                </div>
+                                <div class="col-6">
+                                    <label>Kilos/Unidad:</label>
+                                    <InputNumber class="form-control" @bind-Value="master.Pesuni" />
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="col-12">
+                            <div class="row g-2">
+                                <div class="col-6">
+                                    <label>Revisión:</label>
+                                    <InputText class="form-control" @bind-Value="master.Revision" />
+                                </div>
+                                <div class="col-6">
+                                    <label>Fecha Rev.:</label>
+                                    <InputDate class="form-control" @bind-Value="master.Ferevis" />
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+
+        <!-- Sección REPOSICION -->
+        <div class="col-md-6">
+            <div class="card">
+
+                <div class="card-header bg-black text-white">
+                    <h5 class="mb-0">REPOSICION</h5>
+                </div>
+                <div class="card-body" style="height: 400px;">
+
+                    <div class="row g-3">
+                        <div class="col-6">
+                            <label>Criterio de Reposición:</label>
+                            <InputSelect class="form-control" @bind-Value="master.Critrep">
+                                <option value="0">Seleccione criterio...</option>
+                                <option value="1">Stock</option>
+                                <option value="2">Pedido</option>
+                            </InputSelect>
+                        </div>
+                        <div class="col-md-6">
+                            <label>Lote Económico:</label>
+                            <InputNumber class="form-control" @bind-Value="@master.Lorepos" />
+                        </div>
+                        <div class="col-6">
+                            <label>Lote Indivisible:</label>
+                            <InputNumber class="form-control" @bind-Value="master.Lindivis" />
+                        </div>
+                        <div class="col-md-6">
+                            <label>Lote Indivisible venta:</label>
+                            <InputNumber class="form-control" @bind-Value="master.Lindiven" />
+                        </div>
+
+                        <div class="col-md-6">
+                            <label>Lote Máximo:</label>
+                            <InputNumber class="form-control" @bind-Value="@master.Stomax" />
+                        </div>
+
+
+                        <div class="col-12">
+                            <div class="row g-2">
+                                <div class="col-md-6">
+                                    <label>Promedio:</label>
+                                    <InputNumber class="form-control" @bind-Value="master.ConsuProm" />
+                                </div>
+                                @* <div class="col-6">
+                                    <label>Tiempo de Reposición:</label>
+                                    <InputNumber class="form-control" @bind-Value="master.Critrep" />
+                                </div> *@
+                                <div class="col-6">
+                                    <label>Stock de Seguridad:</label>
+                                    <InputNumber class="form-control" @bind-Value="master.Stomin" />
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-6">
+                            <div class="form-check">
+                                <input type="checkbox" class="form-check-input" checked="@(master.Trazable.HasValue && master.Trazable.Value > 0)" @onchange="(e) => master.Trazable = (e.Value != null && (bool)e.Value ? (short?)1 : (short?)0)" id="chkTrazable" />
+                                <label class="form-check-label" for="chkTrazable">Trazable</label>
+                            </div>
+                        </div>
+                        <div class="col-6">
+                            <div class="form-check">
+                                <input type="checkbox" class="form-check-input" checked="@(master.DesCompAut.GetValueOrDefault() > 0)" @onchange="(e) => master.DesCompAut = (e.Value != null && (bool)e.Value ? (short?)1 : (short?)0)" id="chkDescomposicion" />
+                                <label class="form-check-label" for="chkDescomposicion">Descomposición Automática</label>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <br>
+    <!-- Sección COSTOS -->
+    <div class="col-md-12">
+        <div class="card">
+            <div class="card-header bg-black text-white">
+                <h5 class="mb-0">COSTOS</h5>
+            </div>
+            <div class="card-body">
+                <div class="row g-3">
+
+                    <!-- Columna izquierda (50% del ancho) EJECUTA OnInputChanged CADA VEZ QUE CAMBIA COSUNI RECALCULA $ Unidad: (EVENTO CHANGE)-->
+
+                    <!-- EJECUTA OnInputChanged CADA VEZ QUE CAMBIA COSUNI RECALCULA $ Unidad:-->
+                    <div class="col-md-6">
+                        <div class="row g-3">
+                            <div class="col-md-3"> 
+                                <label>Costo reposición:</label>
+                                <InputNumber 
+                                @bind-Value="master.Cosuni" 
+                                @oninput="@(async (ChangeEventArgs e) => { await OnInputChanged(e, nameof(master.Cosuni)); })" 
+                                class="form-control" 
+                                style="width: 80%;">
+                                </InputNumber>
+                            </div>
+                            <div class="col-md-3">
+                                <label>Fecha costeo:</label>
+                                <InputDate class="form-control" @bind-Value="@master.Fecosto" />
+                            </div>
+
+                            <!-- ESTE INPUT SELECT ESTA CONECTADO CON OnAfterRender QUE CADA VEZ QUE HAY UN CAMBIO SE EJECUTA, PERO SOLO RECALCULA CUANDO CAMBIO LA MONEDA -->
+                            <!-- NO FUNCIONO CON OnInputChanged CUANDO SE CAMBIABA LA SELECCION DEL SELECT NO IBA AL METODO:-->
+                            <div class="col-md-3">
+                                <label>Moneda:</label>
+                                <InputSelect class="form-control" @bind-Value="@master.Monecos">
+                                    <option value="0">Seleccione una mon...</option>
+                                    @if (monedas != null)
+                                    {
+                                        @foreach (var mon in monedas)
+                                        {
+                                            <option value="@mon.CodigoMoneda">@mon.Descripcion</option>
+                                        }
+                                    }
+                                </InputSelect>
+                            </div>
+                            <!-- FIN *** ESTE INPUT SELECT ESTA CONECTADO CON OnAfterRender QUE CADA VEZ QUE HAY UN CAMBIO SE EJECUTA, PERO SOLO RECALCULA CUANDO CAMBIO LA MONEDA -->
+
+                            <div class="col-md-3">
+                                <label>% G. nacionalización:</label>
+                                <InputNumber class="form-control" @bind-Value="@master.Pornacio" />
+
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Columna derecha (50% del ancho) con otros inputs -->
+                    <div class="col-md-6">
+                        <div class="row g-3">
+                            <!-- Proveedor Habitual en la misma fila -->
+                            <div class="col-md-3">
+                                <label>Proveedor Habitual:</label>
+                                <InputSelect class="form-control" @bind-Value="@master.Provhabi">
+                                    <option value="0">Seleccione un proveedor...</option>
+                                    @if (proveedores != null)
+                                    {
+                                        @foreach (var proveedor in proveedores)
+                                        {
+                                            <option value="@proveedor.Nume_Cli">@proveedor.Raso_Cli</option>
+                                        }
+                                    }
+                                </InputSelect>
+                                <ValidationMessage For="@(() => master.Provhabi)" />
+                            </div>
+
+                            <!-- master.valorPesos es una propiedad [NotMapped] Esta propiedad no se mapeará a la base de datos -->
+                            <div class="col-md-3">
+                                <label>$ Unidad:</label>
+                                <InputNumber class="form-control" @bind-Value="@master.valorPesos" disabled="true" />
+                            </div>
+
+
+                            <div class="col-md-3">
+                                <label>Precio básico:</label>
+                                <InputNumber class="form-control" @bind-Value="@master.CosCal" />
+                            </div>
+                            <div class="col-md-3">
+                                <label>Fecha cálculo:</label>
+                                <InputDate class="form-control" @bind-Value="@master.FeCosCal" />
+                            </div>
+                        </div>
+                    </div>
+
+                </div>
+
+                <!-- Botones alineados a la derecha -->
+                <div class="d-flex justify-content-end mt-4">
+                    <button type="submit" class="btn btn-primary me-2">Guardar</button>
+                    <button class="btn btn-success" @onclick="ReturnAction">Regresar</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+
+
+
+</EditForm>
+
+@code {
+
+
+    private EditContext editContext = null!; //ojo el orden si esta primero como en este caso la declaracion debe ir primero si no da error de carga en la pantalla
+    private List<Tatimat> tiposMaterial = new();
+    private List<Familia> familias = new();
+    private List<Grupiva> gruposIva = new();
+    private List<Proved12> proveedores = new();
+    private List<UnidadMedidas> umedida = new();
+    private List<Tamoned> monedas = new();
+
+    private decimal valorenPesos = 0;
+
+    // private List<Master> masterItemList = new();
+    private string unidadMedida = "U.";
+
+    [Parameter]
+    public Master master { get; set; } = null!;
+
+    [EditorRequired]
+    [Parameter]
+    public EventCallback OnValidSubmit { get; set; }
+
+    [EditorRequired]
+    [Parameter]
+    public EventCallback ReturnAction { get; set; }
+
+    [Parameter]
+    public bool IsEdit { get; set; }
+
+    public bool FormPostedSuccessfully { get; set; } = false;
+
+    protected async override Task OnInitializedAsync()
+    {
+        editContext = new(master);//ojo el orden si esta primero como en este caso la declaracion debe ir primero si no da error de carga en la pantalla
+        await CargarCombos();
+        CalcularValorPesos(); // Calcular valor inicial en pesos
+    }
+    private void NavigateToComponentes()
+    {
+
+        navigation.NavigateTo($"/master/componentes/{master.Id}");
+
+
+    }
+    private void NavigateToElaboracion()
+    {
+        navigation.NavigateTo($"/master/elaboracion/{master.Id}");
+    }
+
+    private void NavigateToEspecificacion()
+    {
+        navigation.NavigateTo($"/master/especificacion/{master.Id}");
+    }
+
+    private async Task CargarCombos()
+
+    {
+
+        var responseTipos = await repository.Get<List<Tatimat>>("/api/tipomaterial/combo");
+        if (responseTipos.Error)
+        {
+            await sweetAlertService.FireAsync("Error", responseTipos.HttpResponseMessage.ReasonPhrase, SweetAlertIcon.Error);
+
+            return;
+        }
+        tiposMaterial = responseTipos.Response ?? new();
+
+        var responseFamilias = await repository.Get<List<Familia>>("/api/familias/combo");
+        if (responseFamilias.Error)
+        {
+            await sweetAlertService.FireAsync("Error", responseFamilias.HttpResponseMessage.ReasonPhrase, SweetAlertIcon.Error);
+            return;
+        }
+        familias = responseFamilias.Response ?? new();
+        var responseGruposIva = await repository.Get<List<Grupiva>>("/api/grupivas/combo");
+        if (responseGruposIva.Error)
+        {
+            await sweetAlertService.FireAsync("Error", responseGruposIva.HttpResponseMessage.ReasonPhrase, SweetAlertIcon.Error);
+            return;
+        }
+        gruposIva = responseGruposIva.Response ?? new();
+
+        var responseProveedores = await repository.Get<List<Proved12>>("/api/Proved12/combo");
+        if (responseProveedores.Error)
+        {
+            await sweetAlertService.FireAsync("Error", responseProveedores.HttpResponseMessage.ReasonPhrase, SweetAlertIcon.Error);
+            return;
+        }
+        proveedores = responseProveedores.Response ?? new();
+
+        var responseUmedida = await repository.Get<List<UnidadMedidas>>("/api/umedidas/combo");
+        if (responseUmedida.Error)
+        {
+            await sweetAlertService.FireAsync("Error", responseUmedida.HttpResponseMessage.ReasonPhrase, SweetAlertIcon.Error);
+            return;
+        }
+        umedida = responseUmedida.Response ?? new();
+        var responseMoneda = await repository.Get<List<Tamoned>>("/api/tamoneds/combo");
+        if (responseMoneda.Error)
+        {
+            await sweetAlertService.FireAsync("Error", responseMoneda.HttpResponseMessage.ReasonPhrase, SweetAlertIcon.Error);
+            return;
+        }
+        monedas = responseMoneda.Response ?? new();
+
+    }
+    private async Task OnBeforeInternalNavigation(LocationChangingContext context)
+    { //Tutorial 69 - Parte 04 -51 min
+        var formWasEdited = editContext.IsModified();
+
+        if (!formWasEdited || FormPostedSuccessfully)//cuando se quiera ir de la pagina valida si se hicieron cambios
+        {
+            return;
+        }
+
+        var result = await sweetAlertService.FireAsync(new SweetAlertOptions
+            {
+                Title = "Confirmación",
+                Text = "¿Deseas abandonar la página y perder los cambios?",
+                Icon = SweetAlertIcon.Warning,
+                ShowCancelButton = true,
+                CancelButtonText = "No",
+                ConfirmButtonText = "Si"
+            });
+
+        var confirm = !string.IsNullOrEmpty(result.Value);
+
+        if (confirm)
+        {
+            return;
+        }
+
+        context.PreventNavigation();
+    }
+
+    //Usa OnAfterRender() para detectar cambios en la UI y hacer cálculos después de renderizar.
+    //Si quieres asegurarte de que la actualización se refleje después de renderizar la UI, puedes utilizar OnAfterRender():
+    private int? lastMonedaValue;
+    private decimal? lastPorcentajeValue;
+    protected override void OnAfterRender(bool firstRender)
+    {
+        if (!firstRender) // Para evitar que se ejecute solo al cargar la página
+        {
+            if (master.Monecos != lastMonedaValue || master.Pornacio != lastPorcentajeValue) //si cambio la moneda de este modo recalcula solo cuando cambia la moneda
+            {
+                lastMonedaValue = master.Monecos;
+                lastPorcentajeValue = master.Pornacio;
+                CalcularValorPesos();
+            }
+        }
+    }
+    /// <summary>
+    /// Maneja los cambios en los campos numéricos (Frecuencia, Uso, Factor) y actualiza la fecha crono.
+    /// </summary>
+    /// <param name="e">Evento que contiene el nuevo valor ingresado</param>
+    /// <param name="propertyName">Nombre de la propiedad que se está modificando</param>
+    private async Task OnInputChanged(ChangeEventArgs e, string propertyName)
+    {
+        // Verifica dos condiciones:
+        // 1. Que el valor no sea nulo
+        // 2. Intenta convertir el valor a número entero (int)
+        //    - Si es exitoso, guarda el número en 'valor' y devuelve true
+        //    - Si falla (ej: usuario ingresa letras), devuelve false
+        if (e.Value != null && int.TryParse(e.Value.ToString(), out int valor))
+        {
+            switch (propertyName)
+            {
+                case nameof(master.Cosuni):
+                    master.Cosuni = valor;
+                    break;
+                    // case nameof(master.Monecos):  // aca no entraba creo por que era un select no le encontre la vuelta por eso use  OnAfterRender
+                    //     master.Monecos = Convert.ToInt16(valor);
+                    //     break;
+            }
+            CalcularValorPesos();
+            StateHasChanged();
+        }
+    }
+    private void CalcularValorPesos()
+    {
+        // Si no hay moneda seleccionada o costo de reposición, el valor en pesos es 0
+        if (master.Monecos <= 0 || !master.Cosuni.HasValue || master.Cosuni.Value <= 0)
+        {
+            valorenPesos = 0;
+            return;
+        }
+
+        // Buscar la moneda seleccionada
+        var monedaSeleccionada = monedas.FirstOrDefault(m => m.Id == master.Monecos);
+        if (monedaSeleccionada == null)
+        {
+            valorenPesos = 0;
+            return;
+        }
+
+        // Si la moneda es pesos (código 1), el valor es el mismo que el costo de reposición
+        //        ✔ master.Pornacio.Value → Convierte Pornacio de decimal? a decimal, evitando el error.
+        //        ✔ 100m → Usa m para definir 100 como decimal en lugar de double, asegurando compatibilidad en la división.
+
+        if (monedaSeleccionada.CodigoMoneda == 1)
+        {
+            valorenPesos = master.Cosuni.Value;
+
+            if (master.Pornacio.HasValue && master.Pornacio > 0) // Verifica que no sea null
+            {
+                //int numero = 5; (*** EJEMPLO *** DEL OPERADOR: *=)
+                // numero *= 3;  // Equivalente a: numero = numero * 3;
+                //Console.WriteLine(numero); // Salida: 15
+                valorenPesos *= 1 + (master.Pornacio.Value / 100m); // Convierte a decimal y usa '100m' para asegurar compatibilidad
+            }
+        }
+        else
+        {
+            // Para otras monedas, multiplicar por la cotización
+            valorenPesos = master.Cosuni.Value * monedaSeleccionada.Cotizacion;
+            if (master.Pornacio.HasValue && master.Pornacio > 0) // Verifica que no sea null
+            {
+                valorenPesos *= 1 + (master.Pornacio.Value / 100m); // Convierte a decimal y usa '100m' para asegurar compatibilidad
+            }
+        }
+
+        master.valorPesos = valorenPesos; //master.valorPesos es una propiedad [NotMapped] // Esta propiedad no se mapeará a la base de datos
+        StateHasChanged();
+    }
+}

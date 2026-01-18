@@ -1,0 +1,189 @@
+@page "/DestinoRechazoRecepcion/Baja"
+@inject IRepository repository
+@inject NavigationManager navigationManager
+@inject SweetAlertService sweetAlertService
+@inject IJSRuntime JS
+
+@using System.Net.Http
+@using CurrieTechnologies.Razor.SweetAlert2
+
+<PageTitle>Destinos de Rechazo - Baja</PageTitle>
+
+<div class="bg-primary text-white text-center p-3 mb-4">
+    <h1>Destinos de Rechazo de Baja</h1>
+</div>
+<div class="mb-3">
+    <a class="btn btn-success" href="/DestinoRechazoRecepcion">Regresar</a>
+</div>
+
+<div class="d-flex align-items-center justify-content-between mb-3">
+    <div class="d-flex align-items-center">
+
+        <input style="width: 400px;" type="text" class="form-control me-2" id="titulo" placeholder="Buscar destino..." @bind-value="Filter" />
+        <button type="button" class="btn btn-outline-primary me-2" @onclick="ApplyFilterAsync">Filtrar</button>
+        <button type="button" class="btn btn-outline-danger" @onclick="CleanFilterAsync">Limpiar</button>
+    </div>
+    
+    <div>
+    </div>
+</div>
+
+<Pagination CurrentPage="currentPage"
+            TotalPages="totalPages"
+            SelectedPage="SelectedPageAsync" />
+
+<GenericList MyList="destinos">
+    <Body>
+        <table class="table table-striped">
+            <thead>
+                <tr>
+                    <th>Id</th>
+                    <th>Código</th>
+                    <th>Descripción</th>
+                    <th>Depósito</th>
+                    <th>Acciones</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var item in destinos!)
+                {
+                    <tr>
+                        <td>@item.Id</td>
+                        <td>@item.CodigoDestino</td>
+                        <td>@item.Descripcion</td>
+                        <td>
+                            @if (item.Deposito.HasValue && item.Deposito.Value > 0)
+                            {
+                                @depo!.FirstOrDefault(x => x.CodigoDepo == item.Deposito)?.Descripcion
+                            }
+                            else
+                            {
+                                <span class="text-muted">-</span>
+                            }
+                        </td>
+                        <td>
+                            <button class="btn btn-success btn-sm" @onclick=@(() => RestaurarAsync(item.Id))>Restaurar</button>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </Body>
+</GenericList>
+
+@code {
+    public List<DestinoRechazoRecepcion>? destinos { get; set; }
+    public List<Tadeposi>? depo { get; set; }
+    
+    [CascadingParameter]
+    IModalService Modal { get; set; } = default!;
+
+    [Parameter]
+    [SupplyParameterFromQuery]
+    public string Page { get; set; } = string.Empty;
+
+    [Parameter]
+    [SupplyParameterFromQuery]
+    public string Filter { get; set; } = string.Empty;
+
+    private int currentPage = 1;
+    private int totalPages;
+
+    protected async override Task OnInitializedAsync()
+    {
+        await CargarDepositos();
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync(int page = 1)
+    {
+        if (!string.IsNullOrWhiteSpace(Page))
+        {
+            page = Convert.ToInt32(Page);
+        }
+
+        string url1 = string.Empty;
+        string url2 = string.Empty;
+
+   
+        if (string.IsNullOrEmpty(Filter))
+        {
+            url1 = $"api/destinorechazorecepcion?page={page}&estado=-1";
+            url2 = $"api/destinorechazorecepcion/totalPages?estado=-1";
+        }
+        else
+        {
+            url1 = $"api/destinorechazorecepcion?page={page}&filter={Filter}&estado=-1";
+            url2 = $"api/destinorechazorecepcion/totalPages?filter={Filter}&estado=-1";
+        }
+
+        var responseHppt = await repository.Get<List<DestinoRechazoRecepcion>>(url1);
+        var responseHppt2 = await repository.Get<int>(url2);
+        destinos = responseHppt.Response!;
+        totalPages = responseHppt2.Response!;
+    }
+
+    private async Task RestaurarAsync(int id)
+    {
+        var result = await sweetAlertService.FireAsync(new SweetAlertOptions
+        {
+            Title = "Confirmación",
+            Text = "¿Realmente desea restaurar el registro?",
+            Icon = SweetAlertIcon.Question,
+            ShowCancelButton = true,
+            CancelButtonText = "No",
+            ConfirmButtonText = "Si"
+        });
+
+        var confirm = string.IsNullOrEmpty(result.Value);
+        if (confirm)
+        {
+            return;
+        }
+
+        int status = 0;
+        var responseHTTP = await repository.Delete($"api/destinorechazorecepcion/cambiaStatus/{id}/{status}");
+        if (responseHTTP.Error)
+        {
+            if (responseHTTP.HttpResponseMessage.StatusCode == System.Net.HttpStatusCode.NotFound)
+            {
+                navigationManager.NavigateTo("/");
+            }
+            else
+            {
+                var mensajeError = await responseHTTP.GetErrorMessageAsync();
+                await sweetAlertService.FireAsync("Error", mensajeError, SweetAlertIcon.Error);
+            }
+        }
+        else
+        {
+            await LoadAsync();
+        }
+    }
+
+    private async Task CleanFilterAsync()
+    {
+        Filter = string.Empty;
+        await ApplyFilterAsync();
+    }
+
+    private async Task ApplyFilterAsync()
+    {
+        int page = 1;
+        await LoadAsync(page);
+    }
+
+    private async Task SelectedPageAsync(int page)
+    {
+        currentPage = page;
+        await LoadAsync(page);
+    }
+
+    private  async Task CargarDepositos()
+    {
+        var response = await repository.Get<List<Tadeposi>>($"api/tadeposi/activos");
+        depo = response.Response!;
+       
+    }
+   
+}

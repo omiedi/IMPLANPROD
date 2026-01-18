@@ -1,0 +1,149 @@
+@page "/ficha-cliente-baja"
+@using IMPLANPROD.Shared.Entities
+@inject IRepository repository
+@using IMPLANPROD.Shared.DTOs
+@inject NavigationManager NavigationManager
+@inject SweetAlertService sweetAlertService
+
+<!--
+    Componente: FichaClienteBajaIndex.razor
+    Descripción: Listado paginado de clientes dados de baja (Stat_Cli < 0) con opción de restaurar (Stat_Cli = 0).
+    Autor: IA Cascade (solicitud de Omar)
+    Fecha: 22/04/2025
+    Este componente sigue el estándar de páginas ABM definido en el proyecto.
+    Se muestran las columnas: Nro de cliente, Razón social, Domicilio, Teléfono, Mail.
+    Incluye paginación y botón para restaurar clientes.
+-->
+
+<h3>Clientes dados de baja</h3>
+<div class="mb-3">
+    <button class="btn btn-secondary" @onclick="VolverListado">
+        <i class="fas fa-arrow-left"></i> Volver al listado
+    </button>
+</div>
+
+<div class="row mb-3">
+    <div class="col-md-4">
+        <input class="form-control" placeholder="Buscar por Razón Social..." @bind="Filter" @bind:event="oninput" />
+    </div>
+    <div class="col-md-2">
+        <button class="btn btn-outline-secondary" @onclick="()=>LoadAsync(1)"><i class="fas fa-search"></i> Buscar</button>
+    </div>
+</div>
+
+@if (isLoading)
+{
+    <p>Cargando...</p>
+}
+else
+{
+    <table class="table table-striped">
+        <thead>
+            <tr>
+                <th>Nro Cliente</th>
+                <th>Razón Social</th>
+                <th>Domicilio</th>
+                <th>Teléfono</th>
+                <th>Mail</th>
+                <th>Acciones</th>
+            </tr>
+        </thead>
+        <tbody>
+            @if (Clientes != null && Clientes.Count > 0)
+            {
+                @foreach (var cliente in Clientes)
+                {
+                    <tr>
+                        <td>@cliente.Id</td>
+                        <td>@cliente.Raso_Cli</td>
+                        <td>@cliente.Domi_Cli</td>
+                        <td>@cliente.Tele_Cli</td>
+                        <td>@cliente.Mail_Cli</td>
+                        <td>
+                            <button class="btn btn-sm btn-outline-success" @onclick="() => RestaurarCliente(cliente.Id)"><i class="fas fa-undo"></i> Restaurar</button>
+                        </td>
+                    </tr>
+                }
+            }
+            else
+            {
+                <tr><td colspan="6">No hay clientes dados de baja para mostrar.</td></tr>
+            }
+        </tbody>
+    </table>
+    <div class="d-flex justify-content-between align-items-center">
+        <button class="btn btn-outline-secondary" @onclick="()=>LoadAsync(PaginaActual-1)" disabled="@(PaginaActual == 1)">Anterior</button>
+        <span>Página @PaginaActual de @TotalPaginas</span>
+        <button class="btn btn-outline-secondary" @onclick="()=>LoadAsync(PaginaActual+1)" disabled="@(PaginaActual == TotalPaginas)">Siguiente</button>
+    </div>
+}
+
+@code {
+    // Lista de clientes dados de baja
+    private List<Deudor12> Clientes = new();
+    private int PaginaActual = 1;
+    private int TotalPaginas = 1;
+    private int RegistrosPorPagina = 10;
+    private bool isLoading = true;
+    private string? Filter = string.Empty;
+    private string? Page = string.Empty;
+
+    /// <summary>
+    /// Carga los clientes dados de baja (Stat_Cli < 0) paginados desde el backend
+    /// </summary>
+    private async Task LoadAsync(int page = 1)
+    {
+        if (!string.IsNullOrWhiteSpace(Page))
+        {
+            page = Convert.ToInt32(Page);
+        }
+        PaginaActual = page;
+        string url1 = string.Empty;
+        string url2 = string.Empty;
+        if (string.IsNullOrEmpty(Filter))
+        {
+            url1 = $"api/deudor12?page={page}&recordsNumber={RegistrosPorPagina}&stat_Cli=-1";
+            url2 = $"api/deudor12/totalPages?recordsNumber={RegistrosPorPagina}&stat_Cli=-1";
+        }
+        else
+        {
+            url1 = $"api/deudor12?page={page}&recordsNumber={RegistrosPorPagina}&filter={Filter}&stat_Cli=-1";
+            url2 = $"api/deudor12/totalPages?recordsNumber={RegistrosPorPagina}&filter={Filter}&stat_Cli=-1";
+        }
+        try
+        {
+            isLoading = true;
+            var responseHttp = await repository.Get<List<Deudor12>>(url1);
+            var responseHttp2 = await repository.Get<int>(url2);
+            Clientes = responseHttp.Response!;
+            TotalPaginas = responseHttp2.Response!;
+        }
+        catch (Exception ex)
+        {
+            await sweetAlertService.FireAsync("Error", ex.Message, SweetAlertIcon.Error);
+        }
+        isLoading = false;
+        StateHasChanged();
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadAsync();
+    }
+
+    private async Task RestaurarCliente(int id)
+    {
+        var cliente = await repository.Get<Deudor12>($"/api/deudor12/{id}");
+        if (cliente.Response != null)
+        {
+            cliente.Response.Stat_Cli = 0;
+            await repository.Put("/api/deudor12", cliente.Response);
+            await LoadAsync(PaginaActual);
+        }
+    }
+
+    private void VolverListado()
+    {
+        NavigationManager.NavigateTo("/ficha-cliente-index");
+    }
+}

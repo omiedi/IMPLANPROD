@@ -1,0 +1,127 @@
+@page "/stock/seleccionardepositos"
+@using IMPLANPROD.Shared.Entities
+@inject IRepository repository
+@inject NavigationManager NavigationManager
+@inject SweetAlertService sweetAlertService
+
+<div class="container-fluid">
+    <h3 class="mb-3">Seleccionar Depósitos</h3>
+    <div class="card">
+        <div class="card-header bg-light">
+            <div class="row">
+                <div class="col-12">
+                    <h5>Seleccione los depósitos para consultar stock</h5>
+                </div>
+            </div>
+        </div>
+        <div class="card-body">
+            <div class="row">
+                <div class="col-12">
+                    <div class="list-group" style="max-height: 400px; overflow-y: auto;">
+                        @if (depositos != null)
+                        {
+                            @foreach (var deposito in depositos)
+                            {
+                                <div class="list-group-item">
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="checkbox" 
+                                               @bind="depositosSeleccionados[deposito.CodigoDepo]" 
+                                               id="deposito-@deposito.CodigoDepo" />
+                                        <label class="form-check-label" for="deposito-@deposito.CodigoDepo">
+                                            @deposito.CodigoDepo - @deposito.Descripcion
+                                        </label>
+                                    </div>
+                                </div>
+                            }
+                        }
+                        else
+                        {
+                            <div class="alert alert-info">Cargando depósitos...</div>
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="card-footer">
+            <div class="row">
+                <div class="col-6">
+                    <button class="btn btn-secondary" @onclick="Cancelar">Cancelar</button>
+                </div>
+                <div class="col-6 text-end">
+                    <button class="btn btn-primary" @onclick="Aceptar">Aceptar</button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    private List<Tadeposi> depositos = new List<Tadeposi>();
+    private Dictionary<int, bool> depositosSeleccionados = new Dictionary<int, bool>();
+    private string depositosString = string.Empty;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await CargarDepositos();
+    }
+
+    private async Task CargarDepositos()
+    {
+        try
+        {
+            var response = await repository.Get<List<Tadeposi>>("api/tadeposi/activos");
+            if (response.Error)
+            {
+                await sweetAlertService.FireAsync("Error", response.HttpResponseMessage.ReasonPhrase, SweetAlertIcon.Error);
+                return;
+            }
+            
+            depositos = response.Response;
+            
+            // Inicializar diccionario de selección
+            foreach (var deposito in depositos)
+            {
+                depositosSeleccionados[deposito.CodigoDepo] = false;
+            }
+  
+        }
+        catch (Exception ex)
+        {
+            await sweetAlertService.FireAsync("Error", $"Error al cargar depósitos: {ex.Message}", SweetAlertIcon.Error);
+        }
+    }
+
+    private async Task Aceptar()
+    {
+        try
+        {
+            // Construir string con los depósitos seleccionados
+            var depositosIds = depositosSeleccionados
+                .Where(kvp => kvp.Value)
+                .Select(kvp => kvp.Key.ToString())
+                .ToList();
+                
+            depositosString = string.Join(",", depositosIds);
+            
+            // Guardar selección
+            var response = await repository.Post("api/stock/guardardepositos", depositosString);
+            if (response.Error)
+            {
+                await sweetAlertService.FireAsync("Error", response.HttpResponseMessage.ReasonPhrase, SweetAlertIcon.Error);
+                return;
+            }
+            
+            // Volver a la pantalla anterior
+            NavigationManager.NavigateTo("/stock/consulta");
+        }
+        catch (Exception ex)
+        {
+            await sweetAlertService.FireAsync("Error", $"Error al guardar selección: {ex.Message}", SweetAlertIcon.Error);
+        }
+    }
+
+    private void Cancelar()
+    {
+        NavigationManager.NavigateTo("/stock/consulta");
+    }
+}

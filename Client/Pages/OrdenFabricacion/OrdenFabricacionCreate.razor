@@ -1,0 +1,67 @@
+@page "/orden-fabricacion-create"
+@inject NavigationManager navigationManager
+@inject IRepository repository
+@inject SweetAlertService sweetAlertService
+
+<div class="bg-primary bg-opacity-10 p-3 rounded-3 mb-3">
+    <h3 class="m-0 text-primary">Crear Nueva Orden de Fabricación</h3>
+</div>
+
+<OrdenFabricacionForm @ref="ordenFabricacionForm" ordenFabricacion="ordenFabricacion" OnValidSubmit="CreateAsync" ReturnAction="Return" IsEdit="false" />
+
+@code {
+    private OrdeFabr ordenFabricacion = new();
+    private OrdenFabricacionForm? ordenFabricacionForm;
+
+    /// <summary>
+    /// Método para crear una nueva orden de fabricación
+    /// </summary>
+    private async Task CreateAsync()
+    {
+        // Validaciones previas
+        if (ordenFabricacion.Cod_Inte <= 0)
+        {
+            await sweetAlertService.FireAsync("Error", "El código interno debe ser mayor a 0.", SweetAlertIcon.Warning);
+            ordenFabricacionForm?.ReiniciarFormulario();
+            return;
+        }
+
+        if (ordenFabricacion.CanProy <= 0 || ordenFabricacion.CanProy is null)
+        {
+            await sweetAlertService.FireAsync("Error", "La cantidad proyectada debe ser mayor a 0.", SweetAlertIcon.Warning);
+            ordenFabricacionForm?.ReiniciarFormulario();
+            return;
+        }
+
+
+        var httpResponse = await repository.Post("api/ordefabr/crearOrdenFabricacion", ordenFabricacion);
+
+        if (httpResponse.Error)
+        {
+            var mensaje = await httpResponse.HttpResponseMessage.Content.ReadAsStringAsync();
+            await sweetAlertService.FireAsync("Error", mensaje, SweetAlertIcon.Error);
+            ordenFabricacionForm?.ReiniciarFormulario();
+            return;
+        }
+
+        await sweetAlertService.FireAsync("Éxito", "Orden de fabricación creada correctamente", SweetAlertIcon.Success);
+        Return();
+    }
+
+    /// <summary>
+    /// Método para volver a la página de listado
+    /// </summary>
+    private void Return()
+    {
+        ordenFabricacionForm!.FormPostedSuccessfully = true;
+        navigationManager.NavigateTo("/ordenfabricacion");
+    }
+    // ESTA ES LA FORMA DE LLAMADA EN .RAZOR PARA QUE MUESTRE EL MENSAJE QUE RETORNA DESDE EL ENDPOINT  ************
+    //var response = await repository.Post("api/stockTransferencia/transferencia", transferencia);
+    //    if (response.Error)
+    //    {
+    //        var mensaje = await response.HttpResponseMessage.Content.ReadAsStringAsync();
+    //await sweetAlertService.FireAsync("Error", mensaje, SweetAlertIcon.Error);
+    //        return;
+    //    }
+}

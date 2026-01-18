@@ -1,0 +1,169 @@
+@page "/login"
+@using IMPLANPROD.Shared.DTOs
+@using System.Text.Json
+@using Blazored.Toast.Services
+@using Microsoft.AspNetCore.Components.Authorization
+@inject IToastService toastService
+@inject IRepository repository
+@inject NavigationManager navigationManager
+@inject AuthenticationStateProvider authenticationStateProvider
+
+<div class="row justify-content-center">
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-header">
+                <h4>Iniciar Sesión</h4>
+            </div>
+            <div class="card-body">
+                <EditForm Model="userInfo" OnValidSubmit="LoginAsync">
+                    <DataAnnotationsValidator />
+
+                    <div class="form-group mb-3">
+                        <label>Email:</label>
+                        <div>
+                            <InputText class="form-control" @bind-Value="@userInfo.Email" />
+                            <ValidationMessage For="@(() => userInfo.Email)" />
+                        </div>
+                    </div>
+
+                    <div class="form-group mb-3">
+                        <label>Contraseña:</label>
+                        <div>
+                            <InputText type="password" class="form-control" @bind-Value="@userInfo.Password" />
+                            <ValidationMessage For="@(() => userInfo.Password)" />
+                        </div>
+                    </div>
+
+                    <button type="submit" class="btn btn-primary" disabled="@loading">
+                        @if (loading)
+                        {
+                            <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
+                            <span>Cargando...</span>
+                        }
+                        else
+                        {
+                            <span>Iniciar Sesión</span>
+                        }
+                    </button>
+                </EditForm>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    private UserInfo userInfo = new();
+    private bool loading;
+
+    /// <summary>
+    /// Método que maneja el inicio de sesión del usuario
+    /// </summary>
+    private async Task LoginAsync()
+    {
+        loading = true;
+
+        try
+        {
+            // Verificar si es una solicitud de restablecimiento de contraseña
+            if (userInfo.Email.EndsWith(".reset"))
+            {
+                string realEmail = userInfo.Email.Replace(".reset", "");
+                var resetResponse = await repository.Post<UserInfo, object>("/api/auth/login", 
+                    new UserInfo { Email = userInfo.Email, Password = userInfo.Password });
+                
+                if (!resetResponse.Error)
+                {
+                    toastService.ShowSuccess($"Contraseña restablecida para {realEmail}");
+                    // Preparar para iniciar sesión normal
+                    userInfo.Email = realEmail;
+                }
+                else
+                {
+                    var message = await resetResponse.GetErrorMessageAsync();
+                    toastService.ShowError(message);
+                    loading = false;
+                    return;
+                }
+            }
+
+            // Proceso normal de inicio de sesión
+            var responseHttp = await repository.Post<UserInfo, object>("/api/auth/login", userInfo);
+            if (responseHttp.Error)
+            {
+                var message = await responseHttp.GetErrorMessageAsync();
+                toastService.ShowError(message);
+            }
+            else
+            {
+                // Extraer los datos de la respuesta usando JsonDocument
+                var responseJson = JsonDocument.Parse(responseHttp.HttpResponseMessage.Content.ReadAsStringAsync().Result);
+                var root = responseJson.RootElement;
+                
+                // Extraer el token
+                string token = root.TryGetProperty("token", out var tokenProp) ? tokenProp.GetString() ?? "" : "";
+                
+                // Crear objeto UserInfo con los datos del usuario de manera más segura
+                var userInfoData = new IMPLANPROD.Client.Auth.UserInfo
+                {
+                    Id = root.TryGetProperty("id", out var id) && id.ValueKind != JsonValueKind.Null ? id.GetInt32() : 0,
+                    Email = userInfo.Email,
+                    NombreUsuario = root.TryGetProperty("nombreUsuario", out var nombre) && nombre.ValueKind != JsonValueKind.Null ? nombre.GetString() ?? "" : "",
+                    
+                    // Manejo seguro de propiedades anidadas para Perfil
+                    PerfilId = root.TryGetProperty("perfil", out var perfil) && 
+                              perfil.ValueKind != JsonValueKind.Null && 
+                              perfil.TryGetProperty("id", out var perfilId) && 
+                              perfilId.ValueKind != JsonValueKind.Null ? 
+                              perfilId.GetInt32() : 0,
+                    
+                    PerfilNombre = root.TryGetProperty("perfil", out var p) && 
+                                  p.ValueKind != JsonValueKind.Null && 
+                                  p.TryGetProperty("nombre", out var perfilNombre) && 
+                                  perfilNombre.ValueKind != JsonValueKind.Null ? 
+                                  perfilNombre.GetString() ?? "Usuario" : "Usuario",
+                    
+                    // Manejo seguro de propiedades anidadas para Empresa
+                    EmpresaId = root.TryGetProperty("empresa", out var empresa) && 
+                               empresa.ValueKind != JsonValueKind.Null && 
+                               empresa.TryGetProperty("id", out var empresaId) && 
+                               empresaId.ValueKind != JsonValueKind.Null ? 
+                               empresaId.GetInt32() : 0,
+                    
+                    EmpresaNombre = root.TryGetProperty("empresa", out var e) && 
+                                   e.ValueKind != JsonValueKind.Null && 
+                                   e.TryGetProperty("razonSocial", out var razonSocial) && 
+                                   razonSocial.ValueKind != JsonValueKind.Null ? 
+                                   razonSocial.GetString() ?? "" : "",
+                    
+                    // IMPORTANTE: Campos necesarios para el sistema de derechos
+                    // IdFlexoft debe hacer match con DER_ACCE.NUM_USER
+                    IdFlexoft = root.TryGetProperty("idFlexoft", out var idFlexoft) && idFlexoft.ValueKind != JsonValueKind.Null ? idFlexoft.GetInt32() : 0,
+                    
+                    // CodiEmprNet para el sistema de derechos
+                    Codiempresa = root.TryGetProperty("codiEmprNet", out var codiEmprNet) && codiEmprNet.ValueKind != JsonValueKind.Null ? codiEmprNet.GetInt32() : 0
+                };
+                
+                // Obtener el servicio de autenticación
+                var authService = (IMPLANPROD.Client.Auth.AuthenticationService)authenticationStateProvider;
+                
+                // Iniciar sesión con el servicio de autenticación
+                await authService.LoginAsync(token, userInfoData);
+                
+                // Guardar el token
+                await repository.SetTokenAsync(token);
+                
+                // Forzar una recarga completa para actualizar el estado de autenticación en toda la aplicación
+                navigationManager.NavigateTo("/", true);
+                toastService.ShowSuccess("¡Bienvenido!");
+            }
+        }
+        catch (Exception ex)
+        {
+            toastService.ShowError($"Error al intentar iniciar sesión: {ex.Message}");
+        }
+        finally
+        {
+            loading = false;
+        }
+    }
+}

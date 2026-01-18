@@ -1,0 +1,190 @@
+@using IMPLANPROD.Shared.DTOs
+
+@inject IRepository repository
+@inject SweetAlertService sweetAlertService
+
+<div class="modal fade show" style="display: block; background-color: rgba(0,0,0,0.5)">
+    <div class="modal-dialog modal-dialog-centered modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">@Title</h5>
+                <button type="button" class="btn-close" @onclick="Cancel"></button>
+            </div>
+
+            <EditForm Model="Detalle" OnValidSubmit="Submit">
+                <DataAnnotationsValidator />
+
+                <div class="modal-body">
+                    <div class="form-group mb-3">
+                        <label>Búsqueda:</label>
+                        <div class="input-group">
+                            <input type="text" class="form-control" @bind-value="terminoBusqueda" @bind-value:event="oninput" placeholder="Buscar por código o descripción..." />
+                            <button class="btn btn-primary" type="button" @onclick="BuscarRepuesto">
+                                <i class="oi oi-magnifying-glass"></i>
+                            </button>
+                        </div>
+                    </div>
+
+                    @if (repuestosEncontrados.Any())
+                    {
+                        <div class="table-responsive mb-3" style="max-height: 200px; overflow-y: auto;">
+                            <table class="table table-sm table-hover">
+                                <thead>
+                                    <tr>
+                                        <th>Código Interno</th>
+                                        <th>Código Externo</th>
+                                        <th>Descripción</th>
+                                        <th>U.M.</th>
+                                        <th></th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var repuesto in repuestosEncontrados)
+                                    {
+                                        <tr>
+                                            <td>@repuesto.CodigoExterno</td>
+                                            <td>@repuesto.CodigoExterno</td>
+                                            <td>@repuesto.Descritem</td>
+                                            <td>@repuesto.Uni_Com</td>
+                                            <td>
+                                                <button type="button" class="btn btn-sm btn-primary" @onclick="() => SeleccionarRepuesto(repuesto)">
+                                                    <i class="oi oi-check"></i>
+                                                </button>
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    }
+
+                    @if (repuestoSeleccionado)
+                    {
+                        <div class="card mb-3">
+                            <div class="card-header bg-primary text-white">
+                                <h6 class="mb-0">Detalle del Repuesto Seleccionado</h6>
+                            </div>
+                            <div class="card-body">
+                                <div class="row">
+                                    <div class="col-md-6">
+                                        <div class="form-group mb-2">
+                                            <label>Código Interno:</label>
+                                            <div class="input-group">
+                                                <InputNumber class="form-control" @bind-Value="Detalle.CodigoInterno" readonly />
+                                            </div>
+                                        </div>
+
+                                        <div class="form-group mb-2">
+                                            <label>Código Externo:</label>
+                                            <div class="input-group">
+                                                <InputText class="form-control" @bind-Value="Detalle.CodigoExterno" readonly />
+                                            </div>
+                                        </div>
+
+                                        <div class="form-group mb-2">
+                                            <label>Descripción:</label>
+                                            <div class="input-group">
+                                                <InputText class="form-control" @bind-Value="Detalle.DescripcionItem" readonly />
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <div class="form-group mb-2">
+                                            <label>Unidad de Medida:</label>
+                                            <div class="input-group">
+                                                <InputText class="form-control" @bind-Value="Detalle.Unidad" readonly />
+                                            </div>
+                                        </div>
+
+                                        <div class="form-group mb-2">
+                                            <label>Cantidad:</label>
+                                            <div class="input-group">
+                                                <InputNumber class="form-control" @bind-Value="Detalle.CantidadNominal" />
+                                            </div>
+                                            <ValidationMessage For="@(() => Detalle.CantidadNominal)" />
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    }
+                </div>
+
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" @onclick="Cancel">Cancelar</button>
+                    <button type="submit" class="btn btn-primary">Aceptar</button>
+                </div>
+            </EditForm>
+        </div>
+    </div>
+</div>
+
+@code {
+    [CascadingParameter] BlazoredModalInstance BlazoredModal { get; set; } = default!;
+    [Parameter] public RecepcionItemDTO Detalle { get; set; } = new();
+    [Parameter] public string Title { get; set; } = "Agregar Repuesto";
+
+    private string terminoBusqueda = "";
+    private List<RepuestoDTO> repuestosEncontrados = new();
+    private bool repuestoSeleccionado = false;
+
+    private async Task BuscarRepuesto()
+    {
+        try
+        {
+            if (string.IsNullOrWhiteSpace(terminoBusqueda))
+            {
+                await sweetAlertService.FireAsync("Error", "Ingrese un término de búsqueda", SweetAlertIcon.Error);
+                return;
+            }
+
+            var busquedaEncoded = Uri.EscapeDataString(terminoBusqueda);
+            // Buscar en la tabla MASTER en lugar de REPUESTOS
+            var url = $"api/master/buscar?busqueda={busquedaEncoded}";
+            
+            var response = await repository.Get<List<RepuestoDTO>>(url);
+            if (response.Error)
+            {
+                var mensajeError = await response.GetErrorMessageAsync();
+                await sweetAlertService.FireAsync("Error", mensajeError, SweetAlertIcon.Error);
+                return;
+            }
+
+            repuestosEncontrados = response.Response;
+        }
+        catch (Exception ex)
+        {
+            await sweetAlertService.FireAsync("Error", ex.Message, SweetAlertIcon.Error);
+        }
+    }
+
+    private void SeleccionarRepuesto(RepuestoDTO repuesto)
+    {
+        Detalle.CodigoInterno = repuesto.Codint;
+        Detalle.CodigoExterno = repuesto.CodigoExterno;
+        Detalle.DescripcionItem = repuesto.Descritem;
+        Detalle.Unidad = repuesto.Uni_Com;
+        repuestoSeleccionado = true;
+        repuestosEncontrados.Clear();
+        terminoBusqueda = "";
+    }
+
+    private void Cancel()
+    {
+        BlazoredModal.CancelAsync();
+    }
+
+    private async Task Submit()
+    {
+        if (Detalle.CantidadNominal <= 0)
+        {
+            await sweetAlertService.FireAsync("Error", "La cantidad debe ser mayor a cero", SweetAlertIcon.Error);
+            return;
+        }
+
+        // Inicializar CanToApro con la cantidad nominal
+        Detalle.CanToApro = Detalle.CantidadNominal;
+        
+        await BlazoredModal.CloseAsync(ModalResult.Ok(Detalle));
+    }
+}

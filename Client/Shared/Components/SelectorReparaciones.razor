@@ -1,0 +1,328 @@
+@using Microsoft.AspNetCore.Components.Web
+@using IMPLANPROD.Shared.Entities
+@inject IRepository repository
+@inject SweetAlertService sweetAlertService
+
+@if (mostrarModal)
+{
+    <div class="modal fade show" style="display:block; background-color: rgba(0,0,0,0.5);" tabindex="-1" role="dialog" @onkeydown="OnKeyDown">
+        <div class="modal-dialog modal-xl" role="document">
+            <div class="modal-content">
+                <div class="modal-header bg-primary text-white">
+                    <h5 class="modal-title">
+                        <i class="fas fa-file-invoice"></i> Seleccionar Talón (N.R.)
+                    </h5>
+                    <button type="button" class="btn-close btn-close-white" @onclick="CerrarModal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="row mb-3">
+                        <div class="col-md-8">
+                            <div class="input-group">
+                                <span class="input-group-text"><i class="fas fa-search"></i></span>
+                                <input type="text" class="form-control" placeholder="Buscar por N° o referencia..."
+                                       @bind="filtro" @bind:event="oninput" @bind:after="OnFiltroChangedAfter" />
+                                <button class="btn btn-outline-secondary" type="button" @onclick="LimpiarFiltro">
+                                    <i class="fas fa-times"></i>
+                                </button>
+                            </div>
+                        </div>
+                        <div class="col-md-4 text-end">
+                            <small class="text-muted">Página @paginaActual de @totalPaginas</small>
+                        </div>
+                    </div>
+
+                    <div class="row mb-2">
+                        <div class="col-md-6">
+                            <div class="d-flex align-items-center gap-2">
+                                <span class="text-muted">Registros</span>
+                                <select class="form-select form-select-sm" style="width: 120px;" @bind="recordsNumber" @bind:after="OnRecordsNumberChangedAfter">
+                                    <option value="10">10</option>
+                                    <option value="20">20</option>
+                                    <option value="50">50</option>
+                                    <option value="100">100</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="d-flex justify-content-end gap-2">
+                                <button class="btn btn-sm btn-outline-primary" @onclick="PaginaAnterior" disabled="@(paginaActual <= 1 || cargando)">
+                                    <i class="fas fa-chevron-left"></i>
+                                </button>
+                                <button class="btn btn-sm btn-outline-primary" @onclick="PaginaSiguiente" disabled="@(paginaActual >= totalPaginas || cargando)">
+                                    <i class="fas fa-chevron-right"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    @if (cargando)
+                    {
+                        <div class="text-center">
+                            <div class="spinner-border" role="status">
+                                <span class="visually-hidden">Cargando...</span>
+                            </div>
+                        </div>
+                    }
+                    else if (!itemsFiltrados.Any())
+                    {
+                        <div class="alert alert-info text-center">
+                            <i class="fas fa-info-circle"></i> No se encontraron Notas de Reparación.
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="table-responsive" style="max-height: 520px; overflow-y: auto;">
+                            <table class="table table-hover table-sm">
+                                <thead class="table-dark sticky-top">
+                                    <tr>
+                                        <th style="width: 12%">N°</th>
+                                        <th style="width: 48%">Referencia</th>
+                                        <th style="width: 20%">Fecha</th>
+                                        <th style="width: 20%"></th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var r in itemsFiltrados)
+                                    {
+                                        <tr style="cursor: pointer;" @onclick="() => Seleccionar(r)">
+                                            <td><strong>@r.NumRepa</strong></td>
+                                            <td>@r.Referen</td>
+                                            <td>@(r.FechRecep?.ToString("dd/MM/yyyy") ?? "")</td>
+                                            <td class="text-end">
+                                                <button class="btn btn-sm btn-primary" type="button" @onclick="() => Seleccionar(r)">
+                                                    <i class="fas fa-check"></i>
+                                                </button>
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    }
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" @onclick="CerrarModal">
+                        <i class="fas fa-times"></i> Cancelar
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private bool mostrarModal;
+    private bool cargando;
+    private string filtro = string.Empty;
+
+    private List<Repara> items = new();
+    private List<Repara> itemsFiltrados = new();
+
+    private int paginaActual = 1;
+    private int totalPaginas = 1;
+    private int recordsNumber = 20;
+
+    [Parameter] public List<Repara>? Items { get; set; }
+    [Parameter] public EventCallback<Repara> OnSeleccionado { get; set; }
+
+    public async Task AbrirModal()
+    {
+        mostrarModal = true;
+        filtro = string.Empty;
+        paginaActual = 1;
+        await CargarPaginaAsync();
+        StateHasChanged();
+    }
+
+    public void CerrarModal()
+    {
+        mostrarModal = false;
+        filtro = string.Empty;
+        StateHasChanged();
+    }
+
+    private async Task AsegurarDatosAsync()
+    {
+        if (Items != null)
+        {
+            items = Items;
+            return;
+        }
+
+        if (items.Any())
+            return;
+
+        try
+        {
+            // Modo legado: si el padre pasó Items, no paginamos. Si no, cargamos por página.
+            await CargarPaginaAsync();
+        }
+        catch (Exception ex)
+        {
+            await sweetAlertService.FireAsync("Error", $"Error al cargar Nota de reparación: {ex.Message}", SweetAlertIcon.Error);
+            items = new List<Repara>();
+        }
+        finally
+        {
+            cargando = false;
+        }
+    }
+
+    private void AplicarFiltro()
+    {
+        // En modo paginado server-side, el filtro se aplica en el backend.
+        // Dejamos este método por compatibilidad cuando el padre pasa Items.
+        if (string.IsNullOrWhiteSpace(filtro))
+        {
+            itemsFiltrados = items
+                .OrderByDescending(x => x.FechRecep)
+                .ThenByDescending(x => x.NumRepa)
+                .ToList();
+            return;
+        }
+
+        var f = filtro.Trim().ToLower();
+        itemsFiltrados = items
+            .Where(x =>
+                x.NumRepa.ToString().Contains(f) ||
+                (x.Referen?.ToLower().Contains(f) ?? false))
+            .OrderByDescending(x => x.FechRecep)
+            .ThenByDescending(x => x.NumRepa)
+            .ToList();
+    }
+
+    private void LimpiarFiltro()
+    {
+        filtro = string.Empty;
+        paginaActual = 1;
+        _ = CargarPaginaAsync();
+    }
+
+    private async Task OnFiltroChangedAfter()
+    {
+        if (Items != null)
+        {
+            AplicarFiltro();
+            return;
+        }
+
+        paginaActual = 1;
+        await CargarPaginaAsync();
+    }
+
+    private async Task OnRecordsNumberChangedAfter()
+    {
+        if (Items != null)
+        {
+            AplicarFiltro();
+            return;
+        }
+
+        paginaActual = 1;
+        await CargarPaginaAsync();
+    }
+
+    private async Task PaginaAnterior()
+    {
+        if (paginaActual <= 1) return;
+        paginaActual--;
+        await CargarPaginaAsync();
+    }
+
+    private async Task PaginaSiguiente()
+    {
+        if (paginaActual >= totalPaginas) return;
+        paginaActual++;
+        await CargarPaginaAsync();
+    }
+
+    private async Task CargarPaginaAsync()
+    {
+        if (Items != null)
+        {
+            items = Items;
+            AplicarFiltro();
+            totalPaginas = 1;
+            paginaActual = 1;
+            return;
+        }
+
+        try
+        {
+            cargando = true;
+            StateHasChanged();
+
+            var filterParam = Uri.EscapeDataString(filtro ?? string.Empty);
+
+            var respTotal = await repository.Get<double>($"api/repara/totalPages?page={paginaActual}&recordsNumber={recordsNumber}&Filter={filterParam}");
+            if (!respTotal.Error && respTotal.Response > 0)
+            {
+                totalPaginas = (int)Math.Max(1, Math.Round(respTotal.Response, 0));
+            }
+            else
+            {
+                totalPaginas = 1;
+            }
+
+            if (paginaActual > totalPaginas)
+            {
+                paginaActual = totalPaginas;
+            }
+
+            var responseHttp = await repository.Get<List<Repara>>($"api/repara?page={paginaActual}&recordsNumber={recordsNumber}&Filter={filterParam}");
+            if (responseHttp.Error || responseHttp.Response == null)
+            {
+                items = new List<Repara>();
+                itemsFiltrados = new List<Repara>();
+                return;
+            }
+
+            items = responseHttp.Response;
+            itemsFiltrados = items;
+        }
+        catch (Exception ex)
+        {
+            await sweetAlertService.FireAsync("Error", $"Error al cargar Nota de reparación: {ex.Message}", SweetAlertIcon.Error);
+            items = new List<Repara>();
+            itemsFiltrados = new List<Repara>();
+        }
+        finally
+        {
+            cargando = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task Seleccionar(Repara r)
+    {
+        if (OnSeleccionado.HasDelegate)
+        {
+            await OnSeleccionado.InvokeAsync(r);
+        }
+        CerrarModal();
+    }
+
+    private void OnKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Escape")
+        {
+            CerrarModal();
+        }
+        else
+        {
+            if (Items != null)
+            {
+                AplicarFiltro();
+            }
+        }
+    }
+
+    protected override void OnParametersSet()
+    {
+        if (Items != null)
+        {
+            items = Items;
+            AplicarFiltro();
+        }
+    }
+}

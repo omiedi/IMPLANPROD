@@ -1,0 +1,163 @@
+@page "/pedidos/auditoria/{NroPedido:int}"
+@using IMPLANPROD.Client.Components
+@using IMPLANPROD.Shared.Entities
+@using IMPLANPROD.Client.Repositories
+@inject NavigationManager NavigationManager
+@inject IRepository repository
+
+<PageTitle>Auditoría de Pedido #@NroPedido</PageTitle>
+
+<div class="container-fluid">
+    <div class="row mb-3">
+        <div class="col-md-12">
+            <nav aria-label="breadcrumb">
+                <ol class="breadcrumb">
+                    <li class="breadcrumb-item">
+                        <a href="/pedidos-venta" class="text-decoration-none">
+                            <i class="fas fa-shopping-cart"></i> Pedidos de Venta
+                        </a>
+                    </li>
+                    <li class="breadcrumb-item active" aria-current="page">
+                        <i class="fas fa-history"></i> Auditoría #@NroPedido
+                    </li>
+                </ol>
+            </nav>
+        </div>
+    </div>
+
+    <div class="row mb-3">
+        <div class="col-md-6">
+            <h2>
+                <i class="fas fa-history text-primary"></i>
+                Auditoría de Pedido #@NroPedido
+            </h2>
+        </div>
+        <div class="col-md-6 text-end">
+            <button class="btn btn-outline-secondary me-2" @onclick="Actualizar">
+                <i class="fas fa-sync-alt"></i> Actualizar
+            </button>
+            <button class="btn btn-secondary" @onclick="Volver">
+                <i class="fas fa-arrow-left"></i> Volver
+            </button>
+        </div>
+    </div>
+
+    <!-- Detalle del Pedido -->
+    <div class="row mb-3">
+        <div class="col-md-12">
+            <div class="card">
+                <div class="card-header bg-info text-white">
+                    <h5 class="mb-0">
+                        <i class="fas fa-list"></i> Detalle del Pedido
+                    </h5>
+                </div>
+                <div class="card-body">
+                    @if (detallePedido == null)
+                    {
+                        <div class="text-center">
+                            <div class="spinner-border text-primary" role="status">
+                                <span class="visually-hidden">Cargando...</span>
+                            </div>
+                        </div>
+                    }
+                    else if (!detallePedido.Any())
+                    {
+                        <div class="alert alert-warning">
+                            <i class="fas fa-exclamation-triangle"></i> No se encontraron items en el detalle del pedido.
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="table-responsive">
+                            <table class="table table-sm table-hover">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th>Código</th>
+                                        <th>Descripción</th>
+                                        <th class="text-end">Cant. Pedida</th>
+                                        <th class="text-end">Cant. Entregada</th>
+                                        <th class="text-end">Pendiente</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var item in detallePedido)
+                                    {
+                                        var pendiente = (item.CanPed ?? 0) - (item.CantEnt ?? 0);
+                                        <tr>
+                                            <td><strong>@item.CodiExt</strong></td>
+                                            <td>@item.Descrip</td>
+                                            <td class="text-end">@((item.CanPed ?? 0).ToString("N2"))</td>
+                                            <td class="text-end">@((item.CantEnt ?? 0).ToString("N2"))</td>
+                                            <td class="text-end">
+                                                <span class="badge @(pendiente > 0 ? "bg-warning" : "bg-success")">
+                                                    @pendiente.ToString("N2")
+                                                </span>
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Componente de seguimiento del pedido -->
+    <div class="row mb-3">
+        <div class="col-md-12">
+            <SeguimientoPedido NroPedido="@NroPedido" @ref="componenteSeguimiento" />
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-md-12">
+            <!-- Componente de auditoría de PEDDETA -->
+            <PeddetaAuditoria NroPedido="@NroPedido" @ref="componenteAuditoria" />
+        </div>
+    </div>
+
+</div>
+
+@code {
+    [Parameter] public int NroPedido { get; set; }
+
+    private PeddetaAuditoria? componenteAuditoria;
+    private SeguimientoPedido? componenteSeguimiento;
+    private List<Peddeta>? detallePedido;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await CargarDetallePedido();
+    }
+
+    private async Task CargarDetallePedido()
+    {
+        var responseHttp = await repository.Get<List<Peddeta>>($"api/pedenca/detalle/{NroPedido}");
+        if (!responseHttp.Error)
+        {
+            detallePedido = responseHttp.Response;
+        }
+    }
+
+    private async Task Actualizar()
+    {
+        await CargarDetallePedido();
+        
+        if (componenteSeguimiento != null)
+        {
+            await componenteSeguimiento.Actualizar();
+        }
+        
+        if (componenteAuditoria != null)
+        {
+            await componenteAuditoria.ActualizarAuditoria();
+        }
+    }
+
+    private void Volver()
+    {
+        NavigationManager.NavigateTo("/pedidos-venta");
+    }
+}

@@ -1,0 +1,122 @@
+@using IMPLANPROD.Shared.Entities
+@using IMPLANPROD.Client.Repositories
+@inject IRepository repository
+@using CurrieTechnologies.Razor.SweetAlert2
+@inject SweetAlertService sweetAlertService
+@using IMPLANPROD.Client.Helpers
+
+<EditForm Model="transporte" OnValidSubmit="HandleValidSubmit">
+    <DataAnnotationsValidator />
+    <div class="row g-3">
+        <div class="col-md-3">
+            <label class="form-label">Código</label>
+            <InputNumber class="form-control" @bind-Value="transporte.Codi_Tra" />
+        </div>
+        <div class="col-md-9">
+            <label class="form-label">Nombre</label>
+            <InputText class="form-control" @bind-Value="transporte.Deno_Tra" />
+        </div>
+
+        <div class="col-md-6">
+            <label class="form-label">Razón Social</label>
+            <InputText class="form-control" @bind-Value="transporte.Raso_Tra" />
+        </div>
+        <div class="col-md-6">
+            <label class="form-label">CUIT</label>
+            <InputText class="form-control" @bind-Value="transporte.Cuit_Tra" />
+        </div>
+
+        <div class="col-md-6">
+            <label class="form-label">Domicilio</label>
+            <InputText class="form-control" @bind-Value="transporte.Domi_Tra" />
+        </div>
+        <div class="col-md-3">
+            <label class="form-label">Localidad</label>
+            <InputText class="form-control" @bind-Value="transporte.Loca_Tra" />
+        </div>
+        <div class="col-md-3">
+            <label class="form-label">Código Postal</label>
+            <InputText class="form-control" @bind-Value="transporte.CodPostal_Tra" />
+        </div>
+
+        <div class="col-md-4">
+            <label class="form-label">Posición IVA</label>
+            <select class="form-select" @bind="CodigoIvaSeleccionado">
+                <option value="">Seleccione...</option>
+                @foreach (TipoIvaEnum tipo in Enum.GetValues(typeof(TipoIvaEnum)))
+                {
+                    <option value="@((int)tipo)">@((int)tipo) - @ObtenerDescripcionIva(tipo)</option>
+                }
+            </select>
+        </div>
+        <div class="col-md-4">
+            <label class="form-label">Teléfono</label>
+            <InputText class="form-control" @bind-Value="transporte.Tele_Tra" />
+        </div>
+        <div class="col-md-4">
+            <label class="form-label">Email</label>
+            <InputText class="form-control" @bind-Value="transporte.Mail_Tra" />
+        </div>
+
+        <div class="col-md-6">
+            <label class="form-label">Contacto</label>
+            <InputText class="form-control" @bind-Value="transporte.Ctac_Tra" />
+        </div>
+    </div>
+
+    <div class="mt-3 d-flex gap-2">
+        <button type="submit" class="btn btn-success">
+            <i class="fas fa-save"></i> Guardar
+        </button>
+        <button type="button" class="btn btn-secondary" @onclick="OnCancelClicked">
+            <i class="fas fa-times"></i> Cancelar
+        </button>
+    </div>
+</EditForm>
+
+@code {
+    [Parameter] public Transporte transporte { get; set; } = new();
+    [Parameter] public EventCallback OnValidSubmit { get; set; }
+    [Parameter] public EventCallback OnCancel { get; set; }
+
+    /// <summary>
+    /// Maneja el submit válido del formulario e invoca el callback del componente padre.
+    /// </summary>
+    private async Task HandleValidSubmit()
+    {
+        await OnValidSubmit.InvokeAsync();
+    }
+
+    private async Task OnCancelClicked()
+    {
+        await OnCancel.InvokeAsync();
+    }
+
+    /// <summary>
+    /// Propiedad intermediaria para manejar la selección del IVA (int en UI -> short en entidad)
+    /// </summary>
+    private int CodigoIvaSeleccionado
+    {
+        get => transporte.Piva_Tra ?? 0;
+        set => transporte.Piva_Tra = checked((short)value);
+    }
+
+    /// <summary>
+    /// Método para obtener la descripción legible del enum TipoIvaEnum
+    /// </summary>
+    private string ObtenerDescripcionIva(TipoIvaEnum tipo)
+    {
+        return tipo switch
+        {
+            TipoIvaEnum.ConsumidorFinal => "A CONSUMIDOR FINAL",
+            TipoIvaEnum.IvaResponsableInscripto => "IVA RESPONSABLE INSCRIPTO",
+            TipoIvaEnum.IvaResponsableNoInscripto => "IVA RESPONSABLE NO INSCRIPTO",
+            TipoIvaEnum.IvaNoResponsable => "IVA NO RESPONSABLE",
+            TipoIvaEnum.IvaExento => "IVA EXENTO",
+            TipoIvaEnum.ComercioExterior => "OPs.COMERCIO EXTERIOR",
+            TipoIvaEnum.Monotributo => "CONTRIBUYENTE MONOTRIBUTO",
+            TipoIvaEnum.ExentoZonaPromovida => "EXENTO - ZONA PROMOVIDA",
+            _ => tipo.ToString()
+        };
+    }
+}

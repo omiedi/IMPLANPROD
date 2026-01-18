@@ -1,0 +1,579 @@
+@page "/usuarios/editar/{Id:int}"
+@using IMPLANPROD.Shared.Entities
+@using System.Text.Json
+@using System.Net.Http.Headers
+@inject HttpClient Http
+@inject NavigationManager NavigationManager
+@inject IModalService ModalService
+@inject IRepository repository
+
+
+<style>
+    .modal-backdrop {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100vw;
+        height: 100vh;
+        background-color: rgba(0, 0, 0, 0.5);
+    }
+
+    .modal {
+        position: fixed;
+        top: 0;
+        left: 0;
+        z-index: 1055;
+        width: 100%;
+        height: 100%;
+        overflow-x: hidden;
+        overflow-y: auto;
+        outline: 0;
+    }
+
+    .modal-dialog {
+        position: relative;
+        width: auto;
+        margin: 1.75rem auto;
+        max-width: 500px;
+    }
+
+    .modal.fade.show {
+        display: block;
+    }
+</style>
+
+<h3>Editar Usuario</h3>
+
+@if (cargando)
+{
+    <div class="d-flex justify-content-center">
+        <div class="spinner-border" role="status">
+            <span class="visually-hidden">Cargando...</span>
+        </div>
+    </div>
+}
+else if (usuario == null)
+{
+    <div class="alert alert-danger">Usuario no encontrado</div>
+}
+else
+{
+    @if (!cargando && usuario != null)
+    {
+    }
+    <EditForm Model="@usuarioEdit" OnValidSubmit="@HandleValidSubmit">
+        <DataAnnotationsValidator />
+        <ValidationSummary />
+
+        @if (!string.IsNullOrEmpty(mensajeError))
+        {
+            <div class="alert alert-danger">@mensajeError</div>
+        }
+
+        <div class="row">
+            <div class="col-md-6">
+                <div class="form-group mb-3">
+                    <label for="nombreUsuario">Nombre de Usuario:</label>
+                    <InputText id="nombreUsuario" @bind-Value="usuarioEdit.NombreUsuario" class="form-control" />
+                    <ValidationMessage For="@(() => usuarioEdit.NombreUsuario)" />
+                </div>
+
+                <div class="form-group mb-3">
+                    <label for="email">Correo Electrónico:</label>
+                    <InputText id="email" @bind-Value="usuarioEdit.Email" class="form-control" />
+                    <ValidationMessage For="@(() => usuarioEdit.Email)" />
+                </div>
+                <div class="form-group mb-3">
+                    <label for="email">N° Us.Flexoft:</label>
+                    <InputNumber id="idflexoft" @bind-Value="usuarioEdit.IdFlexoft" class="form-control" />
+                    <ValidationMessage For="@(() => usuarioEdit.IdFlexoft)" />
+                </div>
+
+                <div class="form-group mb-3">
+                    <label>Contraseña:</label>
+                    <div class="input-group">
+                        <input type="text" 
+                               class="form-control" 
+                               value="********" 
+                               readonly 
+                               autocomplete="new-password" />
+                        <button type="button" class="btn btn-primary" @onclick="AbrirModalPassword">
+                            Cambiar Contraseña
+                        </button>
+                    </div>
+                </div>
+
+                <div class="form-group mb-3">
+                    <label for="foto">Foto de Perfil:</label>
+                    <InputFile id="foto" OnChange="@OnFileChange" class="form-control" accept="image/*" />
+                    @if (!string.IsNullOrEmpty(mensajeError))
+                    {
+                        <div class="alert alert-danger mt-2">
+                            @mensajeError
+                        </div>
+                    }
+                    @if (!string.IsNullOrEmpty(usuario.FotoUrl))
+                    {
+                        <img src="@usuario.FotoUrl" class="mt-2" style="max-width: 200px; max-height: 200px;" />
+                    }
+                    @if (fotoPreview != null)
+                    {
+                        <img src="@fotoPreview" class="mt-2" style="max-width: 200px; max-height: 200px;" />
+                    }
+                </div>
+
+                <!-- País, Provincia y Localidad en cascada -->
+                <div class="form-group mb-3">
+                    <label for="country">País:</label>
+                    <!-- Selector de país: al cambiar, se ejecuta CountryChangeAsync y se actualiza usuarioEdit.CountryId -->
+                    <select id="country" class="form-select" @onchange="CountryChangeAsync">
+                        <option value="0">Seleccione un país...</option>
+                        @foreach (var country in countries)
+                        {
+                            <option value="@country.Id" selected="@(country.Id == usuarioEdit.CountryId)">@country.Name</option>
+                        }
+                    </select>
+                    <ValidationMessage For="@(() => usuarioEdit.CountryId)" />
+                </div>
+
+                <div class="form-group mb-3">
+                    <label for="state">Provincia:</label>
+                    <!-- Selector de provincia: al cambiar, se ejecuta StateChangeAsync y se actualiza usuarioEdit.StateId -->
+                    <select id="state" class="form-select" @onchange="StateChangeAsync">
+                        <option value="0">Seleccione una provincia...</option>
+                        @foreach (var state in states)
+                        {
+                            <option value="@state.Id" selected="@(state.Id == usuarioEdit.StateId)">@state.Name</option>
+                        }
+                    </select>
+                    <ValidationMessage For="@(() => usuarioEdit.StateId)" />
+                </div>
+
+                <div class="form-group mb-3">
+                    <label for="city">Localidad:</label>
+                    <!-- Selector de localidad: al cambiar, usuarioEdit.CityId se actualiza automáticamente -->
+                    <select id="city" class="form-select" @onchange="CityChangeAsync">
+                        <option value="0">Seleccione una localidad...</option>
+                        @foreach (var city in cities)
+                        {
+                            <option value="@city.Id" selected="@(city.Id == usuarioEdit.CityId)">@city.Name</option>
+                        }
+                    </select>
+                    <ValidationMessage For="@(() => usuarioEdit.CityId)" />
+                </div>
+
+                <div>
+                    <div class="form-group mb-3">
+                        <label>Empresa:</label>
+                        <!-- Selector de empresa: al cambiar, se ejecuta EmpresaChangeAsync y se actualiza usuarioEdit.EmpresaId -->
+                        <select class="form-select" @onchange="EmpresaChangeAsync">
+                            <option value="0">-- Seleccione una empresa --</option>
+                            @if (empresa is not null)
+                            {
+                                @foreach (var empresa in empresa)
+                                {
+                                    <option value="@empresa.Id" selected="@(empresa.Id == usuarioEdit.EmpresaId)">@empresa.razon</option>
+                                }
+                            }
+                        </select>
+                    </div>
+                    <div class="form-group mb-3">
+                        <label>Filial:</label>
+                        <!-- Selector de dependencia (filial): al cambiar, se ejecuta DependenciaChangedAsync y se actualiza usuarioEdit.DependenciaId -->
+                        <select class="form-select" @onchange="DependenciaChangedAsync">
+                            <option value="0">-- Seleccione una filial --</option>
+                            @if (dependencia is not null)
+                            {
+                                @foreach (var dependencia in dependencia)
+                                {
+                                    <option value="@dependencia.Id" selected="@(dependencia.Id == usuarioEdit.DependenciaId)">@dependencia.dependencia</option>
+                                }
+                            }
+                        </select>
+                    </div>
+                    <div class="form-group mb-3">
+                        <label>Sector:</label>
+                        <!-- Selector de sector con binding directo. Al cambiar, usuarioEdit.SectorId se actualiza automáticamente -->
+                        <select class="form-select" @bind="usuarioEdit.SectorId">
+                            <option value="0">-- Seleccione un sector --</option>
+                            @if (sector is not null)
+                            {
+                                @foreach (var sector in sector)
+                                {
+                                    <option value="@sector.Id">@sector.sector</option>
+                                }
+                            }
+                        </select>
+                    </div>
+                </div>     
+                <div class="form-group mb-3">
+                    <label for="perfil">Perfil:</label>
+                    <InputSelect id="perfil" @bind-Value="usuarioEdit.PerfilId" class="form-control">
+                        <option value="">Seleccione un perfil...</option>
+                        @foreach (var perfil in perfiles)
+                        {
+                            <option value="@perfil.Id">@perfil.Nombre</option>
+                        }
+                    </InputSelect>
+                    <ValidationMessage For="@(() => usuarioEdit.PerfilId)" />
+                </div>
+
+                <button type="submit" class="btn btn-primary">Guardar Cambios</button>
+                <button type="button" class="btn btn-secondary" @onclick="Cancelar">Cancelar</button>
+            </div>
+        </div>
+    </EditForm>
+}
+
+@code {
+    [Parameter]
+    public int Id { get; set; }
+
+    private Usuario? usuario;
+    private Usuario usuarioEdit = new Usuario
+    {
+        NombreUsuario = "",
+        Email = "",
+        Password = "",
+        FechaRegistro = DateTime.Now,
+        Activo = true,
+        PerfilId = 0,
+        EmpresaId = 0,
+        DependenciaId = 0,
+        IdFlexoft =0,
+        SectorId = 0
+    };
+    private EditContext? editContext;
+    private bool cargando = true;
+    private List<Perfil> perfiles = new List<Perfil>();
+    // private List<Empresa> empresas = new List<Empresa>();
+    // private List<Dependencia> dependencias = new List<Dependencia>();
+    // private List<Sector> sectores = new List<Sector>();
+
+    public List<Empresa>? empresa { get; set; }
+    public List<Dependencia>? dependencia { get; set; }
+    public List<Sector>? sector { get; set; }
+
+    private IBrowserFile? foto;
+    private string? fotoPreview;
+    private string? mensajeError;
+
+    // Listas para los combos de selección
+    private List<Country> countries = new List<Country>();
+    private List<State> states = new List<State>();
+    private List<City> cities = new List<City>();
+
+    private async Task AbrirModalPassword()
+    {
+        var parameters = new ModalParameters()
+            .Add(nameof(CambiarPasswordModal.UsuarioId), Id);
+
+        var modal = ModalService.Show<CambiarPasswordModal>("", parameters);
+        var result = await modal.Result;
+
+        // No necesitamos hacer nada con el resultado, ya que la contraseña
+        // se actualiza directamente en el servidor desde el modal
+        if (!result.Cancelled)
+        {
+            // Mostrar mensaje de éxito
+            mensajeError = null;
+        }
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        await CargarDatos();
+        // Cargar lista de países y perfiles (solo generales, dependientes se cargan en CargarDatos)
+        countries = await Http.GetFromJsonAsync<List<Country>>("api/countries") ?? new List<Country>();
+        perfiles = await Http.GetFromJsonAsync<List<Perfil>>("api/Perfiles") ?? new List<Perfil>();
+        // Ya no recargar states ni cities aquí para evitar inconsistencias
+    }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        await CargarDatos();
+    }
+
+    private async Task CargarDatos()
+    {
+        try
+        {
+            cargando = true;
+            // Reiniciar el estado
+            usuario = null;
+            usuarioEdit = new Usuario
+            {
+                NombreUsuario = "",
+                Email = "",
+                Password = "",
+                IdFlexoft =0,
+                FechaRegistro = DateTime.Now,
+                Activo = true,
+                PerfilId = 0,
+                EmpresaId = 0,
+                DependenciaId = 0,
+                SectorId = 0
+                
+            };
+            foto = null;
+            fotoPreview = null;
+            mensajeError = null;
+
+            // Cargar datos del usuario
+            var response = await Http.GetAsync($"api/Usuarios/{Id}");
+            if (!response.IsSuccessStatusCode)
+            {
+                mensajeError = "Error al cargar los datos del usuario";
+                return;
+            }
+
+            usuario = await response.Content.ReadFromJsonAsync<Usuario>();
+            if (usuario != null)
+            {
+                // Crear una copia para edición
+                usuarioEdit = new Usuario
+                {
+                    Id = usuario.Id,
+                    NombreUsuario = usuario.NombreUsuario,
+                    Email = usuario.Email,
+                    Password = usuario.Password,
+                    IdFlexoft=usuario.IdFlexoft,
+                    FechaRegistro = usuario.FechaRegistro,
+                    Activo = usuario.Activo,
+                    FotoUrl = usuario.FotoUrl,
+                    PerfilId = usuario.PerfilId,
+                    EmpresaId = usuario.EmpresaId,
+                    DependenciaId = usuario.DependenciaId,
+                    SectorId = usuario.SectorId,
+                    CountryId = usuario.CountryId,
+                    StateId = usuario.StateId,
+                    CityId = usuario.CityId
+                };
+
+                editContext = new EditContext(usuarioEdit);
+
+                // Cargar datos relacionados
+                empresa = await Http.GetFromJsonAsync<List<Empresa>>("api/Empresas") ?? new List<Empresa>();
+                // Cargar dependencias y sectores basados en los valores actuales
+                if (usuarioEdit.EmpresaId > 0)
+                {
+                    dependencia = await Http.GetFromJsonAsync<List<Dependencia>>($"api/dependencias/combo/{usuarioEdit.EmpresaId}") ?? new List<Dependencia>();
+                    if (usuarioEdit.DependenciaId > 0)
+                    {
+                        sector = await Http.GetFromJsonAsync<List<Sector>>($"api/sectores/combo/{usuarioEdit.DependenciaId}") ?? new List<Sector>();
+                    }
+                }
+                // Cargar provincias y localidades según los valores actuales
+                if (usuarioEdit.CountryId > 0)
+                {
+                    states = await Http.GetFromJsonAsync<List<State>>($"api/states/combo/{usuarioEdit.CountryId}") ?? new List<State>();
+                }
+                else
+                {
+                    states.Clear();
+                }
+                if (usuarioEdit.StateId > 0)
+                {
+                    cities = await Http.GetFromJsonAsync<List<City>>($"api/cities/combo/{usuarioEdit.StateId}") ?? new List<City>();
+                }
+                else
+                {
+                    cities.Clear();
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error al cargar datos: {ex.Message}");
+            mensajeError = "Error al cargar los datos del usuario";
+        }
+        finally
+        {
+            cargando = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task OnFileChange(InputFileChangeEventArgs e)
+    {
+        try
+        {
+            mensajeError = null;
+            var file = e.File;
+            
+            if (file.Size > 2097152) // 2MB en bytes
+            {
+                mensajeError = "La imagen no puede ser mayor a 2MB";
+                return;
+            }
+
+            var allowedExtensions = new[] { ".jpg", ".jpeg", ".png" };
+            var extension = Path.GetExtension(file.Name).ToLowerInvariant();
+            if (!allowedExtensions.Contains(extension))
+            {
+                mensajeError = "Solo se permiten archivos JPG y PNG";
+                return;
+            }
+
+            foto = file;
+
+            // Crear preview
+            var resizedImage = await file.RequestImageFileAsync("image/jpeg", 200, 200);
+            var buffer = new byte[resizedImage.Size];
+            await resizedImage.OpenReadStream().ReadAsync(buffer);
+            fotoPreview = $"data:image/jpeg;base64,{Convert.ToBase64String(buffer)}";
+        }
+        catch (Exception ex)
+        {
+            mensajeError = "Error al procesar la imagen";
+            Console.WriteLine($"Error al procesar la imagen: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// Maneja el cambio de país. Actualiza el modelo, carga provincias y limpia combos dependientes.
+    /// </summary>
+    private async Task CountryChangeAsync(ChangeEventArgs e)
+    {
+        var countryId = Convert.ToInt32(e.Value!);
+        usuarioEdit.CountryId = countryId;
+        // Cargar provincias del país seleccionado
+        if (countryId > 0)
+        {
+            states = await Http.GetFromJsonAsync<List<State>>($"api/states/combo/{countryId}") ?? new List<State>();
+        }
+        else
+        {
+            states.Clear();
+        }
+        // Limpiar selección de provincia y localidad
+        usuarioEdit.StateId = 0;
+        usuarioEdit.CityId = 0;
+        cities.Clear();
+        StateHasChanged();
+    }
+
+    /// <summary>
+    /// Maneja el cambio de provincia. Actualiza el modelo, carga localidades y limpia la localidad seleccionada.
+    /// </summary>
+    private async Task StateChangeAsync(ChangeEventArgs e)
+    {
+        var stateId = Convert.ToInt32(e.Value!);
+        usuarioEdit.StateId = stateId;
+        usuarioEdit.CityId = 0; // Limpiar selección de localidad
+        cities.Clear(); // Limpiar lista de ciudades
+        if (stateId > 0)
+        {
+            cities = await Http.GetFromJsonAsync<List<City>>($"api/cities/combo/{stateId}") ?? new List<City>();
+        }
+        StateHasChanged();
+    }
+
+    /// <summary>
+    /// Maneja el cambio de localidad. Actualiza el modelo.
+    /// </summary>
+    private Task CityChangeAsync(ChangeEventArgs e)
+    {
+        var cityId = Convert.ToInt32(e.Value!);
+        usuarioEdit.CityId = cityId;
+        return Task.CompletedTask;
+    }
+
+    private async Task HandleValidSubmit()
+    {
+        try
+        {
+            mensajeError = null;
+
+            // Crear una copia del usuario para edición sin incluir la contraseña
+            var usuarioToSave = new Usuario
+            {
+                Id = usuarioEdit.Id,
+                NombreUsuario = usuarioEdit.NombreUsuario,
+                Email = usuarioEdit.Email,
+                Password = string.Empty, // Establecer un valor vacío para el campo requerido
+                IdFlexoft=usuarioEdit.IdFlexoft,
+                FechaRegistro = usuarioEdit.FechaRegistro,
+                Activo = usuarioEdit.Activo,
+                FotoUrl = usuarioEdit.FotoUrl,
+                PerfilId = usuarioEdit.PerfilId,
+                EmpresaId = usuarioEdit.EmpresaId,
+                DependenciaId = usuarioEdit.DependenciaId,
+                SectorId = usuarioEdit.SectorId,
+                CountryId = usuarioEdit.CountryId,
+                StateId = usuarioEdit.StateId,
+                CityId = usuarioEdit.CityId
+            };
+
+            var content = new MultipartFormDataContent();
+
+            // Agregar los datos del usuario como JSON
+            var usuarioJson = JsonSerializer.Serialize(usuarioToSave);
+            content.Add(new StringContent(usuarioJson), "usuarioJson");
+
+            // Agregar la foto si existe
+            if (foto != null)
+            {
+                var fotoContent = new StreamContent(foto.OpenReadStream());
+                fotoContent.Headers.ContentType = new MediaTypeHeaderValue(foto.ContentType);
+                content.Add(fotoContent, "foto", foto.Name);
+            }
+
+            var response = await Http.PutAsync($"api/Usuarios/{Id}", content);
+            if (response.IsSuccessStatusCode)
+            {
+                NavigationManager.NavigateTo("/usuarios");
+            }
+            else
+            {
+                var error = await response.Content.ReadAsStringAsync();
+                Console.WriteLine($"Error: {error}");
+                mensajeError = "Error al actualizar el usuario: " + error;
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error: {ex.Message}");
+            mensajeError = "Error al actualizar el usuario";
+        }
+    }
+
+    private void Cancelar()
+    {
+        NavigationManager.NavigateTo("/usuarios");
+    }
+
+    private async Task EmpresaChangeAsync(ChangeEventArgs e)
+    {
+        var empresaId = Convert.ToInt32(e.Value!);
+        //maquina.idEmpresa = empresaId;
+        await LoadDependenciaAsync(empresaId);
+        usuarioEdit.EmpresaId = empresaId;
+    }
+    private async Task DependenciaChangedAsync(ChangeEventArgs e)
+    {
+        var depId = Convert.ToInt32(e.Value!);
+        // Limpiar el sector seleccionado y la lista de sectores al cambiar la dependencia
+        usuarioEdit.DependenciaId = depId;
+        usuarioEdit.SectorId = 0; // Limpiar selección de sector
+        sector = new List<Sector>(); // Limpiar lista de sectores
+        await LoadSectoresAsync(depId); // Si depId > 0, recargar los sectores correspondientes
+    }
+    private async Task SectoresChangedAsync(ChangeEventArgs e)
+    {
+        var sectorId = Convert.ToInt32(e.Value!);
+        // maquina.elsector = sectorId;
+        // await LoadSectoresAsync(vdependenciaId);
+
+    }
+    private async Task LoadDependenciaAsync(int empresaId)
+    {
+        var responseHppt = await repository.Get<List<Dependencia>>($"api/dependencias/combo/{empresaId}");
+        dependencia = responseHppt.Response!;
+    }
+    private async Task LoadSectoresAsync(int dependenciaId)
+    {
+        var responseHppt = await repository.Get<List<Sector>>($"api/sectores/combo/{dependenciaId}");
+        sector = responseHppt.Response!;
+    }
+}

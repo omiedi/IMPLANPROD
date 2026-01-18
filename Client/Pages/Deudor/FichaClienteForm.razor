@@ -1,0 +1,384 @@
+@page "/ficha-cliente"
+@page "/ficha-cliente/{Id:int}"
+
+<style>
+    /* Estilo uniforme para todos los inputs de la cabecera */
+    .cabecera-input {
+        height: 38px !important;
+        border: 2px solid #6c757d !important; /* Borde más visible (gris Bootstrap) */
+        border-radius: 0.25rem !important;
+        font-size: 1em;
+        background-color: #fff;
+        box-shadow: none;
+    }
+    .tab-btn {
+        border: none;
+        background: none;
+        padding: 10px 30px;
+        font-weight: 600;
+        font-size: 1.1em;
+        color: #495057;
+        border-bottom: 3px solid transparent;
+        transition: color 0.2s, border-bottom 0.2s;
+    }
+    .tab-btn.active, .tab-btn:focus {
+        color: #198754;
+        border-bottom: 3px solid #198754;
+        background: #f8f9fa;
+    }
+    .tab-btn:hover {
+        color: #146c43;
+    }
+    .tab-content-custom {
+        background: #fff;
+        border: 1px solid #dee2e6;
+        border-top: none;
+        border-radius: 0 0 0.5rem 0.5rem;
+        padding: 2rem 1.5rem 1.5rem 1.5rem;
+        min-height: 350px;
+    }
+</style>
+
+<div class="container-fluid">
+    <div class="card mb-3">
+        <!-- Cabecera visualmente mejorada -->
+        <div class="card-header bg-light border-bottom-0">
+            <div class="row align-items-center g-2">
+                <!-- Nro de Id -->
+                <div class="col-auto" style="min-width:120px;max-width:140px;">
+                    <label class="fw-bold small text-secondary">Id</label>
+                    <input type="text" class="form-control cabecera-input" style="font-weight:bold;" @bind="Deudor.Id" disabled />
+                </div>
+                <!-- Nro de Cuenta reducido -->
+                <div class="col-auto" style="min-width:120px;max-width:140px;">
+                    <label class="fw-bold small text-secondary">Nro Cuenta</label>
+                    <input type="text" class="form-control cabecera-input" style="font-weight:bold;" @bind="Deudor.Nume_Cli" disabled />
+                </div>
+                <!-- Código de Cuenta reducido -->
+                <div class="col-auto" style="min-width:120px;max-width:140px;">
+                    <label class="fw-bold small text-secondary">Código</label>
+                    <input type="text" class="form-control cabecera-input" @bind="Deudor.Codi_Cli" />
+                </div>
+                <!-- Proveedor Número reducido -->
+                <div class="col-auto" style="min-width:80px;max-width:100px;">
+                    <label class="fw-bold small text-secondary">Prov. Nro</label>
+                    <input type="text" class="form-control cabecera-input" @bind="Deudor.Prvd_Cli" />
+                </div>
+                <!-- Razón Social más amplia -->
+                <div class="col flex-grow-1">
+                    <label class="fw-bold small text-secondary">Razón Social</label>
+                    <input type="text" class="form-control cabecera-input" @bind="Deudor.Raso_Cli" required maxlength="100" style="min-width:250px; font-size:1.1em; font-weight:bold;" />
+                </div>
+                <!-- Check Destino Fabrica con texto en dos líneas -->
+                <div class="col-auto d-flex flex-column align-items-center justify-content-center" style="min-width:70px;">
+                    <input class="form-check-input" type="checkbox" id="destinoFabrica" style="margin-top:8px;" />
+                    <label class="form-check-label text-center small mt-1" for="destinoFabrica">
+                        Destino<br />Fábrica
+                    </label>
+                </div>
+            </div>
+        </div>
+        <!-- Botones separados, con estilo y espacio -->
+        <div class="card-header bg-white border-bottom-0 pt-2 pb-3 d-flex justify-content-end gap-2">
+            <button class="btn btn-outline-secondary px-4" @onclick="Regresar">
+                <i class="fas fa-arrow-left"></i> Regresar
+            </button>
+            <button class="btn btn-success px-4" title="Guardar" @onclick="GuardarAsync">
+                <i class="fas fa-save"></i> Guardar
+            </button>
+        </div>
+    </div>
+
+    @* Solapas mejoradas visualmente y funcionales con Blazor *@
+    <div class="d-flex border-bottom mb-0" style="background:#f8f9fa;">
+        <button class="tab-btn @(activeTab == 0 ? "active" : "")" @onclick="() => CambiarTab(0)">Datos</button>
+        <button class="tab-btn @(activeTab == 1 ? "active" : "")" @onclick="() => CambiarTab(1)">Notas</button>
+    </div>
+    <div class="tab-content-custom">
+        @if (activeTab == 0)
+        {
+            <!-- Contenido de la ficha de cliente (Datos) -->
+            <div class="row">
+                <!-- Sección de Domicilio -->
+                <div class="col-md-6">
+                    <div class="card mb-3">
+                        <div class="card-header">
+                            <h5>DOMICILIO</h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="row mb-3">
+                                <label class="col-sm-3 col-form-label">Calle y Número:</label>
+                                <div class="col-sm-9">
+                                    <input type="text" class="form-control" @bind="Deudor.Domi_Cli" />
+                                </div>
+                            </div>
+                            <div class="row mb-3">
+                                <label class="col-sm-3 col-form-label">País:</label>
+                                <div class="col-sm-9">
+                                    <select class="form-select" @onchange="OnPaisChanged">
+                                        <option value="">Seleccione...</option>
+                                        @if (Paises != null)
+                                        {
+                                            foreach (var pais in Paises)
+                                            {
+                                                <option value="@pais.Name" selected="@(Deudor.Pais_Cli == pais.Name)">@pais.Name</option>
+                                            }
+                                        }
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="row mb-3">
+                                <label class="col-sm-3 col-form-label">Provincia:</label>
+                                <div class="col-sm-9">
+                                    <select class="form-select" @onchange="OnProvinciaChanged">
+                                        <option value="">Seleccione...</option>
+                                        @if (Provincias != null)
+                                        {
+                                            foreach (var prov in Provincias)
+                                            {
+                                                <option value="@prov.Name" selected="@(Deudor.Prov_Cli == prov.Name)">@prov.Name</option>
+                                            }
+                                        }
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="row mb-3">
+                                <label class="col-sm-3 col-form-label">Localidad:</label>
+                                <div class="col-sm-9">
+                                    <input type="text" class="form-control" @bind="Deudor.Loca_Cli" />
+                                </div>
+                            </div>
+                            <div class="row mb-3">
+                                <label class="col-sm-3 col-form-label">Código Postal:</label>
+                                <div class="col-sm-9">
+                                    <input type="text" class="form-control" @bind="Deudor.Cpos_Cli" />
+                                </div>
+                            </div>
+                            <div class="row mb-3">
+                                <label class="col-sm-3 col-form-label">Nombre de Fantasía:</label>
+                                <div class="col-sm-9">
+                                    <input type="text" class="form-control" @bind="Deudor.Fant_Cli" />
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Sección de Agenda -->
+                <div class="col-md-6">
+                    <div class="card mb-3">
+                        <div class="card-header">
+                            <h5>AGENDA</h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="row mb-3">
+                                <label class="col-sm-3 col-form-label">Teléfono:</label>
+                                <div class="col-sm-9">
+                                    <input type="text" class="form-control" @bind="Deudor.Tele_Cli" />
+                                </div>
+                            </div>
+                            <div class="row mb-3">
+                                <label class="col-sm-3 col-form-label">Fax:</label>
+                                <div class="col-sm-9">
+                                    <input type="text" class="form-control" @bind="Deudor.Faxi_Cli" />
+                                </div>
+                            </div>
+                            <div class="row mb-3">
+                                <label class="col-sm-3 col-form-label">E-Mail:</label>
+                                <div class="col-sm-9">
+                                    <input type="email" class="form-control" @bind="Deudor.Mail_Cli" />
+                                </div>
+                            </div>
+                            <div class="row mb-3">
+                                <label class="col-sm-3 col-form-label">Contacto:</label>
+                                <div class="col-sm-9">
+                                    <input type="text" class="form-control" @bind="Deudor.Ctac_Cli" />
+                                </div>
+                            </div>
+                            <div class="row mb-3">
+                                <label class="col-sm-3 col-form-label">Horario:</label>
+                                <div class="col-sm-9">
+                                    <input type="text" class="form-control" @bind="Deudor.Hora_Cli" />
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Frame de IMPUESTOS -->
+            <div class="card mb-3">
+                <div class="card-header bg-light fw-bold">Impuestos</div>
+                <div class="card-body">
+                    <div class="row mb-3 align-items-end">
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold">Posición IVA</label>
+                            <select class="form-select" @bind="Deudor.Piva_Cli">
+                                <option value="">Seleccione...</option>
+                                @foreach (TipoIvaEnum tipo in Enum.GetValues(typeof(TipoIvaEnum)))
+                                {
+                                    <option value="@((int)tipo)">@((int)tipo) - @ObtenerDescripcionIva(tipo)</option>
+                                }
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold">@ObtenerLabelCuit(Deudor.Piva_Cli)</label>
+                            <input type="text" class="form-control" @bind="Deudor.Cuit_Cli" maxlength="24" />
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Se eliminaron las secciones de Impuestos, Datos Contables y Datos Comerciales por solicitud del usuario. -->
+        }
+        else if (activeTab == 1)
+        {
+            <!-- TextArea enlazado a Nota_Cli -->
+            <div class="mb-3">
+                <label for="notaCli" class="form-label fw-bold">Notas del Cliente</label>
+                <textarea id="notaCli" class="form-control" style="width:100%;height:50vh;resize:vertical;font-size:1.1em;" @bind="Deudor.Nota_Cli" placeholder="Escriba aquí las notas del cliente..."></textarea>
+            </div>
+        }
+    </div>
+</div>
+
+@code {
+    [Parameter]
+    public int Id { get; set; }
+
+    private IMPLANPROD.Shared.Entities.Deudor12 Deudor { get; set; } = new();
+    [Inject] private IRepository repository { get; set; } = default!;
+    [Inject] private NavigationManager NavigationManager { get; set; } = default!;
+    [Inject] private SweetAlertService sweetAlertService { get; set; } = default!;
+    private bool isLoading = false;
+    private bool isEdit => Id > 0;
+
+    // Listas para combos de país y provincia
+    private List<Country> Paises = new();
+    private List<State> Provincias = new();
+
+    private int activeTab = 0; // 0: Datos, 1: Notas
+
+    private void CambiarTab(int idx) => activeTab = idx;
+
+    protected override async Task OnInitializedAsync()
+    {
+        Paises = (await repository.Get<List<Country>>("/api/countries/combo")).Response ?? new List<Country>();
+        if (!string.IsNullOrEmpty(Deudor.Pais_Cli))
+        {
+            var pais = Paises.FirstOrDefault(x => x.Name == Deudor.Pais_Cli);
+            if (pais != null)
+                await CargarProvincias(pais.Id);
+        }
+        else
+        {
+            Provincias.Clear();
+        }
+        if (isEdit)
+        {
+            isLoading = true;
+            var response = await repository.Get<Deudor12>($"/api/deudor12/{Id}");
+            if (response.Response != null)
+                Deudor = response.Response;
+            else
+                await sweetAlertService.FireAsync("Error", "No se encontró el cliente para editar.", SweetAlertIcon.Error);
+            isLoading = false;
+            // Si el cliente ya tiene país, cargar provincias
+            if (!string.IsNullOrEmpty(Deudor.Pais_Cli))
+            {
+                var pais = Paises.FirstOrDefault(x => x.Name == Deudor.Pais_Cli);
+                if (pais != null)
+                    await CargarProvincias(pais.Id);
+            }
+        }
+    }
+
+    // Evento para cargar provincias al cambiar país y guardar el texto en el modelo
+    private async Task OnPaisChanged(ChangeEventArgs e)
+    {
+        var paisSeleccionado = e.Value?.ToString();
+        Deudor.Pais_Cli = paisSeleccionado;
+        var pais = Paises.FirstOrDefault(x => x.Name == paisSeleccionado);
+        if (pais != null)
+        {
+            await CargarProvincias(pais.Id);
+        }
+        else
+        {
+            Provincias.Clear();
+            Deudor.Prov_Cli = null;
+        }
+    }
+
+    // Evento para guardar el texto de la provincia seleccionada
+    private void OnProvinciaChanged(ChangeEventArgs e)
+    {
+        Deudor.Prov_Cli = e.Value?.ToString();
+    }
+
+    // Método auxiliar para cargar provincias por país
+    private async Task CargarProvincias(int paisId)
+    {
+        Provincias = (await repository.Get<List<State>>($"/api/states/combo/{paisId}")).Response ?? new List<State>();
+        StateHasChanged();
+    }
+
+    private async Task GuardarAsync()
+    {
+        try
+        {
+            if (isEdit)
+            {
+                var result = await repository.Put($"/api/deudor12", Deudor);
+                await sweetAlertService.FireAsync("Éxito", "Cliente actualizado correctamente.", SweetAlertIcon.Success);
+            }
+            else
+            {
+                var result = await repository.Post($"/api/deudor12", Deudor);
+                await sweetAlertService.FireAsync("Éxito", "Cliente creado correctamente.", SweetAlertIcon.Success);
+            }
+            NavigationManager.NavigateTo("/ficha-cliente-index");
+        }
+        catch (Exception ex)
+        {
+            await sweetAlertService.FireAsync("Error", ex.Message, SweetAlertIcon.Error);
+        }
+    }
+
+    private void Regresar()
+    {
+        NavigationManager.NavigateTo("/ficha-cliente-index");
+    }
+
+    // Método para obtener la descripción legible del enum TipoIvaEnum
+    private string ObtenerDescripcionIva(TipoIvaEnum tipo)
+    {
+        return tipo switch
+        {
+            TipoIvaEnum.ConsumidorFinal => "A CONSUMIDOR FINAL",
+            TipoIvaEnum.IvaResponsableInscripto => "IVA RESPONSABLE INSCRIPTO",
+            TipoIvaEnum.IvaResponsableNoInscripto => "IVA RESPONSABLE NO INSCRIPTO",
+            TipoIvaEnum.IvaNoResponsable => "IVA NO RESPONSABLE",
+            TipoIvaEnum.IvaExento => "IVA EXENTO",
+            TipoIvaEnum.ComercioExterior => "OPs.COMERCIO EXTERIOR",
+            TipoIvaEnum.Monotributo => "CONTRIBUYENTE MONOTRIBUTO",
+            TipoIvaEnum.ExentoZonaPromovida => "EXENTO - ZONA PROMOVIDA",
+            _ => tipo.ToString()
+        };
+    }
+
+    // Método para obtener el label dinámico del campo CUIT según la posición de IVA
+    private string ObtenerLabelCuit(object? piva)
+    {
+        // Si el valor es null o vacío, mostrar CUIT por defecto
+        if (piva == null) return "CUIT:";
+        int valor;
+        if (!int.TryParse(piva.ToString(), out valor)) return "CUIT:";
+        if (valor == (int)TipoIvaEnum.ConsumidorFinal)
+            return "Doc.No:";
+        else if (valor == (int)TipoIvaEnum.ComercioExterior)
+            return "R.U.C.:";
+        else
+            return "CUIT:";
+    }
+}

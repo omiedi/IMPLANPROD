@@ -1,0 +1,144 @@
+@inject IRepository repository
+@using Microsoft.AspNetCore.Components.Authorization
+@inject AuthenticationStateProvider AuthStateProvider
+
+<AuthorizeView>
+    <Authorized>
+        @if (!string.IsNullOrEmpty(empresa) && !string.IsNullOrEmpty(dependencia))
+        {
+            <div class="user-info-container">
+                <div class="user-info-item">
+                    <i class="fas fa-building text-warning"></i>
+                    <span class="user-info-label">Emp.:</span>
+                    <span class="user-info-value">@empresa</span>
+                </div>
+                <div class="user-info-item">
+                    <i class="fas fa-map-marker-alt text-info"></i>
+                    <span class="user-info-label">Dep.:</span>
+                    <span class="user-info-value">@dependencia</span>
+                </div>
+                @if (usuarioId > 0)
+                {
+                    <div class="user-info-item user-ids">
+                        <span class="user-info-value">@usuarioId - @idFlexoft</span>
+                    </div>
+                }
+            </div>
+        }
+    </Authorized>
+</AuthorizeView>
+
+<style>
+    .user-info-container {
+        background-color: rgba(255, 255, 255, 0.1);
+        padding: 0.75rem 1rem;
+        margin: 0.5rem 0;
+        border-radius: 6px;
+        border-left: 3px solid #ffc107;
+    }
+
+    .user-info-item {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        color: white;
+        font-size: 0.875rem;
+        margin-bottom: 0.25rem;
+    }
+
+    .user-info-item:last-child {
+        margin-bottom: 0;
+    }
+
+    .user-info-item i {
+        width: 1.25rem;
+        text-align: center;
+    }
+
+    .user-info-label {
+        font-weight: 600;
+        opacity: 0.9;
+    }
+
+    .user-info-value {
+        font-weight: 400;
+        opacity: 0.95;
+        text-transform: uppercase;
+        font-size: 0.8rem;
+    }
+
+    .user-ids {
+        margin-top: 0.5rem;
+        padding-top: 0.5rem;
+        border-top: 1px solid rgba(255, 255, 255, 0.2);
+        justify-content: center;
+    }
+
+    .user-ids .user-info-value {
+        font-size: 0.75rem;
+        opacity: 0.7;
+        text-transform: none;
+    }
+
+    /* Responsive */
+    @@media (max-width: 768px) {
+        .user-info-container {
+            font-size: 0.8rem;
+        }
+    }
+</style>
+
+@code {
+    private string empresa = "";
+    private string dependencia = "";
+    private int usuarioId = 0;
+    private int idFlexoft = 0;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await CargarInformacionUsuario();
+        
+        // Suscribirse a cambios de autenticación
+        ((AuthenticationStateProvider)AuthStateProvider).AuthenticationStateChanged += OnAuthenticationStateChanged;
+    }
+
+    private async Task CargarInformacionUsuario()
+    {
+        try
+        {
+            var response = await repository.Get<InfoUsuarioDTO>("api/Usuarios/InfoUsuarioActual");
+            
+            if (!response.Error && response.Response != null)
+            {
+                empresa = response.Response.Empresa ?? "Sin empresa";
+                dependencia = response.Response.Dependencia ?? "Sin dependencia";
+                usuarioId = response.Response.UsuarioId;
+                idFlexoft = response.Response.IdFlexoft;
+                StateHasChanged();
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error al cargar información del usuario: {ex.Message}");
+        }
+    }
+
+    private async void OnAuthenticationStateChanged(Task<AuthenticationState> task)
+    {
+        await CargarInformacionUsuario();
+    }
+
+    public void Dispose()
+    {
+        ((AuthenticationStateProvider)AuthStateProvider).AuthenticationStateChanged -= OnAuthenticationStateChanged;
+    }
+
+    // DTO para recibir la información del usuario
+    private class InfoUsuarioDTO
+    {
+        public int UsuarioId { get; set; }
+        public int IdFlexoft { get; set; }
+        public string Empresa { get; set; } = "";
+        public string Dependencia { get; set; } = "";
+    }
+}

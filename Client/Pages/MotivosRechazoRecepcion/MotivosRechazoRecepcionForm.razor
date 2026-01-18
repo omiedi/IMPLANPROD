@@ -1,0 +1,44 @@
+@inject SweetAlertService sweetAlertService
+@inject IRepository repository
+
+<EditForm Model="motivo" OnValidSubmit="OnValidSubmit">
+    <DataAnnotationsValidator />
+
+    <div class="mb-3">
+        <label>Código Motivo:</label>
+        <div>
+            <InputNumber class="form-control" @bind-Value="@motivo.CodigoMotivo" disabled="@IsEdit" />
+            <ValidationMessage For="@(() => motivo.CodigoMotivo)" />
+        </div>
+    </div>
+    <div class="mb-3">
+        <label>Descripción:</label>
+        <div>
+            <InputText class="form-control" @bind-Value="@motivo.Descripcion" />
+            <ValidationMessage For="@(() => motivo.Descripcion)" />
+        </div>
+    </div>
+
+    <button class="btn btn-primary" type="submit">Guardar Cambios</button>
+    <button class="btn btn-success" @onclick="ReturnAction">Regresar</button>
+
+</EditForm>
+
+@code {
+    [EditorRequired]
+    [Parameter]
+    public MotivosRechazoRecepcion motivo { get; set; } = null!;
+
+    [EditorRequired]
+    [Parameter]
+    public EventCallback OnValidSubmit { get; set; }
+
+    [EditorRequired]
+    [Parameter]
+    public EventCallback ReturnAction { get; set; }
+
+    [Parameter]
+    public bool IsEdit { get; set; }
+
+    public bool FormPostedSuccessfully { get; set; }
+}

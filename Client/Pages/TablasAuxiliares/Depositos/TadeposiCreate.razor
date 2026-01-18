@@ -1,0 +1,36 @@
+﻿@page "/TablasAuxiliares/Depositos/Tadeposi/create"
+@inject IRepository repository
+@inject NavigationManager navigationManager
+@inject SweetAlertService sweetAlertService
+@inject IModalService Modal
+
+<h3>Crear Depósito</h3>
+
+<TadeposiForm @ref="tadeposiForm" Tadeposi="tadeposi" OnValidSubmit="Create" ReturnAction="Return" IsEdit="false" />
+
+@code {
+    private Tadeposi tadeposi = new();
+    private TadeposiForm? tadeposiForm;
+    [CascadingParameter]
+    BlazoredModalInstance BlazoredModal { get; set; } = default!;
+
+    private async Task Create()
+    {
+        var responseHttp = await repository.Post("/api/tadeposi", tadeposi);
+        if (responseHttp.Error)
+        {
+            var mensajeError = await responseHttp.GetErrorMessageAsync();
+            await sweetAlertService.FireAsync("Error", mensajeError, SweetAlertIcon.Error);
+            return;
+        }
+
+        await BlazoredModal.CloseAsync(ModalResult.Ok());
+        Return();
+    }
+
+    private void Return()
+    {
+        tadeposiForm!.FormPostedSuccessfully = true;
+        navigationManager.NavigateTo("/TablasAuxiliares/Depositos/Tadeposi");
+    }
+}

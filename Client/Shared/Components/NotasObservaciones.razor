@@ -1,0 +1,242 @@
+@using IMPLANPROD.Shared.DTOs
+@inject IRepository repository
+@inject SweetAlertService sweetAlertService
+
+<!--
+═══════════════════════════════════════════════════════════════════════════════
+COMPONENTE: NotasObservaciones.razor
+DESCRIPCIÓN: Componente reutilizable para mostrar y agregar notas
+AUTOR: Sistema IMPLANPROD
+FECHA: 2026-01-09
+═══════════════════════════════════════════════════════════════════════════════
+-->
+
+<div class="card">
+    <div class="card-header bg-secondary text-white">
+        <h6 class="mb-0">
+            <i class="fas fa-clipboard-list me-2"></i>Notas
+        </h6>
+    </div>
+    <div class="card-body">
+        <!-- Tabla de notas existentes -->
+        <div class="row mb-3">
+            <div class="col-md-12">
+                <h6 class="text-secondary mb-3">
+                    <i class="fas fa-history me-2"></i>Historial de Notas
+                </h6>
+                
+                @if (isLoading)
+                {
+                    <div class="text-center py-4">
+                        <div class="spinner-border text-primary" role="status">
+                            <span class="visually-hidden">Cargando...</span>
+                        </div>
+                        <p class="mt-2 text-muted">Cargando notas...</p>
+                    </div>
+                }
+                else if (observaciones == null || !observaciones.Any())
+                {
+                    <div class="alert alert-info">
+                        <i class="fas fa-info-circle me-2"></i>
+                        No hay notas registradas.
+                    </div>
+                }
+                else
+                {
+                    <div class="table-responsive">
+                        <table class="table table-striped table-hover table-sm">
+                            <thead class="table-dark">
+                                <tr>
+                                    <th style="width: 15%;">Fecha</th>
+                                    <th style="width: 70%;">Notas</th>
+                                    <th style="width: 15%;">Usuario</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var obs in observaciones)
+                                {
+                                    <tr>
+                                        <td>
+                                            <small>@obs.AddRecord?.ToString("dd/MM/yyyy HH:mm")</small>
+                                        </td>
+                                        <td style="white-space: pre-wrap;">@obs.Observaciones</td>
+                                        <td class="text-center">
+                                            <span class="badge bg-info">@obs.NumUsuar</span>
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                }
+            </div>
+        </div>
+
+        <hr />
+
+        <!-- Formulario para agregar nueva nota -->
+        <div class="row mb-3">
+            <div class="col-md-12">
+                <label class="form-label fw-bold">Nueva Nota:</label>
+                <textarea class="form-control" 
+                          @bind="nuevaObservacion" 
+                          rows="3" 
+                          placeholder="Ingrese su nota aquí..."
+                          maxlength="500"></textarea>
+            </div>
+        </div>
+        <div class="row">
+            <div class="col-md-12 text-end">
+                <button type="button" 
+                        class="btn btn-primary" 
+                        @onclick="GuardarObservacion"
+                        disabled="@(string.IsNullOrWhiteSpace(nuevaObservacion) || isProcessing)">
+                    <i class="fas fa-save me-2"></i>
+                    @if (isProcessing)
+                    {
+                        <span class="spinner-border spinner-border-sm me-1"></span>
+                        <text>Guardando...</text>
+                    }
+                    else
+                    {
+                        <text>Guardar Nota</text>
+                    }
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    /// <summary>
+    /// Nombre de la tabla de donde se obtendrán las observaciones
+    /// Ejemplo: "BADAMODE_NOTA", "MASTER_NOTA", etc.
+    /// </summary>
+    [Parameter]
+    [EditorRequired]
+    public string NombreTabla { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Nombre del campo identificador en la tabla
+    /// Ejemplo: "Cod_Mod", "Codint", etc.
+    /// </summary>
+    [Parameter]
+    [EditorRequired]
+    public string CampoIdentificador { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Valor del identificador para filtrar las observaciones
+    /// Puede ser string o numérico
+    /// </summary>
+    [Parameter]
+    [EditorRequired]
+    public string ValorIdentificador { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Indica si el campo identificador es de tipo texto (true) o numérico (false)
+    /// </summary>
+    [Parameter]
+    public bool EsTexto { get; set; } = true;
+
+    /// <summary>
+    /// Callback que se ejecuta después de guardar una observación exitosamente
+    /// </summary>
+    [Parameter]
+    public EventCallback OnObservacionGuardada { get; set; }
+
+    private List<ObservacionDTO>? observaciones;
+    private string nuevaObservacion = string.Empty;
+    private bool isLoading = false;
+    private bool isProcessing = false;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        await CargarObservaciones();
+    }
+
+    private async Task CargarObservaciones()
+    {
+        if (string.IsNullOrWhiteSpace(NombreTabla) || 
+            string.IsNullOrWhiteSpace(CampoIdentificador) || 
+            string.IsNullOrWhiteSpace(ValorIdentificador))
+        {
+            return;
+        }
+
+        try
+        {
+            isLoading = true;
+            StateHasChanged();
+
+            var url = $"api/observaciones?tabla={NombreTabla}&campo={CampoIdentificador}&valor={ValorIdentificador}&esTexto={EsTexto}";
+            var responseHttp = await repository.Get<List<ObservacionDTO>>(url);
+
+            if (!responseHttp.Error && responseHttp.Response != null)
+            {
+                observaciones = responseHttp.Response;
+            }
+            else
+            {
+                observaciones = new List<ObservacionDTO>();
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error al cargar notas: {ex.Message}");
+            observaciones = new List<ObservacionDTO>();
+        }
+        finally
+        {
+            isLoading = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task GuardarObservacion()
+    {
+        if (string.IsNullOrWhiteSpace(nuevaObservacion))
+        {
+            await sweetAlertService.FireAsync("Advertencia", "Debe ingresar una nota", SweetAlertIcon.Warning);
+            return;
+        }
+
+        try
+        {
+            isProcessing = true;
+            StateHasChanged();
+
+            var dto = new GuardarObservacionDTO
+            {
+                NombreTabla = NombreTabla,
+                CampoIdentificador = CampoIdentificador,
+                ValorIdentificador = ValorIdentificador,
+                EsTexto = EsTexto,
+                Observaciones = nuevaObservacion
+            };
+
+            var responseHttp = await repository.Post<GuardarObservacionDTO, ObservacionDTO>("api/observaciones", dto);
+
+            if (!responseHttp.Error)
+            {
+                await sweetAlertService.FireAsync("Éxito", "Nota guardada correctamente", SweetAlertIcon.Success);
+                nuevaObservacion = string.Empty;
+                await CargarObservaciones();
+                await OnObservacionGuardada.InvokeAsync();
+            }
+            else
+            {
+                await sweetAlertService.FireAsync("Error", "Error al guardar la nota", SweetAlertIcon.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error al guardar nota: {ex.Message}");
+            await sweetAlertService.FireAsync("Error", "Ocurrió un error al guardar la nota", SweetAlertIcon.Error);
+        }
+        finally
+        {
+            isProcessing = false;
+            StateHasChanged();
+        }
+    }
+}

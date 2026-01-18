@@ -1,0 +1,50 @@
+@inject IRepository repository
+@inject NavigationManager navigationManager
+@inject SweetAlertService sweetAlertService
+@inject IModalService Modal
+
+@using CurrieTechnologies.Razor.SweetAlert2
+@using Blazored.Modal
+@using Blazored.Modal.Services
+@using IMPLANPROD.Shared.Entities
+
+<div class="modal-body">
+    <h3>Crear Transporte</h3>
+
+    <TransportesForm @ref="formRef" transporte="transporte" OnValidSubmit="Create" OnCancel="CloseOnly" />
+</div>
+
+@code {
+    private Transporte transporte = new();
+    private TransportesForm? formRef;
+
+    [CascadingParameter]
+    BlazoredModalInstance BlazoredModal { get; set; } = default!;
+
+    /// <summary>
+    /// Crea un nuevo transporte usando el repositorio (patrón obligatorio)
+    /// </summary>
+    private async Task Create()
+    {
+        // En alta, forzar estado activo = 0
+        transporte.Status = 0;
+        var responseHttp = await repository.Post("/api/transportes", transporte);
+        if (responseHttp.Error)
+        {
+            var mensajeError = await responseHttp.GetErrorMessageAsync();
+            await sweetAlertService.FireAsync("Error", mensajeError, SweetAlertIcon.Error);
+            return;
+        }
+
+        // Cerrar el modal y dejar que el Index refresque la grilla al recibir Confirmed
+        await BlazoredModal.CloseAsync(ModalResult.Ok());
+    }
+
+    /// <summary>
+    /// Cancelar: cerrar el modal sin navegar
+    /// </summary>
+    private async Task CloseOnly()
+    {
+        await BlazoredModal.CloseAsync(ModalResult.Cancel());
+    }
+}

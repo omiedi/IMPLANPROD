@@ -1,0 +1,66 @@
+@inject IRepository repository
+@inject NavigationManager navigationManager
+@inject SweetAlertService sweetAlertService
+
+<div class="modal-body">
+    <h3>Editar Moneda</h3>
+
+    @if (tamoned is not null)
+    {
+        <TamonedForm @ref="tamonedForm" Tamoned="tamoned" OnValidSubmit="Edit" ReturnAction="Return" IsEdit="true" />
+    }
+</div>
+
+@code {
+    private Tamoned? tamoned;
+    private TamonedForm? tamonedForm;
+
+    [CascadingParameter]
+    BlazoredModalInstance BlazoredModal { get; set; } = default!;
+
+    [Parameter]
+    public int Id { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        var responseHTTP = await repository.Get<Tamoned>($"api/tamoneds/{Id}");
+
+        if (responseHTTP.Error)
+        {
+            if (responseHTTP.HttpResponseMessage.StatusCode == System.Net.HttpStatusCode.NotFound)
+            {
+                navigationManager.NavigateTo("/TablaMonedas/Tamoned/Index");
+            }
+            else
+            {
+                var messageError = await responseHTTP.GetErrorMessageAsync();
+                await sweetAlertService.FireAsync("Error", messageError, SweetAlertIcon.Error);
+            }
+        }
+        else
+        {
+            tamoned = responseHTTP.Response;
+        }
+    }
+
+    private async Task Edit()
+    {
+        var responseHTTP = await repository.Put("api/tamoneds", tamoned);
+
+        if (responseHTTP.Error)
+        {
+            var mensajeError = await responseHTTP.GetErrorMessageAsync();
+            await sweetAlertService.FireAsync("Error", mensajeError, SweetAlertIcon.Error);
+            return;
+        }
+
+        await BlazoredModal.CloseAsync(ModalResult.Ok());
+        Return();
+    }
+
+    private void Return()
+    {
+        tamonedForm!.FormPostedSuccessfully = true;
+        navigationManager.NavigateTo("/TablaMonedas/Tamoned/Index");
+    }
+}

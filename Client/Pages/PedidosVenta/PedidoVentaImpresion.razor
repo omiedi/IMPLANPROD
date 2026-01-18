@@ -1,0 +1,676 @@
+@page "/pedido-impresion/{NroPedido:int}"
+@page "/pedido-impresion/{NroPedido:int}/{TipoImpresion}"
+@using IMPLANPROD.Shared.Entities
+@using IMPLANPROD.Shared.DTOs
+@using System.Linq
+@inject IRepository repository
+@inject NavigationManager NavigationManager
+
+<style>
+    .impresion-container {
+        font-family: Arial, sans-serif;
+        font-size: 12px;
+        max-width: 21cm;
+        margin: 0 auto;
+        padding: 1cm;
+        background: white;
+        color: black;
+    }
+
+    .header-table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-bottom: 10px;
+    }
+
+    .header-table td {
+        border: 1px solid black;
+        padding: 5px;
+        vertical-align: top;
+    }
+
+    .empresa-info {
+        width: 40%;
+        font-weight: bold;
+    }
+
+    .cliente-info {
+        width: 40%;
+    }
+
+    .numero-fecha {
+        width: 20%;
+        text-align: center;
+    }
+
+    .detalle-table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-bottom: 15px;
+    }
+
+    .detalle-table th,
+    .detalle-table td {
+        border: 1px solid black;
+        padding: 4px;
+        text-align: left;
+    }
+
+    .detalle-table th {
+        background-color: #f0f0f0;
+        font-weight: bold;
+    }
+
+    .col-it { width: 5%; text-align: left; }
+    .col-cantidad { width: 10%; text-align: right; }
+    .col-codigo { width: 15%; text-align: left; }
+    .col-descripcion { width: 50%; text-align: left; }
+    .col-precio { width: 10%; text-align: right; }
+    .col-importe { width: 10%; text-align: right; }
+
+    .control-section {
+        display: flex;
+        gap: 10px;
+        margin-top: 20px;
+    }
+
+    .observaciones {
+        flex: 1;
+        border: 1px solid black;
+        padding: 10px;
+        min-height: 100px;
+    }
+
+    .checkboxes {
+        width: 200px;
+        border: 1px solid black;
+        padding: 8px;
+        font-size: 11px;
+    }
+
+    .checkbox-row {
+        display: flex;
+        justify-content: space-between;
+        margin-bottom: 6px;
+        align-items: center;
+    }
+
+    .checkbox-label {
+        flex: 1;
+        text-align: left;
+    }
+
+    .checkbox-options {
+        display: flex;
+        gap: 15px;
+        align-items: center;
+    }
+
+    .checkbox-option {
+        display: flex;
+        align-items: center;
+        gap: 3px;
+    }
+
+    .checkbox-item {
+        display: inline-block;
+        width: 12px;
+        height: 12px;
+        border: 1px solid black;
+        background: white;
+    }
+
+    .firma-vendedor {
+        text-align: right;
+        margin-top: 10px;
+        font-size: 10px;
+        border-top: 1px solid black;
+        padding-top: 5px;
+        width: 150px;
+        margin-left: auto;
+    }
+
+    .no-print {
+        display: block;
+    }
+
+
+    .btn-imprimir {
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        z-index: 1000;
+    }
+
+</style>
+
+<style media="print">
+    .no-print {
+        display: none !important;
+    }
+    
+    /* Ocultar elementos de navegación y UI */
+    .sidebar, .nav, .navbar, .menu, .header, .footer,
+    .btn, .button, .toolbar, .top-row, .main-nav,
+    .sidebar-content, .nav-item, .nav-link,
+    .blazor-error-ui, .loading-bar {
+        display: none !important;
+    }
+    
+    /* Ocultar por ID comunes */
+    #sidebar, #navigation, #menu, #header, #footer,
+    #blazor-error-ui, #components-reconnect-modal {
+        display: none !important;
+    }
+    
+    /* Mostrar solo el contenido de impresión */
+    body * {
+        visibility: hidden;
+    }
+    
+    .impresion-container, .impresion-container * {
+        visibility: visible;
+    }
+    
+    .impresion-container {
+        position: absolute;
+        left: 0;
+        top: 0;
+        margin: 0;
+        padding: 0;
+        max-width: none;
+        width: 100%;
+    }
+    
+    body {
+        margin: 0;
+        padding: 0;
+    }
+</style>
+
+<div class="no-print btn-imprimir">
+    @if (EsOrdenDespacho)
+    {
+        <button class="btn btn-success" @onclick="Imprimir">
+            <i class="fas fa-print"></i> Imprimir O. Despacho
+        </button>
+        <button class="btn btn-info ms-2" @onclick="ImprimirPedido">
+            <i class="fas fa-file-invoice"></i> Ver Pedido
+        </button>
+    }
+    else
+    {
+        <button class="btn btn-primary" @onclick="Imprimir">
+            <i class="fas fa-print"></i> Imprimir Pedido
+        </button>
+        <button class="btn btn-success ms-2" @onclick="ImprimirOrdenDespacho">
+            <i class="fas fa-truck"></i> O. Despacho
+        </button>
+    }
+    <button class="btn btn-secondary ms-2" @onclick="Volver">
+        <i class="fas fa-arrow-left"></i> Volver
+    </button>
+</div>
+
+@if (pedido != null)
+{
+    <div class="impresion-container">
+        <!-- Encabezado -->
+        <table class="header-table">
+            <tr>
+                <td class="empresa-info">
+                    <strong>METALURGICASIAM S.A.</strong><br />
+                    <br />
+                    <strong>BOMBAS ALTERNATIVAS</strong><br />
+                    <br />
+                    Dr. ATILIO LAVARELLO<br />
+                    C.P. 1870 AVELLANEDA<br />
+                    TEL. 4204-7389 4203-6577/0011<br />
+                    FAX 54-11-4203-8760
+                </td>
+                <td class="cliente-info">
+                    <strong>Cta.:</strong> @pedido.NroClie - <strong>R.Social:</strong> @pedido.RasoClie<br />
+                    <strong>Calle:</strong> @(datosCliente?.Domi_Cli ?? "")<br />
+                    <strong>Localidad:</strong> @(datosCliente?.Loca_Cli ?? "")<br />
+                    <strong>Teléfono:</strong> @(datosCliente?.Tele_Cli ?? "")<br />
+                    <strong>Entregar en:</strong> @pedido.DomiEnt<br />
+                    <strong>Despachado por:</strong> @(pedido.NTranspo?.ToString() ?? "") "-" + @(pedido.TranspEnt?.ToString() ?? "")<br />
+                    <strong>Cond. de pago:</strong> @pedido.CondPag - @(condicionPago?.DescCondPag ?? "")<br />
+                    <strong>C.U.I.T.:</strong> @(datosCliente?.Cuit_Cli ?? "")<br />
+                    <strong>Fecha de Entrega:</strong> @(pedido.FeSolEnt?.ToString("dd/MM/yy") ?? "")
+                </td>
+                <td class="numero-fecha">
+                    <strong>Formulario Interno</strong><br />
+                    <br />
+                    <strong>N°</strong><br />
+                    <strong>@pedido.NroPed</strong><br />
+                    <strong>@(pedido.FechEmis?.ToString("dd/MM/yy") ?? DateTime.Now.ToString("dd/MM/yy"))</strong><br />
+                    <br />
+                    <strong>Orden de Compra N°</strong><br />
+                    <strong>@(pedido.NroOcom ?? "")</strong>
+                </td>
+            </tr>
+        </table>
+
+        <!-- Detalle de productos -->
+        <table class="detalle-table">
+            <thead>
+                <tr>
+                    <th class="col-it">It.</th>
+                    <th class="col-cantidad">Cantidad</th>
+                    <th class="col-codigo">Código</th>
+                    <th class="col-descripcion">Descripción</th>
+                    @if (!EsOrdenDespacho)
+                    {
+                        <th class="col-precio">Pr. Unit.</th>
+                        <th class="col-importe">Importe</th>
+                    }
+                </tr>
+            </thead>
+            <tbody>
+                @if (detalleItems != null && detalleItems.Any())
+                {
+                    @for (int i = 0; i < Math.Max(detalleItems.Count, 15); i++)
+                    {
+                        <tr style="height: 25px;">
+                            @if (i < detalleItems.Count)
+                            {
+                                var item = detalleItems[i];
+                                <td class="col-it">@(i + 1)</td>
+                                <td class="col-cantidad">@item.CanPed?.ToString("F2")</td>
+                                <td class="col-codigo">@item.CodiExt</td>
+                                <td class="col-descripcion">@item.Descrip</td>
+                                @if (!EsOrdenDespacho)
+                                {
+                                    <td class="col-precio">@item.PreUnid?.ToString("F2")</td>
+                                    <td class="col-importe">@((item.CanPed * item.PreUnid)?.ToString("F2"))</td>
+                                }
+                            }
+                            else
+                            {
+                                <td class="col-it"></td>
+                                <td class="col-cantidad"></td>
+                                <td class="col-codigo"></td>
+                                <td class="col-descripcion"></td>
+                                @if (!EsOrdenDespacho)
+                                {
+                                    <td class="col-precio"></td>
+                                    <td class="col-importe"></td>
+                                }
+                            }
+                        </tr>
+                    }
+                }
+            </tbody>
+        </table>
+
+        @if (!EsOrdenDespacho)
+        {
+            <!-- Totalizador -->
+            <div style="margin-top: 15px; margin-bottom: 15px;">
+                <div style="float: right; width: 300px;">
+                    <table style="width: 100%; border-collapse: collapse;">
+                        <tr>
+                            <td style="text-align: right; padding: 3px; font-weight: bold;">Subtotal:</td>
+                            <td style="text-align: right; padding: 3px; border: 1px solid black; width: 100px;">@CalcularSubtotal().ToString("F2")</td>
+                        </tr>
+                        <tr>
+                            <td style="text-align: right; padding: 3px; font-weight: bold;">Descuento (@(pedido.TDescApli ?? "SIN DESCUENTO")):</td>
+                            <td style="text-align: right; padding: 3px; border: 1px solid black;">@CalcularDescuento().ToString("F2")</td>
+                        </tr>
+                        <tr>
+                            <td style="text-align: right; padding: 3px; font-weight: bold; font-size: 14px;">TOTAL (@(monedaPedido?.Descripcion ?? "PESOS")):</td>
+                            <td style="text-align: right; padding: 3px; border: 2px solid black; font-weight: bold; font-size: 14px;">
+                                @CalcularTotal().ToString("F2")
+                            </td>
+                        </tr>
+                    </table>
+                </div>
+                <div style="clear: both;"></div>
+            </div>
+        }
+
+        <!-- Sección de control -->
+        <div class="control-section">
+            <div class="observaciones">
+                <strong>OBSERVACIONES</strong><br />
+                <div style="height: 80px;"></div>
+            </div>
+            <div class="checkboxes">
+                <div class="checkbox-row">
+                    <div class="checkbox-label">Con inspección</div>
+                    <div class="checkbox-options">
+                        <div class="checkbox-option">
+                            <span>SI</span>
+                            <span class="checkbox-item"></span>
+                        </div>
+                        <div class="checkbox-option">
+                            <span>NO</span>
+                            <span class="checkbox-item"></span>
+                        </div>
+                    </div>
+                </div>
+                <div class="checkbox-row">
+                    <div class="checkbox-label">Solicitud de</div>
+                    <div class="checkbox-options">
+                        <span class="checkbox-item"></span>
+                    </div>
+                </div>
+                <div class="checkbox-row">
+                    <div class="checkbox-label">Presencia de calista</div>
+                    <div class="checkbox-options">
+                        <div class="checkbox-option">
+                            <span>SI</span>
+                            <span class="checkbox-item"></span>
+                        </div>
+                        <div class="checkbox-option">
+                            <span>NO</span>
+                            <span class="checkbox-item"></span>
+                        </div>
+                    </div>
+                </div>
+                <div class="checkbox-row">
+                    <div class="checkbox-label">Extracción de muestra</div>
+                    <div class="checkbox-options">
+                        <div class="checkbox-option">
+                            <span>SI</span>
+                            <span class="checkbox-item"></span>
+                        </div>
+                        <div class="checkbox-option">
+                            <span>NO</span>
+                            <span class="checkbox-item"></span>
+                        </div>
+                    </div>
+                </div>
+                <div class="checkbox-row">
+                    <div class="checkbox-label">Cert análisis químico</div>
+                    <div class="checkbox-options">
+                        <div class="checkbox-option">
+                            <span>SI</span>
+                            <span class="checkbox-item"></span>
+                        </div>
+                        <div class="checkbox-option">
+                            <span>NO</span>
+                            <span class="checkbox-item"></span>
+                        </div>
+                    </div>
+                </div>
+                <div class="checkbox-row">
+                    <div class="checkbox-label">Cert análisis físico</div>
+                    <div class="checkbox-options">
+                        <div class="checkbox-option">
+                            <span>SI</span>
+                            <span class="checkbox-item"></span>
+                        </div>
+                        <div class="checkbox-option">
+                            <span>NO</span>
+                            <span class="checkbox-item"></span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Firma del vendedor -->
+        <div class="firma-vendedor">
+            FIRMA DEL VENDEDOR
+        </div>
+    </div>
+}
+else
+{
+    <div class="text-center mt-5">
+        <div class="spinner-border" role="status">
+            <span class="visually-hidden">Cargando...</span>
+        </div>
+        <p class="mt-2">Cargando pedido...</p>
+    </div>
+}
+
+@code {
+    [Parameter] public int NroPedido { get; set; }
+    [Parameter] public string? TipoImpresion { get; set; } = "pedido";
+
+    private Pedenca? pedido;
+    private List<Peddeta>? detalleItems;
+    private DatosClienteImpresionDTO? datosCliente;
+    private CondicionPagoDTO? condicionPago;
+    private Tamoned? monedaPedido;
+
+    private bool EsOrdenDespacho => TipoImpresion?.ToLower() == "despacho";
+
+    protected override async Task OnInitializedAsync()
+    {
+        await CargarPedido();
+        await CargarDetalle();
+        
+        // Cargar datos adicionales si el pedido se cargó correctamente
+        if (pedido?.NroClie != null)
+        {
+            await CargarDatosCliente(pedido.NroClie.Value);
+        }
+        
+        if (pedido?.CondPag != null)
+        {
+            await CargarCondicionPago(pedido.CondPag.Value);
+        }
+        
+        // Cargar información de la moneda del pedido desde el detalle (PEDDETA)
+        if (detalleItems?.Any() == true)
+        {
+            var primerItem = detalleItems.First();
+            if (primerItem.MoneEmis.HasValue)
+            {
+                Console.WriteLine($"Cargando moneda desde PEDDETA: {primerItem.MoneEmis.Value}");
+                await CargarMonedaPedido(primerItem.MoneEmis.Value);
+            }
+            else
+            {
+                Console.WriteLine("Primer item no tiene moneda establecida, usando fallback");
+                if (pedido?.MoneEmis != null)
+                {
+                    await CargarMonedaPedido(pedido.MoneEmis.Value);
+                }
+            }
+        }
+        else if (pedido?.MoneEmis != null)
+        {
+            // Fallback: usar moneda del encabezado si no hay detalle
+            Console.WriteLine($"No hay detalle, usando moneda de PEDENCA: {pedido.MoneEmis.Value}");
+            await CargarMonedaPedido(pedido.MoneEmis.Value);
+        }
+        else
+        {
+            Console.WriteLine("No se pudo determinar la moneda del pedido");
+        }
+    }
+
+    private async Task CargarPedido()
+    {
+        try
+        {
+            var response = await repository.Get<Pedenca>($"api/pedenca/{NroPedido}");
+            if (!response.Error && response.Response != null)
+            {
+                pedido = response.Response;
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error al cargar pedido: {ex.Message}");
+        }
+    }
+
+    private async Task CargarDetalle()
+    {
+        try
+        {
+            var response = await repository.Get<List<Peddeta>>($"api/pedenca/detalle/{NroPedido}");
+            if (!response.Error && response.Response != null)
+            {
+                detalleItems = response.Response;
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error al cargar detalle: {ex.Message}");
+        }
+    }
+
+    private async Task Imprimir()
+    {
+        await Task.Delay(100); // Pequeña pausa para asegurar que el DOM esté listo
+        await InvokeAsync(() =>
+        {
+            NavigationManager.NavigateTo($"javascript:window.print()", forceLoad: false);
+        });
+    }
+
+    private async Task CargarDatosCliente(int nroCliente)
+    {
+        try
+        {
+            var response = await repository.Get<DatosClienteImpresionDTO>($"api/deudor12/datos-impresion/{nroCliente}");
+            if (!response.Error && response.Response != null)
+            {
+                datosCliente = response.Response;
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error al cargar datos del cliente: {ex.Message}");
+        }
+    }
+
+    private async Task CargarCondicionPago(short condPago)
+    {
+        try
+        {
+            var response = await repository.Get<CondicionPagoDTO>($"api/condpag/condiciones-pago/{condPago}");
+            if (!response.Error && response.Response != null)
+            {
+                condicionPago = response.Response;
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error al cargar condición de pago: {ex.Message}");
+        }
+    }
+
+    private async Task CargarMonedaPedido(short codigoMoneda)
+    {
+        try
+        {
+            Console.WriteLine($"Buscando información de moneda para código: {codigoMoneda}");
+            var response = await repository.Get<List<Tamoned>>($"api/pedenca/monedas");
+            if (!response.Error && response.Response != null)
+            {
+                monedaPedido = response.Response.FirstOrDefault(m => m.CodigoMoneda == codigoMoneda);
+                if (monedaPedido != null)
+                {
+                    Console.WriteLine($"Moneda encontrada: {monedaPedido.Descripcion}");
+                }
+                else
+                {
+                    Console.WriteLine($"No se encontró moneda con código: {codigoMoneda}");
+                }
+            }
+            else
+            {
+                Console.WriteLine("Error al obtener lista de monedas desde API");
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error al cargar información de moneda: {ex.Message}");
+        }
+    }
+
+    private decimal CalcularSubtotal()
+    {
+        if (detalleItems == null) return 0;
+        return detalleItems.Sum(item => (item.CanPed ?? 0) * (item.PreUnid ?? 0));
+    }
+
+    private decimal CalcularDescuento()
+    {
+        var subtotal = CalcularSubtotal();
+        var textoDescuento = pedido?.TDescApli?.Trim() ?? "";
+        
+        if (string.IsNullOrEmpty(textoDescuento)) return 0;
+        
+        // Limpiar el texto de descuento - remover paréntesis, $, comas
+        var textoLimpio = textoDescuento.Replace("(", "").Replace(")", "").Replace("$", "").Replace(",", "").Trim();
+        
+        // Si contiene %, es porcentaje simple
+        if (textoLimpio.Contains("%"))
+        {
+            var porcentajeTexto = textoLimpio.Replace("%", "").Trim();
+            if (decimal.TryParse(porcentajeTexto, System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out decimal porcentaje))
+            {
+                return subtotal * (porcentaje / 100);
+            }
+        }
+        // Si contiene texto como "10 + 15" - descuentos secuenciales (primero 10%, luego 15% al resultado)
+        else if (textoLimpio.Contains("+"))
+        {
+            var partes = textoLimpio.Split('+');
+            decimal importeActual = subtotal;
+            decimal totalDescuento = 0;
+            
+            foreach (var parte in partes)
+            {
+                var parteTexto = parte.Trim();
+                decimal porcentaje = 0;
+                
+                if (parteTexto.Contains("%"))
+                {
+                    var porcentajeTexto = parteTexto.Replace("%", "").Trim();
+                    decimal.TryParse(porcentajeTexto, System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out porcentaje);
+                }
+                else if (decimal.TryParse(parteTexto, System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out decimal numero))
+                {
+                    porcentaje = numero;
+                }
+                
+                if (porcentaje > 0)
+                {
+                    var descuentoParte = importeActual * (porcentaje / 100);
+                    totalDescuento += descuentoParte;
+                    importeActual -= descuentoParte;
+                }
+            }
+            
+            return totalDescuento;
+        }
+        // Si no, es monto fijo
+        else if (decimal.TryParse(textoLimpio, System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out decimal montoFijo))
+        {
+            return montoFijo;
+        }
+        
+        return 0;
+    }
+
+    private decimal CalcularTotal()
+    {
+        return CalcularSubtotal() - CalcularDescuento();
+    }
+
+    private void ImprimirPedido()
+    {
+        NavigationManager.NavigateTo($"/pedido-impresion/{NroPedido}/pedido");
+    }
+
+    private void ImprimirOrdenDespacho()
+    {
+        NavigationManager.NavigateTo($"/pedido-impresion/{NroPedido}/despacho");
+    }
+
+    private void Volver()
+    {
+        // Volver al pedido de donde se partió
+        NavigationManager.NavigateTo($"/pedidos-venta/editar/{NroPedido}");
+    }
+}

@@ -1,0 +1,553 @@
+@page "/stock/consultaStockComponentes"
+@using IMPLANPROD.Shared.Entities
+@using IMPLANPROD.Shared.DTOs
+@inject IRepository repository
+@inject NavigationManager NavigationManager
+@inject SweetAlertService sweetAlertService
+@using IMPLANPROD.Client.Shared.Components
+@using IMPLANPROD.Client.Pages.Stock
+@using Blazored.Modal
+@using Blazored.Modal.Services
+@* @inject Microsoft.AspNetCore.Components.Authorization.AuthenticationStateProvider AuthStateProvider
+ *@
+ @inject IModalService ModalService
+
+<div class="container-fluid">
+    <h3 class="mb-3">Consulta de Stocks de Componentes</h3>
+    <div class="card">
+        <div class="card-header bg-light">
+            <div class="row">
+                <div class="col-md-12">
+                    <MasterSearchComponent OnRepuestoSelected="CódigoSeleccionado" />
+                </div>
+            </div>
+            <div class="row mt-3">
+                <div class="col-md-3">
+                    <div class="form-group">
+                        <label for="codigo">Código:</label>
+                        <input type="text" class="form-control" id="codigo" @bind="Label4" readonly />
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="form-group">
+                        <label for="codint">Código Interno:</label>
+                        <input type="text" class="form-control" id="codint" @bind="codinte" readonly />
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="form-group">
+                        <label for="umedida">U. Medida:</label>
+                        <input type="text" class="form-control" id="umedida" @bind="selectedUMedida" readonly />
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="form-group">
+                        <label for="stocks">Stock Total:</label>
+                        <input type="text" class="form-control" id="stocks" @bind="Label5" readonly />
+                    </div>
+                </div>
+            </div>
+            <div class="row mt-2">
+                <div class="col-md-12">
+                    <div class="form-group">
+                        <label for="descripcion">Descripción:</label>
+                        <input type="text" class="form-control" id="descripcion" @bind="Label6" readonly />
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="form-group">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <label for="cantidad">Cantidad:</label>
+                                <input type="text" class="form-control" id="cantidad" @bind="Text3" @bind:event="oninput" />
+                            </div>
+                            <div class="col-md-6">
+                                <label for="niveles">Niveles:</label>
+                                <input type="text" class="form-control" id="niveles" @bind="TXTNIVELES" @bind:event="oninput" />
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="row mt-2">
+                <div class="col-md-4">
+                    <button class="btn btn-primary" @onclick="ExportarExcel">Exportar a Excel</button>
+                </div>
+                <div class="col-md-4 text-center">
+                    <button class="btn btn-info" @onclick="ActualizarDatos" disabled="@cargando">
+                        @if (cargando)
+                        {
+                            <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
+                            <span> Actualizando...</span>
+                        }
+                        else
+                        {
+                            <i class="fas fa-sync-alt"></i>
+                            <span> Actualizar Datos</span>
+                        }
+                    </button>
+                </div>
+                <div class="col-md-4 text-end">
+                    <button class="btn btn-success" @onclick="SeleccionarDepositos" disabled="@cargando">
+                        @if (cargando)
+                        {
+                            <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
+                            <span> Cargando...</span>
+                        }
+                        else
+                        {
+                            <i class="fas fa-warehouse"></i>
+                            <span> Seleccionar Depósitos</span>
+                        }
+                    </button>
+                </div>
+            </div>
+        </div>
+        <div class="card-body">
+            <div class="row">
+                <div class="col-md-3">
+                    <div class="form-group">
+                        <label for="depositosSeleccionados">Depósitos Seleccionados:</label>
+                        <input type="text" class="form-control" id="depositosSeleccionados" @bind="Text1" readonly />
+                    </div>
+                </div>
+                <div class="col-md-9">
+                    <div class="list-group" style="max-height: 150px; overflow-y: auto;">
+                        @foreach (var deposito in depositosSeleccionados)
+                        {
+                            <div class="list-group-item">@deposito</div>
+                        }
+                    </div>
+                </div>
+            </div>
+            
+            <div class="row mt-3">
+                <div class="col-12">
+                    <div class="btn-group mb-2">
+                        <button class="btn @(mostrarVistaDetalle ? "btn-outline-primary" : "btn-primary")" @onclick="() => MostrarAcumularPorCodigo()">ACUMULAR X CÓDIGO</button>
+                        <button class="btn @(mostrarVistaDetalle ? "btn-primary" : "btn-outline-primary")" @onclick="MostrarVistaDetalle">VISTA DETALLE</button>
+                    </div>
+                    
+                    <div class="table-responsive">
+                        @if (mostrarVistaDetalle)
+                        {
+                            <table class="table table-striped table-bordered">
+                                <thead>
+                                    <tr>
+                                        <th>CI1</th>
+                                        <th>CodXEelem</th>
+                                        <th>Descripción</th>
+                                        <th>U.M.</th>
+                                        <th>Uso</th>
+                                        <th>Cant.Simulada</th>
+                                        <th>St.Acumulado</th>
+                                        @foreach (var deposito in depositosSeleccionados)
+                                        {
+                                            <th>Dep.@deposito</th>
+                                        }
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @if (detalleItems != null)
+                                    {
+                                        @foreach (var item in detalleItems)
+                                        {
+                                            <tr>
+                                                <td>@item.CI1</td>
+                                                <td>@item.CodXEelem</td>
+                                                <td>@item.Descripcion</td>
+                                                <td>@item.UM</td>
+                                                <td>@item.Uso</td>
+                                                <td>@item.CantSimulada</td>
+                                                <td>@item.StAcumulado</td>
+                                                @foreach (var deposito in depositosSeleccionados)
+                                                {
+                                                    <td>@GetStockAcumuladoDeposito(item, deposito)</td>
+                                                }
+                                            </tr>
+                                        }
+                                    }
+                                </tbody>
+                            </table>
+                        }
+                        else
+                        {
+                            <table class="table table-striped table-bordered">
+                                <thead>
+                                    <tr>
+                                        <th>CI1</th>
+                                        <th>CodXEelem</th>
+                                        <th>Descripción</th>
+                                        <th>U.M.</th>
+                                        <th>Uso</th>
+                                        <th>Cant.Simulada</th>
+                                        <th>St.Acumulado</th>
+                                        @foreach (var deposito in depositosSeleccionados)
+                                        {
+                                            <th>Dep. @deposito</th>
+                                        }
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @if (acumuladoItems != null)
+                                    {
+                                        @foreach (var item in acumuladoItems)
+                                        {
+                                            <tr>
+                                                <td>@item.CI1</td>
+                                                <td>@item.CodXEelem</td>
+                                                <td>@item.Descripcion</td>
+                                                <td>@item.UM</td>
+                                                <td>@item.Uso</td>
+                                                <td>@item.CantSimulada</td>
+                                                <td>@item.StAcumulado</td>
+                                                @foreach (var deposito in depositosSeleccionados)
+                                                {
+                                                    <td>@GetStockAcumuladoDeposito(item, deposito)</td>
+                                                }
+                                            </tr>
+                                        }
+                                    }
+                                </tbody>
+                            </table>
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    private string Label4 { get; set; } = string.Empty; // Código
+    private string Label5 { get; set; } = string.Empty; // Stock
+    private string Label6 { get; set; } = string.Empty; // Descripción
+    private string TXTNIVELES { get; set; } = "1"; // Niveles
+    private string Text1 { get; set; } = string.Empty; // Depósitos seleccionados
+    private string Text3 { get; set; } = "1"; // Cantidad
+    private int codinte { get; set; } // Código interno seleccionado
+    private string selectedUMedida { get; set; } = string.Empty; // Unidad de medida
+    private List<string> depositosSeleccionados = new List<string>();
+    private List<DetalleStockDTO> detalleItems = new List<DetalleStockDTO>();
+    private List<DetalleStockDTO> acumuladoItems = new List<DetalleStockDTO>();
+    private Dictionary<string, decimal> stockPorDeposito = new Dictionary<string, decimal>();
+    private bool mostrarVistaDetalle = true;
+    private bool cargando { get; set; } = false;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await base.OnInitializedAsync();
+    }
+
+    private async Task CódigoSeleccionado(Master master)
+    {
+        try
+        {
+            if (master != null)
+            {
+                // Guardar datos del producto seleccionado
+                Label4 = master.Codigo ?? string.Empty;
+                Label6 = master.Descripcion ?? string.Empty;
+                codinte = master.Codint;
+                selectedUMedida = master.Umedida ?? string.Empty;
+                
+                // Obtener stock total
+                var stockResponse = await repository.Get<decimal>($"/api/Movisto/stock/total/{codinte}");
+                if (!stockResponse.Error)
+                {
+                    Label5 = stockResponse.Response.ToString("F2");
+                }
+                else
+                {
+                    Label5 = "0.00";
+                }
+                
+                // Cargar detalle
+                await CargarEstructuraMultinivel(master.Codint);
+            }
+            else
+            {
+                Label5 = string.Empty;
+                Label6 = string.Empty;
+                codinte = 0;
+                selectedUMedida = string.Empty;
+            }
+        }
+        catch (Exception ex)
+        {
+            await sweetAlertService.FireAsync("Error", ex.Message, SweetAlertIcon.Error);
+        }
+    }
+
+    private async Task CargarEstructuraMultinivel(int codInt)
+    {
+        try
+        {
+            int niveles = TXTNIVELES.ToLower() == "todos" ? 0 : int.Parse(TXTNIVELES);
+            int cantidad = int.Parse(Text3);
+            
+            var url = $"api/stock/estructuramultinivel/{codInt}?niveles={niveles}&cantidad={cantidad}";
+            var response = await repository.Get<List<DetalleStockDTO>>(url);
+            
+            if (response.Error)
+            {
+                await sweetAlertService.FireAsync("Error", $"Error al obtener estructura: {response.HttpResponseMessage.ReasonPhrase}", SweetAlertIcon.Error);
+                detalleItems = new List<DetalleStockDTO>();
+                return;
+            }
+            
+            detalleItems = response.Response ?? new List<DetalleStockDTO>();
+            
+            // Actualizar stocks por depósito si hay depósitos seleccionados
+            if (depositosSeleccionados.Any())
+            {
+                await ActualizarStockPorDeposito();
+            }
+            
+            // Generar vista acumulada
+            await AcumularPorCodigo();
+        }
+        catch (Exception ex)
+        {
+            await sweetAlertService.FireAsync("Error", ex.Message, SweetAlertIcon.Error);
+        }
+    }
+
+    private async Task ActualizarStockPorDeposito()
+    {
+        if (detalleItems == null || !detalleItems.Any() || !depositosSeleccionados.Any())
+        {
+            return;
+        }
+
+        stockPorDeposito.Clear();
+
+        // Limpiar los diccionarios de stock por depósito en cada item
+        foreach (var item in detalleItems)
+        {
+            if (item.StockPorDeposito == null)
+            {
+                item.StockPorDeposito = new Dictionary<string, decimal>();
+            }
+            else
+            {
+                item.StockPorDeposito.Clear();
+            }
+        }
+
+        // Cargar el stock para cada item y depósito
+        foreach (var item in detalleItems)
+        {
+            foreach (var depositoStr in depositosSeleccionados)
+            {
+                try
+                {
+                    var response = await repository.Get<decimal>($"api/stock/stockdeposito/{item.CI1}/{depositoStr}");
+                    if (!response.Error)
+                    {
+                        // Guardar en el diccionario global para la vista detalle
+                        var key = $"{item.CI1}_{depositoStr}";
+                        stockPorDeposito[key] = response.Response;
+                        
+                        // Guardar también en el item para la vista acumulada
+                        item.StockPorDeposito[depositoStr] = response.Response;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"Error al obtener stock para CI1 {item.CI1} y depósito {depositoStr}: {ex.Message}");
+                }
+            }
+        }
+    }
+
+    private decimal GetStockDeposito(int codInt, string deposito)
+    {
+        var key = $"{codInt}_{deposito}";
+        if (stockPorDeposito.ContainsKey(key))
+        {
+            return stockPorDeposito[key];
+        }
+        return 0;
+    }
+    
+    private decimal GetStockAcumuladoDeposito(DetalleStockDTO item, string deposito)
+    {
+        if (item.StockPorDeposito != null && item.StockPorDeposito.ContainsKey(deposito))
+        {
+            return item.StockPorDeposito[deposito];
+        }
+        return 0;
+    }
+    
+    
+
+    private async Task AcumularPorCodigo()
+    {
+        // Verificar que haya datos para acumular
+        if (detalleItems == null || !detalleItems.Any())
+        {
+            acumuladoItems = new List<DetalleStockDTO>();
+            return;
+        }
+
+        // Crear un diccionario para acumular los valores por código externo
+        var acumuladoPorCodigo = new Dictionary<string, DetalleStockDTO>();
+        
+        // Recorrer todos los items y acumular por código externo (similar al ejemplo en VB6)
+        foreach (var item in detalleItems)
+        {
+            string codigoExterno = item.CodXEelem;
+            
+            // Si ya existe este código en el diccionario, acumular valores
+            if (acumuladoPorCodigo.ContainsKey(codigoExterno))
+            {
+                var itemExistente = acumuladoPorCodigo[codigoExterno];
+                
+                // Acumular valores
+                itemExistente.Uso += item.Uso;
+                itemExistente.CantSimulada += item.CantSimulada;
+                itemExistente.StAcumulado += item.StAcumulado;
+                
+                // No necesitamos actualizar otros campos como descripción o UM porque son los mismos
+            }
+            else
+            {
+                // Si es la primera vez que vemos este código, crear un nuevo item acumulado
+                var nuevoItemAcumulado = new DetalleStockDTO
+                {
+                    CI1 = item.CI1, // Usar el CI1 del primer item encontrado con este código
+                    CodXEelem = codigoExterno,
+                    Descripcion = item.Descripcion,
+                    UM = item.UM,
+                    Uso = item.Uso,
+                    CantSimulada = item.CantSimulada,
+                    StAcumulado = item.StAcumulado,
+                    StockPorDeposito = new Dictionary<string, decimal>()
+                };
+                
+                acumuladoPorCodigo.Add(codigoExterno, nuevoItemAcumulado);
+            }
+        }
+        
+        // Convertir el diccionario a una lista
+        acumuladoItems = acumuladoPorCodigo.Values.ToList();
+        
+        // Calcular stock por depósito para los items acumulados
+        if (depositosSeleccionados.Any())
+        {
+            foreach (var item in acumuladoItems)
+            {
+                foreach (var depositoStr in depositosSeleccionados)
+                {
+                    decimal stockTotal = 0;
+                    
+                    // Sumar el stock de todos los componentes con el mismo código externo
+                    foreach (var detalle in detalleItems.Where(d => d.CodXEelem == item.CodXEelem))
+                    {
+                        stockTotal += GetStockDeposito(detalle.CI1, depositoStr);
+                    }
+                    
+                    // Guardar el stock total para este depósito
+                    if (item.StockPorDeposito == null)
+                    {
+                        item.StockPorDeposito = new Dictionary<string, decimal>();
+                    }
+                    
+                    item.StockPorDeposito[depositoStr] = stockTotal;
+                }
+            }
+        }
+        
+        await Task.CompletedTask; // Para satisfacer el requisito de async
+    }
+
+    private void MostrarVistaDetalle()
+    {
+        mostrarVistaDetalle = true;
+    }
+
+    private async Task MostrarAcumularPorCodigo()
+    {
+        mostrarVistaDetalle = false;
+        
+        // Ejecutar la acumulación por código si hay datos
+        if (detalleItems != null && detalleItems.Any())
+        {
+            await AcumularPorCodigo();
+        }
+    }
+
+    private async Task SeleccionarDepositos()
+    {
+        try
+        {
+            cargando = true;
+            // Mostrar el modal de selección de depósitos
+            var modalParameters = new ModalParameters();
+            
+            // Pasar los depósitos seleccionados actuales al modal
+            if (depositosSeleccionados != null && depositosSeleccionados.Any())
+            {
+                modalParameters.Add("DepositosSeleccionados", depositosSeleccionados);
+            }
+            
+            var modal = ModalService.Show<SeleccionarDepositosModal>("Seleccionar Depósitos", modalParameters);
+            var result = await modal.Result;
+            
+            // Si el usuario cerró el modal con Aceptar y hay depósitos seleccionados
+            if (!result.Cancelled && result.Data != null)
+            {
+                if (result.Data is List<string> depositosIdsStr && depositosIdsStr.Any())
+                {
+                    // Asignar directamente la lista de IDs como strings
+                    depositosSeleccionados = depositosIdsStr;
+                    Text1 = string.Join(", ", depositosSeleccionados);
+                    
+                    // Actualizar los stocks por depósito
+                    if (detalleItems != null && detalleItems.Any())
+                    {
+                        await ActualizarStockPorDeposito();
+                        await AcumularPorCodigo();
+                    }
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            await sweetAlertService.FireAsync("Error", $"Error al seleccionar depósitos: {ex.Message}", SweetAlertIcon.Error);
+        }
+        finally
+        {
+            cargando = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task ExportarExcel()
+    {
+        await sweetAlertService.FireAsync("Información", "Funcionalidad de exportación a Excel pendiente de implementar", SweetAlertIcon.Info);
+    }
+    
+    private async Task ActualizarDatos()
+    {
+        if (codinte > 0)
+        {
+            try
+            {
+                cargando = true;
+                await CargarEstructuraMultinivel(codinte);
+                await sweetAlertService.FireAsync("Éxito", "Datos actualizados correctamente", SweetAlertIcon.Success);
+            }
+            finally
+            {
+                cargando = false;
+                StateHasChanged();
+            }
+        }
+        else
+        {
+            await sweetAlertService.FireAsync("Advertencia", "Primero debe seleccionar un producto", SweetAlertIcon.Warning);
+        }
+    }
+}

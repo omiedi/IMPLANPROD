@@ -1,0 +1,109 @@
+@inject SweetAlertService sweetAlertService
+@inject IRepository repository
+
+
+<EditForm Model="padmaq" OnValidSubmit="OnValidSubmit">
+    <DataAnnotationsValidator />
+
+    <div class="mb-3">
+        <label>Código:</label>
+        <div>
+            <InputText class="form-control" @bind-Value="@padmaq.CodigoPadMaq" disabled="@IsEdit" />
+            <ValidationMessage For="@(() =>padmaq.CodigoPadMaq)" />
+        </div>
+    </div>
+    <div class="mb-3">
+        <label>Descripción:</label>
+        <div>
+            <InputText class="form-control" @bind-Value="@padmaq.Descripcion" />
+            <ValidationMessage For="@(() => padmaq.Descripcion)" />
+        </div>
+    </div>
+
+    <div class="mb-3">
+        <label>Sector productivo:</label>
+        <div>
+            <InputSelect class="form-control" @bind-Value="@padmaq.CodigoSecProd">
+                <option value="0">Seleccione un sector...</option>
+                @if (secProd != null)
+                {
+                    @foreach (var item in secProd)
+                    {
+                        <option value="@item.Id">@item.Descripcion</option>
+                    }
+                }
+            </InputSelect>
+            <ValidationMessage For="@(() => padmaq.CodigoSecProd)" />
+        </div>
+    </div>
+
+    <div class="mb-3">
+        <label>Máq.Alternativa:</label>
+        <div>
+            <InputSelect class="form-control" @bind-Value="@padmaq.CodigoPadMaqAlt">
+                <option value="0">Seleccione un máquina alternat...</option>
+                @if (secProd != null)
+                {
+                    @foreach (var item in padmaqList)
+                    {
+                        <option value="@item.CodigoPadMaq">@item.Descripcion</option>
+                    }
+                }
+            </InputSelect>
+            <ValidationMessage For="@(() =>padmaq.CodigoPadMaqAlt)" />
+        </div>
+    </div>
+    <div class="mb-3">
+        <label>Descripción:</label>
+        <div>
+            <InputNumber class="form-control" @bind-Value="@padmaq.ValorHora" />
+            <ValidationMessage For="@(() => padmaq.ValorHora)" />
+        </div>
+    </div>
+
+
+    <button class="btn btn-primary" type="submit">Guardar Cambios</button>
+    <button class="btn btn-success" @onclick="ReturnAction">Regresar</button>
+
+</EditForm>
+
+@code {
+
+
+
+    [EditorRequired]
+    [Parameter]
+    public PADMAQ padmaq { get; set; } = null!;
+    private List<SecProd> secProd = new();
+    private List<PADMAQ> padmaqList = new();
+    [EditorRequired]
+    [Parameter]
+    public EventCallback OnValidSubmit { get; set; }
+
+    [EditorRequired]
+    [Parameter]
+    public EventCallback ReturnAction { get; set; }
+
+    [Parameter]
+    public bool IsEdit { get; set; }
+
+    public bool FormPostedSuccessfully { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            var response = await repository.Get<List<SecProd>>($"api/secprod/combo");
+            secProd = response.Response!;
+            var response2 = await repository.Get<List<PADMAQ>>($"api/padmaq/combo");
+
+            padmaqList = response2.Response!;
+        }
+        catch (Exception ex)
+        {
+            
+            throw;
+        }
+ 
+    }
+}

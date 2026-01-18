@@ -1,0 +1,126 @@
+﻿@using IMPLANPROD.Shared.Entities
+@using IMPLANPROD.Shared.DTOs
+@inject IRepository repository
+@inject SweetAlertService sweetAlertService
+
+@if (Visible)
+{
+    <div class="modal fade show" style="display: block" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header bg-warning text-dark">
+                    <h5 class="modal-title">Ajuste Trazable - @Repuesto?.Descripcion</h5>
+                    <button type="button" class="btn-close" @onclick="OnClose"></button>
+                </div>
+                <div class="modal-body">
+                    <EditForm Model="ajuste" OnValidSubmit="OnValidSubmit">
+                        <DataAnnotationsValidator />
+                        <ValidationSummary />
+
+                        <div class="mb-3">
+                            <label class="form-label">Seleccionar Lote</label>
+                            <select class="form-select" @bind="ajuste.IdenLote">
+                                <option value="">-- Seleccionar --</option>
+                                @foreach (var lote in LotesDisponibles)
+                                {
+                                    <option value="@lote.IdenLote">
+                                        @($"{lote.IdenLote} - Stock: {lote.Saldo:N2}")
+                                    </option>
+                                }
+                            </select>
+                            @if (string.IsNullOrWhiteSpace(ajuste.IdenLote))
+                            {
+                                <div class="text-danger">Debe seleccionar un lote</div>
+                            }
+                        </div>
+
+                        <!-- Reutilizás aquí los campos Ingreso, Salida, Referencia igual que el componente original -->
+                        <!-- Podés incluso refactorizar los campos en un componente común si lo deseás -->
+
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-secondary" @onclick="OnClose">Cancelar</button>
+                            <button type="submit" class="btn btn-warning">Guardar Ajuste</button>
+                        </div>
+                    </EditForm>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+<div class="modal-backdrop fade show"></div>
+
+@code {
+    private List<LoteSaldoDTO> LotesDisponibles = new();
+    private decimal stockActual;
+    private decimal stockResultante;
+
+    private StockAjusteDTO ajuste = new();
+
+    [Parameter] public ProductoConSaldoDTO? Repuesto { get; set; }
+    [Parameter] public StockDepositoDTO? StockDeposito { get; set; }
+    [Parameter] public EventCallback OnClose { get; set; }
+    [Parameter] public EventCallback OnSave { get; set; }
+    [Parameter] public bool Visible { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        ajuste = new StockAjusteDTO
+            {
+                CodInte = Repuesto?.Cod_inte,
+                CodExte = Repuesto?.Codigo,
+                Descripcion = Repuesto?.Descripcion,
+                Deposito = StockDeposito?.Deposito,
+                Referencia = "Ajuste Trazable",
+                IdenLote = Repuesto?.IdenLote
+            };
+
+        stockActual = StockDeposito?.Stock ?? 0;
+        stockResultante = stockActual;
+
+        if (Repuesto?.Cod_inte != null)
+        {
+            var result = await repository.Get<List<LoteSaldoDTO>>($"api/lotes/producto/{Repuesto.Cod_inte}");
+
+            if (result != null && !result.Error)
+            {
+                LotesDisponibles = result.Response!; // Asegúrate que el nombre coincida
+            }
+            // // Consultá al backend: API que devuelva los lotes con su saldo actual
+            // var response = await repository.Get<List<LoteSaldoDTO>>($"api/lotes/producto/{Repuesto.Cod_inte}");
+            // if (response != null)
+            // {
+            //     LotesDisponibles = response;
+            // }
+        }
+    }
+
+    private async Task OnValidSubmit()
+    {
+        if (string.IsNullOrWhiteSpace(ajuste.IdenLote))
+        {
+            await sweetAlertService.FireAsync("Error", "Debe seleccionar un lote válido", SweetAlertIcon.Error);
+            return;
+        }
+
+        if (ajuste.Ingreso == 0 && ajuste.Salida == 0)
+        {
+            await sweetAlertService.FireAsync("Error", "Debe ingresar cantidad de ingreso o salida", SweetAlertIcon.Error);
+            return;
+        }
+
+        // Acá podés validar stockResultante de ese lote en particular si querés
+
+        var response = await repository.Post("api/stockajustes/ajuste-trazable", ajuste);
+        if (response.Error)
+        {
+            var msg = await response.HttpResponseMessage.Content.ReadAsStringAsync();
+            await sweetAlertService.FireAsync("Error", msg, SweetAlertIcon.Error);
+        }
+        else
+        {
+            await sweetAlertService.FireAsync("Éxito", "Ajuste realizado correctamente", SweetAlertIcon.Success);
+            await OnSave.InvokeAsync();
+            await OnClose.InvokeAsync();
+        }
+    }
+}

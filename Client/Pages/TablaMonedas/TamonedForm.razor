@@ -1,0 +1,53 @@
+@inject SweetAlertService sweetAlertService
+
+@using CurrieTechnologies.Razor.SweetAlert2
+
+<!-- Formulario para crear/editar una moneda -->
+<EditForm Model="Tamoned" OnValidSubmit="OnValidSubmit">
+    <DataAnnotationsValidator />
+
+    <div class="mb-3">
+        <label>Código:</label>
+        <div>
+            <InputNumber class="form-control" @bind-Value="@Tamoned.CodigoMoneda" disabled="@IsEdit" />
+            <ValidationMessage For="@(() => Tamoned.CodigoMoneda)" />
+        </div>
+    </div>
+    <div class="mb-3">
+        <label>Descripción:</label>
+        <div>
+            <InputText class="form-control" @bind-Value="@Tamoned.Descripcion" />
+            <ValidationMessage For="@(() => Tamoned.Descripcion)" />
+        </div>
+    </div>
+    <div class="mb-3">
+        <label>Cotización:</label>
+        <div>
+            <InputNumber class="form-control" @bind-Value="@Tamoned.Cotizacion" />
+            <ValidationMessage For="@(() => Tamoned.Cotizacion)" />
+        </div>
+    </div>
+
+    <button class="btn btn-primary" type="submit">Guardar Cambios</button>
+    <button class="btn btn-success" type="button" @onclick="ReturnAction">Regresar</button>
+
+</EditForm>
+
+@code {
+    [EditorRequired]
+    [Parameter]
+    public Tamoned Tamoned { get; set; } = null!;
+
+    [EditorRequired]
+    [Parameter]
+    public EventCallback OnValidSubmit { get; set; }
+
+    [EditorRequired]
+    [Parameter]
+    public EventCallback ReturnAction { get; set; }
+
+    [Parameter]
+    public bool IsEdit { get; set; }
+
+    public bool FormPostedSuccessfully { get; set; }
+}

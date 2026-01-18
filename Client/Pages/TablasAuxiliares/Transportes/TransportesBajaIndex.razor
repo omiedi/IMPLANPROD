@@ -1,0 +1,155 @@
+@page "/TablasAuxiliares/Transportes/TransportesBaja"
+@inject IRepository repository
+@inject NavigationManager navigationManager
+@inject SweetAlertService sweetAlertService
+@inject IJSRuntime JS
+
+@using CurrieTechnologies.Razor.SweetAlert2
+@using IMPLANPROD.Shared.Entities
+
+<!-- Listado de transportes inactivos (baja lógica) -->
+<div class="bg-primary text-white text-center p-3 mb-4">
+    <h1>Transportes Inactivos</h1>
+</div>
+<div class="mb-3">
+    <a class="btn btn-success" href="/TablasAuxiliares/Transportes/Transportes">Volver</a>
+</div>
+
+<div class="d-flex align-items-center mb-3">
+    <input style="width: 400px;" type="text" class="form-control me-2" id="titulo" placeholder="Buscar transporte..." @bind-value="Filter" />
+    <button type="button" class="btn btn-outline-primary me-2" @onclick="ApplyFilterAsync">Filtrar</button>
+    <button type="button" class="btn btn-outline-danger" @onclick="CleanFilterAsync">Limpiar</button>
+</div>
+
+<Pagination CurrentPage="currentPage"
+            TotalPages="totalPages"
+            SelectedPage="SelectedPageAsync" />
+
+<GenericList MyList="transportes">
+    <Body>
+        <table class="table table-striped">
+            <thead>
+                <tr>
+                    <th>Id</th>
+                    <th>Código</th>
+                    <th>Nombre</th>
+                    <th>Razón Social</th>
+                    <th>CUIT</th>
+                    <th>Acciones</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var t in transportes!)
+                {
+                    <tr>
+                        <td>@t.Id</td>
+                        <td>@t.Codi_Tra</td>
+                        <td>@t.Deno_Tra</td>
+                        <td>@t.Raso_Tra</td>
+                        <td>@t.Cuit_Tra</td>
+                        <td>
+                            <button class="btn btn-success btn-sm" @onclick=@(() => ActivarAsync(t))>Activar</button>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </Body>
+</GenericList>
+
+@code {
+    public List<Transporte>? transportes { get; set; }
+
+    [Parameter]
+    [SupplyParameterFromQuery]
+    public string Page { get; set; } = string.Empty;
+
+    [Parameter]
+    [SupplyParameterFromQuery]
+    public string Filter { get; set; } = string.Empty;
+
+    private int currentPage = 1;
+    private int totalPages;
+
+    protected async override Task OnInitializedAsync()
+    {
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync(int page = 1)
+    {
+        if (!string.IsNullOrWhiteSpace(Page))
+        {
+            page = Convert.ToInt32(Page);
+        }
+
+        string url1;
+        string url2;
+
+        if (string.IsNullOrEmpty(Filter))
+        {
+            url1 = $"api/transportes?page={page}&estado=-1";
+            url2 = $"api/transportes/totalPages?estado=-1";
+        }
+        else
+        {
+            url1 = $"api/transportes?page={page}&filter={Filter}&estado=-1";
+            url2 = $"api/transportes/totalPages?filter={Filter}&estado=-1";
+        }
+
+        var responseHppt = await repository.Get<List<Transporte>>(url1);
+        var responseHppt2 = await repository.Get<int>(url2);
+        transportes = responseHppt.Response ?? new List<Transporte>();
+        totalPages = responseHppt2.Response!;
+    }
+
+    private async Task ActivarAsync(Transporte transporte)
+    {
+        var confirm = await sweetAlertService.FireAsync(new SweetAlertOptions
+        {
+            Title = "Confirmación",
+            Text = $"¿Está seguro que quiere activar el transporte: {transporte.Deno_Tra}?",
+            Icon = SweetAlertIcon.Question,
+            ShowCancelButton = true
+        });
+
+        if (string.IsNullOrEmpty(confirm.Value)) { return; }
+
+        transporte.Status = 0;
+        var responseHttp = await repository.Put($"api/transportes", transporte);
+        if (responseHttp.Error)
+        {
+            var message = await responseHttp.GetErrorMessageAsync();
+            await sweetAlertService.FireAsync("Error", message, SweetAlertIcon.Error);
+            return;
+        }
+
+        await LoadAsync();
+        var toast = sweetAlertService.Mixin(new SweetAlertOptions
+        {
+            Toast = true,
+            Position = SweetAlertPosition.BottomEnd,
+            ShowConfirmButton = false,
+            Timer = 3000
+        });
+        await toast.FireAsync(icon: SweetAlertIcon.Success, message: "Transporte activado con éxito.");
+    }
+
+    private async Task CleanFilterAsync()
+    {
+        Filter = string.Empty;
+        await ApplyFilterAsync();
+    }
+
+    private async Task ApplyFilterAsync()
+    {
+        int page = 1;
+        await LoadAsync(page);
+    }
+
+    private async Task SelectedPageAsync(int page)
+    {
+        currentPage = page;
+        await LoadAsync(page);
+    }
+}

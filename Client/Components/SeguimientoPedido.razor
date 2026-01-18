@@ -1,0 +1,304 @@
+@using IMPLANPROD.Shared.DTOs
+@inject IRepository repository
+
+<div class="card shadow-sm mb-4">
+    <div class="card-header bg-info text-white">
+        <h5 class="mb-0">
+            <i class="fas fa-route"></i> Seguimiento del Pedido
+        </h5>
+    </div>
+    <div class="card-body">
+        @if (cargando)
+        {
+            <div class="text-center py-4">
+                <div class="spinner-border text-primary" role="status">
+                    <span class="visually-hidden">Cargando...</span>
+                </div>
+                <p class="mt-2 text-muted">Cargando seguimiento...</p>
+            </div>
+        }
+        else if (seguimiento != null)
+        {
+            <!-- Diagrama de flujo visual -->
+            <div class="seguimiento-flow">
+                <!-- PEDIDO (inicio) -->
+                <div class="flow-item">
+                    <div class="flow-box pedido-box">
+                        <i class="fas fa-shopping-cart fa-2x mb-2"></i>
+                        <h6>PEDIDO</h6>
+                        <strong>#@NroPedido</strong>
+                    </div>
+                </div>
+
+                <!-- Flecha divisoria -->
+                @if (seguimiento.OrdenesFabricacion.Any() || seguimiento.Remitos.Any())
+                {
+                    <div class="flow-arrow-container">
+                        <div class="flow-arrow-split">
+                            @if (seguimiento.OrdenesFabricacion.Any())
+                            {
+                                <div class="arrow-branch arrow-left">
+                                    <i class="fas fa-arrow-down"></i>
+                                </div>
+                            }
+                            @if (seguimiento.Remitos.Any())
+                            {
+                                <div class="arrow-branch arrow-right">
+                                    <i class="fas fa-arrow-down"></i>
+                                </div>
+                            }
+                        </div>
+                    </div>
+                }
+
+                <!-- Contenedor de dos columnas -->
+                <div class="row mt-3">
+                    <!-- ÓRDENES DE FABRICACIÓN (columna izquierda) -->
+                    <div class="col-md-6">
+                        @if (seguimiento.OrdenesFabricacion.Any())
+                        {
+                            <div class="flow-section">
+                                <h6 class="text-primary mb-3">
+                                    <i class="fas fa-industry"></i> Órdenes de Fabricación (@seguimiento.OrdenesFabricacion.Count)
+                                </h6>
+                                @foreach (var of in seguimiento.OrdenesFabricacion)
+                                {
+                                    <div class="flow-box of-box mb-3">
+                                        <div class="d-flex justify-content-between align-items-start mb-2">
+                                            <div>
+                                                <strong>@of.CodExte</strong>
+                                                <span class="badge @GetEstadoBadgeClass(of.StatuOrf) ms-2">
+                                                    @of.EstadoDescripcion
+                                                </span>
+                                            </div>
+                                        </div>
+                                        <div class="small text-muted mb-2">@of.Descrip</div>
+                                        
+                                        <!-- Barra de progreso -->
+                                        <div class="mb-2">
+                                            <div class="d-flex justify-content-between small mb-1">
+                                                <span>Proyectado: @of.CanProy?.ToString("N2")</span>
+                                                <span>Aprobado: @of.CanApro?.ToString("N2")</span>
+                                            </div>
+                                            <div class="progress" style="height: 20px;">
+                                                <div class="progress-bar @GetProgressBarClass(of.PorcentajeAvance)" 
+                                                     role="progressbar" 
+                                                     style="width: @of.PorcentajeAvance%"
+                                                     aria-valuenow="@of.PorcentajeAvance" 
+                                                     aria-valuemin="0" 
+                                                     aria-valuemax="100">
+                                                    @of.PorcentajeAvance.ToString("N0")%
+                                                </div>
+                                            </div>
+                                        </div>
+                                        
+                                        @if (!string.IsNullOrEmpty(of.IdenLote))
+                                        {
+                                            <div class="small">
+                                                <i class="fas fa-barcode"></i> Lote: <strong>@of.IdenLote</strong>
+                                            </div>
+                                        }
+                                    </div>
+                                }
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="alert alert-light text-center">
+                                <i class="fas fa-info-circle"></i> Sin órdenes de fabricación
+                            </div>
+                        }
+                    </div>
+
+                    <!-- REMITOS (columna derecha) -->
+                    <div class="col-md-6">
+                        @if (seguimiento.Remitos.Any())
+                        {
+                            <div class="flow-section">
+                                <h6 class="text-success mb-3">
+                                    <i class="fas fa-truck"></i> Remitos (@seguimiento.Remitos.Count)
+                                </h6>
+                                @foreach (var remito in seguimiento.Remitos)
+                                {
+                                    <div class="flow-box remito-box mb-3">
+                                        <div class="d-flex justify-content-between align-items-start mb-2">
+                                            <div>
+                                                <i class="fas fa-file-invoice"></i>
+                                                <strong>Remito: @remito.NumeroRemito</strong>
+                                            </div>
+                                            <small class="text-muted">
+                                                @remito.FechMov?.ToString("dd/MM/yyyy")
+                                            </small>
+                                        </div>
+                                        <div class="small mb-1">
+                                            <strong>@remito.CodExte</strong>
+                                        </div>
+                                        <div class="small text-muted mb-2">@remito.Descrip</div>
+                                        <div class="small">
+                                            <i class="fas fa-boxes"></i> Cantidad: <strong>@remito.CantSalid?.ToString("N2")</strong>
+                                        </div>
+                                    </div>
+                                }
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="alert alert-light text-center">
+                                <i class="fas fa-info-circle"></i> Sin remitos generados
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+        }
+        else if (!string.IsNullOrEmpty(mensajeError))
+        {
+            <div class="alert alert-danger">
+                <i class="fas fa-exclamation-triangle"></i> @mensajeError
+            </div>
+        }
+    </div>
+</div>
+
+<style>
+    .seguimiento-flow {
+        padding: 20px;
+    }
+
+    .flow-item {
+        display: flex;
+        justify-content: center;
+        margin-bottom: 20px;
+    }
+
+    .flow-box {
+        border: 2px solid #dee2e6;
+        border-radius: 8px;
+        padding: 15px;
+        background: white;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        transition: all 0.3s ease;
+    }
+
+    .flow-box:hover {
+        box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+        transform: translateY(-2px);
+    }
+
+    .pedido-box {
+        border-color: #0d6efd;
+        background: linear-gradient(135deg, #e7f1ff 0%, #ffffff 100%);
+        text-align: center;
+        min-width: 200px;
+    }
+
+    .of-box {
+        border-color: #0d6efd;
+        border-left: 4px solid #0d6efd;
+    }
+
+    .remito-box {
+        border-color: #198754;
+        border-left: 4px solid #198754;
+    }
+
+    .flow-arrow-container {
+        display: flex;
+        justify-content: center;
+        margin: 10px 0;
+    }
+
+    .flow-arrow-split {
+        display: flex;
+        gap: 100px;
+    }
+
+    .arrow-branch {
+        font-size: 24px;
+        color: #6c757d;
+    }
+
+    .flow-section {
+        height: 100%;
+    }
+
+    .progress {
+        background-color: #e9ecef;
+    }
+
+    .progress-bar {
+        font-size: 12px;
+        font-weight: bold;
+    }
+</style>
+
+@code {
+    [Parameter] public int NroPedido { get; set; }
+
+    private SeguimientoPedidoDTO? seguimiento;
+    private bool cargando = true;
+    private string? mensajeError;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await CargarSeguimiento();
+    }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        await CargarSeguimiento();
+    }
+
+    private async Task CargarSeguimiento()
+    {
+        try
+        {
+            cargando = true;
+            mensajeError = null;
+
+            var responseHttp = await repository.Get<SeguimientoPedidoDTO>($"api/pedenca/seguimiento/{NroPedido}");
+
+            if (!responseHttp.Error && responseHttp.Response != null)
+            {
+                seguimiento = responseHttp.Response;
+            }
+            else
+            {
+                mensajeError = "No se pudo cargar el seguimiento del pedido";
+            }
+        }
+        catch (Exception ex)
+        {
+            mensajeError = $"Error al cargar seguimiento: {ex.Message}";
+            Console.WriteLine($"Error en SeguimientoPedido: {ex.Message}");
+        }
+        finally
+        {
+            cargando = false;
+        }
+    }
+
+    private string GetEstadoBadgeClass(short? estado)
+    {
+        return estado switch
+        {
+            0 => "bg-primary",
+            1 => "bg-success",
+            2 => "bg-danger",
+            _ => "bg-secondary"
+        };
+    }
+
+    private string GetProgressBarClass(decimal porcentaje)
+    {
+        if (porcentaje >= 100) return "bg-success";
+        if (porcentaje >= 75) return "bg-info";
+        if (porcentaje >= 50) return "bg-warning";
+        return "bg-danger";
+    }
+
+    public async Task Actualizar()
+    {
+        await CargarSeguimiento();
+    }
+}

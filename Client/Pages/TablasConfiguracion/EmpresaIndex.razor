@@ -1,0 +1,185 @@
+﻿@page "/empresas"
+@inject IRepository repository
+@inject SweetAlertService sweetAlertService
+@inject NavigationManager navigationManager
+@inject IJSRuntime JS
+
+
+
+@if (Empresas is null)
+{
+    <div class="spinner" />
+}
+else
+{
+
+    <div class="bg-primary text-white text-center p-3 mb-4">
+        <!-- Añadido mb-4 para margen inferior -->
+        <h1>Empresas</h1>
+    </div>
+
+    <div class="d-flex align-items-center mb-3">
+        <div class="me-2">
+            <a class="btn btn-sm btn-primary float-end" href="/empresas/create"><i class="oi oi-plus"></i> Nueva Empresa</a>
+        </div>
+
+        <input style="width: 400px;" type="text" class="form-control me-2" id="titulo" placeholder="Buscar Empresa..." @bind-value="Filter" />
+
+        <button type="button" class="btn btn-outline-primary me-2" @onclick="ApplyFilterAsync">Filtrar</button>
+        <button type="button" class="btn btn-outline-danger" @onclick="CleanFilterAsync">Limpiar</button>
+    </div>
+    <Pagination CurrentPage="currentPage"
+                TotalPages="totalPages"
+                SelectedPage="SelectedPageAsync" />
+
+    <GenericList MyList="Empresas">
+        <Body>
+            <table class="table table-striped">
+                <thead>
+                    <tr>
+                        <th>Empresa</th>
+                        <th style="with: 220px"> Cantidad de Filiales</th>
+                        <th style="with: 260px"></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var empresa in Empresas!)
+                    {
+                        <tr>
+
+                            <td>
+                                @empresa.razon
+                            </td>
+                            <td>
+                                @empresa.DependenciasNumber
+                            </td>
+                            <td>
+                                <a href="/empresas/detalles/@empresa.Id" class="btn btn-info btn-sm"><i class="oi oi-list" />Filiales</a>
+                                <a href="/empresas/edit/@empresa.Id" class="btn btn-warning btn-sm"><i class="oi oi-pencil" /> Editar</a>
+@*                                 <button class="btn btn-danger btn-sm" @onclick=@(() => DeleteAsync(empresa.Id))><i class="oi oi-trash" /> Borrar</button>
+ *@
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </Body>
+    </GenericList>
+}
+@code {
+    public List<Empresa>? Empresas { get; set; }
+    [Parameter]
+    [SupplyParameterFromQuery]//para que no se pierda la pagina
+    public string Page { get; set; } = string.Empty;
+
+    [Parameter]
+    [SupplyParameterFromQuery]//para que no se pieerda el filtro
+    public string Filter { get; set; } = string.Empty;
+
+    private int currentPage = 1;
+    private int totalPages;
+
+
+    protected async override Task OnInitializedAsync()
+    {
+        await LoadAsync();
+    }
+    private async Task LoadAsync(int page = 1)
+    {
+        // var responseHppt = await repository.Get<List<Empresa>>("api/empresas");
+        // Empresas = responseHppt.Response!;
+
+
+        if (!string.IsNullOrWhiteSpace(Page))
+        {
+            page = Convert.ToInt32(Page);
+        }
+
+        string url1 = string.Empty;
+        string url2 = string.Empty;
+        if (string.IsNullOrEmpty(Filter))
+        {
+            url1 = $"api/empresas?page={page}";
+            url2 = $"api/empresas/totalPages";
+        }
+        else
+        {
+            url1 = $"api/empresas?page={page}&filter={Filter}";
+            url2 = $"api/empresas/totalPages?filter={Filter}";
+        }
+
+        // try
+        // {
+        var responseHppt = await repository.Get<List<Empresa>>(url1);
+        var responseHppt2 = await repository.Get<int>(url2);
+        Empresas = responseHppt.Response!;
+        totalPages = responseHppt2.Response!;
+        // }
+        // catch (Exception ex)
+        // {
+        //     await sweetAlertService.FireAsync("Error", ex.Message, SweetAlertIcon.Error);
+        // }
+
+    }
+
+    private async Task SelectedPageAsync(int page)
+    {
+        currentPage = page;
+        await LoadAsync(page);
+    }
+
+    // private async Task DeleteAsync(int id)
+    // {
+    //     var result = await sweetAlertService.FireAsync(new SweetAlertOptions
+    //         {
+    //             Title = "Confirmación",
+    //             Text = "¿Realmente deseas eliminar el registro?",
+    //             Icon = SweetAlertIcon.Question,
+    //             ShowCancelButton = true,
+    //             CancelButtonText = "No",
+    //             ConfirmButtonText = "Si"
+    //         });
+
+    //     var confirm = string.IsNullOrEmpty(result.Value);
+
+    //     if (confirm)
+    //     {
+    //         return;
+    //     }
+
+
+    //     var responseHTTP = await repository.Delete($"api/empresas/{id}");
+
+    //     if (responseHTTP.Error)
+    //     {
+    //         if (responseHTTP.HttpResponseMessage.StatusCode == System.Net.HttpStatusCode.NotFound)
+    //         {
+    //             navigationManager.NavigateTo("/");
+    //         }
+    //         else
+    //         {
+    //             var mensajeError = await responseHTTP.GetErrorMessageAsync();
+    //             await sweetAlertService.FireAsync("Error", mensajeError, SweetAlertIcon.Error);
+    //         }
+    //     }
+    //     else
+    //     {
+    //         await LoadAsync();
+    //     }
+    // }
+    //esto tambien para el filtro de busqueda
+    private async Task CleanFilterAsync()
+    {
+        Filter = string.Empty;
+        await ApplyFilterAsync();
+    }
+
+    private async Task ApplyFilterAsync()
+    {
+        int page = 1;
+        await LoadAsync(page);
+        await SelectedPageAsync(page);
+    }
+
+
+}

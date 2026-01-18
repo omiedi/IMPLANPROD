@@ -1,0 +1,957 @@
+@page "/reparaciones-tipicas"
+@using IMPLANPROD.Client.Shared.Components
+@inject IRepository repository
+@inject SweetAlertService sweetAlertService
+@inject NavigationManager navigationManager
+@inject IJSRuntime jsRuntime
+
+<h3><i class="fas fa-wrench"></i> Reparaciones Típicas</h3>
+
+<div class="mb-3">
+    <button class="btn btn-secondary" @onclick="Volver">
+        <i class="fas fa-arrow-left"></i> Volver
+    </button>
+</div>
+
+<div class="card">
+    <div class="card-header">
+        <h5 class="card-title mb-0">Seleccionar Código de Reparación</h5>
+    </div>
+    <div class="card-body">
+        <div class="row">
+            <div class="col-md-6">
+                <label class="form-label">Código de Reparación:</label>
+                <select class="form-select" @bind="codigoReparacionSeleccionado" @bind:after="CargarDatosReparacion">
+                    <option value="">-- Seleccione un código de reparación --</option>
+                    @if (codigosReparacion != null)
+                    {
+                        @foreach (var codigo in codigosReparacion)
+                        {
+                            <option value="@codigo.Codigo">@codigo.Codigo - @codigo.Descripcion</option>
+                        }
+                    }
+                </select>
+            </div>
+            @if (!string.IsNullOrEmpty(codigoReparacionSeleccionado))
+            {
+                <div class="col-md-6">
+                    <div class="alert alert-info mb-0" style="font-size: 1.25rem; font-weight: bold;">
+                        <i class="fas fa-wrench"></i> Código Seleccionado: <span style="font-size: 1.5rem;">@codigoReparacionSeleccionado</span>
+                    </div>
+                </div>
+            }
+        </div>
+    </div>
+</div>
+
+@if (!string.IsNullOrEmpty(codigoReparacionSeleccionado))
+{
+    <!-- Sección de Especificaciones -->
+    <div class="card mt-3">
+        <div class="card-header bg-primary text-white">
+            <h5 class="card-title mb-0">
+                <i class="fas fa-file-alt"></i> Descripción General / Especificaciones
+            </h5>
+        </div>
+        <div class="card-body">
+            <div class="row">
+                <div class="col-12">
+@*                     <label class="form-label">Especificación:</label>
+ *@                    <textarea class="form-control" 
+                              rows="10" 
+                              @bind="especificacion"
+                              @bind:after="GuardarEspecificacion"
+                              style="font-family: 'Courier New', monospace; white-space: pre-wrap;">
+                    </textarea>
+                    <small class="text-muted">
+                        <i class="fas fa-info-circle"></i> Los cambios se guardan automáticamente al modificar el texto
+                    </small>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Sección de Materiales/Repuestos -->
+    <div class="card mt-3">
+        <div class="card-header bg-success text-white">
+            <h5 class="card-title mb-0">
+                <i class="fas fa-boxes"></i> Materiales / Repuestos
+            </h5>
+        </div>
+        <div class="card-body">
+            <!-- Botón para agregar producto -->
+            <div class="row mb-3">
+                <div class="col-12">
+                    <button class="btn btn-primary" @onclick="AbrirSelectorProducto">
+                        <i class="fas fa-plus"></i> Agregar Material
+                    </button>
+                </div>
+            </div>
+
+            <!-- Tabla de materiales -->
+            @if (repuestos == null)
+            {
+                <div class="text-center">
+                    <div class="spinner-border text-primary" role="status">
+                        <span class="visually-hidden">Cargando...</span>
+                    </div>
+                </div>
+            }
+            else if (!repuestos.Any())
+            {
+                <div class="alert alert-info">
+                    <i class="fas fa-info-circle"></i> No hay materiales agregados para esta reparación.
+                </div>
+            }
+            else
+            {
+                <div class="table-responsive" style="max-height: 400px; overflow-y: auto;">
+                    <table class="table table-striped table-hover">
+                        <thead class="table-dark sticky-top">
+                            <tr>
+                                <th>Cód. Interno</th>
+                                <th>Código</th>
+                                <th>U.M.</th>
+                                <th>Descripción</th>
+                                <th class="text-end">Uso</th>
+                                <th class="text-center">Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var repuesto in repuestos)
+                            {
+                                <tr>
+                                    <td>@repuesto.CodigoInterno</td>
+                                    <td>@repuesto.CodigoExterno</td>
+                                    <td>@repuesto.UnidadMedida</td>
+                                    <td>@repuesto.Descripcion</td>
+                                    <td class="text-end">
+                                        <input type="number" 
+                                               id="uso-@repuesto.Id"
+                                               class="form-control form-control-sm text-end" 
+                                               style="width: 100px; display: inline-block;"
+                                               step="0.01"
+                                               @bind="repuesto.Uso"
+                                               @onfocus="() => GuardarUsoAnterior(repuesto)"
+                                               @bind:after="() => ActualizarUso(repuesto)" />
+                                    </td>
+                                    <td class="text-center">
+                                        <button class="btn btn-danger btn-sm" 
+                                                @onclick="() => EliminarRepuesto(repuesto)">
+                                            <i class="fas fa-trash"></i>
+                                        </button>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        </div>
+    </div>
+
+    <!-- Sección de Operaciones -->
+    <div class="card mt-3">
+        <div class="card-header bg-info text-white">
+            <h5 class="card-title mb-0">
+                <i class="fas fa-cogs"></i> Operaciones
+            </h5>
+        </div>
+        <div class="card-body">
+            <div class="row">
+                <!-- Lista de operaciones -->
+                <div class="col-md-6">
+                    @if (operaciones == null)
+                    {
+                        <div class="text-center">
+                            <div class="spinner-border text-primary" role="status">
+                                <span class="visually-hidden">Cargando...</span>
+                            </div>
+                        </div>
+                    }
+                    else if (!operaciones.Any())
+                    {
+                        <div class="alert alert-info">
+                            <i class="fas fa-info-circle"></i> No hay operaciones registradas para esta reparación.
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="table-responsive" style="max-height: 500px; overflow-y: auto;">
+                            <table class="table table-hover table-sm">
+                                <thead class="table-dark sticky-top">
+                                    <tr>
+                                        <th>N° Op.</th>
+                                        <th>Descripción</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var operacion in operaciones)
+                                    {
+                                        <tr class="@(operacionSeleccionada?.Id == operacion.Id ? "table-primary" : "")" 
+                                            @onclick="() => SeleccionarOperacion(operacion)"
+                                            style="cursor: pointer;">
+                                            <td>@operacion.NumeroOperacion</td>
+                                            <td>@operacion.Descripcion</td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    }
+                </div>
+
+                <!-- Detalle de operación seleccionada -->
+                <div class="col-md-6">
+                    @if (operacionSeleccionada != null)
+                    {
+                        <div class="card">
+                            <div class="card-header bg-secondary text-white">
+                                <h6 class="mb-0">Detalle de la Operación</h6>
+                            </div>
+                            <div class="card-body">
+                                <div class="mb-3">
+                                    <strong>Operación:</strong> @operacionSeleccionada.NumeroOperacion - @operacionSeleccionada.Descripcion
+                                </div>
+                                
+                                <!-- Horas -->
+                                <div class="mb-3">
+                                    <label class="form-label fw-bold">Horas:</label>
+                                    <input type="text" 
+                                           class="form-control" 
+                                           @bind="horasFormateadas"
+                                           @bind:after="GuardarHorasOperacion"
+                                           placeholder="hh:mm:ss" 
+                                           maxlength="8" />
+                                    <small class="text-muted">
+                                        <i class="fas fa-clock"></i> Formato: hh:mm:ss (ejemplo: 02:30:00). Los cambios se guardan automáticamente
+                                    </small>
+                                </div>
+
+                                <!-- Selector de Equipo -->
+                                <div class="mb-3">
+                                    <label class="form-label fw-bold">Equipo:</label>
+                                    @if (equipos == null)
+                                    {
+                                        <div class="text-center">
+                                            <div class="spinner-border spinner-border-sm text-primary" role="status">
+                                                <span class="visually-hidden">Cargando...</span>
+                                            </div>
+                                        </div>
+                                    }
+                                    else
+                                    {
+                                        <select class="form-select" 
+                                                @bind="operacionSeleccionada.Equipo"
+                                                @bind:after="GuardarEquipoOperacion">
+                                            <option value="">-- Sin equipo asignado --</option>
+                                            @foreach (var equipo in equipos)
+                                            {
+                                                <option value="@equipo.CodigoPadMaq">@equipo.CodigoPadMaq - @equipo.Descripcion</option>
+                                            }
+                                        </select>
+                                        <small class="text-muted">
+                                            <i class="fas fa-info-circle"></i> Los cambios se guardan automáticamente
+                                        </small>
+                                    }
+                                </div>
+
+                                <!-- Cantidad de Operarios -->
+                                <div class="mb-3">
+                                    <label class="form-label fw-bold">Cantidad de Operarios:</label>
+                                    <input type="number" 
+                                           class="form-control" 
+                                           @bind="operacionSeleccionada.CantidadOperarios"
+                                           @bind:after="GuardarCantidadOperariosOperacion"
+                                           min="0"
+                                           step="1" />
+                                    <small class="text-muted">
+                                        <i class="fas fa-users"></i> Los cambios se guardan automáticamente
+                                    </small>
+                                </div>
+
+                                <!-- Selector de Categoría -->
+                                <div class="mb-3">
+                                    <label class="form-label fw-bold">Categoría:</label>
+                                    @if (categorias == null)
+                                    {
+                                        <div class="text-center">
+                                            <div class="spinner-border spinner-border-sm text-primary" role="status">
+                                                <span class="visually-hidden">Cargando...</span>
+                                            </div>
+                                        </div>
+                                    }
+                                    else
+                                    {
+                                        <select class="form-select" 
+                                                @bind="operacionSeleccionada.Categoria"
+                                                @bind:after="GuardarCategoriaOperacion">
+                                            <option value="">-- Sin categoría asignada --</option>
+                                            @foreach (var categoria in categorias)
+                                            {
+                                                <option value="@categoria.CodigoCategoria">@categoria.CodigoCategoria - @categoria.Descripcion</option>
+                                            }
+                                        </select>
+                                        <small class="text-muted">
+                                            <i class="fas fa-info-circle"></i> Los cambios se guardan automáticamente
+                                        </small>
+                                    }
+                                </div>
+
+                                <!-- Observación -->
+                                <div>
+                                    <label class="form-label fw-bold">Observación:</label>
+                                    <textarea class="form-control" 
+                                              rows="6" 
+                                              @bind="operacionSeleccionada.Observacion"
+                                              @bind:after="GuardarObservacionOperacion"
+                                              style="font-family: 'Courier New', monospace; white-space: pre-wrap;">
+                                    </textarea>
+                                    <small class="text-muted">
+                                        <i class="fas fa-info-circle"></i> Los cambios se guardan automáticamente
+                                    </small>
+                                </div>
+                            </div>
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="alert alert-secondary">
+                            <i class="fas fa-hand-pointer"></i> Seleccione una operación para ver su detalle
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+<!-- Selector de Productos (Modal) -->
+<SelectorProductos @ref="selectorProductos" 
+                   OnProductoSeleccionadoCantidad="OnProductoSeleccionado"
+                   PermitirCantidad="true"
+                   CantidadDefault="1"
+                   OnClose="CerrarSelectorProducto" />
+
+@code {
+    private List<Indirep>? codigosReparacion;
+    private string codigoReparacionSeleccionado = string.Empty;
+    private string especificacion = string.Empty;
+    private List<RepuestoReparacionDTO>? repuestos;
+    private List<Secoprep>? operaciones;
+    private Secoprep? operacionSeleccionada;
+    private SelectorProductos? selectorProductos;
+    private Dictionary<int, decimal> valoresUsoAnteriores = new Dictionary<int, decimal>();
+    private bool guardandoEspecificacion = false;
+    private bool guardandoObservacion = false;
+    private List<PADMAQ>? equipos;
+    private List<Catoper>? categorias;
+    private string horasFormateadas = "00:00:00";
+
+    protected override async Task OnInitializedAsync()
+    {
+        await CargarCodigosReparacion();
+    }
+
+    private async Task CargarCodigosReparacion()
+    {
+        try
+        {
+            var responseHttp = await repository.Get<List<Indirep>>("api/indirep/combo");
+            if (responseHttp.Error)
+            {
+                var message = await responseHttp.GetErrorMessageAsync();
+                await sweetAlertService.FireAsync("Error", message, SweetAlertIcon.Error);
+                return;
+            }
+
+            codigosReparacion = responseHttp.Response;
+        }
+        catch (Exception ex)
+        {
+            await sweetAlertService.FireAsync("Error", $"Error al cargar códigos: {ex.Message}", SweetAlertIcon.Error);
+        }
+    }
+
+    private async Task CargarDatosReparacion()
+    {
+        if (string.IsNullOrEmpty(codigoReparacionSeleccionado))
+        {
+            especificacion = string.Empty;
+            repuestos = null;
+            operaciones = null;
+            operacionSeleccionada = null;
+            return;
+        }
+
+        await CargarEspecificacion();
+        await CargarRepuestos();
+        await CargarOperaciones();
+    }
+
+    private async Task CargarEspecificacion()
+    {
+        try
+        {
+            var responseHttp = await repository.Get<Descrep>($"api/descrep/{codigoReparacionSeleccionado}");
+            if (responseHttp.Error)
+            {
+                especificacion = string.Empty;
+                return;
+            }
+
+            especificacion = responseHttp.Response?.Especificacion ?? string.Empty;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error al cargar especificación: {ex.Message}");
+            especificacion = string.Empty;
+        }
+    }
+
+    private async Task CargarRepuestos()
+    {
+        try
+        {
+            var responseHttp = await repository.Get<List<RepuestoReparacionDTO>>($"api/repuesre/reparacion/{codigoReparacionSeleccionado}");
+            if (responseHttp.Error)
+            {
+                repuestos = new List<RepuestoReparacionDTO>();
+                return;
+            }
+
+            repuestos = responseHttp.Response;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error al cargar repuestos: {ex.Message}");
+            repuestos = new List<RepuestoReparacionDTO>();
+        }
+    }
+
+    private async Task GuardarEspecificacion()
+    {
+        if (guardandoEspecificacion || string.IsNullOrEmpty(codigoReparacionSeleccionado))
+            return;
+
+        try
+        {
+            guardandoEspecificacion = true;
+
+            var responseHttp = await repository.Put($"api/descrep/{codigoReparacionSeleccionado}", especificacion);
+            if (responseHttp.Error)
+            {
+                var message = await responseHttp.GetErrorMessageAsync();
+                await sweetAlertService.FireAsync("Error", message, SweetAlertIcon.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            await sweetAlertService.FireAsync("Error", $"Error al guardar: {ex.Message}", SweetAlertIcon.Error);
+        }
+        finally
+        {
+            guardandoEspecificacion = false;
+        }
+    }
+
+    private async Task AbrirSelectorProducto()
+    {
+        if (selectorProductos != null)
+            await selectorProductos.AbrirModal();
+    }
+
+    private void CerrarSelectorProducto()
+    {
+        // Método para cerrar el selector si es necesario
+    }
+
+    private async Task OnProductoSeleccionado(SelectorProductos.SeleccionProducto seleccion)
+    {
+        if (string.IsNullOrEmpty(codigoReparacionSeleccionado))
+        {
+            await sweetAlertService.FireAsync("Advertencia", "Debe seleccionar un código de reparación primero", SweetAlertIcon.Warning);
+            return;
+        }
+
+        try
+        {
+            // Validar si el código ya existe en la lista
+            var repuestoExistente = repuestos?.FirstOrDefault(r => r.CodigoInterno == seleccion.Producto.Codint);
+            
+            if (repuestoExistente != null)
+            {
+                // Mostrar mensaje con información del registro existente
+                var mensajeHtml = $@"
+                    <div class='text-start'>
+                        <p><strong>Este material ya existe en la lista:</strong></p>
+                        <ul>
+                            <li><strong>Código Interno:</strong> {repuestoExistente.CodigoInterno}</li>
+                            <li><strong>Código:</strong> {repuestoExistente.CodigoExterno}</li>
+                            <li><strong>Descripción:</strong> {repuestoExistente.Descripcion}</li>
+                            <li><strong>Unidad Medida:</strong> {repuestoExistente.UnidadMedida}</li>
+                            <li><strong>Uso Actual:</strong> {repuestoExistente.Uso:F2}</li>
+                        </ul>
+                        <p>¿Desea modificar la cantidad de uso?</p>
+                    </div>
+                ";
+
+                var result = await sweetAlertService.FireAsync(new SweetAlertOptions
+                {
+                    Title = "Material Duplicado",
+                    Html = mensajeHtml,
+                    Icon = SweetAlertIcon.Warning,
+                    ShowCancelButton = true,
+                    ConfirmButtonText = "Sí, modificar uso",
+                    CancelButtonText = "Cancelar"
+                });
+
+                if (result.IsConfirmed)
+                {
+                    // Enfocar y resaltar el input de uso del registro existente
+                    await EnfocarYResaltarUso(repuestoExistente.Id);
+                }
+                
+                return;
+            }
+
+            var request = new AgregarRepuestoRequest
+            {
+                CodigoReparacion = codigoReparacionSeleccionado,
+                CodigoInterno = (short)seleccion.Producto.Codint,
+                Uso = seleccion.Cantidad
+            };
+
+            var responseHttp = await repository.Post<AgregarRepuestoRequest, RepuestoReparacionDTO>("api/repuesre/agregar", request);
+            
+            if (responseHttp.Error)
+            {
+                var message = await responseHttp.GetErrorMessageAsync();
+                await sweetAlertService.FireAsync("Error", message, SweetAlertIcon.Error);
+                return;
+            }
+
+            // Agregar a la lista local
+            if (repuestos == null)
+                repuestos = new List<RepuestoReparacionDTO>();
+
+            repuestos.Add(responseHttp.Response!);
+
+            await sweetAlertService.FireAsync("Éxito", "Material agregado correctamente", SweetAlertIcon.Success);
+        }
+        catch (Exception ex)
+        {
+            await sweetAlertService.FireAsync("Error", $"Error al agregar material: {ex.Message}", SweetAlertIcon.Error);
+        }
+    }
+
+    private async Task EnfocarYResaltarUso(int repuestoId)
+    {
+        try
+        {
+            // Enfocar el input de uso
+            await jsRuntime.InvokeVoidAsync("eval", $@"
+                (function() {{
+                    var input = document.getElementById('uso-{repuestoId}');
+                    if (input) {{
+                        // Scroll hasta el elemento
+                        input.scrollIntoView({{ behavior: 'smooth', block: 'center' }});
+                        
+                        // Esperar un momento para el scroll
+                        setTimeout(function() {{
+                            // Enfocar el input
+                            input.focus();
+                            input.select();
+                            
+                            // Agregar clase de resaltado temporal
+                            input.classList.add('border-warning', 'border-3', 'shadow');
+                            input.style.backgroundColor = '#fff3cd';
+                            
+                            // Remover el resaltado después de 3 segundos
+                            setTimeout(function() {{
+                                input.classList.remove('border-warning', 'border-3', 'shadow');
+                                input.style.backgroundColor = '';
+                            }}, 3000);
+                        }}, 300);
+                    }}
+                }})()
+            ");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error al enfocar input: {ex.Message}");
+        }
+    }
+
+    private void GuardarUsoAnterior(RepuestoReparacionDTO repuesto)
+    {
+        // Guardar el valor anterior cuando el usuario enfoca el input
+        if (!valoresUsoAnteriores.ContainsKey(repuesto.Id))
+        {
+            valoresUsoAnteriores[repuesto.Id] = repuesto.Uso;
+        }
+        else
+        {
+            valoresUsoAnteriores[repuesto.Id] = repuesto.Uso;
+        }
+    }
+
+    private async Task ActualizarUso(RepuestoReparacionDTO repuesto)
+    {
+        // Verificar si el valor cambió
+        if (valoresUsoAnteriores.TryGetValue(repuesto.Id, out var valorAnterior))
+        {
+            if (Math.Abs(valorAnterior - repuesto.Uso) < 0.001m)
+            {
+                // No cambió, no hacer nada
+                return;
+            }
+        }
+
+        // Solicitar confirmación
+        var result = await sweetAlertService.FireAsync(new SweetAlertOptions
+        {
+            Title = "¿Confirmar cambio?",
+            Html = $@"
+                <div class='text-start'>
+                    <p><strong>Material:</strong> {repuesto.CodigoExterno} - {repuesto.Descripcion}</p>
+                    <p><strong>Uso anterior:</strong> {valorAnterior:F2}</p>
+                    <p><strong>Uso nuevo:</strong> {repuesto.Uso:F2}</p>
+                    <p>¿Desea guardar este cambio?</p>
+                </div>
+            ",
+            Icon = SweetAlertIcon.Question,
+            ShowCancelButton = true,
+            ConfirmButtonText = "Sí, guardar",
+            CancelButtonText = "Cancelar"
+        });
+
+        if (!result.IsConfirmed)
+        {
+            // Revertir el cambio
+            repuesto.Uso = valorAnterior;
+            StateHasChanged();
+            return;
+        }
+
+        try
+        {
+            var responseHttp = await repository.Put($"api/repuesre/{repuesto.Id}/uso", repuesto.Uso);
+            
+            if (responseHttp.Error)
+            {
+                var message = await responseHttp.GetErrorMessageAsync();
+                await sweetAlertService.FireAsync("Error", message, SweetAlertIcon.Error);
+                // Revertir el cambio
+                repuesto.Uso = valorAnterior;
+                StateHasChanged();
+            }
+            else
+            {
+                // Actualizar el valor anterior con el nuevo valor guardado
+                valoresUsoAnteriores[repuesto.Id] = repuesto.Uso;
+                await sweetAlertService.FireAsync("Éxito", "Uso actualizado correctamente", SweetAlertIcon.Success);
+            }
+        }
+        catch (Exception ex)
+        {
+            await sweetAlertService.FireAsync("Error", $"Error al actualizar uso: {ex.Message}", SweetAlertIcon.Error);
+            // Revertir el cambio
+            repuesto.Uso = valorAnterior;
+            StateHasChanged();
+        }
+    }
+
+    private async Task CargarOperaciones()
+    {
+        try
+        {
+            var responseHttp = await repository.Get<List<Secoprep>>($"api/secoprep/reparacion/{codigoReparacionSeleccionado}");
+            if (responseHttp.Error)
+            {
+                operaciones = new List<Secoprep>();
+                return;
+            }
+
+            operaciones = responseHttp.Response;
+            operacionSeleccionada = null;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error al cargar operaciones: {ex.Message}");
+            operaciones = new List<Secoprep>();
+        }
+    }
+
+    private async Task SeleccionarOperacion(Secoprep operacion)
+    {
+        operacionSeleccionada = operacion;
+        horasFormateadas = FormatearHoras(operacion.Horas);
+        await CargarEquipos();
+        await CargarCategorias();
+    }
+
+    private async Task CargarEquipos()
+    {
+        try
+        {
+            var responseHttp = await repository.Get<List<PADMAQ>>("api/padmaq/combo");
+            if (responseHttp.Error)
+            {
+                equipos = new List<PADMAQ>();
+                return;
+            }
+
+            equipos = responseHttp.Response;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error al cargar equipos: {ex.Message}");
+            equipos = new List<PADMAQ>();
+        }
+    }
+
+    private async Task CargarCategorias()
+    {
+        try
+        {
+            var responseHttp = await repository.Get<List<Catoper>>("api/catoper/combo");
+            if (responseHttp.Error)
+            {
+                categorias = new List<Catoper>();
+                return;
+            }
+
+            categorias = responseHttp.Response;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error al cargar categorías: {ex.Message}");
+            categorias = new List<Catoper>();
+        }
+    }
+
+    private string FormatearHoras(double? horas)
+    {
+        if (!horas.HasValue || horas.Value == 0)
+            return "00:00:00";
+
+        try
+        {
+            // Convertir las horas decimales a TimeSpan
+            var totalHoras = Math.Abs(horas.Value);
+            var timeSpan = TimeSpan.FromHours(totalHoras);
+            
+            // Formatear como hh:mm:ss
+            return $"{(int)timeSpan.TotalHours:D2}:{timeSpan.Minutes:D2}:{timeSpan.Seconds:D2}";
+        }
+        catch
+        {
+            return "00:00:00";
+        }
+    }
+
+    private async Task GuardarObservacionOperacion()
+    {
+        if (guardandoObservacion || operacionSeleccionada == null)
+            return;
+
+        try
+        {
+            guardandoObservacion = true;
+
+            var responseHttp = await repository.Put($"api/secoprep/{operacionSeleccionada.Id}", operacionSeleccionada);
+            if (responseHttp.Error)
+            {
+                var message = await responseHttp.GetErrorMessageAsync();
+                await sweetAlertService.FireAsync("Error", message, SweetAlertIcon.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            await sweetAlertService.FireAsync("Error", $"Error al guardar observación: {ex.Message}", SweetAlertIcon.Error);
+        }
+        finally
+        {
+            guardandoObservacion = false;
+        }
+    }
+
+    private async Task GuardarHorasOperacion()
+    {
+        if (operacionSeleccionada == null)
+            return;
+
+        try
+        {
+            // Convertir el formato hh:mm:ss a horas decimales
+            var horasDecimales = ConvertirHorasFormatoADecimal(horasFormateadas);
+            
+            if (horasDecimales < 0)
+            {
+                await sweetAlertService.FireAsync("Error", "Formato de horas inválido. Use el formato hh:mm:ss (ejemplo: 02:30:00)", SweetAlertIcon.Error);
+                // Restaurar el valor anterior
+                horasFormateadas = FormatearHoras(operacionSeleccionada.Horas);
+                return;
+            }
+
+            operacionSeleccionada.Horas = horasDecimales;
+
+            var responseHttp = await repository.Put($"api/secoprep/{operacionSeleccionada.Id}", operacionSeleccionada);
+            if (responseHttp.Error)
+            {
+                var message = await responseHttp.GetErrorMessageAsync();
+                await sweetAlertService.FireAsync("Error", message, SweetAlertIcon.Error);
+                // Restaurar el valor anterior
+                horasFormateadas = FormatearHoras(operacionSeleccionada.Horas);
+            }
+            else
+            {
+                await sweetAlertService.FireAsync("Éxito", "Horas actualizadas correctamente", SweetAlertIcon.Success);
+            }
+        }
+        catch (Exception ex)
+        {
+            await sweetAlertService.FireAsync("Error", $"Error al guardar horas: {ex.Message}", SweetAlertIcon.Error);
+            // Restaurar el valor anterior
+            horasFormateadas = FormatearHoras(operacionSeleccionada.Horas);
+        }
+    }
+
+    private double ConvertirHorasFormatoADecimal(string horasFormato)
+    {
+        try
+        {
+            // Validar formato hh:mm:ss
+            if (string.IsNullOrWhiteSpace(horasFormato))
+                return 0;
+
+            var partes = horasFormato.Split(':');
+            if (partes.Length != 3)
+                return -1;
+
+            if (!int.TryParse(partes[0], out int horas) || 
+                !int.TryParse(partes[1], out int minutos) || 
+                !int.TryParse(partes[2], out int segundos))
+                return -1;
+
+            // Validar rangos
+            if (horas < 0 || minutos < 0 || minutos > 59 || segundos < 0 || segundos > 59)
+                return -1;
+
+            // Convertir a horas decimales
+            double totalHoras = horas + (minutos / 60.0) + (segundos / 3600.0);
+            return totalHoras;
+        }
+        catch
+        {
+            return -1;
+        }
+    }
+
+    private async Task GuardarEquipoOperacion()
+    {
+        if (operacionSeleccionada == null)
+            return;
+
+        try
+        {
+            var responseHttp = await repository.Put($"api/secoprep/{operacionSeleccionada.Id}", operacionSeleccionada);
+            if (responseHttp.Error)
+            {
+                var message = await responseHttp.GetErrorMessageAsync();
+                await sweetAlertService.FireAsync("Error", message, SweetAlertIcon.Error);
+            }
+            else
+            {
+                await sweetAlertService.FireAsync("Éxito", "Equipo actualizado correctamente", SweetAlertIcon.Success);
+            }
+        }
+        catch (Exception ex)
+        {
+            await sweetAlertService.FireAsync("Error", $"Error al guardar equipo: {ex.Message}", SweetAlertIcon.Error);
+        }
+    }
+
+    private async Task GuardarCantidadOperariosOperacion()
+    {
+        if (operacionSeleccionada == null)
+            return;
+
+        try
+        {
+            var responseHttp = await repository.Put($"api/secoprep/{operacionSeleccionada.Id}", operacionSeleccionada);
+            if (responseHttp.Error)
+            {
+                var message = await responseHttp.GetErrorMessageAsync();
+                await sweetAlertService.FireAsync("Error", message, SweetAlertIcon.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            await sweetAlertService.FireAsync("Error", $"Error al guardar cantidad de operarios: {ex.Message}", SweetAlertIcon.Error);
+        }
+    }
+
+    private async Task GuardarCategoriaOperacion()
+    {
+        if (operacionSeleccionada == null)
+            return;
+
+        try
+        {
+            var responseHttp = await repository.Put($"api/secoprep/{operacionSeleccionada.Id}", operacionSeleccionada);
+            if (responseHttp.Error)
+            {
+                var message = await responseHttp.GetErrorMessageAsync();
+                await sweetAlertService.FireAsync("Error", message, SweetAlertIcon.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            await sweetAlertService.FireAsync("Error", $"Error al guardar categoría: {ex.Message}", SweetAlertIcon.Error);
+        }
+    }
+
+    private async Task EliminarRepuesto(RepuestoReparacionDTO repuesto)
+    {
+        var result = await sweetAlertService.FireAsync(new SweetAlertOptions
+        {
+            Title = "¿Confirmar eliminación?",
+            Text = $"¿Está seguro de eliminar el material {repuesto.CodigoExterno} - {repuesto.Descripcion}?",
+            Icon = SweetAlertIcon.Warning,
+            ShowCancelButton = true,
+            ConfirmButtonText = "Sí, eliminar",
+            CancelButtonText = "Cancelar"
+        });
+
+        if (result.IsConfirmed)
+        {
+            try
+            {
+                var responseHttp = await repository.Delete($"api/repuesre/{repuesto.Id}");
+                
+                if (responseHttp.Error)
+                {
+                    var message = await responseHttp.GetErrorMessageAsync();
+                    await sweetAlertService.FireAsync("Error", message, SweetAlertIcon.Error);
+                    return;
+                }
+
+                // Eliminar de la lista local
+                repuestos?.Remove(repuesto);
+
+                await sweetAlertService.FireAsync("Eliminado", "Material eliminado correctamente", SweetAlertIcon.Success);
+            }
+            catch (Exception ex)
+            {
+                await sweetAlertService.FireAsync("Error", $"Error al eliminar: {ex.Message}", SweetAlertIcon.Error);
+            }
+        }
+    }
+
+    private void Volver()
+    {
+        navigationManager.NavigateTo("/recepcion-bombas-evaluacion");
+    }
+}

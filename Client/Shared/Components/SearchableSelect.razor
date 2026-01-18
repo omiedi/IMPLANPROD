@@ -1,0 +1,187 @@
+@typeparam TItem
+@typeparam TValue
+
+<div class="searchable-select">
+    <div class="input-group">
+        <input type="text" 
+               class="form-control @CssClass" 
+               placeholder="@Placeholder"
+               @bind="searchText"
+               @bind:event="oninput"
+               @onfocus="OnFocus"
+               @onblur="OnBlur"
+               readonly="@(!AllowSearch)" />
+        <button class="btn btn-outline-secondary dropdown-toggle" 
+                type="button" 
+                @onclick="ToggleDropdown">
+            <i class="fas fa-search"></i>
+        </button>
+    </div>
+
+    @if (isOpen && filteredItems != null)
+    {
+        <div class="dropdown-menu show w-100" style="max-height: 300px; overflow-y: auto;">
+            @if (!filteredItems.Any())
+            {
+                <div class="dropdown-item disabled">No se encontraron resultados</div>
+            }
+            else
+            {
+                @foreach (var item in filteredItems)
+                {
+                    <a class="dropdown-item @(IsSelected(item) ? "active" : "")" 
+                       href="javascript:void(0)"
+                       @onclick="() => SelectItem(item)"
+                       @onclick:preventDefault>
+                        @DisplayText(item)
+                    </a>
+                }
+            }
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter] public List<TItem>? Items { get; set; }
+    [Parameter] public TValue? Value { get; set; }
+    [Parameter] public EventCallback<TValue> ValueChanged { get; set; }
+    [Parameter] public Func<TItem, TValue> ValueSelector { get; set; } = null!;
+    [Parameter] public Func<TItem, string> DisplaySelector { get; set; } = null!;
+    [Parameter] public Func<TItem, string, bool>? SearchFilter { get; set; }
+    [Parameter] public string Placeholder { get; set; } = "Seleccione una opción...";
+    [Parameter] public string CssClass { get; set; } = "";
+    [Parameter] public bool AllowSearch { get; set; } = true;
+
+    private string searchText = "";
+    private bool isOpen = false;
+    private List<TItem>? filteredItems;
+
+    protected override void OnParametersSet()
+    {
+        UpdateFilteredItems();
+        UpdateSearchText();
+    }
+
+    private void UpdateSearchText()
+    {
+        if (Items != null && Value != null)
+        {
+            var selectedItem = Items.FirstOrDefault(i => EqualityComparer<TValue>.Default.Equals(ValueSelector(i), Value));
+            if (selectedItem != null)
+            {
+                searchText = DisplayText(selectedItem);
+            }
+        }
+        else if (Value == null || (Value is int intValue && intValue == 0))
+        {
+            searchText = "";
+        }
+    }
+
+    private void UpdateFilteredItems()
+    {
+        if (Items == null)
+        {
+            filteredItems = new List<TItem>();
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(searchText))
+        {
+            filteredItems = Items.ToList();
+        }
+        else
+        {
+            if (SearchFilter != null)
+            {
+                filteredItems = Items.Where(i => SearchFilter(i, searchText)).ToList();
+            }
+            else
+            {
+                // Filtro por defecto: buscar en el texto de display
+                var search = searchText.ToLower();
+                filteredItems = Items.Where(i => DisplayText(i).ToLower().Contains(search)).ToList();
+            }
+        }
+    }
+
+    private string DisplayText(TItem item)
+    {
+        return DisplaySelector?.Invoke(item) ?? item?.ToString() ?? "";
+    }
+
+    private bool IsSelected(TItem item)
+    {
+        if (Value == null) return false;
+        return EqualityComparer<TValue>.Default.Equals(ValueSelector(item), Value);
+    }
+
+    private async Task SelectItem(TItem item)
+    {
+        var newValue = ValueSelector(item);
+        Value = newValue;
+        searchText = DisplayText(item);
+        isOpen = false;
+        
+        await ValueChanged.InvokeAsync(newValue);
+    }
+
+    private void ToggleDropdown()
+    {
+        isOpen = !isOpen;
+        if (isOpen)
+        {
+            UpdateFilteredItems();
+        }
+    }
+
+    private void OnFocus()
+    {
+        if (AllowSearch)
+        {
+            isOpen = true;
+            UpdateFilteredItems();
+        }
+    }
+
+    private async Task OnBlur()
+    {
+        // Delay para permitir que el click en el dropdown se procese
+        await Task.Delay(200);
+        isOpen = false;
+    }
+}
+
+<style>
+    .searchable-select {
+        position: relative;
+    }
+
+    .searchable-select .dropdown-menu {
+        position: absolute;
+        top: 100%;
+        left: 0;
+        z-index: 1000;
+        display: block;
+        margin-top: 2px;
+    }
+
+    .searchable-select .dropdown-item {
+        cursor: pointer;
+        padding: 0.5rem 1rem;
+    }
+
+    .searchable-select .dropdown-item:hover {
+        background-color: #f8f9fa;
+    }
+
+    .searchable-select .dropdown-item.active {
+        background-color: #0d6efd;
+        color: white;
+    }
+
+    .searchable-select .dropdown-item.disabled {
+        cursor: not-allowed;
+        opacity: 0.6;
+    }
+</style>

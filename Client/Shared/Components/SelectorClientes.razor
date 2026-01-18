@@ -1,0 +1,253 @@
+@using IMPLANPROD.Client.Repositories
+@using Microsoft.AspNetCore.Components.Web
+@inject IRepository repository
+@inject SweetAlertService sweetAlertService
+
+<!-- Modal para seleccionar cliente -->
+<div class="modal fade @(mostrarModal ? "show" : "")" style="display: @(mostrarModal ? "block" : "none")" tabindex="-1" role="dialog"
+     @onkeydown="OnKeyDown">
+    <div class="modal-dialog modal-lg" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="fas fa-users"></i> Seleccionar Cliente
+                </h5>
+                <button type="button" class="btn-close" @onclick="CerrarModal"></button>
+            </div>
+            <div class="modal-body">
+                <!-- Filtro de búsqueda -->
+                <div class="row mb-3">
+                    <div class="col-md-8">
+                        <div class="input-group">
+                            <input type="text" class="form-control" @bind="filtroCliente" @bind:event="oninput" 
+                                   @onkeypress="@(async (KeyboardEventArgs e) => { if (e.Key == "Enter") await FiltrarClientes(); })" 
+                                   placeholder="Buscar por código o razón social..." />
+                            <button class="btn btn-outline-secondary" @onclick="LimpiarFiltro">
+                                <i class="fas fa-times"></i>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <small class="text-muted">@clientesFiltrados.Count cliente(s) encontrado(s)</small>
+                    </div>
+                </div>
+
+                <!-- Lista de clientes -->
+                @if (cargandoClientes)
+                {
+                    <div class="text-center">
+                        <div class="spinner-border" role="status">
+                            <span class="visually-hidden">Cargando clientes...</span>
+                        </div>
+                    </div>
+                }
+                else if (!clientesFiltrados.Any())
+                {
+                    <div class="alert alert-info text-center">
+                        <i class="fas fa-info-circle"></i> No se encontraron clientes activos.
+                    </div>
+                }
+                else
+                {
+                    <div class="table-responsive" style="max-height: 400px; overflow-y: auto;">
+                        <table class="table table-striped table-hover">
+                            <thead class="table-dark sticky-top">
+                                <tr>
+                                    <th>Código</th>
+                                    <th>Razón Social</th>
+                                    <th>Acción</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var cliente in clientesFiltrados)
+                                {
+                                    <tr>
+                                        <td><strong>@cliente.Nume_Cli</strong></td>
+                                        <td>@cliente.Raso_Cli</td>
+                                        <td>
+                                            <button class="btn btn-sm btn-primary" @onclick="(() => SeleccionarCliente(cliente))">
+                                                <i class="fas fa-check"></i> Seleccionar
+                                            </button>
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                }
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" @onclick="CerrarModal">
+                    <i class="fas fa-times"></i> Cancelar
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Backdrop del modal -->
+@if (mostrarModal)
+{
+    <div class="modal-backdrop fade show"></div>
+}
+
+@code {
+    /// <summary>
+    /// Evento que se dispara cuando se selecciona un cliente
+    /// </summary>
+    [Parameter] public EventCallback<ClienteSeleccionado> OnClienteSeleccionado { get; set; }
+
+    /// <summary>
+    /// Controla la visibilidad del modal
+    /// </summary>
+    private bool mostrarModal = false;
+
+    /// <summary>
+    /// Lista completa de clientes cargados desde el backend
+    /// </summary>
+    private List<ClienteCombo> clientesCompletos = new();
+
+    /// <summary>
+    /// Lista filtrada de clientes que se muestra en la tabla
+    /// </summary>
+    private List<ClienteCombo> clientesFiltrados = new();
+
+    /// <summary>
+    /// Filtro de búsqueda por razón social
+    /// </summary>
+    private string filtroCliente = string.Empty;
+
+    /// <summary>
+    /// Indica si se están cargando los clientes
+    /// </summary>
+    private bool cargandoClientes = false;
+
+    /// <summary>
+    /// Clase para representar los datos del cliente en el combo
+    /// </summary>
+    public class ClienteCombo
+    {
+        public int Nume_Cli { get; set; }
+        public string Raso_Cli { get; set; } = string.Empty;
+    }
+
+    /// <summary>
+    /// Clase para el cliente seleccionado que se envía al componente padre
+    /// </summary>
+    public class ClienteSeleccionado
+    {
+        public int NumeCli { get; set; }
+        public string RazonSocial { get; set; } = string.Empty;
+    }
+
+    /// <summary>
+    /// Método público para abrir el modal desde el componente padre
+    /// </summary>
+    public async Task AbrirModal()
+    {
+        mostrarModal = true;
+        await CargarClientes();
+        StateHasChanged();
+    }
+
+    /// <summary>
+    /// Cierra el modal y limpia los filtros
+    /// </summary>
+    public void CerrarModal()
+    {
+        mostrarModal = false;
+        filtroCliente = string.Empty;
+        clientesFiltrados = clientesCompletos;
+        StateHasChanged();
+    }
+
+    /// <summary>
+    /// Maneja las teclas presionadas en el modal
+    /// </summary>
+    private void OnKeyDown(Microsoft.AspNetCore.Components.Web.KeyboardEventArgs e)
+    {
+        if (e.Key == "Escape")
+        {
+            CerrarModal();
+        }
+    }
+
+    /// <summary>
+    /// Carga la lista de clientes activos desde el backend
+    /// </summary>
+    private async Task CargarClientes()
+    {
+        try
+        {
+            cargandoClientes = true;
+            StateHasChanged();
+
+            var responseHttp = await repository.Get<List<ClienteCombo>>("api/deudor12/combo");
+            
+            if (responseHttp.Error)
+            {
+                var message = await responseHttp.GetErrorMessageAsync();
+                await sweetAlertService.FireAsync("Error", $"Error al cargar clientes: {message}", SweetAlertIcon.Error);
+                return;
+            }
+
+            clientesCompletos = responseHttp.Response ?? new List<ClienteCombo>();
+            clientesFiltrados = clientesCompletos;
+        }
+        catch (Exception ex)
+        {
+            await sweetAlertService.FireAsync("Error", $"Error inesperado: {ex.Message}", SweetAlertIcon.Error);
+        }
+        finally
+        {
+            cargandoClientes = false;
+            StateHasChanged();
+        }
+    }
+
+    /// <summary>
+    /// Filtra los clientes por número de cliente o razón social
+    /// </summary>
+    private async Task FiltrarClientes()
+    {
+        await Task.Delay(1); // Para permitir que se actualice la UI
+
+        if (string.IsNullOrWhiteSpace(filtroCliente))
+        {
+            clientesFiltrados = clientesCompletos;
+        }
+        else
+        {
+            clientesFiltrados = clientesCompletos
+                .Where(c => c.Raso_Cli.Contains(filtroCliente, StringComparison.OrdinalIgnoreCase) ||
+                           c.Nume_Cli.ToString().Contains(filtroCliente, StringComparison.OrdinalIgnoreCase))
+                .ToList();
+        }
+
+        StateHasChanged();
+    }
+
+    /// <summary>
+    /// Limpia el filtro de búsqueda
+    /// </summary>
+    private async Task LimpiarFiltro()
+    {
+        filtroCliente = string.Empty;
+        await FiltrarClientes();
+    }
+
+    /// <summary>
+    /// Selecciona un cliente y cierra el modal
+    /// </summary>
+    private async Task SeleccionarCliente(ClienteCombo cliente)
+    {
+        var clienteSeleccionado = new ClienteSeleccionado
+        {
+            NumeCli = cliente.Nume_Cli,
+            RazonSocial = cliente.Raso_Cli
+        };
+
+        await OnClienteSeleccionado.InvokeAsync(clienteSeleccionado);
+        CerrarModal();
+    }
+}

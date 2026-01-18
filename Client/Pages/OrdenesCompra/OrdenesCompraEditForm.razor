@@ -1,0 +1,2703 @@
+@using IMPLANPROD.Shared.Entities
+@using IMPLANPROD.Shared.DTOs
+@using IMPLANPROD.Client.Repositories
+@using IMPLANPROD.Client.Shared.Components
+@using IMPLANPROD.Client.Services
+@using System.ComponentModel.DataAnnotations
+@inject IRepository repository
+@inject SweetAlertService sweetAlertService
+@inject NavigationManager navigationManager
+@inject AuthErrorHandlerService authErrorHandler
+
+<div class="container-fluid">
+    <div class="row">
+        <!-- Columna principal del formulario -->
+        <div class="col-lg-12">
+            <!-- Contenedor principal con marco grueso -->
+            <div class="card" style="border: 3px solid #fd7e14; border-radius: 8px;">
+                <!-- Header del formulario principal -->
+                <div class="card-header" style="background-color: #fd7e14; color: white; border-bottom: 3px solid #e8590c;">
+                    <h5 class="card-title mb-0">
+                        <i class="fas fa-edit"></i>
+                        <span>Editar Orden de Compra N° @ordenCompra.NumeOcom</span>
+                        @if (!string.IsNullOrEmpty(ordenCompra.PorcIva))
+                        {
+                            <span class="badge bg-light text-dark ms-2">IVA: @ordenCompra.PorcIva</span>
+                        }
+                    </h5>
+                </div>
+
+                <!-- Validación de Estado -->
+                @if (ordenCompra.StatOcom >= 9)
+                {
+                    <div class="alert alert-danger m-3" role="alert">
+                        <i class="fas fa-lock me-2"></i>
+                        <strong>Orden Bloqueada:</strong> Esta orden de compra no se puede modificar porque su estado es @ordenCompra.StatOcom (≥ 9).
+                        <br><small>Las órdenes con estado 9 o superior están cerradas y no permiten modificaciones.</small>
+                    </div>
+                }
+                else
+                {
+                    <!-- Cuerpo del formulario principal -->
+                    <div class="card-body" style="padding: 1.5rem;">
+                        <EditForm Model="ordenCompra" OnValidSubmit="HandleValidSubmit">
+                            <DataAnnotationsValidator />
+
+                            <!-- Información del encabezado -->
+                            <div class="row mb-3">
+                                <div class="col-md-3">
+                                    <label class="form-label">N° Orden:</label>
+                                    <InputNumber class="form-control" @bind-Value="ordenCompra.NumeOcom" readonly="true" />
+                                    <ValidationMessage For="@(() => ordenCompra.NumeOcom)" />
+                                </div>
+                                <div class="col-md-3">
+                                    <label class="form-label">Fecha Emisión:</label>
+                                    <InputDate class="form-control" @bind-Value="ordenCompra.FemiOcom" />
+                                    <ValidationMessage For="@(() => ordenCompra.FemiOcom)" />
+                                </div>
+                                <div class="col-md-3">
+                                    <label class="form-label">Destino:</label>
+                                    <InputText class="form-control" @bind-Value="destinoOrdenCompra" readonly />
+                                    <small class="text-muted">Destino asignado en el alta</small>
+                                </div>
+                                <div class="col-md-3">
+                                    <label class="form-label">Sector:</label>
+                                    <InputText class="form-control" @bind-Value="sectorOrdenCompra" readonly />
+                                    <small class="text-muted">Sector asignado en el alta</small>
+                                </div>
+                            </div>
+
+                            <!-- Segunda fila del encabezado -->
+                            <div class="row mb-3">
+                                <div class="col-md-3">
+                                    <label class="form-label">% IVA:</label>
+                                    <input type="text" class="form-control" value="@ordenCompra.PorcIva" readonly />
+                                    <small class="text-muted">Porcentaje de IVA aplicado</small>
+                                </div>
+                                <div class="col-md-3">
+                                    <label class="form-label">Tipo Cambio:</label>
+                                    <InputNumber class="form-control" @bind-Value="ordenCompra.TcamOcom" step="0.0001" readonly />
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label">Referencia:</label>
+                                    <InputText class="form-control" @bind-Value="ordenCompra.RefeOcom" />
+                                </div>
+                            </div>
+
+                            <!-- Información del proveedor -->
+                            <div class="row mb-3">
+                                <div class="col-md-4">
+                                    <label class="form-label">Proveedor:</label>
+                                    <InputText class="form-control" 
+                                    @bind-Value="proveedorSeleccionado" 
+                                    readonly />
+                                    <small class="text-muted">El proveedor no puede modificarse en edición</small>
+                                </div>
+                                <div class="col-md-8">
+                                    <label class="form-label">Razón Social:</label>
+                                    <InputText class="form-control" @bind-Value="ordenCompra.RaSoProv" readonly />
+                                </div>
+                            </div>
+
+                            <!-- Información adicional del proveedor -->
+                            @if (proveedorInfo != null && !string.IsNullOrEmpty(proveedorInfo.CodigoProveedor))
+                            {
+                                <div class="row mb-3">
+                                    <div class="col-md-3">
+                                        <label class="form-label">Código Proveedor:</label>
+                                        <InputText class="form-control" @bind-Value="proveedorInfo.CodigoProveedor" readonly />
+                                    </div>
+                                    <div class="col-md-6">
+                                        <label class="form-label">Domicilio:</label>
+                                        <InputText class="form-control" @bind-Value="proveedorInfo.Domicilio" readonly />
+                                    </div>
+                                    <div class="col-md-3">
+                                        <label class="form-label">Cod.Postal:</label>
+                                        <InputText class="form-control" @bind-Value="proveedorInfo.CodigoPostal" readonly />
+                                    </div>
+                                </div>
+                                <div class="row mb-3">
+                                    <div class="col-md-3">
+                                        <label class="form-label">Localidad:</label>
+                                        <InputText class="form-control" @bind-Value="proveedorInfo.Localidad" readonly />
+                                    </div>
+                                    <div class="col-md-3">
+                                        <label class="form-label">Teléfono:</label>
+                                        <InputText class="form-control" @bind-Value="proveedorInfo.Contacto" readonly />
+                                    </div>
+                                    <div class="col-md-3">
+                                        <label class="form-label">Atención:</label>
+                                        <InputText class="form-control" @bind-Value="ContactoAtencion" />
+                                        <small class="text-muted">Persona de contacto para esta orden</small>
+                                    </div>
+                                    <div class="col-md-3">
+                                        <label class="form-label">CUIT:</label>
+                                        <InputText class="form-control" @bind-Value="proveedorInfo.Cuit" readonly />
+                                    </div>
+                                </div>
+                            }
+
+                            <!-- Información adicional -->
+                            <div class="row mb-3">
+                                <div class="col-md-6">
+                                    <label class="form-label">Moneda:</label>
+                                    <InputSelect class="form-select" @bind-Value="CodigoMonedaSeleccionado">
+                                        <option value="0">Seleccionar...</option>
+                                        @if (monedas != null)
+                                        {
+                                            @foreach (var moneda in monedas)
+                                            {
+                                                <option value="@moneda.CodigoMoneda">@moneda.Descripcion</option>
+                                            }
+                                        }
+                                    </InputSelect>
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label">Cond. de Pago:</label>
+                                    <InputSelect class="form-select" @bind-Value="ordenCompra.CpagOcom">
+                                        <option value="">Seleccionar...</option>
+                                        @if (condicionesPago != null)
+                                        {
+                                            @foreach (var condicion in condicionesPago)
+                                            {
+                                                <option value="@condicion.NumCondPag">@condicion.DescCondPag</option>
+                                            }
+                                        }
+                                    </InputSelect>
+                                </div>
+                            </div>
+                            <div class="row mb-3">
+                                <div class="col-md-6">
+                                    <label class="form-label">Valorizar en:</label>
+                                    <InputSelect class="form-select" @bind-Value="ordenCompra.MoneCos" title="Moneda para valorización de costos">
+                                        <option value="">Seleccionar...</option>
+                                        @if (monedas != null)
+                                        {
+                                            @foreach (var moneda in monedas)
+                                            {
+                                                <option value="@moneda.CodigoMoneda">@moneda.Descripcion</option>
+                                            }
+                                        }
+                                    </InputSelect>
+                                    <div class="form-text">
+                                        <small class="text-muted">
+                                            <i class="fas fa-info-circle me-1"></i>Moneda utilizada para valorizar los costos de los productos
+                                        </small>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Información adicional -->
+                            <div class="row mb-3">
+                                <div class="col-md-6">
+                                    <label class="form-label">Lugar de Entrega:</label>
+                                    <InputText class="form-control" @bind-Value="ordenCompra.Lentrega" placeholder="Especificar lugar de entrega..." />
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label">Solicita:</label>
+                                    <InputText class="form-control" @bind-Value="ordenCompra.ResponOcompra" placeholder="Persona que solicita la orden..." />
+                                </div>
+                            </div>
+
+                            <!-- Observaciones -->
+                            <div class="row mb-3">
+                                <div class="col-12">
+                                    <label class="form-label">Observaciones:</label>
+                                    <InputTextArea class="form-control" @bind-Value="ordenCompra.ObseOcom" rows="3" />
+                                </div>
+                            </div>
+
+                            <!-- Botones de acción -->
+                            <div class="row">
+                                <div class="col-12 d-flex justify-content-end gap-2">
+                                    <button type="button" class="btn btn-secondary" @onclick="Cancelar" disabled="@guardando">
+                                        <i class="fas fa-times"></i> Cancelar y Regresar
+                                    </button>
+                                    <button type="submit" class="btn btn-warning" disabled="@guardando">
+                                        @if (guardando)
+                                        {
+                                            <span class="spinner-border spinner-border-sm me-2"></span>
+                                        }
+                                        <i class="fas fa-save"></i> Actualizar Orden
+                                    </button>
+                                </div>
+                            </div>
+                        </EditForm>
+                    </div>
+                }
+
+                <!-- Detalle de la orden (igual que en OrdenesCompraForm) -->
+                @if (true)
+                {
+                    <div class="border-top" style="border-color: #0a58ca !important; border-width: 2px !important; margin: 0 1.5rem;"></div>
+                    <div class="card-body" style="padding: 1.5rem; padding-top: 1rem;">
+                        <div class="d-flex justify-content-between align-items-center mb-3">
+                            <h6 class="mb-0">
+                                <i class="fas fa-list"></i> Detalle de la Orden
+                            </h6>
+                            @if (ordenCompra.StatOcom < 9)
+                            {
+                                <button type="button" class="btn btn-sm btn-primary" @onclick="AgregarItem">
+                                    <i class="fas fa-plus"></i> Agregar Item
+                                </button>
+                            }
+                        </div>
+
+                        <!-- Leyenda informativa sobre eliminación de items -->
+                        <div class="alert alert-warning border-0 shadow-sm mb-3" style="font-size: 0.9em;">
+                            <div class="d-flex align-items-center">
+                                <i class="fas fa-info-circle text-warning me-2"></i>
+                                <div>
+                                    <strong>Nota:</strong> No es posible eliminar items de la orden. 
+                                    Para anular un item, edítelo y cambie la cantidad a <strong>0</strong>.
+                                </div>
+                            </div>
+                        </div>
+                        @if (detalleItems == null)
+                        {
+                            <div class="text-center">
+                                <div class="spinner-border spinner-border-sm"></div>
+                                <span class="ms-2">Cargando detalle...</span>
+                            </div>
+                        }
+                        else if (!detalleItems.Any())
+                        {
+                            <div class="alert alert-info text-center">
+                                <i class="fas fa-info-circle"></i> No hay items en esta orden.
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="table-responsive">
+                                <table class="table table-sm table-striped">
+                                    <thead class="table-dark">
+                                        <tr>
+                                            <th>Item</th>
+                                            <th>Código</th>
+                                            <th>Descripción</th>
+                                            <th class="text-end">Cantidad</th>
+                                            <th class="text-end">Precio Unit.</th>
+                                            <th class="text-end">Total</th>
+                                            <th>U.M.</th>
+                                            <th>Sector</th>
+                                            <th>Destino</th>
+                                            <th>Fecha Entrega</th>
+                                            @if (ordenCompra.StatOcom < 9)
+                                            {
+                                                <th>Acciones</th>
+                                            }
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach (var item in detalleItems)
+                                        {
+                                            <tr>
+                                                <td>@item.NuOrdItem</td>
+                                                <td>@item.CodExte</td>
+                                                <td>@item.Descritem</td>
+                                                <td class="text-end">@item.CantOcom?.ToString("F2")</td>
+                                                <td class="text-end">@item.PreUnit?.ToString("C4")</td>
+                                                <td class="text-end">@((item.CantOcom * item.PreUnit)?.ToString("C2"))</td>
+                                                <td>@item.UniMas</td>
+                                                <td>@item.SectOcom</td>
+                                                <td>
+                                                    @if (item.IContab.HasValue && cuentasDestino != null)
+                                                    {
+                                                        var cuenta = cuentasDestino.FirstOrDefault(c => c.CodInCue == item.IContab.Value);
+                                                        if (cuenta != null)
+                                                        {
+                                                            <span>@cuenta.CodExCue - @cuenta.Denocue</span>
+                                                        }
+                                                        else
+                                                        {
+                                                            <span>Código: @item.IContab</span>
+                                                        }
+                                                    }
+                                                </td>
+                                                <td>@item.FentreSol?.ToString("dd/MM/yyyy")</td>
+                                                @if (ordenCompra.StatOcom < 9)
+                                                {
+                                                    <td>
+                                                        <button type="button" class="btn btn-sm btn-outline-primary" @onclick="(() => EditarItem(item))" title="Editar item">
+                                                            <i class="fas fa-edit"></i> Editar
+                                                        </button>
+                                                    </td>
+                                                }
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+
+                            <!-- Totales, Descuentos y Resumen -->
+                            <div class="row mt-3">
+                                <div class="col-md-4">
+                                    <!-- Sección de Descuentos -->
+                                    <div class="card">
+                                        <div class="card-header bg-light">
+                                            <h6 class="mb-0">DESCUENTOS</h6>
+                                        </div>
+                                        <div class="card-body">
+                                            @if (ordenCompra.StatOcom < 9)
+                                            {
+                                                <!-- Campo de descuento en texto -->
+                                                <div class="mb-3">
+                                                    <label class="form-label">Descuento (texto)</label>
+                                                    <input type="text" class="form-control" @bind="DescuentoTexto" @bind:event="oninput" placeholder="Ej: 10 o 10 + 5" />
+                                                    <small class="text-muted">Ingrese número o expresiones como "10 + 5" para descuentos sucesivos.</small>
+                                                </div>
+                                            }
+
+                                            <!-- Descuento % y monto -->
+                                            <div class="row mb-2 align-items-center">
+                                                <div class="col-4">
+                                                    <label class="form-label mb-0">Descuento %:</label>
+                                                </div>
+                                                <div class="col-8">
+                                                    <input type="text" class="form-control text-end" readonly value="@descuentoPorcentaje.ToString("F2")" />
+                                                </div>
+                                            </div>
+
+                                            <div class="row mb-2 align-items-center">
+                                                <div class="col-4">
+                                                    <label class="form-label mb-0">Descuento:</label>
+                                                </div>
+                                                <div class="col-8">
+                                                    <input type="text" class="form-control text-end" readonly value="@descuentoMonto.ToString("F4")" />
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-4">
+                                    <!-- Información de la orden -->
+                                    <div class="card">
+                                        <div class="card-header bg-light">
+                                            <h6 class="mb-0">INFORMACIÓN</h6>
+                                        </div>
+                                        <div class="card-body">
+                                            <table class="table table-sm mb-0">
+                                                <tr>
+                                                    <td><strong>Estado:</strong></td>
+                                                    <td>
+                                                        @if (ordenCompra.StatOcom >= 9)
+                                                        {
+                                                            <span class="badge bg-danger">Anulada</span>
+                                                        }
+                                                        else if (ordenCompra.StatOcom == 0)
+                                                        {
+                                                            <span class="badge bg-success">Activa</span>
+                                                        }
+                                                        else
+                                                        {
+                                                            <span class="badge bg-warning">Pendiente</span>
+                                                        }
+                                                    </td>
+                                                </tr>
+                                                <tr>
+                                                    <td><strong>Moneda:</strong></td>
+                                                    <td>
+                                                        @if (monedas != null && ordenCompra.MoneEmis.HasValue)
+                                                        {
+                                                            var moneda = monedas.FirstOrDefault(m => m.CodigoMoneda == ordenCompra.MoneEmis);
+                                                            <span>@(moneda?.Descripcion ?? "Desconocida")</span>
+                                                        }
+                                                    </td>
+                                                </tr>
+                                                <tr>
+                                                    <td><strong>Tipo Cambio:</strong></td>
+                                                    <td>@ordenCompra.TcamOcom?.ToString("F4")</td>
+                                                </tr>
+                                            </table>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-4">
+                                    <!-- Resumen de Totales -->
+                                    <div class="card">
+                                        <div class="card-header bg-light">
+                                            <h6 class="mb-0">RESUMEN</h6>
+                                        </div>
+                                        <div class="card-body">
+                                            <table class="table table-sm mb-0">
+                                                <tr>
+                                                    <td><strong>Total Items:</strong></td>
+                                                    <td class="text-end"><strong>@detalleItems.Count</strong></td>
+                                                </tr>
+                                                <tr>
+                                                    <td><strong>Total Neto:</strong></td>
+                                                    <td class="text-end"><strong>@TotalNeto.ToString("C2")</strong></td>
+                                                </tr>
+                                                <tr>
+                                                    <td><strong>Descuento:</strong></td>
+                                                    <td class="text-end text-danger"><strong>-@descuentoMonto.ToString("C2")</strong></td>
+                                                </tr>
+                                                <tr class="table-success">
+                                                    <td><strong>Total con Descuento:</strong></td>
+                                                    <td class="text-end"><strong>@TotalConDescuento.ToString("C2")</strong></td>
+                                                </tr>
+                                                <tr>
+                                                    <td>
+                                                        <label class="form-label mb-0" @ondblclick="(() => AbrirModalIva())" 
+                                                        style="cursor: pointer; color: #0066cc; text-decoration: underline;" 
+                                                        title="Doble clic para abrir distribución de IVA">
+                                                            <i class="fas fa-calculator me-1"></i>IVA:
+                                                            <small class="text-muted d-block" style="font-size: 0.7em;">
+                                                                <i class="fas fa-mouse-pointer"></i> Doble clic aquí
+                                                            </small>
+                                                        </label>
+                                                    </td>
+                                                    <td class="text-end"><strong>@TotalIva.ToString("C2")</strong></td>
+                                                </tr>
+                                                <tr class="table-info">
+                                                    <td><strong>Total Final:</strong></td>
+                                                    <td class="text-end"><strong>@TotalConIva.ToString("C2")</strong></td>
+                                                </tr>
+                                            </table>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        }
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Componentes modales -->
+<!-- NOTA: Selector de proveedores deshabilitado en edición -->
+<!-- <SelectorProveedores @ref="selectorProveedores" OnProveedorSeleccionado="OnProveedorSeleccionado" /> -->
+<SelectorProductos @ref="selectorProductos" 
+PermitirCantidad="true" 
+PermitirPrecio="true" 
+CantidadDefault="1" 
+PrecioDefault="0" 
+OnProductoSeleccionadoCantidad="OnProductoSeleccionado"
+OnClose="TerminarCicloSeleccionProductos" />
+
+<!-- Modal de edición de item -->
+@if (mostrarModalEdicionItem && itemEnEdicion != null)
+{
+    <div class="modal fade show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5);">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header bg-success text-white">
+                    <h4 class="modal-title">
+                        <i class="fas fa-edit me-2"></i>Editar Item - @itemEnEdicion.CodExte
+                    </h4>
+                    <button type="button" class="btn-close" @onclick="CerrarModalEdicionItem"></button>
+                </div>
+                <div class="modal-body">
+                    <!-- Leyenda informativa -->
+                    <div class="alert alert-info border-0 shadow-sm mb-3">
+                        <div class="d-flex align-items-start">
+                            <i class="fas fa-info-circle fa-lg text-info me-3 mt-1"></i>
+                            <div>
+                                <h6 class="alert-heading mb-2">
+                                    <i class="fas fa-exclamation-triangle me-1"></i>Importante sobre la eliminación de items
+                                </h6>
+                                <p class="mb-1">
+                                    <strong>No es posible eliminar items de la orden de compra.</strong> 
+                                    Para que un item no quede como pendiente, puede cambiar la cantidad a <strong>0 (cero)</strong>.
+                                </p>
+                                <small class="text-muted">
+                                    <i class="fas fa-lightbulb me-1"></i>
+                                    Esto mantiene el registro completo del item en el historial de la orden.
+                                </small>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="row">
+                        <!-- Información no editable -->
+                        <div class="col-md-6">
+                            <div class="card">
+                                <div class="card-header bg-light">
+                                    <h6 class="mb-0">INFORMACIÓN DEL PRODUCTO</h6>
+                                </div>
+                                <div class="card-body">
+                                    <div class="mb-2">
+                                        <label class="form-label mb-1"><strong>Código:</strong></label>
+                                        <div class="form-control-plaintext">@itemEnEdicion.CodExte</div>
+                                    </div>
+                                    <div class="mb-2">
+                                        <label class="form-label mb-1"><strong>Descripción:</strong></label>
+                                        <div class="form-control-plaintext">@itemEnEdicion.Descritem</div>
+                                    </div>
+                                    <div class="mb-2">
+                                        <label class="form-label mb-1"><strong>Unidad de Medida:</strong></label>
+                                        <div class="form-control-plaintext">@itemEnEdicion.UniMas</div>
+                                    </div>
+                                    <div class="mb-2">
+                                        <label class="form-label mb-1"><strong>Item N°:</strong></label>
+                                        <div class="form-control-plaintext">@itemEnEdicion.NuOrdItem</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Campos editables -->
+                        <div class="col-md-6">
+                            <div class="card">
+                                <div class="card-header bg-success text-white">
+                                    <h6 class="mb-0">CAMPOS EDITABLES</h6>
+                                </div>
+                                <div class="card-body">
+                                    <!-- Cantidad -->
+                                    <div class="mb-3">
+                                        <label class="form-label">Cantidad <span class="text-danger">*</span></label>
+                                        <input type="number" class="form-control" step="0.01" min="0" 
+                                        @bind="itemEnEdicion.CantOcom" />
+                                        <small class="text-muted">Cantidad a solicitar (puede ser 0 para anular)</small>
+                                    </div>
+
+                                    <!-- Precio Unitario -->
+                                    <div class="mb-3">
+                                        <label class="form-label">Precio Unitario <span class="text-danger">*</span></label>
+                                        <input type="number" class="form-control" step="0.0001" min="0.0001" 
+                                        @bind="itemEnEdicion.PreUnit" />
+                                        <small class="text-muted">Precio por unidad</small>
+                                    </div>
+
+                                    <!-- Fecha de Entrega -->
+                                    <div class="mb-3">
+                                        <label class="form-label">Fecha de Entrega</label>
+                                        <input type="date" class="form-control" 
+                                        @bind="itemEnEdicion.FentreSol" />
+                                    </div>
+
+                                    <!-- Sector -->
+                                    <div class="mb-3">
+                                        <label class="form-label">Sector</label>
+                                        <input type="text" class="form-control" 
+                                        @bind="itemEnEdicion.SectOcom" 
+                                        placeholder="Código del sector" />
+                                    </div>
+
+                                    <!-- Destino -->
+                                    <div class="mb-3">
+                                        <label class="form-label">Destino</label>
+                                        <select class="form-select" @bind="itemEnEdicion.IContab">
+                                            <option value="">-- Seleccionar Destino --</option>
+                                            @if (destinosDisponibles != null)
+                                            {
+                                                @foreach (var destino in destinosDisponibles)
+                                                {
+                                                    <option value="@destino.CodInCue">@destino.CodExCue - @destino.Denocue</option>
+                                                }
+                                            }
+                                        </select>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Resumen del item -->
+                    <div class="row mt-3">
+                        <div class="col-12">
+                            <div class="alert alert-info">
+                                <h6><i class="fas fa-calculator me-2"></i>Resumen del Item</h6>
+                                <div class="row">
+                                    <div class="col-md-4">
+                                        <strong>Cantidad:</strong> @(itemEnEdicion.CantOcom?.ToString("F2") ?? "0.00")
+                                    </div>
+                                    <div class="col-md-4">
+                                        <strong>Precio Unit.:</strong> @(itemEnEdicion.PreUnit?.ToString("C4") ?? "$0.0000")
+                                    </div>
+                                    <div class="col-md-4">
+                                        <strong>Total:</strong> @((itemEnEdicion.CantOcom * itemEnEdicion.PreUnit)?.ToString("C2") ?? "$0.00")
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" @onclick="CerrarModalEdicionItem">
+                        <i class="fas fa-times me-1"></i>Cancelar
+                    </button>
+                    <button type="button" class="btn btn-success" @onclick="GuardarEdicionItem">
+                        <i class="fas fa-save me-1"></i>Guardar Cambios
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+<!-- Modal de distribución de IVA -->
+@if (mostrarModalIva)
+{
+    <div class="modal fade show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5);">
+        <div class="modal-dialog modal-xl">
+            <div class="modal-content">
+                <div class="modal-header bg-primary text-white">
+                    <h4 class="modal-title">
+                        <i class="fas fa-calculator me-2"></i>Distribución de IVA - Edición
+                    </h4>
+                    <button type="button" class="btn-close btn-close-white" @onclick="CerrarModalIva"></button>
+                </div>
+                <div class="modal-body p-4">
+                    <!-- Panel de ayuda e instrucciones -->
+                    <div class="row mb-4">
+                        <div class="col-12">
+                            <div class="alert alert-info border-0 shadow-sm">
+                                <div class="d-flex align-items-start">
+                                    <i class="fas fa-info-circle fa-2x text-info me-3 mt-1"></i>
+                                    <div>
+                                        <h5 class="alert-heading mb-2">
+                                            <i class="fas fa-question-circle me-1"></i>¿Cómo usar esta distribución?
+                                        </h5>
+                                        <div class="row">
+                                            <div class="col-md-6">
+                                                <ul class="mb-0">
+                                                    <li><strong><i class="fas fa-mouse-pointer text-primary"></i> Doble clic:</strong> En cualquier campo para asignar todo el total</li>
+                                                    <li><strong><i class="fas fa-edit text-warning"></i> Edición manual:</strong> Modifique los campos amarillos</li>
+                                                </ul>
+                                            </div>
+                                            <div class="col-md-6">
+                                                <ul class="mb-0">
+                                                    <li><strong><i class="fas fa-calculator text-success"></i> Automático:</strong> El campo gris se calcula solo</li>
+                                                    <li><strong><i class="fas fa-exclamation-triangle text-danger"></i> Validación:</strong> Alertas si hay inconsistencias</li>
+                                                </ul>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Total a distribuir - Destacado -->
+                    <div class="row mb-4">
+                        <div class="col-12">
+                            <div class="card border-primary shadow-sm">
+                                <div class="card-header bg-primary text-white text-center">
+                                    <h5 class="mb-0">
+                                        <i class="fas fa-coins me-2"></i>Total a Distribuir
+                                    </h5>
+                                </div>
+                                <div class="card-body text-center bg-light">
+                                    <h2 class="text-primary mb-1">@TotalConDescuento.ToString("C2")</h2>
+                                    <small class="text-muted">Subtotal con descuentos aplicados</small>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Grid de distribución -->
+                    <div class="row g-3">
+                        <!-- Exento/N/Grav (0%) -->
+                        <div class="col-md-6 col-lg-3">
+                            <div class="card h-100 border-secondary shadow-sm">
+                                <div class="card-header bg-secondary text-white text-center">
+                                    <h6 class="mb-0">
+                                        <i class="fas fa-ban me-1"></i>Exento/N/Grav
+                                    </h6>
+                                    <small>0% IVA</small>
+                                </div>
+                                <div class="card-body">
+                                    <label class="form-label small">
+                                        <i class="fas fa-info-circle text-info me-1"></i>Base Imponible:
+                                    </label>
+                                    <div class="input-group">
+                                        <span class="input-group-text">$</span>
+                                        <input type="text" class="form-control form-control-lg text-end bg-light" readonly 
+                                        @bind="baseImponible0" @ondblclick="(() => PonerTodoEnCampo(0))"
+                                        title="Doble clic para poner todo el total aquí" 
+                                        style="cursor: pointer; font-weight: bold;" />
+                                    </div>
+                                    <div class="mt-2 text-center">
+                                        <small class="text-muted">
+                                            <i class="fas fa-calculator me-1"></i>IVA: <strong>$0.00</strong>
+                                        </small>
+                                        <br />
+                                        <small class="text-info">
+                                            <i class="fas fa-mouse-pointer me-1"></i>Doble clic para usar
+                                        </small>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- 10.5% -->
+                        <div class="col-md-6 col-lg-3">
+                            <div class="card h-100 border-warning shadow-sm">
+                                <div class="card-header bg-warning text-dark text-center">
+                                    <h6 class="mb-0">
+                                        <i class="fas fa-percentage me-1"></i>Gravado 10.5%
+                                    </h6>
+                                    <small>IVA Reducido</small>
+                                </div>
+                                <div class="card-body">
+                                    <label class="form-label small">
+                                        <i class="fas fa-edit text-warning me-1"></i>Base Imponible:
+                                    </label>
+                                    <div class="input-group">
+                                        <span class="input-group-text">$</span>
+                                        <input type="number" class="form-control form-control-lg text-end" step="0.01" 
+                                        @bind="baseImponible105" @bind:after="RecalcularDistribucionIva" 
+                                        @ondblclick="(() => PonerTodoEnCampo(1))" 
+                                        title="Editable - Doble clic para poner todo el total aquí" 
+                                        placeholder="0.00" style="font-weight: bold;" />
+                                    </div>
+                                    <div class="mt-2 text-center">
+                                        <small class="text-success">
+                                            <i class="fas fa-calculator me-1"></i>IVA: <strong>@importeIva105.ToString("C2")</strong>
+                                        </small>
+                                        <br />
+                                        <small class="text-warning">
+                                            <i class="fas fa-mouse-pointer me-1"></i>Doble clic para usar
+                                        </small>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- 21% -->
+                        <div class="col-md-6 col-lg-3">
+                            <div class="card h-100 border-danger shadow-sm">
+                                <div class="card-header bg-danger text-white text-center">
+                                    <h6 class="mb-0">
+                                        <i class="fas fa-percentage me-1"></i>Gravado 21%
+                                    </h6>
+                                    <small>IVA General</small>
+                                </div>
+                                <div class="card-body">
+                                    <label class="form-label small">
+                                        <i class="fas fa-edit text-warning me-1"></i>Base Imponible:
+                                    </label>
+                                    <div class="input-group">
+                                        <span class="input-group-text">$</span>
+                                        <input type="number" class="form-control form-control-lg text-end" step="0.01" 
+                                        @bind="baseImponible21" @bind:after="RecalcularDistribucionIva" 
+                                        @ondblclick="(() => PonerTodoEnCampo(2))" 
+                                        title="Editable - Doble clic para poner todo el total aquí" 
+                                        placeholder="0.00" style="font-weight: bold;" />
+                                    </div>
+                                    <div class="mt-2 text-center">
+                                        <small class="text-success">
+                                            <i class="fas fa-calculator me-1"></i>IVA: <strong>@importeIva21.ToString("C2")</strong>
+                                        </small>
+                                        <br />
+                                        <small class="text-danger">
+                                            <i class="fas fa-mouse-pointer me-1"></i>Doble clic para usar
+                                        </small>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- 27% -->
+                        <div class="col-md-6 col-lg-3">
+                            <div class="card h-100 border-dark shadow-sm">
+                                <div class="card-header bg-dark text-white text-center">
+                                    <h6 class="mb-0">
+                                        <i class="fas fa-percentage me-1"></i>Gravado 27%
+                                    </h6>
+                                    <small>IVA Especial</small>
+                                </div>
+                                <div class="card-body">
+                                    <label class="form-label small">
+                                        <i class="fas fa-edit text-warning me-1"></i>Base Imponible:
+                                    </label>
+                                    <div class="input-group">
+                                        <span class="input-group-text">$</span>
+                                        <input type="number" class="form-control form-control-lg text-end" step="0.01" 
+                                        @bind="baseImponible27" @bind:after="RecalcularDistribucionIva" 
+                                        @ondblclick="(() => PonerTodoEnCampo(3))" 
+                                        title="Editable - Doble clic para poner todo el total aquí" 
+                                        placeholder="0.00" style="font-weight: bold;" />
+                                    </div>
+                                    <div class="mt-2 text-center">
+                                        <small class="text-success">
+                                            <i class="fas fa-calculator me-1"></i>IVA: <strong>@importeIva27.ToString("C2")</strong>
+                                        </small>
+                                        <br />
+                                        <small class="text-dark">
+                                            <i class="fas fa-mouse-pointer me-1"></i>Doble clic para usar
+                                        </small>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Resumen y validaciones -->
+                    <div class="row mt-4">
+                        <div class="col-md-6">
+                            @{
+                                var diferencia = TotalConDescuento - TotalBaseImponible;
+                                var totalGravado = baseImponible105 + baseImponible21 + baseImponible27;
+                                var alertClass = totalGravado > TotalConDescuento ? "danger" : 
+                                               (TotalBaseImponible == TotalConDescuento ? "success" : "warning");
+                                var iconClass = totalGravado > TotalConDescuento ? "exclamation-triangle" : 
+                                              (TotalBaseImponible == TotalConDescuento ? "check-circle" : "info-circle");
+                            }
+                            <div class="alert alert-@alertClass border-0 shadow-sm">
+                                <h6 class="alert-heading">
+                                    <i class="fas fa-@iconClass me-2"></i>Estado de la Distribución
+                                </h6>
+                                @if (totalGravado > TotalConDescuento)
+                                {
+                                    <p class="mb-2"><strong>¡ADVERTENCIA!</strong> Los campos editables suman más que el total disponible</p>
+                                    <div class="row small">
+                                        <div class="col-6"><strong>Suma editables:</strong></div>
+                                        <div class="col-6 text-end">@totalGravado.ToString("C2")</div>
+                                        <div class="col-6"><strong>Disponible:</strong></div>
+                                        <div class="col-6 text-end">@TotalConDescuento.ToString("C2")</div>
+                                        <div class="col-6"><strong>Exceso:</strong></div>
+                                        <div class="col-6 text-end text-danger"><strong>@((totalGravado - TotalConDescuento).ToString("C2"))</strong></div>
+                                    </div>
+                                }
+                                else
+                                {
+                                    <div class="row small">
+                                        <div class="col-6"><strong>Total Base:</strong></div>
+                                        <div class="col-6 text-end">@TotalBaseImponible.ToString("C2")</div>
+                                        <div class="col-6"><strong>Diferencia:</strong></div>
+                                        <div class="col-6 text-end">@diferencia.ToString("C2")</div>
+                                    </div>
+                                    @if (diferencia != 0)
+                                    {
+                                        <small class="text-muted d-block mt-1">
+                                            <i class="fas fa-info-circle me-1"></i>La diferencia se asigna automáticamente a Exento/N/Grav
+                                        </small>
+                                    }
+                                }
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="alert alert-info border-0 shadow-sm">
+                                <h6 class="alert-heading">
+                                    <i class="fas fa-calculator me-2"></i>Resumen Final
+                                </h6>
+                                <div class="row">
+                                    <div class="col-6"><strong>Total IVA:</strong></div>
+                                    <div class="col-6 text-end"><strong>@TotalIva.ToString("C2")</strong></div>
+                                    <div class="col-6"><strong>Total Final:</strong></div>
+                                    <div class="col-6 text-end"><h5 class="text-primary mb-0">@TotalConIva.ToString("C2")</h5></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Botones de acción rápida -->
+                    <div class="row mt-3">
+                        <div class="col-12">
+                            <div class="d-flex justify-content-center gap-2">
+                                <button type="button" class="btn btn-outline-primary btn-sm" @onclick="(() => PonerTodoEnCampo(0))">
+                                    <i class="fas fa-ban me-1"></i>Todo Exento
+                                </button>
+                                <button type="button" class="btn btn-outline-warning btn-sm" @onclick="(() => PonerTodoEnCampo(1))">
+                                    <i class="fas fa-percentage me-1"></i>Todo 10.5%
+                                </button>
+                                <button type="button" class="btn btn-outline-danger btn-sm" @onclick="(() => PonerTodoEnCampo(2))">
+                                    <i class="fas fa-percentage me-1"></i>Todo 21%
+                                </button>
+                                <button type="button" class="btn btn-outline-dark btn-sm" @onclick="(() => PonerTodoEnCampo(3))">
+                                    <i class="fas fa-percentage me-1"></i>Todo 27%
+                                </button>
+                                <button type="button" class="btn btn-outline-secondary btn-sm" @onclick="LimpiarDistribucion">
+                                    <i class="fas fa-eraser me-1"></i>Limpiar Todo
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer bg-light">
+                    <button type="button" class="btn btn-secondary" @onclick="CerrarModalIva">
+                        <i class="fas fa-times me-1"></i>Cancelar
+                    </button>
+                    @{
+                        var totalGravadoFooter = baseImponible105 + baseImponible21 + baseImponible27;
+                        var hayExceso = totalGravadoFooter > TotalConDescuento;
+                    }
+                    @if (hayExceso)
+                    {
+                        <button type="button" class="btn btn-warning" @onclick="AceptarDistribucionIva">
+                            <i class="fas fa-exclamation-triangle me-1"></i>Aceptar con Advertencia
+                        </button>
+                    }
+                    else
+                    {
+                        <button type="button" class="btn btn-primary" @onclick="AceptarDistribucionIva">
+                            <i class="fas fa-check me-1"></i>Aceptar Distribución
+                        </button>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+
+
+
+    [Parameter] public int OrdenId { get; set; }
+    [Parameter] public EventCallback OnCancel { get; set; }
+
+    // Estado del formulario
+    private bool guardando = false;
+    private Ocomenca ordenCompra = new();
+    private string proveedorSeleccionado = string.Empty;
+    private string sectorOrdenCompra = string.Empty; // Sector guardado en el alta de la O.C.
+    private string destinoOrdenCompra = string.Empty; // Destino guardado en el alta de la O.C.
+    private List<Ocomdeta>? detalleItems;
+    private List<OcomdetaEditDTO>? detalleItemsEnriquecido; // Detalle enriquecido según lógica VB6
+    private List<Tamoned>? monedas;
+    private List<CondPag>? condicionesPago;
+    private List<Plancuen>? cuentasDestino;
+    private SelectorProveedores.ProveedorSeleccionado proveedorInfo = new();
+    private int? tipoIvaProveedor; // PROVED12.Piva_Cli - Tipo de IVA del proveedor
+
+    // ===== Sistema de Descuentos =====
+    private decimal descuentoMonto = 0m;
+    private decimal descuentoPorcentaje = 0m;
+
+    // ===== Sistema de IVA =====
+    // Variables para el modal de distribución de IVA
+    private bool mostrarModalIva = false;
+    private decimal baseImponible0 = 0m;    // ITOGRA(0) - Exento/N/Grav (calculado automáticamente)
+    private decimal baseImponible105 = 0m;  // IMPOGRA(1) - 10.5% (editable)
+    private decimal baseImponible21 = 0m;   // IMPOGRA(2) - 21% (editable)
+    private decimal baseImponible27 = 0m;   // IMPOGRA(3) - 27% (editable)
+    private decimal importeIva0 = 0m;       // IMPOIVA(0) - IVA 0%
+    private decimal importeIva105 = 0m;     // IMPOIVA(1) - IVA 10.5%
+    private decimal importeIva21 = 0m;      // IMPOIVA(2) - IVA 21%
+    private decimal importeIva27 = 0m;      // IMPOIVA(3) - IVA 27%
+
+    // Propiedades calculadas para totales
+    private decimal TotalNeto => detalleItems?.Sum(item => (item.CantOcom ?? 0) * (item.PreUnit ?? 0)) ?? 0m;
+    private decimal TotalConDescuento => totalNetoSinDescuento; // En edición usamos el total ya calculado
+
+    // Propiedades calculadas para el sistema de IVA
+    private decimal TotalBaseImponible => baseImponible0 + baseImponible105 + baseImponible21 + baseImponible27;
+    private decimal TotalIva => importeIva0 + importeIva105 + importeIva21 + importeIva27;
+    private decimal TotalConIva => TotalConDescuento + TotalIva;
+
+    /// <summary>
+    /// Obtiene el porcentaje de IVA aplicado o "VAR" si hay distribución mixta
+    /// </summary>
+    private string PorcentajeIvaTexto
+    {
+        get
+        {
+            // Si no hay distribución de IVA, mostrar 0%
+            if (TotalBaseImponible == 0) return "0%";
+
+            // Contar cuántos campos tienen valor mayor a 0
+            int camposConValor = 0;
+            string porcentajeUnico = "";
+
+            if (baseImponible0 > 0)
+            {
+                camposConValor++;
+                porcentajeUnico = "0%";
+            }
+
+            if (baseImponible105 > 0)
+            {
+                camposConValor++;
+                porcentajeUnico = "10.5%";
+            }
+
+            if (baseImponible21 > 0)
+            {
+                camposConValor++;
+                porcentajeUnico = "21%";
+            }
+
+            if (baseImponible27 > 0)
+            {
+                camposConValor++;
+                porcentajeUnico = "27%";
+            }
+
+            // Si solo hay un campo con valor, mostrar ese porcentaje
+            if (camposConValor == 1)
+            {
+                return porcentajeUnico;
+            }
+
+            // Si hay múltiples campos con valor, mostrar "VAR"
+            if (camposConValor > 1)
+            {
+                return "VAR";
+            }
+
+            // Por defecto, 0%
+            return "0%";
+        }
+    }
+
+    /// <summary>
+    /// Propiedad intermediaria para el campo de texto de descuento.
+    /// Cuando se modifica, actualiza ordenCompra.PdesOcom y recalcula automáticamente
+    /// los valores de descuentoPorcentaje y descuentoMonto.
+    /// </summary>
+    private string DescuentoTexto
+    {
+        get => ordenCompra.PdesOcom ?? string.Empty;
+        set
+        {
+            ordenCompra.PdesOcom = value;
+            RecalcularDescuentoDesdeTexto();
+        }
+    }
+
+    // Variable para manejar la selección de moneda
+    private short CodigoMonedaSeleccionado
+    {
+        get => ordenCompra.MoneEmis ?? (short)0;
+        set => ordenCompra.MoneEmis = value == 0 ? null : (short?)value;
+    }
+
+    // Variable para manejar el contacto de atención (lógica VB6: AtSr_Ocom o Ctac_Cli)
+    private string ContactoAtencion
+    {
+        get
+        {
+            // ATEN$ = !AtSr_Ocom: If TRIM$(ATEN$) = "" Then ATEN$ = !Ctac_Cli
+            var atencion = ordenCompra.AtSrOcom?.Trim() ?? "";
+            if (string.IsNullOrEmpty(atencion))
+            {
+                atencion = proveedorInfo?.ContactoAtencion?.Trim() ?? "";
+            }
+            return atencion;
+        }
+        set
+        {
+            // Siempre actualizar el campo AtSr_Ocom de la orden
+            ordenCompra.AtSrOcom = string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+        }
+    }
+
+    // Referencias a componentes
+    // private SelectorProveedores selectorProveedores = null!;
+    private SelectorProductos selectorProductos = null!;
+    private bool cicloSeleccionProductos = false;
+
+    // Variables para edición de items
+    private bool mostrarModalEdicionItem = false;
+    private Ocomdeta? itemEnEdicion = null;
+    private List<Plancuen>? sectoresDisponibles;
+    private List<Plancuen>? destinosDisponibles;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await CargarDatosIniciales();
+        await CargarOrdenParaEdicion();
+    }
+
+    /// <summary>
+    /// Carga los datos iniciales necesarios para el formulario
+    /// </summary>
+    private async Task CargarDatosIniciales()
+    {
+        try
+        {
+            Console.WriteLine("[CargarDatosIniciales] Iniciando carga de datos...");
+
+            // Cargar monedas
+            Console.WriteLine("[CargarDatosIniciales] Cargando monedas...");
+            var responseMonedas = await repository.Get<List<Tamoned>>("api/tamoneds");
+            if (responseMonedas.Error)
+            {
+                Console.WriteLine($"[CargarDatosIniciales] Error al cargar monedas: {responseMonedas.HttpResponseMessage.StatusCode}");
+                var errorMessage = await responseMonedas.GetErrorMessageAsync();
+                Console.WriteLine($"[CargarDatosIniciales] Mensaje de error monedas: {errorMessage}");
+            }
+            else
+            {
+                monedas = responseMonedas.Response;
+                Console.WriteLine($"[CargarDatosIniciales] Monedas cargadas: {monedas?.Count ?? 0}");
+            }
+
+            // Cargar condiciones de pago
+            Console.WriteLine("[CargarDatosIniciales] Cargando condiciones de pago...");
+            var responseCondiciones = await repository.Get<List<CondPag>>("api/condpag/combo");
+            if (responseCondiciones.Error)
+            {
+                Console.WriteLine($"[CargarDatosIniciales] Error al cargar condiciones: {responseCondiciones.HttpResponseMessage.StatusCode}");
+                var errorMessage = await responseCondiciones.GetErrorMessageAsync();
+                Console.WriteLine($"[CargarDatosIniciales] Mensaje de error condiciones: {errorMessage}");
+            }
+            else
+            {
+                condicionesPago = responseCondiciones.Response;
+                Console.WriteLine($"[CargarDatosIniciales] Condiciones cargadas: {condicionesPago?.Count ?? 0}");
+            }
+
+            // Cargar cuentas destino
+            Console.WriteLine("[CargarDatosIniciales] Cargando cuentas destino...");
+            var responseCuentas = await repository.Get<List<Plancuen>>("api/plancuen/combo");
+            if (responseCuentas.Error)
+            {
+                Console.WriteLine($"[CargarDatosIniciales] Error al cargar cuentas: {responseCuentas.HttpResponseMessage.StatusCode}");
+                var errorMessage = await responseCuentas.GetErrorMessageAsync();
+                Console.WriteLine($"[CargarDatosIniciales] Mensaje de error cuentas: {errorMessage}");
+            }
+            else
+            {
+                cuentasDestino = responseCuentas.Response;
+                Console.WriteLine($"[CargarDatosIniciales] Cuentas destino cargadas: {cuentasDestino?.Count ?? 0}");
+            }
+
+            // Cargar sectores y destinos para edición de items
+            Console.WriteLine("[CargarDatosIniciales] Cargando sectores y destinos...");
+            await CargarSectoresYDestinos();
+
+            Console.WriteLine("[CargarDatosIniciales] Carga de datos completada");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[CargarDatosIniciales] Excepción: {ex.Message}");
+            Console.WriteLine($"[CargarDatosIniciales] Stack trace: {ex.StackTrace}");
+            await sweetAlertService.FireAsync("Error", $"Error al cargar datos: {ex.Message}", SweetAlertIcon.Error);
+        }
+    }
+
+    /// <summary>
+    /// Carga sectores y destinos disponibles para edición de items
+    /// </summary>
+    private async Task CargarSectoresYDestinos()
+    {
+        try
+        {
+            // Los sectores y destinos vienen del mismo endpoint de cuentas
+            // Por ahora usaremos la misma lista para ambos
+            if (cuentasDestino != null)
+            {
+                sectoresDisponibles = cuentasDestino.ToList();
+                destinosDisponibles = cuentasDestino.ToList();
+
+                Console.WriteLine($"[CargarSectoresYDestinos] Cuentas disponibles: {cuentasDestino.Count}");
+            }
+            else
+            {
+                sectoresDisponibles = new List<Plancuen>();
+                destinosDisponibles = new List<Plancuen>();
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[CargarSectoresYDestinos] Error: {ex.Message}");
+            sectoresDisponibles = new List<Plancuen>();
+            destinosDisponibles = new List<Plancuen>();
+        }
+    }
+
+    /// <summary>
+    /// Carga la orden de compra para edición
+    /// </summary>
+    private async Task CargarOrdenParaEdicion()
+    {
+        try
+        {
+            // Cargar encabezado
+            var responseOrden = await repository.Get<Ocomenca>($"api/ocomenca/{OrdenId}");
+            if (responseOrden.Error)
+            {
+                var message = await responseOrden.GetErrorMessageAsync();
+                await sweetAlertService.FireAsync("Error", $"Error al cargar la orden: {message}", SweetAlertIcon.Error);
+                return;
+            }
+
+            ordenCompra = responseOrden.Response!;
+
+            // Cargar información del proveedor desde PROVED12
+            if (ordenCompra.NproOcom.HasValue)
+            {
+                var responseProveedor = await repository.Get<Proved12>($"api/proved12/numero/{ordenCompra.NproOcom}");
+                if (!responseProveedor.Error && responseProveedor.Response != null)
+                {
+                    var proveedor = responseProveedor.Response;
+                    // Mapear a ProveedorSeleccionado
+                    proveedorInfo = new SelectorProveedores.ProveedorSeleccionado
+                    {
+                        NumeCli = proveedor.Nume_Cli,
+                        RazonSocial = proveedor.Raso_Cli ?? "",
+                        CodigoProveedor = proveedor.Codi_Cli ?? "",
+                        Domicilio = proveedor.Domi_Cli ?? "",
+                        CodigoPostal = proveedor.Cpos_Cli ?? "",
+                        Localidad = proveedor.Loca_Cli ?? "",
+                        Contacto = proveedor.Tele_Cli ?? "",
+                        Cuit = proveedor.Cuit_Cli ?? ""
+                    };
+
+                    // También agregar al objeto proveedorInfo
+                    proveedorInfo.ContactoAtencion = proveedor.Ctac_Cli ?? "";
+
+                    // Capturar el tipo de IVA del proveedor para validaciones futuras
+                    tipoIvaProveedor = proveedor.Piva_Cli;
+                    Console.WriteLine($"[CargarOrdenParaEdicion] Tipo IVA proveedor: {tipoIvaProveedor}");
+
+                    proveedorSeleccionado = $"{proveedorInfo.NumeCli} - {proveedorInfo.RazonSocial}";
+
+                    // También actualizar el campo RaSoProv en la orden si no está presente
+                    if (string.IsNullOrEmpty(ordenCompra.RaSoProv))
+                    {
+                        ordenCompra.RaSoProv = proveedorInfo.RazonSocial;
+                    }
+                }
+            }
+
+            // Cargar detalle
+            await CargarDetalle();
+
+            // Cargar y procesar distribución de IVA existente
+            await CargarDistribucionIvaExistente();
+
+            // Cargar sector y destino después de tener todos los datos
+            await CargarSectorYDestino();
+
+            // Cargar descuento existente
+            CargarDescuentoExistente();
+
+            StateHasChanged();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error al cargar orden para edición: {ex.Message}");
+            await sweetAlertService.FireAsync("Error", $"Error inesperado: {ex.Message}", SweetAlertIcon.Error);
+        }
+    }
+
+    /// <summary>
+    /// Carga el detalle de items de la orden
+    /// </summary>
+    private async Task CargarDetalle()
+    {
+        try
+        {
+            // Verificar si la orden está anulada antes de cargar el detalle
+            if (ordenCompra != null && ordenCompra.StatOcom >= 9)
+            {
+                Console.WriteLine($"[CargarDetalle] Orden anulada (Estado: {ordenCompra.StatOcom})");
+                await sweetAlertService.FireAsync("Orden Anulada", "O/Compra Anulada - Imposible Modificar", SweetAlertIcon.Warning);
+                // Redirigir al índice o deshabilitar la edición
+                navigationManager.NavigateTo("/ordenes-compra");
+                return;
+            }
+
+            // Usar el número de orden (NumeOcom) para buscar el detalle enriquecido
+            if (ordenCompra?.NumeOcom.HasValue == true)
+            {
+                var responseDetalle = await repository.Get<List<OcomdetaEditDTO>>($"api/ocomdeta/edicion/{ordenCompra.NumeOcom.Value}");
+                if (!responseDetalle.Error)
+                {
+                    detalleItemsEnriquecido = responseDetalle.Response ?? new List<OcomdetaEditDTO>();
+                    Console.WriteLine($"[CargarDetalle] Cargados {detalleItemsEnriquecido.Count} items enriquecidos para orden {ordenCompra.NumeOcom}");
+
+                    // También mantener la lista original para compatibilidad
+                    detalleItems = detalleItemsEnriquecido.Select(dto => new Ocomdeta
+                    {
+                        OCOMDETA_ID = dto.OCOMDETA_ID,
+                        NumeOcom = dto.NumeOcom,
+                        NuOrdItem = dto.NuOrdItem,
+                        CodInte = dto.CodInte,
+                        CodExte = dto.CodExte,
+                        Descritem = dto.Descritem,
+                        Delibre = dto.Delibre,
+                        CantOcom = dto.CantOcom,
+                        CantRec = dto.CantRec,
+                        UniCom = dto.UniCom,
+                        UniMas = dto.UniMas,
+                        PreUnit = dto.PreUnit,
+                        DescItem = dto.DescItem,
+                        PrUnNeto = dto.PrUnNeto,
+                        FemiOcom = dto.FemiOcom,
+                        FentreSol = dto.FentreSol,
+                        SectOcom = dto.SectOcom,
+                        IContab = dto.IContab,
+                        MediOcom = dto.MediOcom,
+                        Consimat = dto.Consimat,
+                        StatOcom = dto.StatOcom,
+                        MoneEmis = dto.MoneEmis
+                    }).ToList();
+                }
+                else
+                {
+                    Console.WriteLine($"[CargarDetalle] Error al cargar detalle: {responseDetalle.HttpResponseMessage?.StatusCode}");
+                    var errorMessage = await responseDetalle.GetErrorMessageAsync();
+                    Console.WriteLine($"[CargarDetalle] Mensaje de error: {errorMessage}");
+                }
+            }
+            else
+            {
+                Console.WriteLine($"[CargarDetalle] No se puede cargar detalle: NumeOcom no disponible");
+                detalleItems = new List<Ocomdeta>();
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[CargarDetalle] Error al cargar detalle: {ex.Message}");
+            detalleItems = new List<Ocomdeta>();
+        }
+    }
+
+    /// <summary>
+    /// Carga el sector y destino desde el primer item de OCOMDETA
+    /// Se ejecuta después de cargar todos los datos necesarios
+    /// </summary>
+    private async Task CargarSectorYDestino()
+    {
+        try
+        {
+            Console.WriteLine($"[CargarSectorYDestino] Iniciando carga...");
+            Console.WriteLine($"[CargarSectorYDestino] detalleItems count: {detalleItems?.Count ?? 0}");
+            Console.WriteLine($"[CargarSectorYDestino] cuentasDestino count: {cuentasDestino?.Count ?? 0}");
+
+            if (detalleItems == null || !detalleItems.Any())
+            {
+                sectorOrdenCompra = "Sin items";
+                destinoOrdenCompra = "Sin items";
+                Console.WriteLine($"[CargarSectorYDestino] No hay items de detalle");
+                return;
+            }
+
+            var primerItem = detalleItems.First();
+            Console.WriteLine($"[CargarSectorYDestino] Primer item - SectOcom: '{primerItem.SectOcom}', IContab: {primerItem.IContab}");
+
+            // Sector desde OCOMDETA.SectOcom
+            sectorOrdenCompra = primerItem.SectOcom ?? "Sin sector";
+            Console.WriteLine($"[CargarSectorYDestino] Sector cargado: '{sectorOrdenCompra}'");
+
+            // Destino desde OCOMDETA.IContab
+            if (primerItem.IContab.HasValue)
+            {
+                Console.WriteLine($"[CargarSectorYDestino] Buscando cuenta destino para código: {primerItem.IContab.Value}");
+
+                // Buscar la descripción del destino en las cuentas
+                var cuentaDestino = cuentasDestino?.FirstOrDefault(c => c.CodInCue == primerItem.IContab.Value);
+                if (cuentaDestino != null)
+                {
+                    destinoOrdenCompra = $"{cuentaDestino.CodInCue} - {cuentaDestino.CodExCue} - {cuentaDestino.Denocue}";
+                    Console.WriteLine($"[CargarSectorYDestino] Cuenta encontrada: {destinoOrdenCompra}");
+                }
+                else
+                {
+                    destinoOrdenCompra = $"Código: {primerItem.IContab.Value}";
+                    Console.WriteLine($"[CargarSectorYDestino] Cuenta no encontrada, usando código: {destinoOrdenCompra}");
+                }
+            }
+            else
+            {
+                destinoOrdenCompra = "Sin destino";
+                Console.WriteLine($"[CargarSectorYDestino] IContab es null");
+            }
+
+            Console.WriteLine($"[CargarSectorYDestino] Resultado final - Sector: '{sectorOrdenCompra}', Destino: '{destinoOrdenCompra}'");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[CargarSectorYDestino] Error: {ex.Message}");
+            sectorOrdenCompra = "Error al cargar";
+            destinoOrdenCompra = "Error al cargar";
+        }
+    }
+
+    // ===== Variables para Distribución de IVA =====
+    private DistribucionIvaDTO? distribucionIvaExistente;
+    private decimal totalNetoSinDescuento = 0m;
+    private bool tieneDistribucionIva = false;
+
+    /// <summary>
+    /// Carga la distribución de IVA existente desde DETAIVA y la procesa
+    /// Equivalente al código VB6 que carga RIVACOM07
+    /// TOTANEX = TOTAL SIN DESCUENTOS Y SIN IVA - IMPORTE DESCUENTO 
+    /// RIVACOM07.TONECOM = TOTANEX 
+    /// </summary>
+    private async Task CargarDistribucionIvaExistente()
+    {
+        try
+        {
+            // 1. Calcular TOTANEX (Total sin descuentos y sin IVA - Importe descuento)
+            totalNetoSinDescuento = CalcularTotalNetoSinDescuento();
+
+            Console.WriteLine($"[CargarDistribucionIvaExistente] TOTANEX calculado: {totalNetoSinDescuento:C2}");
+
+            // 2. Consultar distribución de IVA usando el endpoint que convierte a DTO
+            var responseDistribucion = await repository.Get<DistribucionIvaDTO>($"api/detaiva/distribucion/{OrdenId}");
+            if (responseDistribucion.Error || responseDistribucion.Response == null)
+            {
+                Console.WriteLine("No se encontró distribución de IVA existente");
+                tieneDistribucionIva = false;
+                return;
+            }
+
+            distribucionIvaExistente = responseDistribucion.Response;
+            tieneDistribucionIva = true;
+
+            // Cargar también en las variables del modal para edición
+            baseImponible0 = distribucionIvaExistente.BaseImponible0;
+            baseImponible105 = distribucionIvaExistente.BaseImponible105;
+            baseImponible21 = distribucionIvaExistente.BaseImponible21;
+            baseImponible27 = distribucionIvaExistente.BaseImponible27;
+            importeIva105 = distribucionIvaExistente.ImporteIva105;
+            importeIva21 = distribucionIvaExistente.ImporteIva21;
+            importeIva27 = distribucionIvaExistente.ImporteIva27;
+
+            // 3. Procesar y mostrar información como en el código VB6
+            Console.WriteLine($"[CargarDistribucionIvaExistente] Distribución IVA cargada:");
+            Console.WriteLine($"  - BaseImponible0 (0%): {distribucionIvaExistente.BaseImponible0:C2}");
+            Console.WriteLine($"  - BaseImponible105 (10.5%): {distribucionIvaExistente.BaseImponible105:C2} - IVA: {distribucionIvaExistente.ImporteIva105:C2}");
+            Console.WriteLine($"  - BaseImponible21 (21%): {distribucionIvaExistente.BaseImponible21:C2} - IVA: {distribucionIvaExistente.ImporteIva21:C2}");
+            Console.WriteLine($"  - BaseImponible27 (27%): {distribucionIvaExistente.BaseImponible27:C2} - IVA: {distribucionIvaExistente.ImporteIva27:C2}");
+            Console.WriteLine($"  - Total Base Imponible: {distribucionIvaExistente.TotalBaseImponible:C2}");
+            Console.WriteLine($"  - Total IVA: {distribucionIvaExistente.TotalIva:C2}");
+
+            // 4. Validar consistencia (como en VB6)
+            if (Math.Abs(distribucionIvaExistente.TotalBaseImponible - totalNetoSinDescuento) > 0.01m)
+            {
+                Console.WriteLine($"[ADVERTENCIA] Diferencia en totales - TOTANEX: {totalNetoSinDescuento:C2}, " +
+                                $"Base Imponible Total: {distribucionIvaExistente.TotalBaseImponible:C2}");
+            }
+
+            StateHasChanged();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error al cargar distribución de IVA: {ex.Message}");
+            tieneDistribucionIva = false;
+        }
+    }
+
+    /// <summary>
+    /// Calcula el total neto sin descuento (equivalente a TOTANEX del VB6)
+    /// TOTANEX = TOTAL SIN DESCUENTOS Y SIN IVA - IMPORTE DESCUENTO
+    /// </summary>
+    private decimal CalcularTotalNetoSinDescuento()
+    {
+        Console.WriteLine($"[CalcularTotalNetoSinDescuento] detalleItems count: {detalleItems?.Count ?? 0}");
+
+        // En el formulario de edición, usar el total ya calculado de la orden si está disponible
+        // Si hay distribución existente, usar su TotalBaseImponible (es el más confiable)
+        if (distribucionIvaExistente != null && distribucionIvaExistente.TotalBaseImponible > 0)
+        {
+            Console.WriteLine($"[CalcularTotalNetoSinDescuento] Usando TotalBaseImponible de distribución existente: {distribucionIvaExistente.TotalBaseImponible:C2}");
+            return distribucionIvaExistente.TotalBaseImponible;
+        }
+
+        // Si no hay distribución pero hay TotalOcom, usarlo
+        if (ordenCompra.TotalOcom.HasValue && ordenCompra.TotalOcom.Value > 0)
+        {
+            Console.WriteLine($"[CalcularTotalNetoSinDescuento] Usando TotalOcom de la orden: {ordenCompra.TotalOcom.Value:C2}");
+            return ordenCompra.TotalOcom.Value;
+        }
+
+        // Fallback: calcular desde detalleItems si están disponibles
+        if (detalleItems == null || !detalleItems.Any())
+        {
+            Console.WriteLine($"[CalcularTotalNetoSinDescuento] No hay detalleItems disponibles");
+            return 0m;
+        }
+
+        // Suma de todos los items (Cantidad * Precio)
+        decimal totalBruto = detalleItems.Sum(item => 
+            (item.CantOcom ?? 0) * (item.PreUnit ?? 0));
+
+        // Restar descuento aplicado (IdesOcom)
+        decimal descuento = ordenCompra.IdesOcom ?? 0m;
+
+        decimal totalNeto = totalBruto - descuento;
+
+        Console.WriteLine($"[CalcularTotalNetoSinDescuento] Calculado desde items - Total Bruto: {totalBruto:C2}, Descuento: {descuento:C2}, Total Neto: {totalNeto:C2}");
+
+        return totalNeto;
+    }
+
+    // NOTA: En el formulario de edición, el proveedor no puede cambiarse
+        // Los siguientes métodos están deshabilitados para edición
+
+    /*
+    private async Task AbrirSelectorProveedores()
+    {
+    await selectorProveedores.AbrirModal();
+    }
+
+    private void OnProveedorSeleccionado(SelectorProveedores.ProveedorSeleccionado proveedor)
+        {
+        ordenCompra.NproOcom = proveedor.NumeCli;
+        ordenCompra.RaSoProv = proveedor.RazonSocial;
+        proveedorSeleccionado = $"{proveedor.NumeCli} - {proveedor.RazonSocial}";
+
+        // Llenar información adicional del proveedor
+        proveedorInfo = proveedor;
+
+        StateHasChanged();
+    }
+    */
+
+    private async Task AgregarItem()
+    {
+        if (ordenCompra.StatOcom >= 9)
+        {
+            await sweetAlertService.FireAsync("Acción No Permitida", 
+                "No se pueden agregar items a una orden con estado ≥ 9", 
+                SweetAlertIcon.Warning);
+            return;
+        }
+
+        cicloSeleccionProductos = true;
+        await selectorProductos.AbrirModal();
+    }
+
+    private async Task OnProductoSeleccionado(SelectorProductos.SeleccionProducto seleccion)
+    {
+        // Implementar lógica de agregar producto (similar al formulario original)
+        // Por ahora, placeholder
+        await sweetAlertService.FireAsync("Info", "Funcionalidad de agregar item en desarrollo", SweetAlertIcon.Info);
+    }
+
+    private void TerminarCicloSeleccionProductos()
+    {
+        cicloSeleccionProductos = false;
+    }
+
+    private async Task EditarItem(Ocomdeta item)
+    {
+        try
+        {
+            // Crear una copia del item para edición
+            itemEnEdicion = new Ocomdeta
+            {
+                OCOMDETA_ID = item.OCOMDETA_ID,
+                NumeOcom = item.NumeOcom,
+                NuOrdItem = item.NuOrdItem,
+                CodInte = item.CodInte,
+                CodExte = item.CodExte,
+                Descritem = item.Descritem,
+                Delibre = item.Delibre,
+                CantOcom = item.CantOcom,
+                CantRec = item.CantRec,
+                UniCom = item.UniCom,
+                UniMas = item.UniMas,
+                PreUnit = item.PreUnit,
+                DescItem = item.DescItem,
+                PrUnNeto = item.PrUnNeto,
+                FemiOcom = item.FemiOcom,
+                FentreSol = item.FentreSol,
+                SectOcom = item.SectOcom,
+                IContab = item.IContab,
+                MediOcom = item.MediOcom,
+                Consimat = item.Consimat,
+                StatOcom = item.StatOcom,
+                MoneEmis = item.MoneEmis
+            };
+
+            mostrarModalEdicionItem = true;
+            StateHasChanged();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[EditarItem] Error: {ex.Message}");
+            await sweetAlertService.FireAsync("Error", $"Error al abrir edición: {ex.Message}", SweetAlertIcon.Error);
+        }
+    }
+
+    private async Task GuardarEdicionItem()
+    {
+        try
+        {
+            if (itemEnEdicion == null) return;
+
+            // Validaciones
+            if (itemEnEdicion.CantOcom < 0)
+            {
+                await sweetAlertService.FireAsync("Error", "La cantidad no puede ser negativa", SweetAlertIcon.Error);
+                return;
+            }
+
+            if (itemEnEdicion.PreUnit <= 0)
+            {
+                await sweetAlertService.FireAsync("Error", "El precio unitario debe ser mayor a cero", SweetAlertIcon.Error);
+                return;
+            }
+
+            // Buscar el item original en la lista
+            var itemOriginal = detalleItems?.FirstOrDefault(i => i.OCOMDETA_ID == itemEnEdicion.OCOMDETA_ID);
+            if (itemOriginal != null)
+            {
+                // Actualizar solo los campos permitidos
+                itemOriginal.CantOcom = itemEnEdicion.CantOcom;
+                itemOriginal.PreUnit = itemEnEdicion.PreUnit;
+                itemOriginal.FentreSol = itemEnEdicion.FentreSol;
+                itemOriginal.SectOcom = itemEnEdicion.SectOcom;
+                itemOriginal.IContab = itemEnEdicion.IContab;
+
+                // Recalcular descuentos y totales
+                RecalcularDescuentoDesdeTexto();
+
+                Console.WriteLine($"[GuardarEdicionItem] Item actualizado: {itemOriginal.CodExte} - Cantidad: {itemOriginal.CantOcom}, Precio: {itemOriginal.PreUnit:C4}");
+            }
+
+            // Cerrar modal
+            CerrarModalEdicionItem();
+
+            await sweetAlertService.FireAsync("Éxito", "Item actualizado correctamente", SweetAlertIcon.Success);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[GuardarEdicionItem] Error: {ex.Message}");
+            await sweetAlertService.FireAsync("Error", $"Error al guardar: {ex.Message}", SweetAlertIcon.Error);
+        }
+    }
+
+    private void CerrarModalEdicionItem()
+    {
+        mostrarModalEdicionItem = false;
+        itemEnEdicion = null;
+        StateHasChanged();
+    }
+
+    private async Task EliminarItem(Ocomdeta item)
+    {
+        if (ordenCompra.StatOcom >= 9)
+        {
+            await sweetAlertService.FireAsync("Acción No Permitida", 
+                "No se pueden eliminar items de una orden con estado ≥ 9", 
+                SweetAlertIcon.Warning);
+            return;
+        }
+
+        // Implementar lógica de eliminación
+        await sweetAlertService.FireAsync("Info", "Funcionalidad de eliminación en desarrollo", SweetAlertIcon.Info);
+    }
+
+    private async Task HandleValidSubmit()
+    {
+        if (ordenCompra.StatOcom >= 9)
+        {
+            await sweetAlertService.FireAsync("Acción No Permitida", 
+                "No se puede modificar una orden con estado ≥ 9", 
+                SweetAlertIcon.Warning);
+            return;
+        }
+
+        // Validar que el proveedor esté seleccionado
+        if (!await ValidarProveedor())
+        {
+            return;
+        }
+
+        // Warning de confirmación para órdenes activas (StatOcom = 0)
+        if (ordenCompra.StatOcom == 0)
+        {
+            var confirmResult = await sweetAlertService.FireAsync(new SweetAlertOptions
+            {
+                Title = "Confirmar Modificación de Orden Activa",
+                Html = @"
+                    <div class='text-start'>
+                        <p><strong>¿Está seguro que desea grabar nuevamente esta orden de compra activa?</strong></p>
+                        <hr>
+                        <div class='alert alert-warning border-0 mb-3'>
+                            <i class='fas fa-exclamation-triangle me-2'></i>
+                            <strong>Importante:</strong> Al confirmar se generará una nueva versión de la orden.
+                        </div>
+                        <ul class='mb-3'>
+                            <li>Se creará un nuevo registro con los cambios realizados</li>
+                            <li>La versión anterior quedará como historial</li>
+                        </ul>
+                        <p class='text-muted'><small><i class='fas fa-info-circle me-1'></i>Esta acción no se puede deshacer.</small></p>
+                    </div>",
+                Icon = SweetAlertIcon.Question,
+                ShowCancelButton = true,
+                ConfirmButtonText = "Sí, Generar Nueva Versión",
+                CancelButtonText = "Cancelar",
+                ConfirmButtonColor = "#28a745",
+                CancelButtonColor = "#6c757d",
+                FocusCancel = true
+            });
+
+            if (!confirmResult.IsConfirmed)
+            {
+                return; // Usuario canceló la operación
+            }
+        }
+
+        // Proceder con el guardado
+        await GuardarOrdenCompra();
+    }
+
+    /// <summary>
+    /// Ejecuta el guardado de la orden de compra
+    /// Implementa lógica similar al guardado de O.C. nueva según código VB6
+    /// </summary>
+    private async Task GuardarOrdenCompra()
+    {
+        try
+        {
+            guardando = true;
+            StateHasChanged();
+
+            Console.WriteLine($"[GuardarOrdenCompra] Iniciando guardado de orden {ordenCompra.NumeOcom}");
+            Console.WriteLine($"[GuardarOrdenCompra] Estado actual: {ordenCompra.StatOcom}");
+            Console.WriteLine($"[GuardarOrdenCompra] Proveedor: {ordenCompra.NproOcom} - {ordenCompra.RaSoProv}");
+            Console.WriteLine($"[GuardarOrdenCompra] Items en detalle: {detalleItems?.Count ?? 0}");
+
+            // PASO 1: Borrar consignaciones sin entregas (BORRACONSIG)
+            await BorrarConsignacionesSinEntregas(ordenCompra.NumeOcom.Value);
+
+            // PASO 2: Actualizar encabezado OCOMENCA
+            await ActualizarEncabezadoOrden();
+
+            // PASO 3: Cambiar estado de items anteriores a 10 (anulados)
+            await CambiarEstadoItemsAnteriores(ordenCompra.NumeOcom.Value);
+
+            // PASO 4: Borrar y regenerar DETAIVA
+            await BorrarYRegenerarDetaiva(ordenCompra.NumeOcom.Value);
+
+            // PASO 5: Procesar detalle OCOMDETA
+            await ProcesarDetalleOcomdeta(ordenCompra.NumeOcom.Value);
+
+            // PASO 6: Procesar MACONSIG según lógica VB6
+            await ProcesarMaconsig(ordenCompra.NumeOcom.Value);
+
+            await sweetAlertService.FireAsync(new SweetAlertOptions
+            {
+                Title = "Orden Actualizada",
+                Html = @"
+                    <div class='text-center'>
+                        <i class='fas fa-check-circle fa-3x text-success mb-3'></i>
+                        <p><strong>La orden de compra ha sido actualizada exitosamente.</strong></p>
+                        <hr>
+                        <p class='text-muted'>
+                            <i class='fas fa-info-circle me-1'></i>
+                            Se ha generado una nueva versión de la orden.
+                        </p>
+                    </div>",
+                Icon = SweetAlertIcon.Success,
+                ShowCancelButton = false,
+                ConfirmButtonText = "Continuar",
+                ConfirmButtonColor = "#28a745"
+            });
+
+            // Recargar datos después del guardado
+            await CargarOrdenParaEdicion();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[GuardarOrdenCompra] Error: {ex.Message}");
+            await sweetAlertService.FireAsync("Error", 
+                $"Error al guardar la orden: {ex.Message}", 
+                SweetAlertIcon.Error);
+        }
+        finally
+        {
+            guardando = false;
+            StateHasChanged();
+        }
+    }
+
+    /// <summary>
+    /// Borra consignaciones sin entregas de MACONSIG
+    /// Basado en Sub BORRACONSIG del código VB6
+    /// </summary>
+    private async Task BorrarConsignacionesSinEntregas(int numeroOrden)
+    {
+        try
+        {
+            Console.WriteLine($"[BorrarConsignacionesSinEntregas] Procesando orden: {numeroOrden}");
+
+            // Formatear número de orden como en VB6: "OC-000001"
+            string nocom = numeroOrden.ToString().PadLeft(6, '0');
+            nocom = $"OC-{nocom.Substring(0, 6)}";
+
+            Console.WriteLine($"[BorrarConsignacionesSinEntregas] Código formateado: {nocom}");
+
+            // Preparar el DTO para la eliminación
+            var deleteRequest = new
+            {
+                NumeroOrden = numeroOrden,
+                CodigoFormateado = nocom,
+                Condicion = $"NRO_OCOM LIKE '{nocom}%' and Cant_Entreg = 0"
+            };
+
+            // Llamar al endpoint implementado para borrar consignaciones
+            var response = await repository.Post("/api/maconsig/borrar-consignaciones", deleteRequest);
+
+            if (response.Error)
+            {
+                var errorMessage = await response.GetErrorMessageAsync();
+                Console.WriteLine($"[BorrarConsignacionesSinEntregas] Error del servidor: {errorMessage}");
+
+                // Si el error indica que no hay consignaciones, no es un error crítico
+                if (errorMessage.Contains("no haya consignaciones") || 
+                    errorMessage.Contains("no hay consignaciones") ||
+                    errorMessage.Contains("No se encontraron registros") ||
+                    errorMessage.Contains("0 registros afectados"))
+                {
+                    Console.WriteLine($"[BorrarConsignacionesSinEntregas] No hay consignaciones para borrar - continuando");
+                    return; // No es un error, simplemente no hay nada que borrar
+                }
+
+                // Si es otro tipo de error, sí lanzar excepción
+                throw new Exception($"Error al borrar consignaciones: {errorMessage}");
+            }
+
+            Console.WriteLine($"[BorrarConsignacionesSinEntregas] Consignaciones eliminadas exitosamente");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[BorrarConsignacionesSinEntregas] Excepción: {ex.Message}");
+
+            // Si la excepción indica que no hay consignaciones, no re-lanzar
+            if (ex.Message.Contains("no haya consignaciones") || 
+                ex.Message.Contains("no hay consignaciones") ||
+                ex.Message.Contains("No se encontraron registros"))
+            {
+                Console.WriteLine($"[BorrarConsignacionesSinEntregas] Excepción manejada: no hay consignaciones para borrar");
+                return;
+            }
+
+            throw; // Re-lanzar para manejo en método padre solo si es un error real
+        }
+    }
+
+    /// <summary>
+    /// Actualiza el encabezado de la orden en OCOMENCA
+    /// Basado en el código VB6 proporcionado
+    /// </summary>
+    private async Task ActualizarEncabezadoOrden()
+    {
+        try
+        {
+            Console.WriteLine($"[ActualizarEncabezadoOrden] Actualizando encabezado de orden: {ordenCompra.NumeOcom}");
+
+            // Preparar datos para actualización según lógica VB6
+            var updateData = new
+            {
+                NumeOcom = ordenCompra.NumeOcom,
+                // Referencia: FECHATEX$(FEX) + " - " + rasocli$((-1) * NPRO%)
+                RefeOcom = $"{ordenCompra.FemiOcom?.ToString("dd/MM/yyyy")} - {ordenCompra.RaSoProv}",
+                FemiOcom = ordenCompra.FemiOcom,
+                NproOcom = ordenCompra.NproOcom,
+                RasoProv = ordenCompra.RaSoProv?.Substring(0, Math.Min(48, ordenCompra.RaSoProv?.Length ?? 0)),
+                TsumOcom = 0m, // materiales - se calculará
+
+                // Campos de modificación
+                FmodOcom = DateTime.Now,
+                // UsuaMod = NUMERROUSUARIO, // Se asignará en el backend
+
+                // Monedas y tipo de cambio
+                MoneCos = ordenCompra.MoneCos,
+                MoneEmis = ordenCompra.MoneEmis,
+                TcamOcom = ordenCompra.TcamOcom,
+
+                // Condición de pago
+                CpagOcom = ordenCompra.CpagOcom,
+
+                // Número de revisión/versión
+                // OcomRevis = NRO DE VERSION, // Se incrementará en el backend
+
+                // Contacto
+                AtSrOcom = ordenCompra.AtSrOcom,
+
+                // Totales y descuentos
+                ToBruOcom = TotalNeto,
+                PdesOcom = ordenCompra.PdesOcom,
+                IdesOcom = descuentoMonto,
+                IivaOcom = TotalIva,
+                Iotr1Ocom = 0m, // TOTPER# - otros impuestos
+                TotalOcom = TotalConIva,
+
+                // Lugar de entrega y observaciones
+                Lentrega = ordenCompra.Lentrega?.Substring(0, Math.Min(128, ordenCompra.Lentrega?.Length ?? 0)),
+                ObseOcom = ordenCompra.ObseOcom,
+
+                // Porcentaje IVA
+                PorcIva = PorcentajeIvaTexto,
+
+                // Estado - se mantendrá según lógica de aprobación
+                StatOcom = ordenCompra.StatOcom
+            };
+
+            // Llamar al endpoint para actualizar encabezado
+            var response = await repository.Put($"/api/ocomenca/{ordenCompra.NumeOcom}", updateData);
+
+            if (response.Error)
+            {
+                var errorMessage = await response.GetErrorMessageAsync();
+                Console.WriteLine($"[ActualizarEncabezadoOrden] Error: {errorMessage}");
+                throw new Exception($"Error al actualizar encabezado: {errorMessage}");
+            }
+
+            Console.WriteLine($"[ActualizarEncabezadoOrden] Encabezado actualizado exitosamente");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[ActualizarEncabezadoOrden] Excepción: {ex.Message}");
+            throw; // Re-lanzar para manejo en método padre
+        }
+    }
+
+    /// <summary>
+    /// Cambia el estado de los items anteriores de la O.C. activa a 10 (anulados)
+    /// Condición: Stat_Ocom < 9 and Nume_Ocom = numeroOrden
+    /// </summary>
+    private async Task CambiarEstadoItemsAnteriores(int numeroOrden)
+    {
+        try
+        {
+            Console.WriteLine($"[CambiarEstadoItemsAnteriores] Anulando items anteriores de orden: {numeroOrden}");
+
+            // Preparar datos para actualización masiva
+            var updateRequest = new
+            {
+                NumeroOrden = numeroOrden,
+                NuevoEstado = 10, // Estado anulado
+                CondicionEstado = "Stat_Ocom < 9", // Solo items activos/pendientes
+                Descripcion = "Anular items de versión anterior"
+            };
+
+            // Llamar al endpoint implementado para cambiar estado de items
+            var response = await repository.Post("/api/ocomdeta/cambiar-estado-items", updateRequest);
+
+            if (response.Error)
+            {
+                var errorMessage = await response.GetErrorMessageAsync();
+                Console.WriteLine($"[CambiarEstadoItemsAnteriores] Error: {errorMessage}");
+                throw new Exception($"Error al cambiar estado de items: {errorMessage}");
+            }
+
+            Console.WriteLine($"[CambiarEstadoItemsAnteriores] Items anteriores anulados exitosamente");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[CambiarEstadoItemsAnteriores] Excepción: {ex.Message}");
+            throw; // Re-lanzar para manejo en método padre
+        }
+    }
+
+    /// <summary>
+    /// Borra y regenera los datos de DETAIVA para la orden
+    /// Basado en el código VB6 para guardar distribución de IVA
+    /// </summary>
+    private async Task BorrarYRegenerarDetaiva(int numeroOrden)
+    {
+        try
+        {
+            Console.WriteLine($"[BorrarYRegenerarDetaiva] Procesando distribución IVA para orden: {numeroOrden}");
+
+            // PASO 1: Borrar datos existentes de DETAIVA
+            await BorrarDetaiva(numeroOrden);
+
+            // PASO 2: Regenerar datos de DETAIVA
+            await RegenerarDetaiva(numeroOrden);
+
+            Console.WriteLine($"[BorrarYRegenerarDetaiva] Distribución IVA actualizada exitosamente");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[BorrarYRegenerarDetaiva] Excepción: {ex.Message}");
+            throw; // Re-lanzar para manejo en método padre
+        }
+    }
+
+    /// <summary>
+    /// Borra los datos existentes de DETAIVA para la orden
+    /// Equivalente a: DELETE DETAIVA where Nume_Ocom = numeroOrden
+    /// </summary>
+    private async Task BorrarDetaiva(int numeroOrden)
+    {
+        try
+        {
+            Console.WriteLine($"[BorrarDetaiva] Eliminando distribución IVA existente para orden: {numeroOrden}");
+
+            var deleteRequest = new
+            {
+                NumeroOrden = numeroOrden,
+                Condicion = $"Nume_Ocom = {numeroOrden}"
+            };
+
+            // Llamar al endpoint implementado para borrar DETAIVA (reutiliza DetaivaService existente)
+            var response = await repository.Post("/api/detaiva/borrar-por-orden", deleteRequest);
+
+            if (response.Error)
+            {
+                var errorMessage = await response.GetErrorMessageAsync();
+                Console.WriteLine($"[BorrarDetaiva] Error del servidor: {errorMessage}");
+
+                // Si el error indica que no hay registros, no es un error crítico
+                if (errorMessage.Contains("No se encontraron registros") ||
+                    errorMessage.Contains("0 registros afectados") ||
+                    errorMessage.Contains("no hay registros") ||
+                    errorMessage.Contains("tabla vacía"))
+                {
+                    Console.WriteLine($"[BorrarDetaiva] No hay registros DETAIVA para borrar - continuando");
+                    return; // No es un error, simplemente no hay nada que borrar
+                }
+
+                // Si es otro tipo de error, sí lanzar excepción
+                throw new Exception($"Error al borrar DETAIVA: {errorMessage}");
+            }
+
+            Console.WriteLine($"[BorrarDetaiva] DETAIVA eliminado exitosamente");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[BorrarDetaiva] Excepción: {ex.Message}");
+
+            // Si la excepción indica que no hay registros, no re-lanzar
+            if (ex.Message.Contains("No se encontraron registros") ||
+                ex.Message.Contains("0 registros afectados") ||
+                ex.Message.Contains("no hay registros"))
+            {
+                Console.WriteLine($"[BorrarDetaiva] Excepción manejada: no hay registros DETAIVA para borrar");
+                return;
+            }
+
+            throw; // Re-lanzar para manejo en método padre solo si es un error real
+        }
+    }
+
+    /// <summary>
+    /// Regenera los datos de DETAIVA basado en la distribución actual de IVA
+    /// Basado en el código VB6 con RIVACOM07
+    /// </summary>
+    private async Task RegenerarDetaiva(int numeroOrden)
+    {
+        try
+        {
+            Console.WriteLine($"[RegenerarDetaiva] Regenerando distribución IVA para orden: {numeroOrden}");
+
+            // Preparar datos de distribución IVA según el código VB6
+            var distribucionIva = new List<object>();
+
+            // KKII% = 0 To 5 (6 niveles de IVA)
+            // Nivel 0: 0%
+            if (baseImponible0 >= 0.005m || importeIva0 >= 0.005m)
+            {
+                distribucionIva.Add(new
+                {
+                    // CODIEMPR = CodiEmp% (se asignará en backend)
+                    NumeOcom = numeroOrden,
+                    Norit = 0, // KKII%
+                    TasaIva = 0.0m, // .TASIVA(KKII%)
+                    BaseImpo = baseImponible0, // .IMPOGRA(KKII%)
+                    ImpoIva = importeIva0 // .IMPOIVA(KKII%)
+                });
+            }
+
+            // Nivel 1: 10.5%
+            if (baseImponible105 >= 0.005m || importeIva105 >= 0.005m)
+            {
+                distribucionIva.Add(new
+                {
+                    NumeOcom = numeroOrden,
+                    Norit = 1,
+                    TasaIva = 10.5m,
+                    BaseImpo = baseImponible105,
+                    ImpoIva = importeIva105
+                });
+            }
+
+            // Nivel 2: 21%
+            if (baseImponible21 >= 0.005m || importeIva21 >= 0.005m)
+            {
+                distribucionIva.Add(new
+                {
+                    NumeOcom = numeroOrden,
+                    Norit = 2,
+                    TasaIva = 21.0m,
+                    BaseImpo = baseImponible21,
+                    ImpoIva = importeIva21
+                });
+            }
+
+            // Nivel 3: 27%
+            if (baseImponible27 >= 0.005m || importeIva27 >= 0.005m)
+            {
+                distribucionIva.Add(new
+                {
+                    NumeOcom = numeroOrden,
+                    Norit = 3,
+                    TasaIva = 27.0m,
+                    BaseImpo = baseImponible27,
+                    ImpoIva = importeIva27
+                });
+            }
+
+            // Solo proceder si hay datos para insertar
+            if (distribucionIva.Any())
+            {
+                var insertRequest = new
+                {
+                    NumeroOrden = numeroOrden,
+                    DistribucionIva = distribucionIva
+                };
+
+                // Llamar al endpoint implementado para insertar DETAIVA (reutiliza DetaivaService existente)
+                var response = await repository.Post("/api/detaiva/insertar-distribucion", insertRequest);
+
+                if (response.Error)
+                {
+                    var errorMessage = await response.GetErrorMessageAsync();
+                    Console.WriteLine($"[RegenerarDetaiva] Error: {errorMessage}");
+                    throw new Exception($"Error al regenerar DETAIVA: {errorMessage}");
+                }
+
+                Console.WriteLine($"[RegenerarDetaiva] Insertados {distribucionIva.Count} registros de distribución IVA");
+            }
+            else
+            {
+                Console.WriteLine($"[RegenerarDetaiva] No hay distribución IVA para insertar");
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[RegenerarDetaiva] Excepción: {ex.Message}");
+            throw;
+        }
+    }
+
+    /// <summary>
+    /// Procesa el detalle OCOMDETA insertando los items de la orden
+    /// Basado en el código VB6 proporcionado
+    /// </summary>
+    private async Task ProcesarDetalleOcomdeta(int numeroOrden)
+    {
+        try
+        {
+            Console.WriteLine($"[ProcesarDetalleOcomdeta] Procesando detalle para orden: {numeroOrden}");
+
+            if (detalleItems == null || !detalleItems.Any())
+            {
+                Console.WriteLine($"[ProcesarDetalleOcomdeta] No hay items para procesar");
+                return;
+            }
+
+            // Preparar lista de items para insertar
+            var itemsParaInsertar = new List<object>();
+
+            string simboloMoneda = "$";
+
+            string valorUnitarioFormateado;
+            // Procesar cada item del detalle
+            foreach (var item in detalleItems)
+            {
+                if (ordenCompra.MoneEmis < 2) { simboloMoneda = "$"; }
+                if (ordenCompra.MoneEmis >= 2) { simboloMoneda = "DO"; }
+                
+
+                // Solo procesar items con cantidad > 0
+                if (item.CantOcom <= 0) continue;
+
+                var itemDetalle = new
+                {
+                    // Campos básicos de identificación
+                    CodiEmpr = 0, // Se asignará en backend
+                    NumeOcom = numeroOrden,
+                    NuOrdItem = item.NuOrdItem, // ORDIT% - Número de orden del item
+                    FemiOcom = ordenCompra.FemiOcom, // Fecha de emisión
+                    MediOcom = "", // SAFETEXT$(PedInt$) - Medio/Pedido interno
+                    NproOcom = ordenCompra.NproOcom, // Número de proveedor
+                    RasoProv = ordenCompra.RaSoProv?.Substring(0, Math.Min(64, ordenCompra.RaSoProv?.Length ?? 0)),
+
+                    // Códigos del producto
+                    CodInte = item.CodInte, // CI0% - Código interno
+                    CodExte = item.CodExte?.Substring(0, Math.Min(24, item.CodExte?.Length ?? 0)), // Código externo
+                    Descritem = item.Descritem?.Substring(0, Math.Min(24, item.Descritem?.Length ?? 0)), // Descripción
+                    Delibre = item.Delibre ?? "", // Descripción libre
+
+                    // Si no hay código interno, usar descripción libre como descripción
+                    DescripcionFinal = item.CodInte < 1 && !string.IsNullOrEmpty(item.Delibre) 
+                        ? item.Delibre.Substring(0, Math.Min(64, item.Delibre.Length)) 
+                        : item.Descritem?.Substring(0, Math.Min(64, item.Descritem?.Length ?? 0)),
+                    valorUnitarioFormateado = $"{simboloMoneda} {item.PreUnit:F4}",
+
+                    // Unidades y cantidades
+                    ValoUnid = valorUnitarioFormateado = $"{simboloMoneda} {item.PreUnit:F4}",
+                    // VAUNI$ - Valor unidad (string)
+                    UniMas = item.UniMas, // Unidad de medida master
+                    UnidsOcom = item.CantOcom, // CAUNIS - Cantidad en unidades de stock
+                    CantOcom = item.CantOcom, // CANTU - Cantidad de compra
+                    UniCom = item.UniCom, // Unidad de compra
+                    CoefUnids = 1.0m, // COEFUNI - Coeficiente de unidades
+
+                    // Precios y descuentos
+                    PreUnit = item.PreUnit, // Precio unitario
+                    DescItem = item.DescItem ?? 0, // Descuento del item
+                    PrunNeto = item.PrUnNeto, // Precio unitario neto
+                    INetItem = (item.CantOcom ?? 0) * (item.PrUnNeto ?? 0), // Importe neto del item
+                    PrUnNetoPes = item.PreUnit, // Precio unitario neto en pesos
+
+                    // Fechas
+                    FentreSol = item.FentreSol, // Fecha de entrega solicitada
+
+                    // Otros campos
+                    Consimat = 0, // Consignación material
+                    CantRec = 0m, // Cantidad recibida (se calculará)
+                    
+                    // Monedas
+                    MoneCos = ordenCompra.MoneCos, // Moneda de costos
+                    MoneEmis = ordenCompra.MoneEmis, // Moneda de emisión
+                    TsumOcom = 0m, // Total suma
+
+
+                    // Estado
+                    StatOcom = ordenCompra.StatOcom, // Estado de la orden
+
+                    // Imputación contable y sector
+                    IContab = item.IContab, // Destino imputación contable
+                    SectOcom = item.SectOcom // Sector
+                };
+
+                itemsParaInsertar.Add(itemDetalle);
+            }
+
+            if (itemsParaInsertar.Any())
+            {
+                var insertRequest = new
+                {
+                    NumeroOrden = numeroOrden,
+                    Items = itemsParaInsertar
+                };
+
+                // Llamar al endpoint implementado para insertar items de detalle
+                var response = await repository.Post("/api/ocomdeta/insertar-items", insertRequest);
+                
+                if (response.Error)
+                {
+                    var errorMessage = await response.GetErrorMessageAsync();
+                    Console.WriteLine($"[ProcesarDetalleOcomdeta] Error: {errorMessage}");
+                    throw new Exception($"Error al procesar detalle OCOMDETA: {errorMessage}");
+                }
+
+                Console.WriteLine($"[ProcesarDetalleOcomdeta] Insertados {itemsParaInsertar.Count} items de detalle");
+            }
+            else
+            {
+                Console.WriteLine($"[ProcesarDetalleOcomdeta] No hay items válidos para insertar");
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[ProcesarDetalleOcomdeta] Excepción: {ex.Message}");
+            throw; // Re-lanzar para manejo en método padre
+        }
+    }
+
+    /// <summary>
+    /// Valida que el proveedor esté correctamente seleccionado
+    /// </summary>
+    private async Task<bool> ValidarProveedor()
+    {
+        if (!ordenCompra.NproOcom.HasValue || ordenCompra.NproOcom <= 0)
+        {
+            await sweetAlertService.FireAsync(new SweetAlertOptions
+            {
+                Title = "Proveedor Requerido",
+                Text = "Debe seleccionar un proveedor para la orden de compra.",
+                Icon = SweetAlertIcon.Warning,
+                ShowCancelButton = false,
+                ConfirmButtonText = "Entendido"
+            });
+            return false;
+        }
+
+        // Verificar que la información del proveedor esté completa
+        if (string.IsNullOrEmpty(ordenCompra.RaSoProv))
+        {
+            await sweetAlertService.FireAsync(new SweetAlertOptions
+            {
+                Title = "Información Incompleta",
+                Text = "La información del proveedor está incompleta. Por favor, seleccione nuevamente el proveedor.",
+                Icon = SweetAlertIcon.Warning,
+                ShowCancelButton = false,
+                ConfirmButtonText = "Entendido"
+            });
+            return false;
+        }
+
+        Console.WriteLine($"Validación exitosa: Proveedor {ordenCompra.NproOcom} - {ordenCompra.RaSoProv} seleccionado");
+        return true;
+    }
+
+    // ===== MÉTODOS DEL SISTEMA DE IVA =====
+
+    /// <summary>
+    /// Abre el modal de distribución de IVA e inicializa con datos existentes o todo al 21%
+    /// </summary>
+    private Task AbrirModalIva()
+    {
+        // Asegurar que tenemos el total correcto
+        Console.WriteLine($"[AbrirModalIva] TotalConDescuento: {TotalConDescuento:C2}");
+        Console.WriteLine($"[AbrirModalIva] totalNetoSinDescuento: {totalNetoSinDescuento:C2}");
+        
+        // Si el total es 0, recalcular
+        if (TotalConDescuento == 0 && detalleItems != null && detalleItems.Any())
+        {
+            totalNetoSinDescuento = CalcularTotalNetoSinDescuento();
+            Console.WriteLine($"[AbrirModalIva] Recalculado totalNetoSinDescuento: {totalNetoSinDescuento:C2}");
+        }
+        
+        // Si ya hay distribución cargada, usar esos valores
+        if (tieneDistribucionIva && distribucionIvaExistente != null)
+        {
+            Console.WriteLine($"[AbrirModalIva] Usando distribución existente ya cargada");
+            // Los valores ya están cargados en las variables del modal
+            RecalcularDistribucionIva();
+        }
+        else
+        {
+            // No hay distribución existente, usar valores por defecto
+            Console.WriteLine($"[AbrirModalIva] No hay distribución existente, usando valores por defecto");
+            LimpiarDistribucion();
+            baseImponible21 = TotalConDescuento;
+            RecalcularDistribucionIva();
+        }
+        
+        mostrarModalIva = true;
+        StateHasChanged();
+        return Task.CompletedTask;
+    }
+
+    /// <summary>
+    /// Cierra el modal de distribución de IVA
+    /// </summary>
+    private void CerrarModalIva()
+    {
+        mostrarModalIva = false;
+        StateHasChanged();
+    }
+
+    /// <summary>
+    /// Acepta la distribución de IVA con validaciones y confirmaciones
+    /// </summary>
+    private async Task AceptarDistribucionIva()
+    {
+        var totalGravado = baseImponible105 + baseImponible21 + baseImponible27;
+        
+        // Verificar si hay exceso en los campos editables
+        if (totalGravado > TotalConDescuento)
+        {
+            var exceso = totalGravado - TotalConDescuento;
+            var result = await sweetAlertService.FireAsync(new SweetAlertOptions
+            {
+                Title = "¡Advertencia de Exceso!",
+                Text = $"Los campos editables suman {totalGravado:C2}, pero solo hay {TotalConDescuento:C2} disponible.\n" +
+                       $"Exceso: {exceso:C2}\n\n" +
+                       $"El campo Exento/N/Grav quedará en {baseImponible0:C2} (negativo).\n\n" +
+                       $"¿Desea continuar de todas formas?",
+                Icon = SweetAlertIcon.Warning,
+                ShowCancelButton = true,
+                ConfirmButtonText = "Sí, continuar",
+                CancelButtonText = "No, revisar"
+            });
+
+            if (!result.IsConfirmed)
+            {
+                return; // Usuario canceló
+            }
+        }
+
+        // Cerrar modal y mostrar confirmación
+        mostrarModalIva = false;
+        
+        if (totalGravado > TotalConDescuento)
+        {
+            await sweetAlertService.FireAsync("Advertencia", 
+                "Distribución de IVA aplicada con advertencia de exceso", 
+                SweetAlertIcon.Warning);
+        }
+        else
+        {
+            await sweetAlertService.FireAsync("Éxito", 
+                "Distribución de IVA aplicada correctamente", 
+                SweetAlertIcon.Success);
+        }
+    }
+
+    /// <summary>
+    /// Recalcula la distribución de IVA basado en las bases imponibles editables
+    /// </summary>
+    private void RecalcularDistribucionIva()
+    {
+        Console.WriteLine($"[RecalcularDistribucionIva] TotalConDescuento: {TotalConDescuento:C2}");
+        Console.WriteLine($"[RecalcularDistribucionIva] baseImponible105: {baseImponible105:C2}");
+        Console.WriteLine($"[RecalcularDistribucionIva] baseImponible21: {baseImponible21:C2}");
+        Console.WriteLine($"[RecalcularDistribucionIva] baseImponible27: {baseImponible27:C2}");
+        
+        // Calcular importes de IVA para cada porcentaje
+        importeIva105 = baseImponible105 * 0.105m;
+        importeIva21 = baseImponible21 * 0.21m;
+        importeIva27 = baseImponible27 * 0.27m;
+        
+        // Calcular ITOGRA(0) como el resto (lógica del VB6)
+        var totalGravado = baseImponible105 + baseImponible21 + baseImponible27;
+        baseImponible0 = TotalConDescuento - totalGravado;
+        
+        Console.WriteLine($"[RecalcularDistribucionIva] totalGravado: {totalGravado:C2}");
+        Console.WriteLine($"[RecalcularDistribucionIva] baseImponible0 (calculado): {baseImponible0:C2}");
+        
+        StateHasChanged();
+    }
+
+    /// <summary>
+    /// Pone todo el total en el campo seleccionado (funcionalidad de doble clic)
+    /// </summary>
+    private void PonerTodoEnCampo(int campo)
+    {
+        // Limpiar todos los campos primero
+        LimpiarDistribucion();
+        
+        // Poner todo el total en el campo seleccionado
+        switch (campo)
+        {
+            case 0: baseImponible0 = TotalConDescuento; break;   // Exento
+            case 1: baseImponible105 = TotalConDescuento; break; // 10.5%
+            case 2: baseImponible21 = TotalConDescuento; break;  // 21%
+            case 3: baseImponible27 = TotalConDescuento; break;  // 27%
+        }
+        
+        RecalcularDistribucionIva();
+    }
+
+    /// <summary>
+    /// Limpia toda la distribución de IVA
+    /// </summary>
+    private void LimpiarDistribucion()
+    {
+        baseImponible0 = 0m;
+        baseImponible105 = 0m;
+        baseImponible21 = 0m;
+        baseImponible27 = 0m;
+        importeIva105 = 0m;
+        importeIva21 = 0m;
+        importeIva27 = 0m;
+        StateHasChanged();
+    }
+
+
+    /// <summary>
+    /// Carga el descuento existente de la orden
+    /// </summary>
+    private void CargarDescuentoExistente()
+    {
+        try
+        {
+            // Cargar el descuento desde los campos de la orden
+            descuentoMonto = ordenCompra.IdesOcom ?? 0m;
+            
+            // Si hay texto de descuento, recalcular para obtener el porcentaje
+            if (!string.IsNullOrEmpty(ordenCompra.PdesOcom))
+            {
+                RecalcularDescuentoDesdeTexto();
+            }
+            else if (descuentoMonto > 0 && TotalNeto > 0)
+            {
+                // Si no hay texto pero sí monto, calcular el porcentaje
+                descuentoPorcentaje = Math.Round((descuentoMonto / TotalNeto) * 100m, 4);
+            }
+            else
+            {
+                descuentoPorcentaje = 0m;
+            }
+            
+            Console.WriteLine($"[CargarDescuentoExistente] Descuento cargado - Texto: '{ordenCompra.PdesOcom}', Monto: {descuentoMonto:C2}, Porcentaje: {descuentoPorcentaje:F2}%");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[CargarDescuentoExistente] Error: {ex.Message}");
+            descuentoMonto = 0m;
+            descuentoPorcentaje = 0m;
+        }
+    }
+
+    /// <summary>
+    /// Recalcula descuento basado en el texto ingresado.
+    /// Soporta números simples (ej: "10") o descuentos sucesivos (ej: "10 + 5").
+    /// - Si es número (entero/decimal): se toma literal como %.
+    /// - Si tiene forma "a + b + c": aplica descuentos sucesivos: base*(1-a%)*(1-b%)*(1-c%).
+    /// </summary>
+    private void RecalcularDescuentoDesdeTexto()
+    {
+        try
+        {
+            var texto = ordenCompra.PdesOcom?.Trim() ?? string.Empty;
+            if (string.IsNullOrWhiteSpace(texto))
+            {
+                descuentoPorcentaje = 0m;
+                descuentoMonto = 0m;
+                ActualizarTotalOrden();
+                StateHasChanged();
+                return;
+            }
+
+            decimal baseNeto = TotalNeto;
+            if (baseNeto <= 0m)
+            {
+                descuentoPorcentaje = 0m;
+                descuentoMonto = 0m;
+                ActualizarTotalOrden();
+                StateHasChanged();
+                return;
+            }
+
+            // Caso 1: Número simple (ej: "10" o "15.5")
+            if (decimal.TryParse(texto.Replace(",", "."), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out decimal porcSimple))
+            {
+                if (porcSimple < 0) porcSimple = 0;
+                if (porcSimple > 100) porcSimple = 100;
+                descuentoPorcentaje = Math.Round(porcSimple, 4);
+                descuentoMonto = Math.Round(baseNeto * (descuentoPorcentaje / 100m), 4);
+                ActualizarTotalOrden();
+                StateHasChanged();
+                return;
+            }
+
+            // Caso 2: Descuentos sucesivos (ej: "10 + 5" o "10+20+5")
+            if (texto.Contains("+"))
+            {
+                var partes = texto.Split('+');
+                decimal acumulado = baseNeto;
+                bool algunaParteValida = false;
+
+                foreach (var parte in partes)
+                {
+                    var parteTexto = parte.Trim().Replace(",", ".");
+                    if (decimal.TryParse(parteTexto, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out decimal porcentajeParte))
+                    {
+                        if (porcentajeParte >= 0 && porcentajeParte <= 100)
+                        {
+                            acumulado = acumulado * (1 - (porcentajeParte / 100m));
+                            algunaParteValida = true;
+                        }
+                    }
+                }
+
+                if (algunaParteValida)
+                {
+                    descuentoMonto = Math.Max(0m, baseNeto - acumulado);
+                    descuentoPorcentaje = baseNeto == 0m ? 0m : Math.Round((descuentoMonto / baseNeto) * 100m, 4);
+                    ActualizarTotalOrden();
+                    StateHasChanged();
+                    return;
+                }
+            }
+
+            // Si no se pudo interpretar: descuento 0
+            descuentoPorcentaje = 0m;
+            descuentoMonto = 0m;
+            ActualizarTotalOrden();
+            StateHasChanged();
+        }
+        catch
+        {
+            // En cualquier error, evitar lanzar excepciones a la UI y dejar descuento en 0
+            descuentoPorcentaje = 0m;
+            descuentoMonto = 0m;
+            ActualizarTotalOrden();
+            StateHasChanged();
+        }
+    }
+
+    /// <summary>
+    /// Actualiza los totales de la orden con el descuento aplicado
+    /// </summary>
+    private void ActualizarTotalOrden()
+    {
+        // Actualizar el campo IdesOcom con el monto del descuento
+        ordenCompra.IdesOcom = descuentoMonto;
+        
+        // Recalcular el total neto sin descuento para el sistema de IVA
+        totalNetoSinDescuento = Math.Max(0m, TotalNeto - descuentoMonto);
+    }
+
+    /// <summary>
+    /// PASO 6: Procesa las consignaciones MACONSIG según la lógica VB6
+    /// Recorre el detalle de la orden y verifica si los códigos poseen estructura
+    /// Genera consignaciones por el remanente considerando cantidades ya asignadas
+    /// </summary>
+    private async Task ProcesarMaconsig(int numeroOrden)
+    {
+        try
+        {
+            Console.WriteLine($"[ProcesarMaconsig] 🔄 Iniciando procesamiento de consignaciones para O.C. {numeroOrden}");
+
+            if (detalleItems == null || !detalleItems.Any())
+            {
+                Console.WriteLine($"[ProcesarMaconsig] ⚠️ No hay items para procesar consignaciones");
+                return;
+            }
+
+            // Preparar datos para el procesamiento de consignaciones según VB6
+            var requestData = new
+            {
+                NumeroOrden = numeroOrden,
+                NumeroProveedor = ordenCompra.NproOcom ?? 0,
+                RazonSocialProveedor = ordenCompra.RaSoProv ?? string.Empty,
+                FechaEmision = ordenCompra.FemiOcom ?? DateTime.Now,
+                MonedaEmision = (short)(ordenCompra.MoneEmis ?? 1)
+            };
+
+            Console.WriteLine($"[ProcesarMaconsig] 📊 Datos para procesamiento:");
+            Console.WriteLine($"  - Número Orden: {requestData.NumeroOrden}");
+            Console.WriteLine($"  - Proveedor: {requestData.NumeroProveedor} - {requestData.RazonSocialProveedor}");
+            Console.WriteLine($"  - Fecha Emisión: {requestData.FechaEmision:yyyy-MM-dd}");
+            Console.WriteLine($"  - Moneda Emisión: {requestData.MonedaEmision}");
+            Console.WriteLine($"  - Items en detalle: {detalleItems.Count}");
+
+            // Llamar al endpoint que procesa las consignaciones con lógica VB6:
+            // 1. Recorre items activos de OCOMDETA (StatOcom = 0)
+            // 2. Verifica estructura en tabla Formulas (LEEEXPLO)
+            // 3. Para cada componente hijo (CIJ%(i%)):
+            //    - Calcula CANTIASIGN# = CAUNIS * USOI(i%) (cantidad deseada)
+            //    - Verifica cantidad ya asignada: CANYASIG# = SUM(CANT_ASIG)
+            //    - Genera consignación por el remanente: CANTIASIGN# - CANYASIG#
+            //    - Solo si remanente > 0.05 y CODEXT$(CII%) <> ""
+            var response = await repository.Post("/api/maconsig/procesar-orden", requestData);
+
+            if (response.Error)
+            {
+                var errorMessage = await response.GetErrorMessageAsync();
+                Console.WriteLine($"[ProcesarMaconsig] ❌ Error del servidor: {errorMessage}");
+
+                // Si el error indica que no hay items con estructura, no es crítico
+                if (errorMessage.Contains("no se encontraron items con estructura") ||
+                    errorMessage.Contains("No se encontraron items activos") ||
+                    errorMessage.Contains("no tiene estructura") ||
+                    errorMessage.Contains("no hay items"))
+                {
+                    Console.WriteLine($"[ProcesarMaconsig] ℹ️ No hay items con estructura - continuando");
+                    return;
+                }
+
+                // Si es otro tipo de error, sí lanzar excepción
+                throw new Exception($"Error al procesar consignaciones MACONSIG: {errorMessage}");
+            }
+
+            // Obtener resultado del procesamiento
+            Console.WriteLine($"[ProcesarMaconsig] ✅ Consignaciones procesadas exitosamente");
+            Console.WriteLine($"[ProcesarMaconsig] 📊 Respuesta del servidor: OK");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[ProcesarMaconsig] ❌ Excepción: {ex.Message}");
+
+            // Si la excepción indica que no hay estructura, no re-lanzar
+            if (ex.Message.Contains("no se encontraron items con estructura") ||
+                ex.Message.Contains("No se encontraron items activos") ||
+                ex.Message.Contains("no tiene estructura") ||
+                ex.Message.Contains("no hay items"))
+            {
+                Console.WriteLine($"[ProcesarMaconsig] ℹ️ Excepción manejada: no hay items con estructura");
+                return;
+            }
+
+            throw; // Re-lanzar para manejo en método padre solo si es un error real
+        }
+    }
+
+    private async Task Cancelar()
+    {
+        await OnCancel.InvokeAsync();
+    }
+}

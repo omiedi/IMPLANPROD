@@ -1,0 +1,266 @@
+@typeparam TItem
+@inject IJSRuntime JS
+@inject SweetAlertService sweetAlertService
+
+@* 
+    Componente: ImpresionLista
+    Descripción: Componente genérico para mostrar e imprimir listas de datos en formato tabular.
+    Permite seleccionar columnas, imprimir y exportar a Excel.
+    
+    Uso: <ImpresionLista TItem="MiClase" Datos="listaDatos" Encabezados="diccionarioEncabezados" Titulo="Mi Reporte" />
+*@
+
+@if (MostrarModal)
+{
+    <div class="modal fade show d-block" tabindex="-1" role="dialog">
+        <div class="modal-dialog modal-xl">
+            <div class="modal-content">
+                <div class="modal-header bg-primary bg-opacity-10 p-3 rounded-top">
+                    <h5 class="modal-title text-primary m-0">@Titulo</h5>
+                    <button type="button" class="btn-close" @onclick="CerrarModal" aria-label="Cerrar"></button>
+                </div>
+
+                <div class="modal-body">
+                    @* Sección para seleccionar las columnas que se mostrarán en el reporte *@
+                    @if (!ImpresionFinalizada)
+                    {
+                        <h5>Seleccioná las columnas que querés incluir:</h5>
+                        <div class="row mb-3">
+                            @foreach (var col in Encabezados)
+                            {
+                                <div class="col-md-3 col-sm-6">
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="checkbox" @bind="ColumnasSeleccionadas[col.Key]" />
+                                        <label class="form-check-label">@col.Value</label>
+                                    </div>
+                                </div>
+                            }
+                        </div>
+                    }
+
+                        @* Contenedor principal del reporte con scroll vertical y horizontal *@
+                        <div style="max-height: 400px; overflow-y: auto; overflow-x: auto;">
+                            @* Elemento con ID único para la impresión *@
+                            <div id="@IdElemento">
+                            <h3>
+                                <div class="text-center mb-3">
+                                    <img src="images/logoempresa.png" alt="Logo" style="max-height: 80px;" />
+                                </div>
+
+                                <h3 class="mt-4 text-center">@Titulo</h3>
+                            </h3>
+                                @* Tabla de datos con formato para impresión *@
+                                <table class="table table-bordered table-sm">
+                                    <thead>
+                                        <tr>
+                                            @* Genera encabezados de columna basados en las columnas seleccionadas *@
+                                            @foreach (var col in Encabezados.Where(e => ColumnasSeleccionadas[e.Key]))
+                                            {
+                                                <th>@col.Value</th>
+                                            }
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @* Genera filas de datos para cada elemento en la colección *@
+                                        @foreach (var item in Datos)
+                                        {
+                                            <tr>
+                                                @* Muestra solo las propiedades correspondientes a las columnas seleccionadas *@
+                                                @foreach (var prop in Encabezados.Keys.Where(k => ColumnasSeleccionadas[k]))
+                                                {
+                                                    <td>@ObtenerValor(item, prop)</td>
+                                                }
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                </div>
+
+                @* Pie del modal con botones de acción *@
+                <div class="modal-footer">
+                    <button class="btn btn-secondary" @onclick="CerrarModal">Cerrar</button>
+                    @if (!ImpresionFinalizada)
+                    {
+                        @* Botón para imprimir el reporte *@
+                        <button class="btn btn-success" @onclick="Imprimir">🖨️ Imprimir</button>
+                        @* Botón opcional para exportar a Excel (se muestra según configuración) *@
+                        @if (MostrarBotonExportarExcel)
+                        {
+                            <button class="btn btn-outline-success" @onclick="ExportarExcel">
+                                <i class="fa fa-file-excel-o"></i> Exportar a Excel
+                            </button>
+                        }
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="modal-backdrop fade show"></div>
+}
+@code {
+    /// <summary>
+    /// Lista de datos genéricos que se mostrarán en el reporte.
+    /// </summary>
+    [Parameter] public List<TItem> Datos { get; set; } = new();
+    
+    /// <summary>
+    /// Diccionario que mapea nombres de propiedades a sus títulos de columna.
+    /// La clave es el nombre de la propiedad en el objeto TItem y el valor es el título visible.
+    /// </summary>
+    [Parameter] public Dictionary<string, string> Encabezados { get; set; } = new();
+    
+    /// <summary>
+    /// Título que se mostrará en el encabezado del reporte.
+    /// </summary>
+    [Parameter] public string Titulo { get; set; } = "Reporte";
+    
+    /// <summary>
+    /// Si es true, imprime automáticamente al cargar el componente sin mostrar opciones.
+    /// </summary>
+    [Parameter] public bool ModoDirecto { get; set; } = false;
+    
+    /// <summary>
+    /// Controla la visibilidad del modal de impresión.
+    /// </summary>
+    [Parameter] public bool MostrarModal { get; set; } = true;
+    
+    /// <summary>
+    /// Evento que se dispara cuando se cierra el modal.
+    /// </summary>
+    [Parameter] public EventCallback OnCerrar { get; set; }
+
+
+    /// <summary>
+    /// ID único para el elemento HTML que contiene el reporte.
+    /// </summary>
+    private string? IdElemento;
+    
+    /// <summary>
+    /// Diccionario que almacena qué columnas están seleccionadas para mostrar.
+    /// La clave es el nombre de la propiedad y el valor indica si está seleccionada.
+    /// </summary>
+    private Dictionary<string, bool> ColumnasSeleccionadas = new();
+    
+    /// <summary>
+    /// Indica si el proceso de impresión ha finalizado.
+    /// </summary>
+    private bool ImpresionFinalizada = false;
+
+    /// <summary>
+    /// Inicializa el componente generando un ID único y preseleccionando todas las columnas.
+    /// </summary>
+    protected override void OnInitialized()
+    {
+        // Genera un ID único para el elemento HTML del reporte
+        IdElemento = $"reporte_{Guid.NewGuid():N}";
+        // Inicializa todas las columnas como seleccionadas por defecto
+        ColumnasSeleccionadas = Encabezados.ToDictionary(e => e.Key, e => true);
+    }
+
+    /// <summary>
+    /// Se ejecuta después de renderizar el componente. Si está en modo directo, imprime automáticamente.
+    /// </summary>
+    /// <param name="firstRender">Indica si es la primera vez que se renderiza el componente</param>
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        // Si es la primera renderización y está en modo directo, imprime automáticamente
+        if (firstRender && ModoDirecto)
+        {
+            await Imprimir();
+        }
+    }
+
+    /// <summary>
+    /// Invoca la función JavaScript para imprimir el contenido del reporte.
+    /// </summary>
+    private async Task Imprimir()
+    {
+        // Llama a la función JavaScript 'imprimirContenido' pasando el ID del elemento a imprimir
+        await JS.InvokeVoidAsync("imprimirContenido", IdElemento);
+    }
+
+    /// <summary>
+    /// Obtiene el valor de una propiedad específica de un objeto usando reflexión.
+    /// </summary>
+    /// <param name="item">El objeto del cual obtener el valor</param>
+    /// <param name="propiedad">Nombre de la propiedad a obtener</param>
+    /// <returns>El valor de la propiedad o una cadena vacía si no existe</returns>
+    private object ObtenerValor(TItem item, string propiedad)
+    {
+        // Usa reflexión para obtener la propiedad por su nombre
+        var prop = typeof(TItem).GetProperty(propiedad);
+        // Devuelve el valor de la propiedad o una cadena vacía si la propiedad no existe
+        return prop?.GetValue(item) ?? string.Empty;
+    }
+    /// <summary>
+    /// Cierra el modal de impresión y notifica al componente padre.
+    /// </summary>
+    private void CerrarModal()
+    {
+        // Oculta el modal
+        MostrarModal = false;
+        // Reinicia el estado de impresión
+        ImpresionFinalizada = false;
+        // Notifica al componente padre que el modal se ha cerrado
+        if (OnCerrar.HasDelegate)
+        {
+            OnCerrar.InvokeAsync();
+        }
+    }
+    /// <summary>
+    /// Parámetros y servicios para la funcionalidad de exportación a Excel
+    /// </summary>
+    [Parameter] public bool MostrarBotonExportarExcel { get; set; } = true;
+    
+    /// <summary>
+    /// URL del endpoint de la API para exportar a Excel (Ej: "api/reportes/exportar")
+    /// </summary>
+    [Parameter] public string? UrlExportarExcel { get; set; } 
+    
+    /// <summary>
+    /// Cliente HTTP para realizar la petición de exportación a Excel
+    /// </summary>
+    [Inject] public HttpClient Http { get; set; } = default!;
+
+    /// <summary>
+    /// Exporta los datos a un archivo Excel mediante una llamada a la API.
+    /// </summary>
+    private async Task ExportarExcel()
+    {
+        // Verifica que haya datos para exportar
+        if (Datos == null || !Datos.Any())
+        {
+            await sweetAlertService.FireAsync("Error", "No hay datos para exportar.", SweetAlertIcon.Error);
+            return;
+        }
+
+        // Verifica que haya datos y una URL válida para la exportación
+        if (Datos == null || !Datos.Any() || string.IsNullOrWhiteSpace(UrlExportarExcel))
+            return;
+
+        // Envía los datos al servidor para generar el Excel
+        var response = await Http.PostAsJsonAsync(UrlExportarExcel, Datos);
+
+        if (response.IsSuccessStatusCode)
+        {
+            // Obtiene el contenido del archivo Excel generado
+            var contenido = await response.Content.ReadAsByteArrayAsync();
+            // Genera un nombre de archivo basado en el título y la fecha/hora actual
+            var nombreArchivo = $"{Titulo?.Replace(" ", "_")}_{DateTime.Now:yyyyMMdd_HHmm}.xlsx";
+
+            // Invoca la función JavaScript para descargar el archivo
+            // Parámetros: nombreArchivo, base64String
+            await JS.InvokeVoidAsync("descargarArchivo", nombreArchivo, Convert.ToBase64String(contenido));
+        }
+        else
+        {
+            // Muestra un mensaje de error si la generación del Excel falló
+            await JS.InvokeVoidAsync("alert", "Error al generar el archivo Excel");
+        }
+    }
+
+   
+}
+

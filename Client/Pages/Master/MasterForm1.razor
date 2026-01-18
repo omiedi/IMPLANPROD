@@ -1,0 +1,466 @@
+
+@page "/FichaProductosForm"
+@page "/FichaProductosForm/{Id:int}"
+@using IMPLANPROD.Shared.Entities
+@using Microsoft.AspNetCore.Components.Forms
+@using System.Linq.Expressions
+@inject IRepository repository
+@inject NavigationManager navigationManager
+@inject SweetAlertService sweetAlertService
+
+<!--
+Componente: MasterForm.razor
+Descripción: Formulario maestro de Ítems de Stock (Productos) siguiendo el estilo de la ficha de proveedor y solapas funcionales.
+Incluye solapas: Datos, Componentes, Elaboración, Especificación.
+Autor: IA Cascade (solicitud de Omar)
+Fecha: 30/04/2025
+-->
+
+<!-- Solapas funcionales -->
+@* <div class="d-flex border-bottom mb-3" style="background:#f8f9fa;">
+    <button class="tab-btn @(activeTab == 0 ? "active" : "")" @onclick="() => CambiarTab(0)">Datos</button>
+    <button class="tab-btn @(activeTab == 1 ? "active" : "")" @onclick="() => CambiarTab(1)">Componentes</button>
+    <button class="tab-btn @(activeTab == 2 ? "active" : "")" @onclick="() => CambiarTab(2)">Elaboración</button>
+    <button class="tab-btn @(activeTab == 3 ? "active" : "")" @onclick="() => CambiarTab(3)">Especificación</button>
+</div> *@
+
+@* <div class="tab-content-custom">
+    @if (activeTab == 0)
+    {
+    @* } *@ 
+<EditForm Model="master" OnValidSubmit="OnValidSubmit">
+
+    <DataAnnotationsValidator />
+
+    <div class="mb-3">
+        <label>Código:</label>
+        <div>
+            <InputText class="form-control" @bind-Value="@master.Codigo" />
+            <ValidationMessage For="@(() =>master.Codigo)" />
+        </div>
+    </div>
+</EditForm>
+@* 
+    <div class="mb-3">
+        <label>Descripción:</label>
+        <div>
+            <InputText class="form-control" @bind-Value="@master.Descripcion" />
+            <ValidationMessage For="@((Expression<Func<string>>)(() => master.Descripcion))" />
+        </div>
+    </div>
+
+    <div class="mb-3">
+        <label>Tipo de Material:</label>
+        <div>
+            <InputSelect class="form-control" @bind-Value="master.Timate">
+                <option value="0">Seleccione un tipo...</option>
+                @if (tiposMaterial != null)
+                {
+                    @foreach (var tipo in tiposMaterial)
+                    {
+                        <option value="@tipo.Id">@tipo.Descripcion</option>
+                    }
+                }
+            </InputSelect>
+            <ValidationMessage For="@(() => master.Timate)" />
+        </div>
+    </div>
+
+    <div class="mb-3">
+        <label>Unidad de Medida:</label>
+        <div>
+            <InputText class="form-control" @bind-Value="@master.Umedida" />
+            <ValidationMessage For="@((Expression<Func<string>>)(() => master.Umedida))" />
+        </div>
+    </div>
+
+    <div class="mb-3">
+        <label>Grupo I.V.A.:</label>
+        <div>
+            <InputSelect class="form-control" @bind-Value="master.Grupiva">
+                <option value="0">Seleccione un grupo...</option>
+                @if (gruposIva != null)
+                {
+                    @foreach (var grupo in gruposIva)
+                    {
+                        <option value="@grupo.Id">@grupo.Referencia</option>
+                    }
+                }
+            </InputSelect>
+            <ValidationMessage For="@(() => master.Grupiva)" />
+        </div>
+    </div>
+
+    <div class="mb-3">
+        <label>N° Plano:</label>
+        <div>
+            <InputText class="form-control" @bind-Value="@master.NPlano" />
+            <ValidationMessage For="@((Expression<Func<string>>)(() => master.NPlano))" />
+        </div>
+    </div>
+
+    <div class="mb-3">
+        <label>Ancho:</label>
+        <div>
+            <InputNumber class="form-control" @bind-Value="master.ANCHO" />
+            <ValidationMessage For="@(() =>master.ANCHO)" />
+        </div>
+    </div>
+
+    <div class="mb-3">
+        <label>Stock Mínimo:</label>
+        <div>
+            <InputNumber class="form-control" @bind-Value="@master.Stomin" />
+            <ValidationMessage For="@(() => master.Stomin)" />
+        </div>
+    </div>
+
+    <div class="mb-3">
+        <label>Stock Máximo:</label>
+        <div>
+            <InputNumber class="form-control" @bind-Value="@master.Stomax" />
+            <ValidationMessage For="@(() => master.Stomax)" />
+        </div>
+    </div>
+
+    <div class="mb-3">
+        <label>Fecha de Revisión:</label>
+        <div>
+            <InputDate class="form-control" @bind-Value="master.Ferevis" />
+            <ValidationMessage For="@(() =>master.Ferevis)" />
+        </div>
+    </div>
+
+    <div class="mb-3">
+        <label>Familia:</label>
+        <div>
+            <InputSelect class="form-control" @bind-Value="@master.Familia">
+                <option value="">Seleccione una familia...</option>
+                @if (familias != null)
+                {
+                    @foreach (var familia in familias)
+                    {
+                        <option value="@familia.Id">@familia.Descripcion</option>
+                    }
+                }
+            </InputSelect>
+            <ValidationMessage For="@((Expression<Func<string>>)(() => master.Familia))" />
+        </div>
+    </div>
+
+    <div class="mb-3">
+        <label>Proveedor Habitual:</label>
+        <div>
+            <InputSelect class="form-control" @bind-Value="@master.Provhabi">
+                <option value="0">Seleccione un proveedor...</option>
+                @if (proveedores != null)
+                {
+                    @foreach (var proveedor in proveedores)
+                    {
+                        <option value="@proveedor.Id">@proveedor.Raso_Cli</option>
+                    }
+                }
+            </InputSelect>
+            <ValidationMessage For="@(() => master.Provhabi)" />
+        </div>
+    </div>
+
+    <div class="d-flex justify-content-end mt-4">
+        <button type="submit" class="btn btn-primary me-2">Guardar</button>
+        <button class="btn btn-success" @onclick="ReturnAction">Regresar</button>
+    </div>  *@
+@* </EditForm> *@
+@code{
+    [Parameter]
+    public Master master { get; set; } = null!;
+
+    // private List<Tatimat> tiposMaterial = new();
+    // private List<Familia> familias = new();
+    // private List<Grupiva> gruposIva = new();
+    // private List<Proved12> proveedores = new();
+    // private List<Master> masterItemList = new();
+    // private string unidadMedida = "U.";
+    int Id = 0;
+
+    [EditorRequired]
+    
+    [Parameter]
+    public EventCallback OnValidSubmit { get; set; }
+
+    [Parameter]
+
+    [EditorRequired]
+    public EventCallback ReturnAction { get; set; }
+
+    [Parameter]
+    [EditorRequired]
+    public bool IsEdit { get; set; }
+    // private async Task Guardar()
+    private void Volver()
+    {
+        navigationManager.NavigateTo("//master-index");
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        await CargarCombos();
+
+        if (Id != 0)
+        {
+            // Modo Edición: Cargar datos del Master
+            var responseMaster = await repository.Get<Master>($"/api/master/{Id}");
+            if (responseMaster.Error)
+            {
+                await sweetAlertService.FireAsync("Error", responseMaster.HttpResponseMessage.ReasonPhrase, SweetAlertIcon.Error);
+                return;
+            }
+            // master = responseMaster.Response ?? new()
+            //     {
+            //         // Inicializar valores por defecto si la respuesta es nula
+            //         Codigo = string.Empty,
+            //         Descripcion = string.Empty,
+            //         NPlano = string.Empty,
+            //         Umedida = "U.",
+            //         Timate = 0,
+            //         Familia = string.Empty,
+            //         Grupiva = 0,
+            //         Provhabi = 0
+            //     };
+
+            // Obtener la unidad de medida usando la función
+            if (master.Codint > 0)
+            {
+                var responseUnimed = await repository.Get<string>($"/api/masterfunciones/unimed/{master.Codint}");
+                if (!responseUnimed.Error)
+                {
+                    master.Umedida = responseUnimed.Response;
+                }
+            }
+        }
+    }
+
+    private async Task CargarCombos()
+    {
+        // var responseTipos = await repository.Get<List<Tatimat>>("/api/tipomaterial/combo");
+        // if (responseTipos.Error)
+        // {
+        //     await sweetAlertService.FireAsync("Error", responseTipos.HttpResponseMessage.ReasonPhrase, SweetAlertIcon.Error);
+        //     return;
+        // }
+        // tiposMaterial = responseTipos.Response ?? new();
+
+        // var responseFamilias = await repository.Get<List<Familia>>("/api/familias/combo");
+        // if (responseFamilias.Error)
+        // {
+        //     await sweetAlertService.FireAsync("Error", responseFamilias.HttpResponseMessage.ReasonPhrase, SweetAlertIcon.Error);
+        //     return;
+        // }
+        // familias = responseFamilias.Response ?? new();
+
+        // var responseGruposIva = await repository.Get<List<Grupiva>>("/api/grupivas/combo");
+        // if (responseGruposIva.Error)
+        // {
+        //     await sweetAlertService.FireAsync("Error", responseGruposIva.HttpResponseMessage.ReasonPhrase, SweetAlertIcon.Error);
+        //     return;
+        // }
+        // gruposIva = responseGruposIva.Response ?? new();
+
+        // var responseProveedores = await repository.Get<List<Proved12>>("/api/Proved12/combo");
+        // if (responseProveedores.Error)
+        // {
+        //     await sweetAlertService.FireAsync("Error", responseProveedores.HttpResponseMessage.ReasonPhrase, SweetAlertIcon.Error);
+        //     return;
+        // }
+        // proveedores = responseProveedores.Response ?? new();
+    }
+}
+@*
+    @code
+    }
+    else if (activeTab == 1)
+    {
+        <div class="alert alert-info">
+            Componentes en desarrollo...
+        </div>
+    }
+    else if (activeTab == 2)
+    {
+        <EditForm Model="masterItem" OnValidSubmit="Guardar">
+            <DataAnnotationsValidator />
+            <div class="container-fluid">
+                <div class="row gx-2 mb-1">
+                    <div class="col-3 mb-1">
+                        <label class="form-label small">CADENCIA</label>
+                        <input type="text" class="form-control form-control-sm" />
+                    </div>
+                    <div class="col-3 mb-1">
+                        <label class="form-label small">% DEMORA</label>
+                        <input type="text" class="form-control form-control-sm" />
+                    </div>
+                </div>
+
+                <div class="row gx-2 mb-1">
+                    <div class="col-6 col-md-6 mb-1">
+                        <label class="form-label small">Mantenimiento Herramental</label>
+                        <input type="text" class="form-control form-control-sm" />
+                    </div>
+                    <div class="col-6 col-md-6 mb-1">
+                        <label class="form-label small">Ciclo Mant.Herr.</label>
+                        <input type="text" class="form-control form-control-sm" />
+                    </div>
+                </div>
+
+                <!-- Checkboxes y Equipos auxiliares -->
+                <div class="row gx-2 mb-1 align-items-center">
+                    <div class="col-auto">
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="secFabUnidad" />
+                            <label class="form-check-label small" for="secFabUnidad">Secuencia Fabricación por Unidad</label>
+                        </div>
+                    </div>
+                    <div class="col-auto">
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="operTercerizada" />
+                            <label class="form-check-label small" for="operTercerizada">Operación Tercerizada</label>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="row gx-2 mb-1">
+                    <div class="col-12">
+                        <label class="form-label small">EQUIPOS AUXILIARES</label>
+                        <div class="row gx-1">
+                            <div class="col-2 mb-1">
+                                <input type="text" class="form-control form-control-sm" placeholder="Eq.Aux (1)" />
+                            </div>
+                            <div class="col-2 mb-1">
+                                <input type="text" class="form-control form-control-sm" placeholder="Eq.Aux (2)" />
+                            </div>
+                            <div class="col-2 mb-1">
+                                <input type="text" class="form-control form-control-sm" placeholder="Eq.Aux (3)" />
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </EditForm>
+    }
+    else if (activeTab == 3)
+    {
+        <div class="alert alert-info">
+            Especificación en desarrollo...
+        </div>
+    }
+</div>
+
+<!-- Estilos personalizados para tabs y contenido -->
+<style>
+    .tab-btn {
+    border: none;
+    background: none;
+    padding: 10px 30px;
+    font-weight: 600;
+    font-size: 1.1em;
+    color: #495057;
+    border-bottom: 3px solid transparent;
+    transition: color 0.2s, border-bottom 0.2s;
+    }
+    .tab-btn.active, .tab-btn:focus {
+    color: #198754;
+    border-bottom: 3px solid #198754;
+    background: #f8f9fa;
+    }
+    .tab-btn:hover {
+    color: #146c43;
+    }
+    .tab-content-custom {
+    background: #fff;
+    border: 1px solid #dee2e6;
+    border-top: none;
+    border-radius: 0 0 0.5rem 0.5rem;
+    padding: 2rem 1.5rem 1.5rem 1.5rem;
+    min-height: 350px;
+    }
+</style>
+
+{
+<div class="container-fluid">
+    <div class="row gx-2 mb-1">
+        <div class="col-3 mb-1">
+            <label class="form-label small">CADENCIA</label>
+            <input type="text" class="form-control form-control-sm" />
+        </div>
+        <div class="col-3 mb-1">
+            <label class="form-label small">% DEMORA</label>
+            <input type="text" class="form-control form-control-sm" />
+        </div>
+    </div>
+
+    <div class="row gx-2 mb-1">
+        <div class="col-6 col-md-6 mb-1">
+            <label class="form-label small">Mantenimiento Herramental</label>
+            <input type="text" class="form-control form-control-sm" />
+        </div>
+        <div class="col-6 col-md-6 mb-1">
+            <label class="form-label small">Ciclo Mant.Herr.</label>
+            <input type="text" class="form-control form-control-sm" />
+        </div>
+    </div>
+
+    <!-- Checkboxes y Equipos auxiliares -->
+    <div class="row gx-2 mb-1 align-items-center">
+        <div class="col-auto">
+            <div class="form-check">
+                <input class="form-check-input" type="checkbox" id="secFabUnidad" />
+                <label class="form-check-label small" for="secFabUnidad">Secuencia Fabricación por Unidad</label>
+            </div>
+        </div>
+        <div class="col-auto">
+            <div class="form-check">
+                <input class="form-check-input" type="checkbox" id="operTercerizada" />
+                <label class="form-check-label small" for="operTercerizada">Operación Tercerizada</label>
+            </div>
+        </div>
+    </div>
+
+    <div class="row gx-2 mb-1">
+        <div class="col-12">
+            <label class="form-label small">EQUIPOS AUXILIARES</label>
+            <div class="row gx-1">
+                <div class="col-2 mb-1">
+                    <input type="text" class="form-control form-control-sm" placeholder="Eq.Aux (1)" />
+                </div>
+                <div class="col-2 mb-1">
+                    <input type="text" class="form-control form-control-sm" placeholder="Eq.Aux (2)" />
+                </div>
+                <div class="col-2 mb-1">
+                    <input type="text" class="form-control form-control-sm" placeholder="Eq.Aux (3)" />
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+@code {
+
+    private int activeTab = 0;
+    private void CambiarTab(int idx) => activeTab = idx;
+
+{{ ... }}
+    public int Id { get; set; }
+
+
+
+   @*  private Master masterItem = new()
+    {
+        // Inicializar valores por defecto para evitar nulos
+        Codigo = string.Empty,
+        Descripcion = string.Empty,
+        NPlano = string.Empty,
+        Umedida = "U.",
+        Timate = 0,
+        Familia = string.Empty,
+        Grupiva = 0,
+        Provhabi = 0
+    }; *@
+
+ 

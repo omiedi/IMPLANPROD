@@ -1,0 +1,110 @@
+@* Componente reutilizable para mostrar instructivos de desarrollador con validación de clave *@
+
+<div class="card mb-3">
+    <div class="card-header bg-secondary text-white p-2">
+        <button class="btn btn-link text-white text-decoration-none w-100 text-start p-0" 
+                type="button" 
+                @onclick="ToggleInstructivo">
+            <i class="fas @(mostrarInstructivo ? "fa-chevron-down" : "fa-chevron-right") me-2"></i>
+            <strong>Instructivo para el Desarrollador</strong>
+        </button>
+    </div>
+    
+    @if (mostrarModalClave)
+    {
+        <div class="card-body">
+            <div class="alert alert-warning">
+                <i class="fas fa-lock me-2"></i>
+                <strong>Acceso Restringido</strong>
+            </div>
+            <p class="text-muted">Este instructivo contiene información técnica sensible.</p>
+            <div class="input-group mb-3">
+                <span class="input-group-text"><i class="fas fa-key"></i></span>
+                <input type="password" 
+                       class="form-control" 
+                       placeholder="Ingrese la clave de acceso" 
+                       @bind="claveIngresada"
+                       @onkeypress="@(async (KeyboardEventArgs e) => { if (e.Key == "Enter") await ValidarClave(); })" />
+                <button class="btn btn-primary" @onclick="ValidarClave">
+                    <i class="fas fa-check me-1"></i>Validar
+                </button>
+            </div>
+            @if (!string.IsNullOrEmpty(mensajeErrorClave))
+            {
+                <div class="alert alert-danger">
+                    <i class="fas fa-exclamation-triangle me-2"></i>@mensajeErrorClave
+                </div>
+            }
+           @*  <small class="text-muted">
+                <i class="fas fa-info-circle me-1"></i>
+                Formato: DDMMAAAA !!
+            </small> *@
+        </div>
+    }
+    
+    @if (mostrarInstructivo && claveValidada)
+    {
+        <div class="card-body">
+            @ChildContent
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter]
+    public RenderFragment? ChildContent { get; set; }
+
+    [Inject]
+    private SweetAlertService sweetAlertService { get; set; } = null!;
+
+    private bool mostrarInstructivo = false;
+    private bool mostrarModalClave = false;
+    private bool claveValidada = false;
+    private string claveIngresada = string.Empty;
+    private string mensajeErrorClave = string.Empty;
+
+    private void ToggleInstructivo()
+    {
+        if (claveValidada)
+        {
+            // Si ya está validada, simplemente toggle el instructivo
+            mostrarInstructivo = !mostrarInstructivo;
+        }
+        else
+        {
+            // Si no está validada, mostrar el modal de clave
+            mostrarModalClave = !mostrarModalClave;
+            mostrarInstructivo = false;
+            mensajeErrorClave = string.Empty;
+            claveIngresada = string.Empty;
+        }
+    }
+
+    private async Task ValidarClave()
+    {
+        // Generar clave esperada: DDMMAAAA !!
+        var fechaHoy = DateTime.Now;
+        var claveEsperada = $"{fechaHoy:ddMMyyyy} !!";
+
+        if (claveIngresada == claveEsperada)
+        {
+            claveValidada = true;
+            mostrarModalClave = false;
+            mostrarInstructivo = true;
+            mensajeErrorClave = string.Empty;
+            claveIngresada = string.Empty;
+            
+            await sweetAlertService.FireAsync(
+                "Acceso Concedido", 
+                "Instructivo de desarrollador desbloqueado", 
+                SweetAlertIcon.Success);
+        }
+        else
+        {
+            mensajeErrorClave = "Clave incorrecta. Vuelva a intentarlo !!";
+            claveIngresada = string.Empty;
+        }
+        
+        StateHasChanged();
+    }
+}

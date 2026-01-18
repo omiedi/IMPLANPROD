@@ -1,0 +1,137 @@
+﻿@inject SweetAlertService sweetAlertService
+<NavigationLock OnBeforeInternalNavigation="OnBeforeInternalNavigation"></NavigationLock>
+
+<EditForm EditContext="editContext" OnValidSubmit="OnValidSubmit">
+    <DataAnnotationsValidator />
+    <div class="mb-3">
+        <label>Filiales:</label>
+        <div>
+            <InputText class="form-control" @bind-Value="@Dependencia.dependencia" />
+            <ValidationMessage For="@(() => Dependencia.dependencia)" />
+        </div>
+
+    </div>
+    <div class="mb-3">
+        <label>Calle:</label>
+        <div>
+            <InputText class="form-control" @bind-Value="@Dependencia.calledep" />
+            <ValidationMessage For="@(() => Dependencia.calledep)" />
+        </div>
+
+    </div>
+    <div class="mb-3">
+        <label>Número:</label>
+        <div>
+            <InputText class="form-control" @bind-Value="@Dependencia.numerodep" />
+            <ValidationMessage For="@(() => Dependencia.numerodep)" />
+        </div>
+
+    </div>
+    <div class="mb-3">
+        <label>Localidad:</label>
+        <div>
+            <InputText class="form-control" @bind-Value="@Dependencia.localidaddep" />
+            <ValidationMessage For="@(() => Dependencia.localidaddep)" />
+        </div>
+
+    </div>
+    <div class="mb-3">
+        <label>Código Postal:</label>
+        <div>
+            <InputText class="form-control" @bind-Value="@Dependencia.CPdep" />
+            <ValidationMessage For="@(() => Dependencia.CPdep)" />
+        </div>
+
+    </div>
+    <div class="mb-3">
+        <label>Télefono 1:</label>
+        <div>
+            <InputText class="form-control" @bind-Value="@Dependencia.TEL1dep" />
+            <ValidationMessage For="@(() => Dependencia.TEL1dep)" />
+        </div>
+
+    </div>
+    <div class="mb-3">
+        <label>Télefono 2:</label>
+        <div>
+            <InputText class="form-control" @bind-Value="@Dependencia.TEL2dep" />
+            <ValidationMessage For="@(() => Dependencia.TEL2dep)" />
+        </div>
+
+    </div>
+    <div class="mb-3">
+        <label>Mail:</label>
+        <div>
+            <InputText class="form-control" @bind-Value="@Dependencia.emaildep" />
+            <ValidationMessage For="@(() => Dependencia.emaildep)" />
+        </div>
+
+    </div>
+    <div class="mb-3">
+        <label>Notas:</label>
+        <div>
+            <InputTextArea class="form-control" @bind-Value="@Dependencia.notasdep" />
+            <ValidationMessage For="@(() => Dependencia.notasdep)" />
+        </div>
+
+    </div>
+
+    <button class="btn btn-primary  btn-sm" type="submit">Guardar Cambios</button>
+    <button class="btn btn-success  btn-sm" @onclick="ReturnAction">Regresar</button>
+</EditForm>
+
+@code {
+    private EditContext editContext = null!;
+
+    protected override void OnInitialized()
+    {
+        editContext = new(Dependencia);
+    }
+
+    [EditorRequired]
+    [Parameter]
+    public Dependencia Dependencia { get; set; } = null!;
+
+    [EditorRequired]
+    [Parameter]
+    public EventCallback OnValidSubmit { get; set; }
+
+    [EditorRequired]
+    [Parameter]
+    public EventCallback ReturnAction { get; set; }
+
+    public bool FormPostedSuccessfully { get; set; } = false;
+
+    private async Task OnBeforeInternalNavigation(LocationChangingContext context)
+    {
+        var formWasEdited = editContext.IsModified();
+        //Aquí se crea una variable llamada formWasEdited que almacena el resultado de la llamada al método IsModified() del objeto editContext.Este método verifica si algún campo del formulario ha sido modificado.Si se han realizado cambios, formWasEdited será true; de lo contrario, será false.
+
+        //Comprueba si el formulario no ha sido editado(!formWasEdited) o si el formulario se ha enviado correctamente(FormPostedSuccessfully). Si alguna de estas condiciones es verdadera, se ejecutará el bloque de código dentro del if.
+        if (!formWasEdited || FormPostedSuccessfully)
+        {
+            return;
+        }
+
+        var result = await sweetAlertService.FireAsync(new SweetAlertOptions
+            {
+                Title = "Confirmación",
+                Text = "¿Deseas abandonar la página y perder los cambios?",
+                Icon = SweetAlertIcon.Warning,
+                ShowCancelButton = true,
+                CancelButtonText = "No",
+                ConfirmButtonText = "Si"
+            });
+
+        var confirm = !string.IsNullOrEmpty(result.Value);
+
+        if (confirm)
+        {
+            return;
+        }
+
+        context.PreventNavigation();
+    }
+
+
+}

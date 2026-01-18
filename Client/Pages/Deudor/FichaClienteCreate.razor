@@ -1,0 +1,18 @@
+@page "/ficha-cliente-create"
+@using IMPLANPROD.Shared.Entities
+@inject IRepository repository
+@inject NavigationManager NavigationManager
+
+<!--
+    Componente: FichaClienteCreate.razor
+    Descripción: Alta de un nuevo cliente usando el formulario reutilizable FichaClienteForm.razor
+    Autor: IA Cascade (solicitud de Omar)
+    Fecha: 22/04/2025
+    
+    Este componente sigue el estándar de páginas ABM definido en el proyecto.
+-->
+
+<div class="bg-primary bg-opacity-10 p-3 rounded-3 mb-3">
+    <h3 class="m-0 text-primary">Nuevo Cliente</h3>
+</div>
+<FichaClienteForm Id="0" />
