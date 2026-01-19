@@ -1,5 +1,6 @@
 @page "/ficha-proveedor-index"
 @using IMPLANPROD.Shared.Entities
+@using IMPLANPROD.Client.Pages.Reportes
 @inject IRepository repository
 @inject NavigationManager NavigationManager
 @inject SweetAlertService sweetAlertService
@@ -23,6 +24,9 @@
     </button>
     <button class="btn btn-secondary ms-2" @onclick="IrABajas">
         <i class="fas fa-trash-alt"></i> Proveedores dados de baja
+    </button>
+    <button class="btn btn-success ms-2" @onclick="MostrarImpresion" disabled="@(Proveedores == null || !Proveedores.Any())">
+        <i class="fas fa-print"></i> Imprimir/Excel
     </button>
 </div>
 
@@ -81,6 +85,19 @@ else
         <span>Página @PaginaActual de @TotalPaginas</span>
         <button class="btn btn-outline-secondary" @onclick="()=>LoadAsync(PaginaActual+1)" disabled="@(PaginaActual == TotalPaginas)">Siguiente</button>
     </div>
+}
+
+@* Componente de impresión *@
+@if (Proveedores != null && Proveedores.Any())
+{
+    <ImpresionLista TItem="Proved12"
+                    Datos="Proveedores"
+                    Titulo="@TituloReporte"
+                    UrlExportarExcel="api/Excel/exportar-proveedores"
+                    Encabezados="encabezadosProveedores"
+                    ModoDirecto="false"
+                    MostrarModal="mostrarModalImpresion"
+                    OnCerrar="ResetearImpresion" />
 }
 
 @code {
@@ -177,5 +194,134 @@ else
             await repository.Put("/api/proved12", proveedor.Response);
             await LoadAsync(PaginaActual);
         }
+    }
+
+    // ===================================================================
+    // FUNCIONALIDAD DE IMPRESIÓN
+    // ===================================================================
+
+    private bool mostrarModalImpresion = false;
+    private bool isPrinting = false;
+    private string TituloReporte => $"Listado de Proveedores - {DateTime.Now:dd/MM/yyyy}";
+
+    /// <summary>
+    /// Diccionario de encabezados para el reporte de impresión
+    /// Mapea las propiedades de Proved12 a nombres legibles
+    /// </summary>
+    private Dictionary<string, string> encabezadosProveedores = new Dictionary<string, string>
+    {
+        { "Id", "Nro Proveedor" },
+        { "Raso_Cli", "Razón Social" },
+        { "Domi_Cli", "Domicilio" },
+        { "Tele_Cli", "Teléfono" },
+        { "Mail_Cli", "Mail" },
+        { "Cuit_Cli", "CUIT" },
+        { "Loca_Cli", "Localidad" },
+        { "Cpos_Cli", "Código Postal" }
+    };
+
+    /// <summary>
+    /// Obtiene TODOS los proveedores que coincidan con los filtros actuales, sin paginación
+    /// Utiliza los mismos filtros que LoadAsync pero sin límite de página
+    /// </summary>
+    private async Task<List<Proved12>?> ObtenerTodosLosProveedoresFiltrados()
+    {
+        try
+        {
+            // Construir URL con filtro si existe
+            var parametros = new List<string>();
+            
+            if (!string.IsNullOrEmpty(Filter))
+            {
+                parametros.Add($"filter={Filter}");
+            }
+
+            // Agregar parámetros para obtener todos los registros (sin paginación)
+            parametros.Add("page=1");
+            parametros.Add("recordsNumber=999999"); // Número muy alto para obtener todos los registros
+            parametros.Add("stat_Cli=0"); // Solo proveedores activos
+
+            string queryParams = parametros.Count > 0 ? "?" + string.Join("&", parametros) : "";
+            string url = $"api/proved12{queryParams}";
+
+            var responseHttp = await repository.Get<List<Proved12>>(url);
+            
+            if (!responseHttp.Error)
+            {
+                return responseHttp.Response;
+            }
+            else
+            {
+                await sweetAlertService.FireAsync("Error", "No se pudieron obtener los proveedores para impresión", SweetAlertIcon.Error);
+                return new List<Proved12>();
+            }
+        }
+        catch (Exception ex)
+        {
+            await sweetAlertService.FireAsync("Error", $"Error al obtener proveedores: {ex.Message}", SweetAlertIcon.Error);
+            return new List<Proved12>();
+        }
+    }
+
+    /// <summary>
+    /// Confirma la impresión del listado de proveedores respetando filtros activos
+    /// Obtiene TODOS los registros que coincidan con los filtros, no solo la página actual
+    /// </summary>
+    private async Task MostrarImpresion()
+    {
+        isPrinting = true;
+        StateHasChanged();
+
+        try
+        {
+            // Obtener TODOS los proveedores que coincidan con los filtros actuales (sin paginación)
+            var proveedoresCompletos = await ObtenerTodosLosProveedoresFiltrados();
+            int cantidadTotal = proveedoresCompletos?.Count ?? 0;
+
+            // Mensaje de confirmación
+            string mensaje = string.IsNullOrEmpty(Filter)
+                ? $"Se van a imprimir {cantidadTotal} registros que coinciden con los filtros aplicados (todas las páginas). ¿Desea continuar?"
+                : $"Se van a imprimir {cantidadTotal} registros filtrados. ¿Desea continuar?";
+
+            var result = await sweetAlertService.FireAsync(new SweetAlertOptions
+            {
+                Title = "Confirmar impresión",
+                Text = mensaje,
+                Icon = SweetAlertIcon.Warning,
+                ShowCancelButton = true,
+                ConfirmButtonText = "Sí, imprimir",
+                CancelButtonText = "Cancelar"
+            });
+
+            if (result.IsConfirmed)
+            {
+                // Actualizar la lista de proveedores para impresión con todos los registros
+                Proveedores = proveedoresCompletos;
+                mostrarModalImpresion = true;
+            }
+        }
+        catch (Exception ex)
+        {
+            await sweetAlertService.FireAsync("Error", ex.Message, SweetAlertIcon.Error);
+        }
+        finally
+        {
+            isPrinting = false;
+            StateHasChanged();
+        }
+    }
+
+    /// <summary>
+    /// Resetea el estado de impresión y cierra el modal
+    /// Restaura la lista de proveedores original (paginada) después de la impresión
+    /// </summary>
+    private async void ResetearImpresion()
+    {
+        mostrarModalImpresion = false;
+        
+        // Restaurar la vista paginada original después de cerrar el modal de impresión
+        await LoadAsync(PaginaActual);
+        
+        StateHasChanged();
     }
 }

@@ -42,7 +42,9 @@ namespace IMPLANPROD.Server.Controllers
         [HttpGet]
         public async Task<IActionResult> GetAsync([FromQuery] PaginationDTO pagination, short stat_Cli = 0)
         {
-            var queryable = _context.Proveedores.AsQueryable();
+            var queryable = _context.Proveedores
+                .Where(x => !string.IsNullOrWhiteSpace(x.Raso_Cli)) // Solo proveedores con razón social
+                .AsQueryable();
 
             if (!string.IsNullOrWhiteSpace(pagination.Filter))
             {
@@ -68,7 +70,9 @@ namespace IMPLANPROD.Server.Controllers
         [HttpGet("totalPages")]
         public async Task<ActionResult> GetPages([FromQuery] PaginationDTO pagination, short stat_Cli = 0)
         {
-            var queryable = _context.Proveedores.AsQueryable();
+            var queryable = _context.Proveedores
+                .Where(x => !string.IsNullOrWhiteSpace(x.Raso_Cli)) // Solo proveedores con razón social
+                .AsQueryable();
 
             if (!string.IsNullOrWhiteSpace(pagination.Filter))
             {

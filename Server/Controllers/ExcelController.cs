@@ -1,8 +1,8 @@
 using ClosedXML.Excel;
 using Microsoft.AspNetCore.Mvc;
 using IMPLANPROD.Server.Services;
-using IMPLANPROD.Server.DTOs;
 using IMPLANPROD.Shared.Entities;
+using IMPLANPROD.Shared.DTOs;
 
 namespace IMPLANPROD.Server.Controllers
 {
@@ -275,6 +275,128 @@ namespace IMPLANPROD.Server.Controllers
             {
                 _logger.LogError(ex, "[ExportarModelos] Error al generar Excel de Modelos");
                 _logger.LogError($"[ExportarModelos] Detalles: {ex.Message}");
+                return StatusCode(500, $"Error al generar el archivo excel: {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// Exporta proveedores (Proved12) a Excel
+        /// </summary>
+        /// <param name="datos">Lista de proveedores a exportar</param>
+        /// <returns>Archivo Excel con los proveedores</returns>
+        [HttpPost("exportar-proveedores")]
+        public IActionResult ExportarProveedores([FromBody] List<Proved12> datos)
+        {
+            _logger.LogInformation("[ExportarProveedores] ===== INICIO EXPORTACIÓN PROVEEDORES =====");
+            _logger.LogInformation($"[ExportarProveedores] Datos recibidos: {datos?.Count ?? 0} registros");
+            
+            try
+            {
+                if (datos == null)
+                {
+                    _logger.LogWarning("[ExportarProveedores] datos es NULL");
+                    return BadRequest("No se recibieron datos para exportar");
+                }
+                
+                if (!datos.Any())
+                {
+                    _logger.LogWarning("[ExportarProveedores] La lista de datos está vacía");
+                    return BadRequest("No hay datos para exportar");
+                }
+
+                var encabezados = new Dictionary<string, string>
+                {
+                    { "Id", "Nro Proveedor" },
+                    { "Raso_Cli", "Razón Social" },
+                    { "Domi_Cli", "Domicilio" },
+                    { "Tele_Cli", "Teléfono" },
+                    { "Mail_Cli", "Mail" },
+                    { "Cuit_Cli", "CUIT" },
+                    { "Loca_Cli", "Localidad" },
+                    { "Cpos_Cli", "Código Postal" }
+                };
+
+                var orden = new List<string>
+                {
+                    "Id", "Raso_Cli", "Domi_Cli", "Tele_Cli", "Mail_Cli", 
+                    "Cuit_Cli", "Loca_Cli", "Cpos_Cli"
+                };
+
+                _logger.LogInformation($"[ExportarProveedores] Generando Excel con {datos.Count} proveedores");
+
+                var archivo = _excelService.GenerarExcel(datos, "Proveedores", encabezados, orden);
+
+                _logger.LogInformation($"[ExportarProveedores] Archivo generado exitosamente: {archivo.Length} bytes");
+
+                return File(archivo,
+                            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                            $"Proveedores_{DateTime.Now:yyyyMMdd_HHmmss}.xlsx");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "[ExportarProveedores] Error al generar Excel de Proveedores");
+                _logger.LogError($"[ExportarProveedores] Detalles: {ex.Message}");
+                return StatusCode(500, $"Error al generar el archivo excel: {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// Exporta órdenes de fabricación a Excel
+        /// </summary>
+        /// <param name="datos">Lista de órdenes de fabricación a exportar</param>
+        /// <returns>Archivo Excel con las órdenes de fabricación</returns>
+        [HttpPost("exportar-ordenes-fabricacion")]
+        public IActionResult ExportarOrdenesFabricacion([FromBody] List<OrdefabrIndexDTO> datos)
+        {
+            _logger.LogInformation("[ExportarOrdenesFabricacion] ===== INICIO EXPORTACIÓN ÓRDENES DE FABRICACIÓN =====");
+            _logger.LogInformation($"[ExportarOrdenesFabricacion] Datos recibidos: {datos?.Count ?? 0} registros");
+            
+            try
+            {
+                if (datos == null)
+                {
+                    _logger.LogWarning("[ExportarOrdenesFabricacion] datos es NULL");
+                    return BadRequest("No se recibieron datos para exportar");
+                }
+                
+                if (!datos.Any())
+                {
+                    _logger.LogWarning("[ExportarOrdenesFabricacion] La lista de datos está vacía");
+                    return BadRequest("No hay datos para exportar");
+                }
+
+                var encabezados = new Dictionary<string, string>
+                {
+                    { "FechGen", "Fecha" },
+                    { "IdSubOr", "Ord.Fab" },
+                    { "Cod_Exte", "Código" },
+                    { "Descrip", "Descripción" },
+                    { "CanProy", "Cant.Proy." },
+                    { "CanApro", "Cant.Apro." },
+                    { "Id_Orfa", "ID" },
+                    { "StatuOrf", "Estado" }
+                };
+
+                var orden = new List<string>
+                {
+                    "FechGen", "IdSubOr", "Cod_Exte", "Descrip", "CanProy", 
+                    "CanApro", "Id_Orfa", "StatuOrf"
+                };
+
+                _logger.LogInformation($"[ExportarOrdenesFabricacion] Generando Excel con {datos.Count} órdenes");
+
+                var archivo = _excelService.GenerarExcel(datos, "Órdenes de Fabricación", encabezados, orden);
+
+                _logger.LogInformation($"[ExportarOrdenesFabricacion] Archivo generado exitosamente: {archivo.Length} bytes");
+
+                return File(archivo,
+                            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                            $"Ordenes_Fabricacion_{DateTime.Now:yyyyMMdd_HHmmss}.xlsx");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "[ExportarOrdenesFabricacion] Error al generar Excel de Órdenes de Fabricación");
+                _logger.LogError($"[ExportarOrdenesFabricacion] Detalles: {ex.Message}");
                 return StatusCode(500, $"Error al generar el archivo excel: {ex.Message}");
             }
         }
