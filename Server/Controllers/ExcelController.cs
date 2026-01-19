@@ -224,6 +224,62 @@ namespace IMPLANPROD.Server.Controllers
         }
 
         /// <summary>
+        /// Exporta modelos (Badamode) a Excel
+        /// </summary>
+        /// <param name="datos">Lista de modelos a exportar</param>
+        /// <returns>Archivo Excel con los modelos</returns>
+        [HttpPost("exportar-modelos")]
+        public IActionResult ExportarModelos([FromBody] List<Badamode> datos)
+        {
+            try
+            {
+                if (datos == null || !datos.Any())
+                {
+                    _logger.LogWarning("[ExportarModelos] No hay datos para exportar");
+                    return BadRequest("No hay datos para exportar");
+                }
+
+                var encabezados = new Dictionary<string, string>
+                {
+                    { "Cod_Mod", "Código" },
+                    { "Descripcion", "Descripción" },
+                    { "Ubic", "Ubicación" },
+                    { "Desc_Mat", "Material" },
+                    { "CantPiezas", "Cant. Piezas" },
+                    { "FechPro_Con", "Próx. Control" },
+                    { "Material", "Cód. Material" },
+                    { "Frecuen", "Frecuencia" },
+                    { "FechUlt_Con", "Último Control" },
+                    { "Cod_Inte", "Cód. Interno" },
+                    { "ObservaMod", "Observaciones" }
+                };
+
+                var orden = new List<string>
+                {
+                    "Cod_Mod", "Descripcion", "Ubic", "Desc_Mat", "CantPiezas", 
+                    "FechPro_Con", "Material", "Frecuen", "FechUlt_Con", 
+                    "Cod_Inte", "ObservaMod"
+                };
+
+                _logger.LogInformation($"[ExportarModelos] Generando Excel con {datos.Count} modelos");
+
+                var archivo = _excelService.GenerarExcel(datos, "Modelos", encabezados, orden);
+
+                _logger.LogInformation($"[ExportarModelos] Archivo generado exitosamente: {archivo.Length} bytes");
+
+                return File(archivo,
+                            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                            $"Modelos_{DateTime.Now:yyyyMMdd_HHmmss}.xlsx");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "[ExportarModelos] Error al generar Excel de Modelos");
+                _logger.LogError($"[ExportarModelos] Detalles: {ex.Message}");
+                return StatusCode(500, $"Error al generar el archivo excel: {ex.Message}");
+            }
+        }
+
+        /// <summary>
         /// Exporta órdenes de compra a Excel
         /// </summary>
         /// <param name="datos">Lista de órdenes de compra a exportar</param>

@@ -1,9 +1,11 @@
 @page "/modelos"
 @using IMPLANPROD.Shared.Entities
 @using Microsoft.AspNetCore.Components.Web
+@using IMPLANPROD.Client.Pages.Reportes
 @inject IRepository repository
 @inject NavigationManager NavigationManager
 @inject SweetAlertService sweetAlertService
+@inject IJSRuntime JS
 
 <PageTitle>Almacén de Modelos</PageTitle>
 
@@ -30,8 +32,11 @@ Incluye paginación y botones para editar y crear nuevo modelo.
         <button class="btn btn-primary" @onclick="NuevoModelo">
             <i class="oi oi-plus"></i> Nuevo Modelo
         </button>
-        <button class="btn btn-secondary" @onclick="ModelosBaja">
+        <button class="btn btn-secondary ms-2" @onclick="ModelosBaja">
             <i class="oi oi-trash"></i> Modelos dados de baja
+        </button>
+        <button class="btn btn-success ms-2" @onclick="MostrarImpresion" disabled="@(Modelos == null || !Modelos.Any())">
+            <i class="fas fa-print"></i> Imprimir/Excel
         </button>
     </div>
 </div>
@@ -112,6 +117,19 @@ else
     <Pagination CurrentPage="currentPage"
                 TotalPages="totalPages"
                 SelectedPage="SelectedPageAsync" />
+}
+
+@* Componente de impresión *@
+@if (Modelos != null && Modelos.Any())
+{
+    <ImpresionLista TItem="Badamode"
+                    Datos="Modelos"
+                    Titulo="@TituloReporte"
+                    UrlExportarExcel="api/excel/exportar-modelos"
+                    Encabezados="encabezadosModelos"
+                    ModoDirecto="false"
+                    MostrarModal="mostrarModalImpresion"
+                    OnCerrar="ResetearImpresion" />
 }
 
 @code {
@@ -281,5 +299,131 @@ else
                 await LoadAsync(currentPage);
             }
         }
+    }
+
+    // ===================================================================
+    // FUNCIONALIDAD DE IMPRESIÓN
+    // ===================================================================
+
+    private bool mostrarModalImpresion = false;
+    private bool isPrinting = false;
+    private string TituloReporte => $"Listado de Modelos - {DateTime.Now:dd/MM/yyyy}";
+
+    /// <summary>
+    /// Diccionario de encabezados para el reporte de impresión
+    /// Mapea las propiedades de Badamode a nombres legibles
+    /// </summary>
+    private Dictionary<string, string> encabezadosModelos = new Dictionary<string, string>
+    {
+        { "Cod_Mod", "Código" },
+        { "Descripcion", "Descripción" },
+        { "Ubic", "Ubicación" },
+        { "Desc_Mat", "Material" },
+        { "CantPiezas", "Cant. Piezas" },
+        { "FechPro_Con", "Próx. Control" }
+    };
+
+    /// <summary>
+    /// Obtiene TODOS los modelos que coincidan con los filtros actuales, sin paginación
+    /// Utiliza los mismos filtros que LoadAsync pero sin límite de página
+    /// </summary>
+    private async Task<List<Badamode>?> ObtenerTodosLosModelosFiltrados()
+    {
+        try
+        {
+            // Construir URL con filtro si existe
+            var parametros = new List<string>();
+            
+            if (!string.IsNullOrEmpty(Filter))
+            {
+                parametros.Add($"filter={Filter}");
+            }
+
+            // Agregar parámetros para obtener todos los registros (sin paginación)
+            parametros.Add("page=1");
+            parametros.Add("recordsNumber=999999"); // Número muy alto para obtener todos los registros
+
+            string queryParams = parametros.Count > 0 ? "?" + string.Join("&", parametros) : "";
+            string url = $"api/badamode{queryParams}";
+
+            var responseHttp = await repository.Get<List<Badamode>>(url);
+            
+            if (!responseHttp.Error)
+            {
+                return responseHttp.Response;
+            }
+            else
+            {
+                await sweetAlertService.FireAsync("Error", "No se pudieron obtener los modelos para impresión", SweetAlertIcon.Error);
+                return new List<Badamode>();
+            }
+        }
+        catch (Exception ex)
+        {
+            await sweetAlertService.FireAsync("Error", $"Error al obtener modelos: {ex.Message}", SweetAlertIcon.Error);
+            return new List<Badamode>();
+        }
+    }
+
+    /// <summary>
+    /// Confirma la impresión del listado de modelos respetando filtros activos
+    /// Obtiene TODOS los registros que coincidan con los filtros, no solo la página actual
+    /// </summary>
+    private async Task MostrarImpresion()
+    {
+        isPrinting = true;
+        StateHasChanged();
+
+        try
+        {
+            // Obtener TODOS los modelos que coincidan con los filtros actuales (sin paginación)
+            var modelosCompletos = await ObtenerTodosLosModelosFiltrados();
+            int cantidadTotal = modelosCompletos?.Count ?? 0;
+
+            // Mensaje de confirmación
+            string mensaje = string.IsNullOrEmpty(Filter)
+                ? $"Se van a imprimir {cantidadTotal} registros que coinciden con los filtros aplicados (todas las páginas). ¿Desea continuar?"
+                : $"Se van a imprimir {cantidadTotal} registros filtrados. ¿Desea continuar?";
+
+            var result = await sweetAlertService.FireAsync(new SweetAlertOptions
+            {
+                Title = "Confirmar impresión",
+                Text = mensaje,
+                Icon = SweetAlertIcon.Warning,
+                ShowCancelButton = true,
+                ConfirmButtonText = "Sí, imprimir",
+                CancelButtonText = "Cancelar"
+            });
+
+            if (result.IsConfirmed)
+            {
+                // Actualizar la lista de modelos para impresión con todos los registros
+                Modelos = modelosCompletos;
+                mostrarModalImpresion = true;
+            }
+        }
+        catch (Exception ex)
+        {
+            await sweetAlertService.FireAsync("Error", ex.Message, SweetAlertIcon.Error);
+        }
+        finally
+        {
+            isPrinting = false;
+            StateHasChanged();
+        }
+    }
+
+    /// <summary>
+    /// Resetea el estado de impresión y cierra el modal
+    /// Restaura la lista de modelos original (paginada) después de la impresión
+    /// </summary>
+    private async void ResetearImpresion()
+    {
+        mostrarModalImpresion = false;
+        
+        // Restaurar la vista paginada original después de cerrar el modal de impresión
+        await LoadAsync(currentPage);
+        
+        StateHasChanged();
     }
 }

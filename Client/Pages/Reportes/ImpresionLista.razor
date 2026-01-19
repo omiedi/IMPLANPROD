@@ -240,7 +240,7 @@
         if (Datos == null || !Datos.Any() || string.IsNullOrWhiteSpace(UrlExportarExcel))
             return;
 
-        // Envía los datos al servidor para generar el Excel
+		// Envía los datos al servidor para generar el Excel ** SE DEBE CREAR EN EXCEL CONTROLLER UN POST QUE RECIBA LA LISTA DE TItem **
         var response = await Http.PostAsJsonAsync(UrlExportarExcel, Datos);
 
         if (response.IsSuccessStatusCode)

@@ -27,13 +27,14 @@ namespace IMPLANPROD.Server.Controllers
         /// </summary>
         /// <param name="page">Número de página</param>
         /// <param name="filter">Filtro de búsqueda por código o descripción</param>
+        /// <param name="recordsNumber">Número de registros por página (opcional, para obtener todos usar 999999)</param>
         /// <returns>Lista de modelos</returns>
         [HttpGet]
-        public async Task<ActionResult<List<Badamode>>> GetAsync([FromQuery] int page = 1, [FromQuery] string? filter = null)
+        public async Task<ActionResult<List<Badamode>>> GetAsync([FromQuery] int page = 1, [FromQuery] string? filter = null, [FromQuery] int? recordsNumber = null)
         {
             try
             {
-                var recordsPerPage = 10;
+                var recordsPerPage = recordsNumber ?? 10; // Usar recordsNumber si se proporciona, sino 10 por defecto
                 var query = _context.Badamodes
                     .Where(m => m.Status != -1) // Excluir modelos dados de baja
                     .AsQueryable();
@@ -50,6 +51,9 @@ namespace IMPLANPROD.Server.Controllers
                     .Skip((page - 1) * recordsPerPage)
                     .Take(recordsPerPage)
                     .ToListAsync();
+
+                _logger.LogInformation("Obtenidos {Count} modelos (página {Page}, registros por página: {RecordsPerPage})", 
+                    modelos.Count, page, recordsPerPage);
 
                 return Ok(modelos);
             }
@@ -398,6 +402,42 @@ namespace IMPLANPROD.Server.Controllers
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error al reactivar modelo {Id}", id);
+                return StatusCode(500, "Error interno del servidor");
+            }
+        }
+
+        /// <summary>
+        /// Obtiene todos los modelos activos sin paginación (para impresión/exportación)
+        /// </summary>
+        /// <param name="filter">Filtro de búsqueda por código o descripción</param>
+        /// <returns>Lista completa de modelos</returns>
+        [HttpGet("todos")]
+        public async Task<ActionResult<List<Badamode>>> GetTodosAsync([FromQuery] string? filter = null)
+        {
+            try
+            {
+                var query = _context.Badamodes
+                    .Where(m => m.Status != -1) // Excluir modelos dados de baja
+                    .AsQueryable();
+
+                if (!string.IsNullOrWhiteSpace(filter))
+                {
+                    query = query.Where(m => 
+                        (m.Cod_Mod != null && m.Cod_Mod.Contains(filter)) ||
+                        (m.Descripcion != null && m.Descripcion.Contains(filter)));
+                }
+
+                var modelos = await query
+                    .OrderBy(m => m.Cod_Mod)
+                    .ToListAsync();
+
+                _logger.LogInformation("Obtenidos {Count} modelos para impresión/exportación", modelos.Count);
+
+                return Ok(modelos);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error al obtener todos los modelos");
                 return StatusCode(500, "Error interno del servidor");
             }
         }
