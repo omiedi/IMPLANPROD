@@ -462,3 +462,83 @@ END
 //ADD     AddRecord DATETIME2 NOT NULL DEFAULT GETDATE(),
 //   LastUpdate DATETIME2 NOT NULL DEFAULT GETDATE(),
 //   CodiEmprNet INT NOT NULL DEFAULT 0;
+
+
+//  *****   COMPARACION DE DATOS ENTRE DOS TABLAS IGUALES Y DOS BASES DIFERENTES *****
+//  *****   PARA COMPARAR SI SE GRABAN BIEN LOS MISMOS CAMPOS EN UNA TRANSACCION EN ARCON COMO EN ARCON2 *****
+
+/*
+ * CREATE OR ALTER PROCEDURE sp_Comparar_Tablas_Detalle
+(
+    @BaseA      SYSNAME,
+    @BaseB      SYSNAME,
+    @Tabla      SYSNAME,
+    @Condicion  NVARCHAR(MAX),
+    @Clave1     SYSNAME,
+    @Clave2     SYSNAME
+)
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+DECLARE @SQL NVARCHAR(MAX) = '';
+
+ Obtener columnas comunes con tipo 
+DECLARE @SQLCols NVARCHAR(MAX) = '
+        SELECT c1.name, t1.name AS tipo
+        FROM ' + QUOTENAME(@BaseA) + '.sys.columns c1
+        JOIN ' + QUOTENAME(@BaseA) + '.sys.types t1 ON c1.user_type_id = t1.user_type_id
+        JOIN ' + QUOTENAME(@BaseB) + '.sys.columns c2 ON c1.name = c2.name
+        WHERE c1.object_id = OBJECT_ID(''' + @BaseA + '.dbo.' + @Tabla + ''')
+          AND c2.object_id = OBJECT_ID(''' + @BaseB + '.dbo.' + @Tabla + ''')
+          AND c1.name NOT IN (''id'')';
+
+    CREATE TABLE #Cols (name SYSNAME, tipo SYSNAME);
+    INSERT INTO #Cols EXEC sp_executesql @SQLCols;
+
+    SELECT @SQL = @SQL + '
+    SELECT
+        COALESCE(A.' + @Clave1 + ', B.' + @Clave1 + ') AS ' + @Clave1 + ',
+    COALESCE(A.' + @Clave2 + ', B.' + @Clave2 + ') AS ' + @Clave2 + ',
+        ''' + name + ''' AS campo,
+    CAST(A.' + name + ' AS NVARCHAR(MAX)) AS valor_basea,
+    CAST(B.' + name + ' AS NVARCHAR(MAX)) AS valor_baseb
+    FROM ' + QUOTENAME(@BaseA) + '.dbo.' + QUOTENAME(@Tabla) + ' A
+    FULL JOIN ' + QUOTENAME(@BaseB) + '.dbo.' + QUOTENAME(@Tabla) + ' B
+        ON A.' + @Clave1 + ' = B.' + @Clave1 + '
+       AND A.' + @Clave2 + ' = B.' + @Clave2 + '
+    WHERE (' + @Condicion + ')
+      AND ' +
+      CASE 
+        WHEN tipo IN ('int','decimal','numeric','float','real','money','smallmoney')
+        THEN '
+        ISNULL(TRY_CAST(A.' + name + ' AS DECIMAL(18,6)), 0)
+        <>
+        ISNULL(TRY_CAST(B.' + name + ' AS DECIMAL(18,6)), 0)'
+        ELSE '
+        ISNULL(CAST(A.' + name + ' AS NVARCHAR(MAX)), '''')
+        <>
+        ISNULL(CAST(B.' + name + ' AS NVARCHAR(MAX)), '''')'
+      END + '
+    UNION ALL'
+    FROM #Cols;
+
+    DROP TABLE #Cols;
+
+    SET @SQL = LEFT(@SQL, LEN(@SQL) - 9);
+
+EXEC sp_executesql @SQL;
+END
+GO*/
+
+
+// *****  PARA EJECUTAR EL SP DE COMPARACION ******
+/*
+ * 	EXEC sp_Comparar_Tablas_Detalle
+    @BaseA      = 'arcon',
+    @BaseB      = 'arcon2',
+    @Tabla      = 'peddeta',
+    @Condicion  = 'A.nroped = 9800 OR B.nroped = 9600',
+    @Clave1     = 'peddeta_id',
+    @Clave2     = 'codiint';
+*/

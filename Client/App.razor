@@ -2,8 +2,11 @@
 @using Blazored.Toast
 @using Blazored.Toast.Services
 @using Blazored.Toast.Configuration
+@using CurrieTechnologies.Razor.SweetAlert2
+@using IMPLANPROD.Client.Shared
 @inject NavigationManager NavigationManager
 @inject IRepository Repository
+@inject SweetAlertService SweetAlertService
 
 <CascadingBlazoredModal Position="ModalPosition.Middle" Size="ModalSize.Large" HideHeader="true"
                         DisableBackgroundCancel="true" AnimationType="ModalAnimationType.FadeInOut">
@@ -12,18 +15,7 @@
             <Found Context="routeData">
                 <AuthorizeRouteView RouteData="@routeData" DefaultLayout="@typeof(MainLayout)">
                     <NotAuthorized>
-                        @{
-                            // Si la ruta actual no es login y el usuario no está autenticado, redirigir a login
-                            // if (!NavigationManager.Uri.EndsWith("/login", StringComparison.OrdinalIgnoreCase) && 
-                            //     context.User.Identity?.IsAuthenticated != true)
-                            // {
-                            //     NavigationManager.NavigateTo("/login", true);
-                            // }
-                            // else
-                            // {
-                            //     <p>Lo siento, no está autorizado para acceder a esta página.</p>
-                            // }
-                        }
+                        <RedirectToLogin />
                     </NotAuthorized>
                     <Authorizing>
                         <div class="d-flex justify-content-center align-items-center" style="height: 100vh;">
@@ -54,13 +46,8 @@
 </CascadingBlazoredModal>
 
 @code {
-    protected override async Task OnInitializedAsync()
-    {
-        var token = await Repository.GetTokenAsync();
-        if (string.IsNullOrEmpty(token) && 
-            !NavigationManager.Uri.EndsWith("/login", StringComparison.OrdinalIgnoreCase))
-        {
-            // NavigationManager.NavigateTo("/login", true);
-        }
-    }
+    /// <summary>
+    /// Al abrir el sistema, siempre se debe pasar por login
+    /// La gestión de sesión y timeout se maneja mediante InactivityService
+    /// </summary>
 }

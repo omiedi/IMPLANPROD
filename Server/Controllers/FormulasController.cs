@@ -1,5 +1,6 @@
 using IMPLANPROD.Server.Data;
 using IMPLANPROD.Server.Helpers;
+using IMPLANPROD.Server.Services;
 using IMPLANPROD.Shared.DTOs;
 using IMPLANPROD.Shared.Entities;
 using Microsoft.AspNetCore.Authorization;
@@ -13,10 +14,14 @@ namespace IMPLANPROD.Server.Controllers
     public class FormulasController : ControllerBase
     {
         private readonly DataContext _context;
+        private readonly ISyncService _syncService;
+        private readonly ILogger<FormulasController> _logger;
 
-        public FormulasController(DataContext context)
+        public FormulasController(DataContext context, ISyncService syncService, ILogger<FormulasController> logger)
         {
             _context = context;
+            _syncService = syncService;
+            _logger = logger;
         }
 
         /// <summary>
@@ -102,6 +107,16 @@ namespace IMPLANPROD.Server.Controllers
 
                 await _context.SaveChangesAsync(); // Guardar cambios
                 await transaction.CommitAsync();  // Confirmar la transacción
+
+                // Generar archivo de sincronización si está habilitado
+                try
+                {
+                    await _syncService.GenerarArchivoSyncFormulasAsync(codigoConjunto);
+                }
+                catch (Exception syncEx)
+                {
+                    _logger.LogError(syncEx, $"Error al generar archivo de sincronización para Formulas CodIConj={codigoConjunto}");
+                }
 
                 return Ok();
             }

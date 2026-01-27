@@ -255,9 +255,9 @@ namespace IMPLANPROD.Server.Controllers
                 return StatusCode(500, "Error interno del servidor");
             }
         }
-        // ******   ESTE SE USA PARA TRAER LOS DERECHOS DE ACCESO POR EL IDFLEXOFT   *********
-        [HttpGet("{idFlexoft}")]
-        public async Task<ActionResult<Usuario>> Get(int idFlexoft)
+        // ******   ESTE SE USA PARA TRAER UN USUARIO POR SU ID (Usuario.Id)   *********
+        [HttpGet("{id:int}")]
+        public async Task<ActionResult<Usuario>> Get(int id)
         {
             try
             {
@@ -283,7 +283,7 @@ namespace IMPLANPROD.Server.Controllers
                         NumUsuar = u.NumUsuar, // Campo necesario para derechos de usuarios
                         Perfil = u.Perfil != null ? new Perfil { Id = u.Perfil.Id, Nombre = u.Perfil.Nombre } : null
                     })
-                    .FirstOrDefaultAsync(u => u.IdFlexoft == idFlexoft);
+                    .FirstOrDefaultAsync(u => u.Id == id);
 
                 if (usuario == null)
                 {

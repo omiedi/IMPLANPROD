@@ -1,0 +1,19 @@
+@inject NavigationManager NavigationManager
+
+@code {
+    /// <summary>
+    /// Componente que se muestra cuando un usuario no autorizado intenta acceder a una página protegida
+    /// Redirige directamente a la página de login sin mostrar alertas
+    /// </summary>
+    protected override void OnInitialized()
+    {
+        // Verificar que no estemos ya en la página de login para evitar bucles
+        var currentUri = NavigationManager.Uri;
+        if (!currentUri.EndsWith("/login", StringComparison.OrdinalIgnoreCase))
+        {
+            Console.WriteLine("[RedirectToLogin] Usuario no autenticado - Redirigiendo a login");
+            // Redirigir directamente a login sin mostrar alerta
+            NavigationManager.NavigateTo("/login", true);
+        }
+    }
+}

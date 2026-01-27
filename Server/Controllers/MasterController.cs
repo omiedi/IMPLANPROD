@@ -1,5 +1,6 @@
 using IMPLANPROD.Server.Data;
 using IMPLANPROD.Server.Helpers;
+using IMPLANPROD.Server.Services;
 using IMPLANPROD.Shared.DTOs;
 using IMPLANPROD.Shared.Entities;
 using Microsoft.AspNetCore.Mvc;
@@ -16,11 +17,13 @@ namespace IMPLANPROD.Server.Controllers
     {
         private readonly DataContext _context;
         private readonly ILogger<MasterController> _logger;
+        private readonly ISyncService _syncService;
 
-        public MasterController(DataContext context, ILogger<MasterController> logger)
+        public MasterController(DataContext context, ILogger<MasterController> logger, ISyncService syncService)
         {
             _context = context;
             _logger = logger;
+            _syncService = syncService;
         }
 
         /// <summary>
@@ -248,6 +251,16 @@ namespace IMPLANPROD.Server.Controllers
                     // Confirmar la transacción si todo salió bien
                     await transaction.CommitAsync();
 
+                    // Generar archivo de sincronización si está habilitado
+                    try
+                    {
+                        await _syncService.GenerarArchivoSyncMasterAsync(master.Codint);
+                    }
+                    catch (Exception exSync)
+                    {
+                        _logger.LogWarning(exSync, "Error al generar archivo de sincronización (no afecta la operación principal)");
+                    }
+
                     // Devuelve una respuesta HTTP 201 (Created) con la URL y el objeto creado
                     return CreatedAtAction(nameof(GetAsync), new { id = master.Id }, master);
                 }
@@ -285,6 +298,17 @@ namespace IMPLANPROD.Server.Controllers
 
                     // Confirmar la transacción si todo salió bien
                     await transaction.CommitAsync();
+
+                    // Generar archivo de sincronización si está habilitado
+                    try
+                    {
+                        await _syncService.GenerarArchivoSyncMasterAsync(master.Codint);
+                    }
+                    catch (Exception exSync)
+                    {
+                        _logger.LogWarning(exSync, "Error al generar archivo de sincronización (no afecta la operación principal)");
+                    }
+
                     return Ok(master);
                 }
                 catch (Exception ex)

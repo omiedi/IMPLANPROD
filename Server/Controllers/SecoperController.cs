@@ -1,5 +1,6 @@
 using IMPLANPROD.Server.Data;
 using IMPLANPROD.Server.Helpers;
+using IMPLANPROD.Server.Services;
 using IMPLANPROD.Shared.DTOs;
 using IMPLANPROD.Shared.Entities;
 using Microsoft.AspNetCore.Authorization;
@@ -13,10 +14,14 @@ namespace IMPLANPROD.Server.Controllers
     public class SecoperController : ControllerBase
     {
         private readonly DataContext _context;
+        private readonly ISyncService _syncService;
+        private readonly ILogger<SecoperController> _logger;
 
-        public SecoperController(DataContext context)
+        public SecoperController(DataContext context, ISyncService syncService, ILogger<SecoperController> logger)
         {
             _context = context;
+            _syncService = syncService;
+            _logger = logger;
         }
 
         /// <summary>
@@ -157,6 +162,16 @@ namespace IMPLANPROD.Server.Controllers
 
                 await _context.SaveChangesAsync();
                 await transaction.CommitAsync();
+
+                // Generar archivo de sincronización si está habilitado
+                try
+                {
+                    await _syncService.GenerarArchivoSyncSecOperAsync(codigoProducto);
+                }
+                catch (Exception syncEx)
+                {
+                    _logger.LogError(syncEx, $"Error al generar archivo de sincronización para SecOper CodIConj={codigoProducto}");
+                }
 
                 // Retornar la lista de operaciones con sus IDs asignados
                 return Ok(operacionesGuardadas);

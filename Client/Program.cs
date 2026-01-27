@@ -37,7 +37,10 @@ builder.Services.AddScoped<CambiosNoGuardadosService>();
 builder.Services.AddScoped<AuthErrorHandlerService>();
 builder.Services.AddScoped<RemitosConfigService>();
 builder.Services.AddScoped<AuthenticationStateProvider, AuthenticationService>();
+builder.Services.AddScoped<AuthenticationService>(sp => 
+    (AuthenticationService)sp.GetRequiredService<AuthenticationStateProvider>());
 builder.Services.AddScoped<DependenciaService>();
+builder.Services.AddScoped<InactivityService>();
 builder.Services.AddSweetAlert2();
 builder.Services.AddBlazoredModal();
 builder.Services.AddBlazoredToast();

@@ -84,6 +84,8 @@ builder.Services.AddScoped<ConsignacionService>();//servicio para manejar consig
 builder.Services.AddScoped<ActualizacionCostoMasterService>();//servicio para actualizar costos en MASTER según configuración ACOSREP (equivalente a lógica VB6 GRACOMPRA)
 builder.Services.AddScoped<MigrationLegacyService>();//servicio para migración de datos legacy
 builder.Services.AddScoped<IDerechosUsuarioService, DerechosUsuarioService>();//servicio para gestión de derechos de usuarios sobre aplicaciones
+builder.Services.AddScoped<ISyncService, SyncService>();//servicio para sincronización Central-Sucursal
+builder.Services.AddHostedService<SyncBackgroundService>();//servicio en segundo plano para procesamiento automático de sincronización (solo Sucursales)
 
 // TODO: CENTRALIZACIÓN_CONTEXTO_USUARIO - Registro del servicio de contexto de usuario y HttpContextAccessor
 builder.Services.AddHttpContextAccessor(); // Necesario para acceder al contexto HTTP en el servicio

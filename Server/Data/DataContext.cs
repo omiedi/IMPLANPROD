@@ -175,7 +175,7 @@ namespace IMPLANPROD.Server.Data
         /// <summary>
         /// Tabla Orfapen
         /// </summary>
-        public DbSet<Orfapen> Orfapens{ get; set; }
+        public DbSet<Orfapen> Orfapens { get; set; }
 
         /// <summary>
         /// Tabla Reserva
@@ -371,6 +371,15 @@ namespace IMPLANPROD.Server.Data
         /// </summary>
         public DbSet<IndiApli> IndiAplis { get; set; }
 
+        /// <summary>
+        /// Tabla SyncProcesados - Auditoría de sincronización entre Central y Sucursal
+        /// </summary>
+        public DbSet<SyncProcesado> SyncProcesados { get; set; }
+
+        /// <summary>
+        /// Tabla SyncConfig - Configuración de sincronización entre Central y Sucursal
+        /// </summary>
+        public DbSet<SyncConfig> SyncConfigs { get; set; }
 
         #endregion
 
@@ -381,217 +390,216 @@ namespace IMPLANPROD.Server.Data
             modelBuilder.Entity<State>().HasIndex("CountryId", "Name").IsUnique();
             modelBuilder.Entity<City>().HasIndex("StateId", "Name").IsUnique();
 
-            modelBuilder.Entity<Dependencia>().HasIndex("EmpresaId", "dependencia").IsUnique();
-            //para que  no se repita si es el mismo  (crea un doble indice)
-            modelBuilder.Entity<Sector>().HasIndex("DependenciaId", "sector").IsUnique();
+                modelBuilder.Entity<Dependencia>().HasIndex("EmpresaId", "dependencia").IsUnique();
+                //para que  no se repita si es el mismo  (crea un doble indice)
+                modelBuilder.Entity<Sector>().HasIndex("DependenciaId", "sector").IsUnique();
 
-            // Configuración de relaciones para evitar ciclos de cascada
-            // Se establece DeleteBehavior.NoAction en todas las relaciones del Usuario
-
-
-        // Relaciones geográficas
-        modelBuilder.Entity<Usuario>()
-                .HasOne<Country>()
-                .WithMany()
-                .HasForeignKey(u => u.CountryId)
-                .OnDelete(DeleteBehavior.NoAction);
-
-            modelBuilder.Entity<Usuario>()
-                .HasOne<State>()
-                .WithMany()
-                .HasForeignKey(u => u.StateId)
-                .OnDelete(DeleteBehavior.NoAction);
-
-            modelBuilder.Entity<Usuario>()
-                .HasOne<City>()
-                .WithMany()
-                .HasForeignKey(u => u.CityId)
-                .OnDelete(DeleteBehavior.NoAction);
-
-            // Relaciones organizacionales
-            modelBuilder.Entity<Usuario>()
-                .HasOne<Empresa>()
-                .WithMany()
-                .HasForeignKey(u => u.EmpresaId)
-                .OnDelete(DeleteBehavior.NoAction);
-
-            modelBuilder.Entity<Usuario>()
-                .HasOne<Dependencia>()
-                .WithMany()
-                .HasForeignKey(u => u.DependenciaId)
-                .OnDelete(DeleteBehavior.NoAction);
-
-            modelBuilder.Entity<Usuario>()
-                .HasOne<Sector>()
-                .WithMany()
-                .HasForeignKey(u => u.SectorId)
-                .OnDelete(DeleteBehavior.NoAction);
-
-            modelBuilder.Entity<Usuario>()
-                .HasOne<Perfil>()
-                .WithMany()
-                .HasForeignKey(u => u.PerfilId)
-                .OnDelete(DeleteBehavior.NoAction);
-
-            modelBuilder.Entity<Tamoned>().ToTable("Tamoned");
-            modelBuilder.Entity<Tamoned>()
-                .HasIndex(p => p.CodigoMoneda)
-                .IsUnique();
-
-            modelBuilder.Entity<Familia>().ToTable("Familia");
-            modelBuilder.Entity<Familia>()
-                .HasIndex(f => f.CodigoFamilia)
-                .IsUnique();
-
-            modelBuilder.Entity<Grupiva>().ToTable("Grupiva");
-            modelBuilder.Entity<Grupiva>()
-                .HasIndex(f => f.CodigoID)
-                .IsUnique();
-
-            modelBuilder.Entity<Catoper>().ToTable("Catoper");
-            modelBuilder.Entity<Catoper>()
-                .HasIndex(f => f.CodigoCategoria)
-                .IsUnique();
-
-            modelBuilder.Entity<SecProd>().ToTable("SecProd");
-            modelBuilder.Entity<SecProd>()
-                .HasIndex(f => f.CodigoSecProd)
-                .IsUnique();
-
-            modelBuilder.Entity<PADMAQ>().ToTable("PADMAQ");
-            modelBuilder.Entity<PADMAQ>()
-                .HasIndex(f => f.CodigoPadMaq)
-                .IsUnique();
-
-            modelBuilder.Entity<Master>().ToTable("Master");
-            modelBuilder.Entity<Master>()
-                .HasIndex(f => f.Codint)
-                .IsUnique();
-
-            modelBuilder.Entity<UnidadMedidas>().ToTable("UnidadMedidas");
-            modelBuilder.Entity<UnidadMedidas>()
-                .HasIndex(p => p.DescripcionAbreviada)
-                .IsUnique();
-
-            modelBuilder.Entity<Formulas>().ToTable("Formulas");
-            modelBuilder.Entity<Formulas>()
-                .HasIndex(p => p.CodiElem)
-                .IsUnique();
-
-            modelBuilder.Entity<Secoper>().ToTable("Secoper");
-            modelBuilder.Entity<Secoper>();
-
-            // Configuración de la tabla UsuariosSectorProd
-            modelBuilder.Entity<UsuariosSectorProd>().ToTable("UsuariosSectorProd");
-            modelBuilder.Entity<UsuariosSectorProd>()
-                .HasIndex(u => new { u.IdFlexoft, u.CodigoSecProd })
-                .IsUnique()
-                .HasDatabaseName("IX_UsuariosSectorProd_Usuario_Sector");
-
-            // Mapeo explícito: el DbSet Clientes apunta a la tabla física Deudor12
-            modelBuilder.Entity<Deudor12>().ToTable("Deudor12");
-
-            // Mapeo explícito: el DbSet Proveedores apunta a la tabla física Proved12
-            modelBuilder.Entity<Proved12>().ToTable("Proved12");
-
-            // Mapeo explícito: Transportes -> TRANSPORTES
-            modelBuilder.Entity<Transporte>().ToTable("TRANSPORTES");
-            // Índice sugerido por código de transportista si el dominio lo requiere
-            modelBuilder.Entity<Transporte>()
-                .HasIndex(t => t.Codi_Tra)
-                .IsUnique(false);
+                // Configuración de relaciones para evitar ciclos de cascada
+                // Se establece DeleteBehavior.NoAction en todas las relaciones del Usuario
 
 
-            modelBuilder.Entity<PedidoAuditoria>(entity =>
-            {
-                entity.ToTable("PEDIDOS_AUDITORIA");
-                entity.HasNoKey();          // <- EF solo leerá, no intentará escribir
-            });
+                // Relaciones geográficas
+                modelBuilder.Entity<Usuario>()
+                        .HasOne<Country>()
+                        .WithMany()
+                        .HasForeignKey(u => u.CountryId)
+                        .OnDelete(DeleteBehavior.NoAction);
 
-            modelBuilder.Entity<Masumcli>(entity =>
-            {
-                entity.ToTable("MASUMCLI");
-                entity.HasNoKey();
-            });
+                modelBuilder.Entity<Usuario>()
+                    .HasOne<State>()
+                    .WithMany()
+                    .HasForeignKey(u => u.StateId)
+                    .OnDelete(DeleteBehavior.NoAction);
 
-            // Configuración para tablas con triggers de auditoría
-            // Indica a EF Core que estas tablas tienen triggers que afectan las operaciones de guardado
-            // IMPORTANTE: Los nombres de triggers deben coincidir exactamente con los implementados en la BD
-            modelBuilder.Entity<Pedenca>()
-                .ToTable(tb => tb.HasTrigger("TR_PEDENCA_AUDIT"));
+                modelBuilder.Entity<Usuario>()
+                    .HasOne<City>()
+                    .WithMany()
+                    .HasForeignKey(u => u.CityId)
+                    .OnDelete(DeleteBehavior.NoAction);
 
-            modelBuilder.Entity<Peddeta>()
-                .ToTable(tb => tb.HasTrigger("TR_PEDDETA_AUDIT"));
+                // Relaciones organizacionales
+                modelBuilder.Entity<Usuario>()
+                    .HasOne<Empresa>()
+                    .WithMany()
+                    .HasForeignKey(u => u.EmpresaId)
+                    .OnDelete(DeleteBehavior.NoAction);
 
-            // Configuración adicional para optimizar el rendimiento con triggers
-            // Esto le dice a EF Core que recargue los datos después de INSERT/UPDATE
-            // para obtener los valores modificados por los triggers
-            modelBuilder.Entity<Pedenca>()
-                .Property(e => e.FechUltCambio)
-                .ValueGeneratedOnAddOrUpdate();
+                modelBuilder.Entity<Usuario>()
+                    .HasOne<Dependencia>()
+                    .WithMany()
+                    .HasForeignKey(u => u.DependenciaId)
+                    .OnDelete(DeleteBehavior.NoAction);
 
-            modelBuilder.Entity<Peddeta>()
-                .Property(e => e.FechUltCambio)
-                .ValueGeneratedOnAddOrUpdate();
-            //// Configuración de relaciones entre Pedenca y Peddeta
-            //// Relación uno a muchos: Un pedido (Pedenca) puede tener múltiples detalles (Peddeta)
-            //modelBuilder.Entity<Peddeta>()
-            //    .HasOne<Pedenca>()
-            //    .WithMany()
-            //    .HasForeignKey(pd => pd.NroPed)
-            //    .HasPrincipalKey(p => p.NroPed)
-            //    .OnDelete(DeleteBehavior.NoAction);
+                modelBuilder.Entity<Usuario>()
+                    .HasOne<Sector>()
+                    .WithMany()
+                    .HasForeignKey(u => u.SectorId)
+                    .OnDelete(DeleteBehavior.NoAction);
 
-            //// Relación adicional por número de cliente
-            //// Un cliente puede tener múltiples pedidos y múltiples detalles de pedido
-            //modelBuilder.Entity<Peddeta>()
-            //    .HasOne<Pedenca>()
-            //    .WithMany()
-            //    .HasForeignKey(pd => pd.NroClie)
-            //    .HasPrincipalKey(p => p.NroClie)
-            //    .OnDelete(DeleteBehavior.NoAction);
+                modelBuilder.Entity<Usuario>()
+                    .HasOne<Perfil>()
+                    .WithMany()
+                    .HasForeignKey(u => u.PerfilId)
+                    .OnDelete(DeleteBehavior.NoAction);
 
-            // Configuración de la tabla CAPANECE - Cálculo de Capacidad Necesaria
-            modelBuilder.Entity<Capanece>().ToTable("CAPANECE");
-            modelBuilder.Entity<Capanece>()
-                .HasIndex(c => c.Equipo)
-                .HasDatabaseName("IX_CAPANECE_Equipo");
-            modelBuilder.Entity<Capanece>()
-                .HasIndex(c => c.NumeroPrograma)
-                .HasDatabaseName("IX_CAPANECE_NumeroPrograma");
-            modelBuilder.Entity<Capanece>()
-                .HasIndex(c => new { c.Equipo, c.CodigoPieza })
-                .HasDatabaseName("IX_CAPANECE_Equipo_Pieza");
+                modelBuilder.Entity<Tamoned>().ToTable("Tamoned");
+                modelBuilder.Entity<Tamoned>()
+                    .HasIndex(p => p.CodigoMoneda)
+                    .IsUnique();
 
-            modelBuilder.Entity<Indirep>()
-                .HasIndex(i => i.Codigo)
-                .IsUnique();
+                modelBuilder.Entity<Familia>().ToTable("Familia");
+                modelBuilder.Entity<Familia>()
+                    .HasIndex(f => f.CodigoFamilia)
+                    .IsUnique();
 
-            modelBuilder.Entity<Repuesre>()
-                .HasIndex(r => new { r.CodigoReparacion, r.CodigoInterno })
-                .IsUnique()
-                .HasDatabaseName("IX_REPUESRE_CodigoReparacion_CodigoInterno");
+                modelBuilder.Entity<Grupiva>().ToTable("Grupiva");
+                modelBuilder.Entity<Grupiva>()
+                    .HasIndex(f => f.CodigoID)
+                    .IsUnique();
 
-            modelBuilder.Entity<Secoprep>()
-                .HasIndex(s => new { s.CodigoReparacion, s.NumeroOperacion })
-                .IsUnique()
-                .HasDatabaseName("IX_SECOPREP_CodigoReparacion_NumeroOperacion");
+                modelBuilder.Entity<Catoper>().ToTable("Catoper");
+                modelBuilder.Entity<Catoper>()
+                    .HasIndex(f => f.CodigoCategoria)
+                    .IsUnique();
 
-            // Configuración de INDI_APLI
-            modelBuilder.Entity<IndiApli>()
-                .HasIndex(i => i.CodApli)
-                .IsUnique()
-                .HasDatabaseName("IX_INDI_APLI_CodApli");
+                modelBuilder.Entity<SecProd>().ToTable("SecProd");
+                modelBuilder.Entity<SecProd>()
+                    .HasIndex(f => f.CodigoSecProd)
+                    .IsUnique();
 
-            // Relación entre DER_ACCE y INDI_APLI
-            // Un código de aplicación en DER_ACCE debe existir en INDI_APLI
-            modelBuilder.Entity<DerAcce>()
-                .HasOne<IndiApli>()
-                .WithMany()
-                .HasForeignKey(d => d.CodApli)
-                .HasPrincipalKey(i => i.CodApli)
-                .OnDelete(DeleteBehavior.NoAction);
+                modelBuilder.Entity<PADMAQ>().ToTable("PADMAQ");
+                modelBuilder.Entity<PADMAQ>()
+                    .HasIndex(f => f.CodigoPadMaq)
+                    .IsUnique();
 
+                modelBuilder.Entity<Master>().ToTable("Master");
+                modelBuilder.Entity<Master>()
+                    .HasIndex(f => f.Codint)
+                    .IsUnique();
+
+                modelBuilder.Entity<UnidadMedidas>().ToTable("UnidadMedidas");
+                modelBuilder.Entity<UnidadMedidas>()
+                    .HasIndex(p => p.DescripcionAbreviada)
+                    .IsUnique();
+
+                modelBuilder.Entity<Formulas>().ToTable("Formulas");
+                modelBuilder.Entity<Formulas>()
+                    .HasIndex(p => p.CodiElem)
+                    .IsUnique();
+
+                modelBuilder.Entity<Secoper>().ToTable("Secoper");
+                modelBuilder.Entity<Secoper>();
+
+                // Configuración de la tabla UsuariosSectorProd
+                modelBuilder.Entity<UsuariosSectorProd>().ToTable("UsuariosSectorProd");
+                modelBuilder.Entity<UsuariosSectorProd>()
+                    .HasIndex(u => new { u.IdFlexoft, u.CodigoSecProd })
+                    .IsUnique()
+                    .HasDatabaseName("IX_UsuariosSectorProd_Usuario_Sector");
+
+                // Mapeo explícito: el DbSet Clientes apunta a la tabla física Deudor12
+                modelBuilder.Entity<Deudor12>().ToTable("Deudor12");
+
+                // Mapeo explícito: el DbSet Proveedores apunta a la tabla física Proved12
+                modelBuilder.Entity<Proved12>().ToTable("Proved12");
+
+                // Mapeo explícito: Transportes -> TRANSPORTES
+                modelBuilder.Entity<Transporte>().ToTable("TRANSPORTES");
+                // Índice sugerido por código de transportista si el dominio lo requiere
+                modelBuilder.Entity<Transporte>()
+                    .HasIndex(t => t.Codi_Tra)
+                    .IsUnique(false);
+
+
+                modelBuilder.Entity<PedidoAuditoria>(entity =>
+                {
+                    entity.ToTable("PEDIDOS_AUDITORIA");
+                    entity.HasNoKey();          // <- EF solo leerá, no intentará escribir
+                });
+
+                modelBuilder.Entity<Masumcli>(entity =>
+                {
+                    entity.ToTable("MASUMCLI");
+                    entity.HasNoKey();
+                });
+
+                // Configuración para tablas con triggers de auditoría
+                // Indica a EF Core que estas tablas tienen triggers que afectan las operaciones de guardado
+                // IMPORTANTE: Los nombres de triggers deben coincidir exactamente con los implementados en la BD
+                modelBuilder.Entity<Pedenca>()
+                    .ToTable(tb => tb.HasTrigger("TR_PEDENCA_AUDIT"));
+
+                modelBuilder.Entity<Peddeta>()
+                    .ToTable(tb => tb.HasTrigger("TR_PEDDETA_AUDIT"));
+
+                // Configuración adicional para optimizar el rendimiento con triggers
+                // Esto le dice a EF Core que recargue los datos después de INSERT/UPDATE
+                // para obtener los valores modificados por los triggers
+                modelBuilder.Entity<Pedenca>()
+                    .Property(e => e.FechUltCambio)
+                    .ValueGeneratedOnAddOrUpdate();
+
+                modelBuilder.Entity<Peddeta>()
+                    .Property(e => e.FechUltCambio)
+                    .ValueGeneratedOnAddOrUpdate();
+                //// Configuración de relaciones entre Pedenca y Peddeta
+                //// Relación uno a muchos: Un pedido (Pedenca) puede tener múltiples detalles (Peddeta)
+                //modelBuilder.Entity<Peddeta>()
+                //    .HasOne<Pedenca>()
+                //    .WithMany()
+                //    .HasForeignKey(pd => pd.NroPed)
+                //    .HasPrincipalKey(p => p.NroPed)
+                //    .OnDelete(DeleteBehavior.NoAction);
+
+                //// Relación adicional por número de cliente
+                //// Un cliente puede tener múltiples pedidos y múltiples detalles de pedido
+                //modelBuilder.Entity<Peddeta>()
+                //    .HasOne<Pedenca>()
+                //    .WithMany()
+                //    .HasForeignKey(pd => pd.NroClie)
+                //    .HasPrincipalKey(p => p.NroClie)
+                //    .OnDelete(DeleteBehavior.NoAction);
+
+                // Configuración de la tabla CAPANECE - Cálculo de Capacidad Necesaria
+                modelBuilder.Entity<Capanece>().ToTable("CAPANECE");
+                modelBuilder.Entity<Capanece>()
+                    .HasIndex(c => c.Equipo)
+                    .HasDatabaseName("IX_CAPANECE_Equipo");
+                modelBuilder.Entity<Capanece>()
+                    .HasIndex(c => c.NumeroPrograma)
+                    .HasDatabaseName("IX_CAPANECE_NumeroPrograma");
+                modelBuilder.Entity<Capanece>()
+                    .HasIndex(c => new { c.Equipo, c.CodigoPieza })
+                    .HasDatabaseName("IX_CAPANECE_Equipo_Pieza");
+
+                modelBuilder.Entity<Indirep>()
+                    .HasIndex(i => i.Codigo)
+                    .IsUnique();
+
+                modelBuilder.Entity<Repuesre>()
+                    .HasIndex(r => new { r.CodigoReparacion, r.CodigoInterno })
+                    .IsUnique()
+                    .HasDatabaseName("IX_REPUESRE_CodigoReparacion_CodigoInterno");
+
+                modelBuilder.Entity<Secoprep>()
+                    .HasIndex(s => new { s.CodigoReparacion, s.NumeroOperacion })
+                    .IsUnique()
+                    .HasDatabaseName("IX_SECOPREP_CodigoReparacion_NumeroOperacion");
+
+                // Configuración de INDI_APLI
+                modelBuilder.Entity<IndiApli>()
+                    .HasIndex(i => i.CodApli)
+                    .IsUnique()
+                    .HasDatabaseName("IX_INDI_APLI_CodApli");
+
+                // Relación entre DER_ACCE y INDI_APLI
+                // Un código de aplicación en DER_ACCE debe existir en INDI_APLI
+                modelBuilder.Entity<DerAcce>()
+                    .HasOne<IndiApli>()
+                    .WithMany()
+                    .HasForeignKey(d => d.CodApli)
+                    .HasPrincipalKey(i => i.CodApli)
+                    .OnDelete(DeleteBehavior.NoAction);
         }
     }
 }

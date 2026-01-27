@@ -21,41 +21,41 @@ namespace IMPLANPROD.Client.Repositories
 
         private async Task<string> GetBearerTokenAsync()
         {
-            return await _jsRuntime.InvokeAsync<string>("localStorage.getItem", "token") ?? string.Empty;
+            return await _jsRuntime.InvokeAsync<string>("sessionStorage.getItem", "token") ?? string.Empty;
         }
 
         public async Task SetTokenAsync(string token)
         {
-            await _jsRuntime.InvokeVoidAsync("localStorage.setItem", "token", token);
+            await _jsRuntime.InvokeVoidAsync("sessionStorage.setItem", "token", token);
             _httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
         }
 
         public async Task<string> GetTokenAsync()
         {
-            return await _jsRuntime.InvokeAsync<string>("localStorage.getItem", "token") ?? string.Empty;
+            return await _jsRuntime.InvokeAsync<string>("sessionStorage.getItem", "token") ?? string.Empty;
         }
 
         public async Task RemoveTokenAsync()
         {
-            await _jsRuntime.InvokeVoidAsync("localStorage.removeItem", "token");
+            await _jsRuntime.InvokeVoidAsync("sessionStorage.removeItem", "token");
             _httpClient.DefaultRequestHeaders.Authorization = null;
         }
 
         public async Task SetUserInfoAsync(object userInfo)
         {
             var json = JsonSerializer.Serialize(userInfo);
-            await _jsRuntime.InvokeVoidAsync("localStorage.setItem", "userInfo", json);
+            await _jsRuntime.InvokeVoidAsync("sessionStorage.setItem", "userInfo", json);
         }
 
         public async Task<T?> GetUserInfoAsync<T>() where T : class
         {
-            var json = await _jsRuntime.InvokeAsync<string>("localStorage.getItem", "userInfo");
+            var json = await _jsRuntime.InvokeAsync<string>("sessionStorage.getItem", "userInfo");
             return string.IsNullOrEmpty(json) ? null : JsonSerializer.Deserialize<T>(json);
         }
 
         public async Task RemoveUserInfoAsync()
         {
-            await _jsRuntime.InvokeVoidAsync("localStorage.removeItem", "userInfo");
+            await _jsRuntime.InvokeVoidAsync("sessionStorage.removeItem", "userInfo");
         }
 
         public async Task<HttpResponseWrapper<T>> Get<T>(string url)

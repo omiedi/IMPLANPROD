@@ -1,6 +1,7 @@
 @page "/master-index"
 @using IMPLANPROD.Client.Pages.Reportes
 @using IMPLANPROD.Shared.Entities
+@using IMPLANPROD.Client.Shared.Components
 @using Microsoft.AspNetCore.Components.Web
 @inject IRepository repository
 @using IMPLANPROD.Shared.DTOs
@@ -34,6 +35,15 @@ Implementa el modelo de carga y paginación LoadAsync como el resto del sistema.
         <button class="btn btn-secondary" @onclick="ProductosBaja">
             <i class="oi oi-trash"></i> Productos dados de baja
         </button>
+        <button class="btn btn-info" @onclick="AbrirConfiguracionSync">
+            <i class="oi oi-cog"></i> Configuración Sincronización
+        </button>
+        @if (configSync != null && !configSync.EsCentral && configSync.GeneraScriptSync)
+        {
+            <button class="btn btn-success me-2" @onclick="ProcesarSincronizacion" disabled="@isProcesandoSync">
+                <i class="oi oi-reload"></i> Sincronizar desde Central
+            </button>
+        }
     </div>
 </div>
 
@@ -72,6 +82,10 @@ Implementa el modelo de carga y paginación LoadAsync como el resto del sistema.
         <span class="visually-hidden">Preparando impresión...</span>
     </div>
 }
+
+<SyncConfigModal MostrarModal="mostrarModalSync" 
+                 OnCerrar="CerrarModalSync" 
+                 OnGuardado="OnConfigSyncGuardada" />
 
 @if (masterListadoIndexDTO != null && masterListadoIndexDTO.Any())
 {
@@ -331,6 +345,104 @@ else
         masterListadoIndexDTO = null;
         mostrarModalImpresion = false;
         StateHasChanged();
+    }
+
+    /// <summary>
+    /// SINCRONIZACIÓN CENTRAL-SUCURSAL
+    /// </summary>
+    private bool mostrarModalSync = false;
+    private bool isProcesandoSync = false;
+    private SyncConfigDTO? configSync = null;
+
+    private async Task AbrirConfiguracionSync()
+    {
+        await CargarConfigSync();
+        mostrarModalSync = true;
+    }
+
+    private void CerrarModalSync()
+    {
+        mostrarModalSync = false;
+        StateHasChanged();
+    }
+
+    private async Task OnConfigSyncGuardada()
+    {
+        await CargarConfigSync();
+        StateHasChanged();
+    }
+
+    private async Task CargarConfigSync()
+    {
+        try
+        {
+            var response = await repository.Get<SyncConfigDTO>("api/sync/config");
+            if (!response.Error && response.Response != null)
+            {
+                configSync = response.Response;
+            }
+        }
+        catch (Exception ex)
+        {
+            await sweetAlertService.FireAsync("Error", $"Error al cargar configuración: {ex.Message}", SweetAlertIcon.Error);
+        }
+    }
+
+    private async Task ProcesarSincronizacion()
+    {
+        if (configSync == null || string.IsNullOrWhiteSpace(configSync.RutaIntercambio))
+        {
+            await sweetAlertService.FireAsync("Error", "No hay configuración de sincronización", SweetAlertIcon.Error);
+            return;
+        }
+
+        try
+        {
+            isProcesandoSync = true;
+            StateHasChanged();
+
+            var request = new ValidarRutaDTO { Ruta = configSync.RutaIntercambio };
+            var response = await repository.Post<ValidarRutaDTO, SyncResultDTO>("api/sync/procesar", request);
+            
+            if (!response.Error && response.Response != null)
+            {
+                var resultado = response.Response;
+                
+                if (resultado.Exitoso)
+                {
+                    await sweetAlertService.FireAsync(
+                        "Sincronización Exitosa", 
+                        resultado.Mensaje, 
+                        SweetAlertIcon.Success);
+                    
+                    await LoadAsync(currentPage);
+                }
+                else
+                {
+                    var detalles = resultado.DetalleErrores.Count > 0 
+                        ? string.Join("<br>", resultado.DetalleErrores.Take(5))
+                        : resultado.Mensaje;
+                    
+                    await sweetAlertService.FireAsync(
+                        "Sincronización con Errores", 
+                        $"{resultado.Mensaje}<br><br>{detalles}", 
+                        SweetAlertIcon.Warning);
+                }
+            }
+            else
+            {
+                await sweetAlertService.FireAsync("Error", await response.GetErrorMessageAsync(), SweetAlertIcon.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            await sweetAlertService.FireAsync("Error", $"Error al procesar sincronización: {ex.Message}", SweetAlertIcon.Error);
+        }
+        finally
+        {
+            isProcesandoSync = false;
+            StateHasChanged();
+        }
     }
 
 }

@@ -1,0 +1,542 @@
+@using IMPLANPROD.Shared.DTOs
+@inject IRepository repository
+@inject SweetAlertService sweetAlertService
+
+@if (MostrarModal)
+{
+    <div class="modal fade show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5);">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header bg-primary text-white">
+                    <h5 class="modal-title">
+                        <i class="oi oi-cog"></i> Configuración de Sincronización Central-Sucursal
+                    </h5>
+                    <button type="button" class="btn-close btn-close-white" @onclick="Cerrar"></button>
+                </div>
+                <div class="modal-body">
+                    @if (isLoading)
+                    {
+                        <div class="text-center">
+                            <div class="spinner-border text-primary" role="status">
+                                <span class="visually-hidden">Cargando...</span>
+                            </div>
+                        </div>
+                    }
+                    else
+                    {
+                        <!-- Instructivos colapsables -->
+                        <div class="row mb-3">
+                            <div class="col-12">
+                                <!-- Instructivo Usuario -->
+                                <div class="card mb-2">
+                                    <div class="card-header bg-info text-white p-2">
+                                        <button class="btn btn-link text-white text-decoration-none w-100 text-start p-0" 
+                                                type="button" 
+                                                @onclick="() => mostrarInstructivoUsuario = !mostrarInstructivoUsuario">
+                                            <i class="fas @(mostrarInstructivoUsuario ? "fa-chevron-down" : "fa-chevron-right") me-2"></i>
+                                            <strong>Instructivo para el Usuario</strong>
+                                        </button>
+                                    </div>
+                                    @if (mostrarInstructivoUsuario)
+                                    {
+                                        <div class="card-body">
+                                            <h6 class="text-primary"><i class="fas fa-info-circle"></i> ¿Qué es la Sincronización Central-Sucursal?</h6>
+                                            <p>
+                                                Sistema automático que mantiene sincronizados los datos de productos (MASTER), componentes de fórmulas (FORMULAS) 
+                                                y operaciones de producción (SECOPER) entre la instalación Central y todas las Sucursales mediante archivos JSON.
+                                            </p>
+
+                                            <h6 class="text-primary mt-3"><i class="fas fa-cog"></i> Configuración Inicial</h6>
+                                            
+                                            <h6 class="text-secondary mt-3">1. Requisitos Previos</h6>
+                                            <ul>
+                                                <li>Carpeta compartida en red accesible desde Central y todas las Sucursales</li>
+                                                <li>Permisos de lectura/escritura en la carpeta compartida</li>
+                                                <li>Base de datos con tablas SyncConfig y SyncProcesados creadas</li>
+                                            </ul>
+
+                                            <h6 class="text-secondary mt-3">2. Configurar en Central</h6>
+                                            <ul>
+                                                <li>✅ Marcar <strong>"Generar archivos de sincronización"</strong></li>
+                                                <li>✅ Marcar <strong>"Este equipo es la Central"</strong></li>
+                                                <li>📁 <strong>Ruta de carpeta compartida:</strong> Ingresar ruta local (Ej: <code>C:\SyncCentral</code>)</li>
+                                                <li>🔍 Hacer clic en <strong>"Validar"</strong> para verificar que la carpeta existe</li>
+                                                <li>💾 Guardar configuración</li>
+                                            </ul>
+
+                                            <h6 class="text-secondary mt-3">3. Configurar en cada Sucursal</h6>
+                                            <ul>
+                                                <li>✅ Marcar <strong>"Generar archivos de sincronización"</strong></li>
+                                                <li>❌ <strong>NO</strong> marcar "Este equipo es la Central"</li>
+                                                <li>📁 <strong>Ruta de carpeta compartida:</strong> Ingresar ruta UNC (Ej: <code>\\SERVIDOR\SyncCentral</code>)</li>
+                                                <li>🔍 Hacer clic en <strong>"Validar"</strong> para verificar conectividad</li>
+                                                <li>💾 Guardar configuración</li>
+                                            </ul>
+
+                                            <h6 class="text-primary mt-3"><i class="fas fa-sync"></i> Funcionamiento Automático</h6>
+                                            
+                                            <h6 class="text-secondary mt-3">En Central (Generación Automática)</h6>
+                                            <p>Cuando se crea o modifica:</p>
+                                            <ul>
+                                                <li><strong>Producto (Master)</strong> → Se genera <code>MASTER_{Codint}_{timestamp}.json</code></li>
+                                                <li><strong>Componentes (Formulas)</strong> → Se genera <code>FORMULAS_{CodIConj}_{timestamp}.json</code></li>
+                                                <li><strong>Operaciones (SecOper)</strong> → Se genera <code>SECOPER_{CodIConj}_{timestamp}.json</code></li>
+                                            </ul>
+                                            <p>Los archivos se guardan automáticamente en la carpeta de intercambio.</p>
+
+                                            <h6 class="text-secondary mt-3">En Sucursales (Procesamiento Automático)</h6>
+                                            <ul>
+                                                <li>⏱️ El sistema procesa archivos <strong>cada 4 minutos</strong> automáticamente</li>
+                                                <li>🔄 No requiere intervención manual</li>
+                                                <li>📊 Actualiza las tablas Master, Formulas y SecOper</li>
+                                                <li>📝 Registra todo en auditoría</li>
+                                            </ul>
+
+                                            <h6 class="text-primary mt-3"><i class="fas fa-hand-pointer"></i> Sincronización Manual (Opcional)</h6>
+                                            <p>Si necesitas forzar una sincronización inmediata en una Sucursal:</p>
+                                            <ol>
+                                                <li>Ir a la página de <strong>Lista de Productos</strong></li>
+                                                <li>Hacer clic en el botón <strong>"Sincronizar desde Central"</strong></li>
+                                                <li>El sistema mostrará:
+                                                    <ul>
+                                                        <li>Cantidad de archivos procesados</li>
+                                                        <li>Cantidad de registros sincronizados</li>
+                                                        <li>Errores si los hubiera</li>
+                                                    </ul>
+                                                </li>
+                                            </ol>
+
+                                            <h6 class="text-primary mt-3"><i class="fas fa-exclamation-triangle"></i> Solución de Problemas</h6>
+                                            
+                                            <h6 class="text-danger mt-2">❌ No se generan archivos en Central</h6>
+                                            <p><strong>Solución:</strong></p>
+                                            <ul>
+                                                <li>Verificar que "Este equipo es la Central" esté marcado</li>
+                                                <li>Verificar que "Generar archivos" esté habilitado</li>
+                                                <li>Verificar permisos de escritura en la carpeta</li>
+                                                <li>Verificar que la ruta de intercambio exista</li>
+                                            </ul>
+
+                                            <h6 class="text-danger mt-2">❌ Sucursal no procesa archivos</h6>
+                                            <p><strong>Solución:</strong></p>
+                                            <ul>
+                                                <li>Verificar que "Este equipo es la Central" NO esté marcado</li>
+                                                <li>Verificar que "Generar archivos" esté habilitado</li>
+                                                <li>Verificar conectividad de red a la carpeta compartida</li>
+                                                <li>Verificar permisos de lectura en la carpeta compartida</li>
+                                                <li>Revisar logs del sistema</li>
+                                            </ul>
+                                        </div>
+                                    }
+                                </div>
+
+                                <!-- Instructivo Desarrollador -->
+                                <InstructivoDesarrollador>
+                                    <h6 class="text-info"><i class="fas fa-code"></i> Arquitectura del Sistema</h6>
+                                    <p>
+                                        Sistema de sincronización basado en archivos JSON para transferencia de datos entre Central y Sucursales.
+                                        Implementa generación automática en Central y procesamiento automático cada 4 minutos en Sucursales mediante BackgroundService.
+                                    </p>
+
+                                    <h6 class="text-info mt-3"><i class="fas fa-puzzle-piece"></i> Componentes Principales</h6>
+                                    <p><strong>DTOs (Data Transfer Objects):</strong></p>
+                                    <ul>
+                                        <li><code>SyncMasterDTO</code> - Sincronización de productos</li>
+                                        <li><code>SyncFormulasDTO + FormulaItemDTO</code> - Sincronización de componentes</li>
+                                        <li><code>SyncSecOperDTO + SecOperItemDTO</code> - Sincronización de operaciones</li>
+                                        <li><code>SyncConfigDTO</code> - Configuración del sistema</li>
+                                        <li><code>SyncResultDTO</code> - Resultado del procesamiento</li>
+                                    </ul>
+
+                                    <p><strong>Servicios:</strong></p>
+                                    <ul>
+                                        <li><code>ISyncService / SyncService</code> - Lógica principal de sincronización</li>
+                                        <li><code>SyncBackgroundService</code> - Procesamiento automático en segundo plano</li>
+                                    </ul>
+
+                                    <p><strong>Controladores:</strong></p>
+                                    <ul>
+                                        <li><code>MasterController</code> - Genera archivos al crear/actualizar productos</li>
+                                        <li><code>FormulasController</code> - Genera archivos al guardar componentes</li>
+                                        <li><code>SecoperController</code> - Genera archivos al guardar operaciones</li>
+                                        <li><code>SyncController</code> - Endpoints de configuración y procesamiento manual</li>
+                                    </ul>
+
+                                    <p><strong>Entidades:</strong></p>
+                                    <ul>
+                                        <li><code>SyncConfig</code> - Configuración persistente en BD</li>
+                                        <li><code>SyncProcesados</code> - Auditoría de archivos procesados</li>
+                                    </ul>
+
+                                    <h6 class="text-info mt-3"><i class="fas fa-project-diagram"></i> Flujo de Sincronización</h6>
+                                    
+                                    <p><strong>Generación en Central:</strong></p>
+                                    <pre class="bg-light p-2 rounded"><code>Usuario modifica Master/Formulas/SecOper
+    ↓
+Controller llama a ISyncService.GenerarArchivo...Async(codint/codiConj)
+    ↓
+SyncService verifica: EsCentral && GeneraScriptSync
+    ↓
+Consulta datos de la BD
+    ↓
+Serializa a JSON con formato indentado
+    ↓
+Guarda archivo: {TABLA}_{ID}_{timestamp}.json en RutaIntercambio
+    ↓
+Log: "Archivo de sincronización generado: {nombre}"</code></pre>
+
+                                    <p><strong>Procesamiento en Sucursal:</strong></p>
+                                    <pre class="bg-light p-2 rounded"><code>SyncBackgroundService ejecuta cada 4 minutos
+    ↓
+Verifica: !EsCentral && GeneraScriptSync
+    ↓
+Busca archivos MASTER_*.json, FORMULAS_*.json, SECOPER_*.json
+    ↓
+Ordena por fecha de creación
+    ↓
+Para cada archivo:
+    ↓
+    Verifica si ya fue procesado (tabla SyncProcesados)
+    ↓
+    Deserializa JSON
+    ↓
+    Ejecuta ProcesarMasterUpsertAsync / ProcesarFormulasUpsertAsync / ProcesarSecOperUpsertAsync
+    ↓
+    Registra en SyncProcesados (EXITOSO o ERROR)
+    ↓
+Log: resultado del procesamiento</code></pre>
+
+                                    <h6 class="text-info mt-3"><i class="fas fa-code-branch"></i> Métodos Principales del SyncService</h6>
+                                    
+                                    <p><strong>Generación de Archivos:</strong></p>
+                                    <pre class="bg-light p-2 rounded"><code>// Genera archivo para un producto Master
+Task&lt;bool&gt; GenerarArchivoSyncMasterAsync(int codint)
+
+// Genera archivo para componentes de una fórmula
+Task&lt;bool&gt; GenerarArchivoSyncFormulasAsync(int codiConj)
+
+// Genera archivo para operaciones de producción
+Task&lt;bool&gt; GenerarArchivoSyncSecOperAsync(int codiConj)</code></pre>
+
+                                    <p><strong>Procesamiento de Archivos:</strong></p>
+                                    <pre class="bg-light p-2 rounded"><code>// Procesa todos los archivos pendientes en la carpeta
+Task&lt;SyncResultDTO&gt; ProcesarArchivosSyncAsync(string rutaIntercambio)
+
+// Métodos privados de procesamiento
+private Task ProcesarMasterUpsertAsync(Master master)
+private Task ProcesarFormulasUpsertAsync(SyncFormulasDTO syncDto)
+private Task ProcesarSecOperUpsertAsync(SyncSecOperDTO syncDto)</code></pre>
+
+                                    <h6 class="text-info mt-3"><i class="fas fa-database"></i> Estrategias de UPSERT</h6>
+                                    
+                                    <p><strong>Master (MERGE SQL):</strong></p>
+                                    <p>Usa MERGE de SQL Server para insertar o actualizar basado en Codint:</p>
+                                    <ul>
+                                        <li><strong>MATCHED:</strong> Actualiza todos los campos</li>
+                                        <li><strong>NOT MATCHED:</strong> Inserta nuevo registro</li>
+                                        <li>Maneja ~150 campos del Master</li>
+                                    </ul>
+
+                                    <p><strong>Formulas y SecOper (DELETE + INSERT):</strong></p>
+                                    <p>Usa estrategia de reemplazo completo:</p>
+                                    <ol>
+                                        <li>Inicia transacción</li>
+                                        <li><code>DELETE FROM tabla WHERE CodIConj = @@CodIConj</code></li>
+                                        <li><code>INSERT</code> de cada componente/operación</li>
+                                        <li>Commit de transacción</li>
+                                        <li>Rollback en caso de error</li>
+                                    </ol>
+                                    <p><strong>Razón:</strong> Simplifica la lógica al reemplazar todo el conjunto de componentes/operaciones.</p>
+
+                                    <h6 class="text-info mt-3"><i class="fas fa-clock"></i> BackgroundService - SyncBackgroundService</h6>
+                                    
+                                    <p><strong>Características:</strong></p>
+                                    <pre class="bg-light p-2 rounded"><code>public class SyncBackgroundService : BackgroundService
+{
+    private readonly TimeSpan _intervalo = TimeSpan.FromMinutes(4);
+    
+    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
+    {
+        // Espera 30s al iniciar
+        await Task.Delay(TimeSpan.FromSeconds(30), stoppingToken);
+        
+        while (!stoppingToken.IsCancellationRequested)
+        {
+            // Verifica: !EsCentral && GeneraScriptSync
+            // Procesa archivos
+            // Espera 4 minutos
+        }
+    }
+}</code></pre>
+
+                                    <p><strong>Registro en Program.cs:</strong></p>
+                                    <pre class="bg-light p-2 rounded"><code>builder.Services.AddHostedService&lt;SyncBackgroundService&gt;();</code></pre>
+
+                                    <p><strong>Inyección de Dependencias:</strong></p>
+                                    <p>Usa <code>IServiceProvider</code> para crear scopes y obtener <code>ISyncService</code> en cada ejecución.</p>
+
+                                    <h6 class="text-info mt-3"><i class="fas fa-file-code"></i> Formato de Archivos JSON</h6>
+                                    
+                                    <p><strong>MASTER_{Codint}_{timestamp}.json:</strong></p>
+                                    <pre class="bg-light p-2 rounded"><code>{
+  "Tabla": "MASTER",
+  "Operacion": "UPSERT",
+  "Fecha": "2026-01-23T19:30:00",
+  "Datos": {
+    "Codint": 12345,
+    "Codempr": 0,
+    "Codext": "PROD-001",
+    "Descrip": "Producto de ejemplo",
+    // ... ~150 campos más
+  }
+}</code></pre>
+
+                                    <p><strong>FORMULAS_{CodIConj}_{timestamp}.json:</strong></p>
+                                    <pre class="bg-light p-2 rounded"><code>{
+  "Tabla": "FORMULAS",
+  "Operacion": "UPSERT",
+  "FechaGeneracion": "2026-01-23T19:30:00",
+  "CodIConj": 12345,
+  "Componentes": [
+    {
+      "CodIConj": 12345,
+      "CodiEmpr": 0,
+      "CodiElem": 5678,
+      "NuorIt": 10,
+      "UsoBruto": 2.5
+    }
+  ]
+}</code></pre>
+
+                                    <h6 class="text-info mt-3"><i class="fas fa-clipboard-check"></i> Tabla de Auditoría - SyncProcesados</h6>
+                                    
+                                    <p><strong>Estructura:</strong></p>
+                                    <pre class="bg-light p-2 rounded"><code>CREATE TABLE SyncProcesados (
+    Id INT IDENTITY(1,1) PRIMARY KEY,
+    Archivo NVARCHAR(255) NOT NULL,
+    Tabla NVARCHAR(50) NOT NULL,
+    Operacion NVARCHAR(50) NOT NULL,
+    FechaProcesamiento DATETIME NOT NULL,
+    Estado NVARCHAR(50) NOT NULL,
+    Error NVARCHAR(MAX) NULL,
+    CodintAfectado INT NULL
+)</code></pre>
+
+                                    <p><strong>Uso:</strong></p>
+                                    <p>Cada archivo procesado se registra con:</p>
+                                    <ul>
+                                        <li><strong>Estado:</strong> "EXITOSO" o "ERROR"</li>
+                                        <li><strong>Error:</strong> Mensaje de error si falló</li>
+                                        <li><strong>CodintAfectado:</strong> ID del registro afectado (Master.Codint o CodIConj)</li>
+                                    </ul>
+                                    <p>Permite:</p>
+                                    <ul>
+                                        <li>Evitar reprocesar archivos ya exitosos</li>
+                                        <li>Auditar qué se sincronizó y cuándo</li>
+                                        <li>Diagnosticar errores</li>
+                                    </ul>
+
+                                    <h6 class="text-info mt-3"><i class="fas fa-exclamation-triangle"></i> Consideraciones Importantes</h6>
+                                    <ul>
+                                        <li>La sincronización NO debe hacer fallar la operación principal de guardado</li>
+                                        <li>Los errores de sincronización se loguean pero no interrumpen el flujo</li>
+                                        <li>El BackgroundService solo se ejecuta en Sucursales (!EsCentral)</li>
+                                        <li>Los archivos JSON se ordenan por fecha de creación antes de procesarse</li>
+                                        <li>Se verifica que el archivo no haya sido procesado antes (tabla SyncProcesados)</li>
+                                        <li>Todas las operaciones de procesamiento usan transacciones para garantizar integridad</li>
+                                    </ul>
+                                </InstructivoDesarrollador>
+                            </div>
+                        </div>
+
+                        <div class="alert alert-info">
+                            <i class="oi oi-info"></i>
+                            <strong>Información:</strong> Esta configuración permite sincronizar automáticamente los productos (tabla MASTER), componentes (FORMULAS) y operaciones (SECOPER) entre la Central y las Sucursales mediante archivos JSON.
+                        </div>
+
+                        <div class="mb-3">
+                            <div class="form-check form-switch">
+                                <input class="form-check-input" type="checkbox" id="generaScriptSync" 
+                                       @bind="config.GeneraScriptSync">
+                                <label class="form-check-label" for="generaScriptSync">
+                                    <strong>Generar archivos de sincronización</strong>
+                                </label>
+                            </div>
+                            <small class="text-muted">
+                                Al activar esta opción, cada vez que se cree o modifique un producto se generará un archivo JSON en la carpeta de intercambio.
+                            </small>
+                        </div>
+
+                        @if (config.GeneraScriptSync)
+                        {
+                            <div class="mb-3">
+                                <div class="form-check form-switch">
+                                    <input class="form-check-input" type="checkbox" id="esCentral" 
+                                           @bind="config.EsCentral">
+                                    <label class="form-check-label" for="esCentral">
+                                        <strong>Este equipo es la Central</strong>
+                                    </label>
+                                </div>
+                                <small class="text-muted">
+                                    Si es Central, genera archivos. Si es Sucursal, procesa archivos.
+                                </small>
+                            </div>
+
+                            <div class="mb-3">
+                                <label for="rutaIntercambio" class="form-label">
+                                    <strong>Ruta de carpeta compartida (Intercambio)</strong>
+                                </label>
+                                <div class="input-group">
+                                    <input type="text" class="form-control" id="rutaIntercambio" 
+                                           @bind="config.RutaIntercambio" 
+                                           placeholder="Ej: \\servidor\intercambio o C:\intercambio">
+                                    <button class="btn btn-outline-secondary" type="button" @onclick="ValidarRuta">
+                                        <i class="oi oi-check"></i> Validar
+                                    </button>
+                                </div>
+                                <small class="text-muted">
+                                    Ruta de red compartida o local donde se guardarán/leerán los archivos de sincronización.
+                                </small>
+                                @if (!string.IsNullOrEmpty(mensajeValidacion))
+                                {
+                                    <div class="alert @(rutaValida ? "alert-success" : "alert-warning") mt-2 py-2">
+                                        <small>@mensajeValidacion</small>
+                                    </div>
+                                }
+                            </div>
+
+                            @if (!config.EsCentral)
+                            {
+                                <div class="alert alert-warning">
+                                    <i class="oi oi-warning"></i>
+                                    <strong>Modo Sucursal:</strong> Para procesar archivos pendientes, usa el botón "Sincronizar" en la página de productos.
+                                </div>
+                            }
+                        }
+                    }
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" @onclick="Cerrar">
+                        <i class="oi oi-x"></i> Cancelar
+                    </button>
+                    <button type="button" class="btn btn-primary" @onclick="GuardarConfiguracion" disabled="@isLoading">
+                        <i class="oi oi-check"></i> Guardar Configuración
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter]
+    public bool MostrarModal { get; set; }
+
+    [Parameter]
+    public EventCallback OnCerrar { get; set; }
+
+    [Parameter]
+    public EventCallback OnGuardado { get; set; }
+
+    private SyncConfigDTO config = new SyncConfigDTO();
+    private bool isLoading = false;
+    private string mensajeValidacion = string.Empty;
+    private bool rutaValida = false;
+    private bool mostrarInstructivoUsuario = false;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (MostrarModal && config.RutaIntercambio == null)
+        {
+            await CargarConfiguracion();
+        }
+    }
+
+    private async Task CargarConfiguracion()
+    {
+        try
+        {
+            isLoading = true;
+            var response = await repository.Get<SyncConfigDTO>("api/sync/config");
+            if (!response.Error && response.Response != null)
+            {
+                config = response.Response;
+            }
+        }
+        catch (Exception ex)
+        {
+            await sweetAlertService.FireAsync("Error", $"Error al cargar configuración: {ex.Message}", SweetAlertIcon.Error);
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private async Task ValidarRuta()
+    {
+        if (string.IsNullOrWhiteSpace(config.RutaIntercambio))
+        {
+            mensajeValidacion = "Debe ingresar una ruta";
+            rutaValida = false;
+            return;
+        }
+
+        try
+        {
+            var request = new ValidarRutaDTO { Ruta = config.RutaIntercambio };
+            var response = await repository.Post<ValidarRutaDTO, ValidarRutaResponseDTO>("api/sync/validar-ruta", request);
+            if (!response.Error && response.Response != null)
+            {
+                rutaValida = response.Response.Valida;
+                mensajeValidacion = response.Response.Mensaje;
+            }
+        }
+        catch (Exception ex)
+        {
+            mensajeValidacion = $"Error al validar ruta: {ex.Message}";
+            rutaValida = false;
+        }
+    }
+
+    private async Task GuardarConfiguracion()
+    {
+        try
+        {
+            isLoading = true;
+
+            if (config.GeneraScriptSync && string.IsNullOrWhiteSpace(config.RutaIntercambio))
+            {
+                await sweetAlertService.FireAsync("Atención", "Debe especificar una ruta de intercambio", SweetAlertIcon.Warning);
+                return;
+            }
+
+            var response = await repository.Post<SyncConfigDTO, dynamic>("api/sync/config", config);
+            if (!response.Error)
+            {
+                await sweetAlertService.FireAsync("Éxito", "Configuración guardada correctamente", SweetAlertIcon.Success);
+                await OnGuardado.InvokeAsync();
+                await Cerrar();
+            }
+            else
+            {
+                await sweetAlertService.FireAsync("Error", await response.GetErrorMessageAsync(), SweetAlertIcon.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            await sweetAlertService.FireAsync("Error", $"Error al guardar: {ex.Message}", SweetAlertIcon.Error);
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private async Task Cerrar()
+    {
+        mensajeValidacion = string.Empty;
+        rutaValida = false;
+        await OnCerrar.InvokeAsync();
+    }
+}
