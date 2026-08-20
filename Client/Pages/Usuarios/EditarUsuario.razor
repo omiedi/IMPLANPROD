@@ -88,7 +88,7 @@ else
             <div class="col-md-6">
                 <div class="form-group mb-3">
                     <label for="nombreUsuario">Nombre de Usuario:</label>
-                    <InputText id="nombreUsuario" @bind-Value="usuarioEdit.NombreUsuario" class="form-control" readonly="@modoPerfilUsuario" />
+                    <InputText id="nombreUsuario" @bind-Value="usuarioEdit.NombreUsuario" class="form-control" readonly="@camposBloqueados" />
                     <ValidationMessage For="@(() => usuarioEdit.NombreUsuario)" />
                 </div>
 
@@ -97,6 +97,7 @@ else
                     <InputText id="email"
                                @bind-Value="usuarioEdit.Email"
                                class="form-control"
+                               readonly="@camposBloqueados"
                                @onfocusout="VerificarEmailAsync" />
                     <ValidationMessage For="@(() => usuarioEdit.Email)" />
                     @if (emailDuplicado)
@@ -108,7 +109,7 @@ else
                 </div>
                 <div class="form-group mb-3">
                     <label for="email">N° Us.Flexoft:</label>
-                    <InputNumber id="idflexoft" @bind-Value="usuarioEdit.IdFlexoft" class="form-control" readonly="@modoPerfilUsuario" />
+                    <InputNumber id="idflexoft" @bind-Value="usuarioEdit.IdFlexoft" class="form-control" readonly="@camposBloqueados" />
                     <ValidationMessage For="@(() => usuarioEdit.IdFlexoft)" />
                 </div>
 
@@ -149,7 +150,7 @@ else
                 <div class="form-group mb-3">
                     <label for="country">País:</label>
                     <!-- Selector de país: al cambiar, se ejecuta CountryChangeAsync y se actualiza usuarioEdit.CountryId -->
-                    <select id="country" class="form-select" @onchange="CountryChangeAsync" disabled="@modoPerfilUsuario">
+                    <select id="country" class="form-select" @onchange="CountryChangeAsync" disabled="@camposBloqueados">
                         <option value="0">Seleccione un país...</option>
                         @foreach (var country in countries)
                         {
@@ -162,7 +163,7 @@ else
                 <div class="form-group mb-3">
                     <label for="state">Provincia:</label>
                     <!-- Selector de provincia: al cambiar, se ejecuta StateChangeAsync y se actualiza usuarioEdit.StateId -->
-                    <select id="state" class="form-select" @onchange="StateChangeAsync" disabled="@modoPerfilUsuario">
+                    <select id="state" class="form-select" @onchange="StateChangeAsync" disabled="@camposBloqueados">
                         <option value="0">Seleccione una provincia...</option>
                         @foreach (var state in states)
                         {
@@ -175,7 +176,7 @@ else
                 <div class="form-group mb-3">
                     <label for="city">Localidad:</label>
                     <!-- Selector de localidad: al cambiar, usuarioEdit.CityId se actualiza automáticamente -->
-                    <select id="city" class="form-select" @onchange="CityChangeAsync" disabled="@modoPerfilUsuario">
+                    <select id="city" class="form-select" @onchange="CityChangeAsync" disabled="@camposBloqueados">
                         <option value="0">Seleccione una localidad...</option>
                         @foreach (var city in cities)
                         {
@@ -189,7 +190,7 @@ else
                     <div class="form-group mb-3">
                         <label>Empresa:</label>
                         <!-- Selector de empresa: al cambiar, se ejecuta EmpresaChangeAsync y se actualiza usuarioEdit.EmpresaId -->
-                        <select class="form-select" @onchange="EmpresaChangeAsync" disabled="@modoPerfilUsuario">
+                        <select class="form-select" @onchange="EmpresaChangeAsync" disabled="@camposBloqueados">
                             <option value="0">-- Seleccione una empresa --</option>
                             @if (empresa is not null)
                             {
@@ -203,7 +204,7 @@ else
                     <div class="form-group mb-3">
                         <label>Filial:</label>
                         <!-- Selector de dependencia (filial): al cambiar, se ejecuta DependenciaChangedAsync y se actualiza usuarioEdit.DependenciaId -->
-                        <select class="form-select" @onchange="DependenciaChangedAsync" disabled="@modoPerfilUsuario">
+                        <select class="form-select" @onchange="DependenciaChangedAsync" disabled="@camposBloqueados">
                             <option value="0">-- Seleccione una filial --</option>
                             @if (dependencia is not null)
                             {
@@ -217,7 +218,7 @@ else
                     <div class="form-group mb-3">
                         <label>Sector:</label>
                         <!-- Selector de sector con binding directo. Al cambiar, usuarioEdit.SectorId se actualiza automáticamente -->
-                        <select class="form-select" @bind="usuarioEdit.SectorId" disabled="@modoPerfilUsuario">
+                        <select class="form-select" @bind="usuarioEdit.SectorId" disabled="@camposBloqueados">
                             <option value="0">-- Seleccione un sector --</option>
                             @if (sector is not null)
                             {
@@ -231,7 +232,7 @@ else
                 </div>     
                 <div class="form-group mb-3">
                     <label for="perfil">Perfil:</label>
-                    <InputSelect id="perfil" @bind-Value="usuarioEdit.PerfilId" class="form-control" disabled="@modoPerfilUsuario">
+                    <InputSelect id="perfil" @bind-Value="usuarioEdit.PerfilId" class="form-control" disabled="@camposBloqueados">
                         <option value="">Seleccione un perfil...</option>
                         @foreach (var perfil in perfiles)
                         {
@@ -247,7 +248,7 @@ else
         </div>
     </EditForm>
 
-    @if (!modoPerfilUsuario && (string.Equals(perfilAutenticado, "SUPERADMIN", StringComparison.OrdinalIgnoreCase)
+    @if (!camposBloqueados && (string.Equals(perfilAutenticado, "SUPERADMIN", StringComparison.OrdinalIgnoreCase)
          || string.Equals(perfilAutenticado, "ADMINISTRADOR", StringComparison.OrdinalIgnoreCase)
          || string.Equals(perfilAutenticado, "ADMIN", StringComparison.OrdinalIgnoreCase)))
     {
@@ -298,6 +299,13 @@ else
     private bool validandoAcceso = true;
     private bool accesoPermitido = false;
     private bool modoMiPerfil = false;
+    private bool esRutaMiPerfil = false;
+
+    /// <summary>
+    /// En /mi-perfil sólo se pueden modificar la contraseña y la foto de perfil:
+    /// el resto de los datos se muestra en modo consulta.
+    /// </summary>
+    private bool camposBloqueados => esRutaMiPerfil || modoPerfilUsuario;
     private AsignadorPermisosPaginas? asignadorPermisos;
     private bool modoPerfilUsuario =>
         usuarioAutenticadoId > 0 &&
@@ -374,6 +382,11 @@ else
             NavigationManager.NavigateTo("/acceso-denegado", replace: true);
             return;
         }
+
+        esRutaMiPerfil = NavigationManager
+            .ToBaseRelativePath(NavigationManager.Uri)
+            .TrimStart('/')
+            .StartsWith("mi-perfil", StringComparison.OrdinalIgnoreCase);
 
         modoMiPerfil = Id <= 0 || Id == usuarioAutenticadoId;
 
@@ -630,7 +643,7 @@ else
             var response = await Http.PutAsync($"api/Usuarios/{Id}", content);
             if (response.IsSuccessStatusCode)
             {
-                NavigationManager.NavigateTo("/usuarios");
+                NavigationManager.NavigateTo(camposBloqueados ? "/" : "/usuarios");
             }
             else
             {
@@ -664,7 +677,7 @@ else
 
     private void Cancelar()
     {
-        if (modoPerfilUsuario)
+        if (camposBloqueados)
         {
             NavigationManager.NavigateTo("/");
             return;
