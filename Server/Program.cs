@@ -1,13 +1,16 @@
 using IMPLANPROD.Server.Data;
 using IMPLANPROD.Server.Data.Interceptors;
 using IMPLANPROD.Server.Middleware;
+using IMPLANPROD.Server.Services.Pdf;
 using IMPLANPROD.Server.Services;
 using IMPLANPROD.Server.Utilities;
+using IMPLANPROD.Shared.Interfaces;
 using IMPLANPROD.Shared.Services;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.FileProviders;
 using Microsoft.IdentityModel.Tokens;
+using PdfSharp.Fonts;
 using Serilog;
 using Serilog.Events;
 using System.Text;
@@ -16,6 +19,11 @@ using System.Text.Json.Serialization;
 // TODO: CENTRALIZACIÓN_CONTEXTO_USUARIO - Importación de namespaces necesarios para el servicio de contexto de usuario
 
 var builder = WebApplication.CreateBuilder(args);
+
+if (GlobalFontSettings.FontResolver == null)
+{
+    GlobalFontSettings.FontResolver = ServerFontResolver.Instance;
+}
 
 // Configurar Serilog
 Log.Logger = new LoggerConfiguration()
@@ -27,6 +35,9 @@ Log.Logger = new LoggerConfiguration()
     .CreateLogger();
 
 builder.Host.UseSerilog();
+
+Log.Information("ASPNETCORE_ENVIRONMENT={Environment}", builder.Environment.EnvironmentName);
+Log.Information("DefaultConnection={DefaultConnection}", builder.Configuration.GetConnectionString("DefaultConnection"));
 
 // Configuración de JWT
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
@@ -76,16 +87,43 @@ builder.Services.AddScoped<ExcelService>();//generico para exportar a excel
 builder.Services.AddScoped<ReservasService>();//servicio para manejar las reservas de órdenes de fabricación
 builder.Services.AddScoped<FlexcrlService>();//servicio para manejar controles de procesos de negocio (tabla FLEXCRL)
 builder.Services.AddScoped<IMoviStockService, MoviStockService>();//servicio para manejar movimientos de stock (equivalente a MOVISTOK VB6)
+builder.Services.AddScoped<IMoviBrecepenService, MoviBrecepenService>();//servicio para registrar movimientos en suspenso de calidad (tabla BRECEPEN)
+builder.Services.AddScoped<RecepcionMaterialesService>();//servicio para procesar recepción de materiales de central (equivalente a RecibirRemitoTraslado VB6)
 builder.Services.AddScoped<FileStorageService>();//servicio para almacenamiento de archivos con ruta configurable por ambiente
 builder.Services.AddScoped<AnotacionesPedidoService>();//servicio para manejar anotaciones automáticas de pedidos
 builder.Services.AddScoped<ConversionMonedaService>();//servicio para manejar conversiones de moneda en pedidos
 builder.Services.AddScoped<DetaivaService>();//servicio para manejar detalle de IVA en órdenes de compra (equivalente a DETAIVA VB6)
 builder.Services.AddScoped<ConsignacionService>();//servicio para manejar consignaciones MACONSIG según lógica VB6
 builder.Services.AddScoped<ActualizacionCostoMasterService>();//servicio para actualizar costos en MASTER según configuración ACOSREP (equivalente a lógica VB6 GRACOMPRA)
+builder.Services.AddScoped<UserContextService>();// Se usa para obtener el usuario actual en operaciones de auditoría (alta, baja, modificación)
 builder.Services.AddScoped<MigrationLegacyService>();//servicio para migración de datos legacy
 builder.Services.AddScoped<IDerechosUsuarioService, DerechosUsuarioService>();//servicio para gestión de derechos de usuarios sobre aplicaciones
 builder.Services.AddScoped<ISyncService, SyncService>();//servicio para sincronización Central-Sucursal
-builder.Services.AddHostedService<SyncBackgroundService>();//servicio en segundo plano para procesamiento automático de sincronización (solo Sucursales)
+builder.Services.AddScoped<NotificacionesService>();
+builder.Services.AddScoped<NotificacionReglasSqlService>();
+builder.Services.AddScoped<IOCOMDETACostoService, OCOMDETACostoService>();//servicio para gestión de costos de items de órdenes de compra
+builder.Services.AddScoped<PdfService>();//servicio base para generación de PDFs
+builder.Services.AddScoped<RemitoPlantillaService>();//servicio para plantillas parametrizadas de impresión de remitos
+builder.Services.AddScoped<ISeguridadRutasService, SeguridadRutasService>();//servicio para control de acceso por módulos y páginas (RBAC)
+builder.Services.AddScoped<IEmailEmpresaService, EmailEmpresaService>();//servicio de correo corporativo via MailKit
+
+var habilitarSyncBackgroundService = builder.Configuration.GetValue(
+    "BackgroundServices:EnableSyncBackgroundService",
+    !builder.Environment.IsDevelopment());
+
+if (habilitarSyncBackgroundService)
+{
+    builder.Services.AddHostedService<SyncBackgroundService>();//servicio en segundo plano para procesamiento automático de sincronización (solo Sucursales)
+}
+
+var habilitarReglasSqlHostedService = builder.Configuration.GetValue(
+    "BackgroundServices:EnableNotificacionReglasSqlHostedService",
+    true);
+
+if (habilitarReglasSqlHostedService)
+{
+    builder.Services.AddHostedService<NotificacionReglasSqlHostedService>();
+}
 
 // TODO: CENTRALIZACIÓN_CONTEXTO_USUARIO - Registro del servicio de contexto de usuario y HttpContextAccessor
 builder.Services.AddHttpContextAccessor(); // Necesario para acceder al contexto HTTP en el servicio

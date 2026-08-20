@@ -67,6 +67,16 @@
     .col-um { min-width: 100px; }
     .col-codint { min-width: 120px; }
     .col-accion { min-width: 150px; }
+
+    .input-no-spinner::-webkit-outer-spin-button,
+    .input-no-spinner::-webkit-inner-spin-button {
+        -webkit-appearance: none;
+        margin: 0;
+    }
+
+    .input-no-spinner {
+        -moz-appearance: textfield;
+    }
 </style>
 <!-- Modal para seleccionar producto -->
 <div class="modal fade @(mostrarModal ? "show" : "")" style="display: @(mostrarModal ? "block" : "none")" tabindex="-1" role="dialog"
@@ -101,7 +111,13 @@
                         {
                             <div class="input-group input-group-sm me-2" style="width: 3cm; min-width: 3cm;">
                                 <span class="input-group-text" style="min-width: 1.2cm; justify-content:center;">Cant.</span>
-                                <input type="number" class="form-control text-end" step="0.0001" @bind="cantidadSeleccion" tabindex="3" />
+                                <input type="number"
+                                       class="form-control text-end @(OcultarFlechasCantidad ? "input-no-spinner" : string.Empty)"
+                                       step="@(CantidadSoloEnteros ? "1" : "0.0001")"
+                                       min="1"
+                                       @bind="cantidadSeleccion"
+                                       @bind:after="NormalizarCantidadInput"
+                                       tabindex="3" />
                             </div>
                         }
                         @if (PermitirPrecio)
@@ -216,6 +232,14 @@
     /// </summary>
     [Parameter] public decimal CantidadDefault { get; set; } = 1m; // Cambiar este valor para predefinir la cantidad al abrir
     /// <summary>
+    /// Si es true, la cantidad se maneja como entero (sin decimales).
+    /// </summary>
+    [Parameter] public bool CantidadSoloEnteros { get; set; } = false;
+    /// <summary>
+    /// Si es true, se ocultan las flechas de incremento/decremento del input de cantidad.
+    /// </summary>
+    [Parameter] public bool OcultarFlechasCantidad { get; set; } = false;
+    /// <summary>
     /// Valor por defecto del precio al abrir el modal.
     /// </summary>
     [Parameter] public decimal PrecioDefault { get; set; } = 0m;
@@ -240,7 +264,9 @@
     public async Task AbrirModal()
     {
         mostrarModal = true;
-        cantidadSeleccion = CantidadDefault;
+        cantidadSeleccion = CantidadSoloEnteros
+            ? Math.Max(1m, Math.Round(CantidadDefault, 0, MidpointRounding.AwayFromZero))
+            : CantidadDefault;
         precioSeleccion = PrecioDefault;
         // Ejecuta la búsqueda solo si hay un filtro ingresado
         if (!string.IsNullOrWhiteSpace(filtro))
@@ -251,6 +277,19 @@
         // Dar tiempo al render del input y luego enfocar automáticamente
         await Task.Delay(50);
         await inputBusquedaRef.FocusAsync();
+    }
+
+    private void NormalizarCantidadInput()
+    {
+        if (cantidadSeleccion <= 0)
+        {
+            cantidadSeleccion = 1m;
+            return;
+        }
+
+        cantidadSeleccion = CantidadSoloEnteros
+            ? Math.Max(1m, Math.Round(cantidadSeleccion, 0, MidpointRounding.AwayFromZero))
+            : cantidadSeleccion;
     }
 
     /// <summary>
@@ -395,9 +434,13 @@
     {
         // Cerrar internamente (sin notificar OnClose) para permitir el ciclo de selección múltiple
         CerrarModalInterno();
+        var cantidadFinal = CantidadSoloEnteros
+            ? Math.Max(1m, Math.Round(cantidadSeleccion, 0, MidpointRounding.AwayFromZero))
+            : (cantidadSeleccion <= 0 ? 1m : cantidadSeleccion);
+
         if (OnProductoSeleccionadoCantidad.HasDelegate)
         {
-            var sel = new SeleccionProducto { Producto = producto, Cantidad = cantidadSeleccion <= 0 ? 1m : cantidadSeleccion, Precio = Math.Round(precioSeleccion, 4) };
+            var sel = new SeleccionProducto { Producto = producto, Cantidad = cantidadFinal, Precio = Math.Round(precioSeleccion, 4) };
             await OnProductoSeleccionadoCantidad.InvokeAsync(sel);
         }
         else

@@ -5,9 +5,16 @@
 @inject IRepository repository
 @inject NavigationManager navigationManager
 @inject SweetAlertService sweetAlertService
+@inject PageAccessService PageAccess
 
 <PageTitle>Presupuestos de Reparación</PageTitle>
 
+@if (validando)
+{
+    <p>Validando acceso...</p>
+}
+else
+{
 <div class="container-fluid">
     <!-- Título de la página -->
     <div class="mb-4">
@@ -171,11 +178,13 @@
                 TotalPages="totalPages"
                 SelectedPage="SelectedPageAsync" />
 </div>
+}
 
 @code {
     private List<Repara>? presupuestos;
     private int currentPage = 1;
     private int totalPages;
+    private bool validando = true;
 
     // Filtros
     private int? filtroId;
@@ -190,6 +199,10 @@
 
     protected override async Task OnInitializedAsync()
     {
+        // Validar que el usuario tenga permiso para acceder a esta página antes de mostrar el contenido
+        await PageAccess.RequiereAccesoAsync("/presupuestos-reparacion");
+        validando = false;
+        
         await LoadAsync();
     }
 

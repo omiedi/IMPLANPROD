@@ -1,18 +1,25 @@
 @page "/ordenes-compra/editar/{Id:int}"
+@using IMPLANPROD.Client.Services
 @using IMPLANPROD.Shared.Entities
 @using IMPLANPROD.Client.Repositories
 @inject IRepository repository
 @inject NavigationManager navigationManager
 @inject SweetAlertService sweetAlertService
+@inject PageAccessService PageAccess
 
 <PageTitle>Editar Orden de Compra</PageTitle>
 
 @code {
     [Parameter] public int Id { get; set; }
     private bool cargando = true;
+    private bool validando = true;
 
     protected override async Task OnInitializedAsync()
     {
+        // Validar que el usuario tenga permiso para acceder a esta página antes de mostrar el contenido
+        await PageAccess.RequiereAccesoAsync("/ordenes-compra/editar/{Id}");
+        validando = false;
+        
         // Pequeña demora para mostrar el loading
         await Task.Delay(100);
         cargando = false;
@@ -25,7 +32,13 @@
     }
 }
 
-@if (cargando)
+@if (validando)
+{
+    <div class="text-center mt-5">
+        <p>Validando acceso...</p>
+    </div>
+}
+else if (cargando)
 {
     <div class="text-center mt-5">
         <div class="spinner-border" role="status">

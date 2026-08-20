@@ -1,0 +1,213 @@
+@inject IRepository Repository
+@inject SweetAlertService Swal
+
+@if (cargando)
+{
+    <div class="text-center py-3">
+        <div class="spinner-border spinner-border-sm text-secondary"></div>
+        <span class="ms-2 text-muted small">Cargando módulos...</span>
+    </div>
+}
+else if (!modulos.Any())
+{
+    <div class="alert alert-info py-2 mb-0">
+        <i class="fas fa-info-circle me-1"></i>
+        No hay módulos configurados. Ejecute <strong>Create_SEG_RBAC_Fase1_5.sql</strong> y complete la tabla <strong>SEG_MODULO / SEG_PAGINA</strong>.
+    </div>
+}
+else
+{
+    <div class="card border-secondary shadow-sm">
+        <div class="card-header bg-secondary text-white py-2 d-flex justify-content-between align-items-center">
+            <span><i class="fas fa-shield-alt me-1"></i>Permisos de Páginas</span>
+            <span class="badge bg-white text-secondary">@paginasSeleccionadas.Count seleccionadas</span>
+        </div>
+        <div class="card-body p-0" style="height:320px; overflow:hidden;">
+            <div class="d-flex h-100">
+
+                <!-- ── Panel izquierdo: Módulos ── -->
+                <div class="border-end" style="width:200px; min-width:200px; overflow-y:auto; background:#f8f9fa;">
+                    @foreach (var mod in modulos)
+                    {
+                        var cnt     = mod.Paginas.Count(p => paginasSeleccionadas.Contains(p.Id));
+                        var activo  = moduloSeleccionado?.Id == mod.Id;
+                        <div class="d-flex justify-content-between align-items-center px-2 py-2 border-bottom"
+                             style="cursor:pointer; @(activo ? "background:#0d6efd; color:#fff;" : "")"
+                             @onclick="() => SeleccionarModulo(mod)">
+                            <small class="fw-semibold">@mod.Nombre</small>
+                            @if (cnt > 0)
+                            {
+                                <span class="badge ms-1 @(activo ? "bg-white text-primary" : "bg-primary")" style="font-size:0.65em;">@cnt</span>
+                            }
+                        </div>
+                    }
+                </div>
+
+                <!-- ── Panel derecho: Páginas ── -->
+                <div class="flex-grow-1 p-2" style="overflow-y:auto;">
+                    @if (moduloSeleccionado == null)
+                    {
+                        <div class="text-muted text-center mt-5">
+                            <i class="fas fa-hand-point-left fa-lg mb-1 d-block"></i>
+                            <small>Seleccioná un módulo</small>
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <small class="fw-bold text-primary">@moduloSeleccionado.Nombre</small>
+                            <div class="btn-group btn-group-sm">
+                                <button class="btn btn-outline-primary py-0 px-1" style="font-size:0.7em;" @onclick="MarcarTodas">
+                                    <i class="fas fa-check-square"></i> Todas
+                                </button>
+                                <button class="btn btn-outline-secondary py-0 px-1" style="font-size:0.7em;" @onclick="DesmarcarTodas">
+                                    <i class="fas fa-square"></i> Ninguna
+                                </button>
+                            </div>
+                        </div>
+
+                        @if (!moduloSeleccionado.Paginas.Any())
+                        {
+                            <small class="text-muted fst-italic">Sin páginas configuradas en este módulo.</small>
+                        }
+
+                        @foreach (var pag in moduloSeleccionado.Paginas)
+                        {
+                            var pId = pag.Id;
+                            <div class="form-check border-bottom py-1">
+                                <input class="form-check-input" type="checkbox"
+                                       id="pag_@pId"
+                                       checked="@paginasSeleccionadas.Contains(pId)"
+                                       @onchange="e => TogglePagina(pId, (bool)e.Value!)" />
+                                <label class="form-check-label small" for="pag_@pId">
+                                    @pag.Nombre
+                                    <span class="text-muted ms-1" style="font-size:0.8em;">@pag.Ruta</span>
+                                </label>
+                            </div>
+                        }
+                    }
+                </div>
+
+            </div>
+        </div>
+
+        @if (UsuarioId > 0)
+        {
+            <div class="card-footer py-2 d-flex justify-content-between align-items-center">
+                <small class="text-muted">@paginasSeleccionadas.Count página(s) habilitadas</small>
+                <button class="btn btn-sm btn-success" @onclick="GuardarDesdeBotonAsync" disabled="@guardando">
+                    @if (guardando)
+                    {
+                        <span class="spinner-border spinner-border-sm me-1"></span>
+                    }
+                    <i class="fas fa-save me-1"></i>Guardar Permisos
+                </button>
+            </div>
+        }
+    </div>
+}
+
+@code {
+    [Parameter] public int UsuarioId { get; set; }
+
+    private List<SeguridadModuloDto> modulos = new();
+    private SeguridadModuloDto? moduloSeleccionado;
+    private HashSet<int> paginasSeleccionadas = new();
+    private bool cargando = true;
+    private bool guardando = false;
+    private int _lastLoadedUsuarioId = -1;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await CargarModulosAsync();
+        if (UsuarioId > 0)
+            await CargarPermisosAsync(UsuarioId);
+    }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (UsuarioId > 0 && UsuarioId != _lastLoadedUsuarioId)
+            await CargarPermisosAsync(UsuarioId);
+    }
+
+    private async Task CargarModulosAsync()
+    {
+        cargando = true;
+        var resp = await Repository.Get<List<SeguridadModuloDto>>("api/seguridad-rutas/modulos");
+        modulos = resp.Error ? new() : (resp.Response ?? new());
+        cargando = false;
+    }
+
+    /// <summary>Carga los permisos actuales del usuario desde la API.</summary>
+    public async Task CargarPermisosAsync(int usuarioId)
+    {
+        _lastLoadedUsuarioId = usuarioId;
+        var resp = await Repository.Get<List<int>>($"api/seguridad-rutas/usuarios/{usuarioId}/paginas");
+        paginasSeleccionadas = resp.Error ? new() : new HashSet<int>(resp.Response ?? new());
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private void SeleccionarModulo(SeguridadModuloDto mod) => moduloSeleccionado = mod;
+
+    private void TogglePagina(int paginaId, bool valor)
+    {
+        if (valor) paginasSeleccionadas.Add(paginaId);
+        else paginasSeleccionadas.Remove(paginaId);
+    }
+
+    private void MarcarTodas()
+    {
+        if (moduloSeleccionado == null) return;
+        foreach (var p in moduloSeleccionado.Paginas) paginasSeleccionadas.Add(p.Id);
+    }
+
+    private void DesmarcarTodas()
+    {
+        if (moduloSeleccionado == null) return;
+        foreach (var p in moduloSeleccionado.Paginas) paginasSeleccionadas.Remove(p.Id);
+    }
+
+    /// <summary>Retorna los IDs de páginas seleccionados actualmente.</summary>
+    public List<int> GetSelectedPaginaIds() => paginasSeleccionadas.ToList();
+
+    /// <summary>
+    /// Guarda los permisos en el servidor.
+    /// Si targetUsuarioId es null usa UsuarioId del parámetro.
+    /// Retorna true si fue exitoso.
+    /// </summary>
+    public async Task<bool> SaveAsync(int? targetUsuarioId = null)
+    {
+        var uid = targetUsuarioId ?? UsuarioId;
+        if (uid <= 0) return true;
+
+        guardando = true;
+        await InvokeAsync(StateHasChanged);
+
+        var request = new AsignarPaginasUsuarioRequestDto { PaginaIds = paginasSeleccionadas.ToList() };
+        var resp = await Repository.Post<AsignarPaginasUsuarioRequestDto>(
+            $"api/seguridad-rutas/usuarios/{uid}/paginas", request);
+
+        guardando = false;
+        await InvokeAsync(StateHasChanged);
+
+        if (resp.Error)
+        {
+            await Swal.FireAsync("Error", await resp.GetErrorMessageAsync(), SweetAlertIcon.Error);
+            return false;
+        }
+        return true;
+    }
+
+    private async Task GuardarDesdeBotonAsync()
+    {
+        if (await SaveAsync())
+            await Swal.FireAsync(new SweetAlertOptions
+            {
+                Icon = SweetAlertIcon.Success,
+                Title = "Guardado",
+                Text = "Permisos guardados correctamente.",
+                Timer = 1500,
+                ShowConfirmButton = false
+            });
+    }
+}

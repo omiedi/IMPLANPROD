@@ -26,9 +26,13 @@ namespace IMPLANPROD.Shared.DTOs
         [MaxLength(32, ErrorMessage = "La referencia no puede superar los 32 caracteres")]
         public string? Referencia { get; set; }
 
+        [MaxLength(20, ErrorMessage = "El lote no puede superar los 20 caracteres")]
+        public string? Lote { get; set; }
+
+        [MaxLength(20, ErrorMessage = "La OC no puede superar los 20 caracteres")]
+        public string? OrdenCompra { get; set; }
+
         public int? NumUsuar { get; set; }
         public short? CodiEmpr { get; set; }
-
-
     }
 }

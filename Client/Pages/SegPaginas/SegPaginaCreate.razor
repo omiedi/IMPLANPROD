@@ -1,0 +1,34 @@
+@page "/seg-paginas/crear"
+@using Microsoft.AspNetCore.Authorization
+@attribute [Authorize(Roles = "SUPERADMIN")]
+@inject IRepository repository
+@inject NavigationManager navigationManager
+@inject SweetAlertService sweetAlertService
+
+<PageTitle>Nueva Página</PageTitle>
+<h4><i class="fas fa-file-alt me-2"></i>Nueva Página de Seguridad</h4>
+<hr />
+
+<SegPaginaForm @ref="form" Pagina="pagina" OnValidSubmit="CreateAsync" ReturnAction="Return" />
+
+@code {
+    private SegPagina pagina = new() { Activo = true, Orden = 0 };
+    private SegPaginaForm? form;
+
+    private async Task CreateAsync()
+    {
+        var resp = await repository.Post<SegPagina>("api/SegPaginas", pagina);
+        if (resp.Error)
+        {
+            await sweetAlertService.FireAsync("Error", await resp.GetErrorMessageAsync(), SweetAlertIcon.Error);
+            return;
+        }
+        Return();
+    }
+
+    private void Return()
+    {
+        form!.FormPostedSuccessfully = true;
+        navigationManager.NavigateTo("/seg-paginas");
+    }
+}

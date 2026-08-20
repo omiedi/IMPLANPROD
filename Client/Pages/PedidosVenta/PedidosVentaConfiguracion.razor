@@ -1,0 +1,204 @@
+@page "/pedidos-venta/configuracion"
+@using IMPLANPROD.Shared.Entities
+@using IMPLANPROD.Shared.DTOs
+@using IMPLANPROD.Client.Repositories
+@using IMPLANPROD.Client.Services
+@using IMPLANPROD.Client.Shared.Components
+@inject IRepository repository
+@inject SweetAlertService sweetAlertService
+@inject PageAccessService PageAccess
+@inject NavigationManager navigationManager
+
+<PageTitle>Configuración de Pedidos de Venta</PageTitle>
+
+@if (validando)
+{
+    <p>Validando acceso...</p>
+}
+else
+{
+    <div class="container-fluid">
+        <!-- Título de la página -->
+        <div class="mb-4">
+            <h2 class="text-center fw-bold text-primary">
+                <i class="fas fa-cog me-2"></i>
+                Configuración de Pedidos de Venta
+            </h2>
+            <hr class="border-primary border-2 opacity-50" />
+        </div>
+
+        <div class="card">
+            <div class="card-body">
+                <div class="mb-3">
+                    <label class="form-label">Límite desde último pedido p/modif. estruct. de un Código</label>
+@*                     <InputNumeroLimpio @bind-Value="limMoest" Class="form-control" Placeholder="Ingrese un valor numérico" style="width: 160px;" />
+ *@                    <InputNumeroLimpio @bind-Value="limMoest" Class="form-control w-25" Placeholder="Ingrese un valor numérico" />
+                </div>
+
+                <div class="mb-4">
+                    <h5 class="card-title mb-3">Modos de bloqueo</h5>
+                    <div class="form-check mb-2">
+                        <input class="form-check-input" type="radio" name="modoBloqueo" id="modo1" value="1" @onchange="@(e => modoBloqueo = 1)" checked="@(modoBloqueo == 1)" />
+                        <label class="form-check-label" for="modo1">
+                            Primer nivel
+                        </label>
+                    </div>
+                    <div class="form-check mb-2">
+                        <input class="form-check-input" type="radio" name="modoBloqueo" id="modo2" value="2" @onchange="@(e => modoBloqueo = 2)" checked="@(modoBloqueo == 2)" />
+                        <label class="form-check-label" for="modo2">
+                            Primer nivel y segundo
+                        </label>
+                    </div>
+                    <div class="form-check mb-2">
+                        <input class="form-check-input" type="radio" name="modoBloqueo" id="modo3" value="3" @onchange="@(e => modoBloqueo = 3)" checked="@(modoBloqueo == 3)" />
+                        <label class="form-check-label" for="modo3">
+                            Todos los niveles
+                        </label>
+                    </div>
+                </div>
+
+                <div class="d-flex gap-2">
+                    <button class="btn btn-primary" @onclick="GuardarConfiguracionAsync">
+                        <i class="fas fa-save me-2"></i> Guardar
+                    </button>
+                    <button class="btn btn-secondary" @onclick="Volver">
+                        <i class="fas fa-arrow-left me-2"></i> Volver
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private bool validando = true;
+    private int? limMoest = null;
+    private int modoBloqueo = 1; // 1 = Primer nivel, 2 = Primer y segundo, 3 = Todos los niveles
+
+    protected override async Task OnInitializedAsync()
+    {
+        // Validar que el usuario tenga permiso para acceder a esta página
+        // Si no tiene permiso, el servicio PageAccess redirigirá a la página de acceso denegado
+        await PageAccess.RequiereAccesoAsync("/pedidos-venta/configuracion");
+        validando = false;
+
+        // Cargar los parámetros de configuración
+        await CargarConfiguracionAsync();
+    }
+
+    /// <summary>
+    /// Carga los parámetros de configuración desde FLEXCRL
+    /// </summary>
+    private async Task CargarConfiguracionAsync()
+    {
+        try
+        {
+            // Cargar LIMMOEST
+            string clabusParam = "PEDIDO";
+            string probusParam = "LIMMOEST";
+
+            var response = await repository.Get<FLEXCRL>($"api/flexcrl/{clabusParam}/{probusParam}");
+
+            if (!response.Error && response.Response != null)
+            {
+                string valorTexto = response.Response.VALCONTROL ?? string.Empty;
+                if (int.TryParse(valorTexto, out int valorNumerico))
+                {
+                    limMoest = valorNumerico;
+                }
+                else
+                {
+                    limMoest = null;
+                }
+            }
+            else
+            {
+                limMoest = null;
+            }
+
+            // Cargar MODOBLOQUEO
+            string probusModo = "MODOBLOQUEO";
+            var responseModo = await repository.Get<FLEXCRL>($"api/flexcrl/{clabusParam}/{probusModo}");
+
+            if (!responseModo.Error && responseModo.Response != null)
+            {
+                string valorModoTexto = responseModo.Response.VALCONTROL ?? string.Empty;
+                if (int.TryParse(valorModoTexto, out int valorModoNumerico) && valorModoNumerico >= 1 && valorModoNumerico <= 3)
+                {
+                    modoBloqueo = valorModoNumerico;
+                }
+                else
+                {
+                    modoBloqueo = 1; // Valor por defecto
+                }
+            }
+            else
+            {
+                modoBloqueo = 1; // Valor por defecto
+            }
+        }
+        catch (Exception)
+        {
+            limMoest = null;
+            modoBloqueo = 1; // Valor por defecto
+        }
+    }
+
+    /// <summary>
+    /// Guarda los parámetros de configuración en FLEXCRL
+    /// </summary>
+    private async Task GuardarConfiguracionAsync()
+    {
+        try
+        {
+            // Guardar LIMMOEST
+            var requestLimite = new FlexcrlRequestDTO
+            {
+                Clabus = "PEDIDO",
+                Probus = "LIMMOEST",
+                Valcontrol = limMoest?.ToString() ?? string.Empty
+            };
+
+            var responseLimite = await repository.Put<object>("api/flexcrl", requestLimite);
+
+            if (responseLimite.Error)
+            {
+                var msg = await responseLimite.GetErrorMessageAsync();
+                await sweetAlertService.FireAsync("Error", msg, SweetAlertIcon.Error);
+                return;
+            }
+
+            // Guardar MODOBLOQUEO
+            var requestModo = new FlexcrlRequestDTO
+            {
+                Clabus = "PEDIDO",
+                Probus = "MODOBLOQUEO",
+                Valcontrol = modoBloqueo.ToString()
+            };
+
+            var responseModo = await repository.Put<object>("api/flexcrl", requestModo);
+
+            if (responseModo.Error)
+            {
+                var msg = await responseModo.GetErrorMessageAsync();
+                await sweetAlertService.FireAsync("Error", msg, SweetAlertIcon.Error);
+                return;
+            }
+
+            await sweetAlertService.FireAsync("Confirmación", "Configuración guardada exitosamente.", SweetAlertIcon.Success);
+            Volver();
+        }
+        catch (Exception ex)
+        {
+            await sweetAlertService.FireAsync("Error", ex.Message, SweetAlertIcon.Error);
+        }
+    }
+
+    /// <summary>
+    /// Vuelve a la página de pedidos de venta
+    /// </summary>
+    private void Volver()
+    {
+        navigationManager.NavigateTo("/pedidos-venta");
+    }
+}

@@ -1,12 +1,20 @@
 @page "/modelos-baja"
+@using IMPLANPROD.Client.Services
 @using IMPLANPROD.Shared.Entities
 @using Microsoft.AspNetCore.Components.Web
 @inject IRepository repository
 @inject NavigationManager NavigationManager
 @inject SweetAlertService sweetAlertService
+@inject PageAccessService PageAccess
 
 <PageTitle>Modelos Dados de Baja</PageTitle>
 
+@if (validando)
+{
+    <p>Validando acceso...</p>
+}
+else
+{
 <!--
 Componente: ModelosBaja.razor
 Descripción: Listado de modelos dados de baja (Status = -1) con opción de reactivación
@@ -100,11 +108,13 @@ else
     <Pagination CurrentPage="currentPage"
                 TotalPages="totalPages"
                 SelectedPage="SelectedPageAsync" />
+    }
 }
 
 @code {
     private List<Badamode>? Modelos;
     private bool isLoading = true;
+    private bool validando = true;
 
     [Parameter]
     [SupplyParameterFromQuery]
@@ -133,6 +143,9 @@ else
     /// </summary>
     protected override async Task OnInitializedAsync()
     {
+        await PageAccess.RequiereAccesoAsync("/modelos-baja");
+        validando = false;
+        
         await LoadAsync();
     }
 

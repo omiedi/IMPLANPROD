@@ -92,3 +92,39 @@ namespace IMPLANPROD.Shared.Entities
         public int? NumUsuar { get; set; }
     }
 }
+
+/*
+SQL PARA CREAR LA TABLA SyncProcesados
+
+Este script crea la tabla usada por la entidad SyncProcesado.
+La tabla registra cada archivo de sincronización procesado, su estado
+y los datos básicos de auditoría del sistema.
+
+CREATE TABLE [dbo].[SyncProcesados]
+(
+    [Id] INT IDENTITY(1,1) NOT NULL,
+    [Archivo] NVARCHAR(200) NOT NULL,
+    [Tabla] NVARCHAR(50) NOT NULL,
+    [Operacion] NVARCHAR(20) NULL,
+    [FechaProcesamiento] DATETIME2 NOT NULL,
+    [Estado] NVARCHAR(20) NOT NULL CONSTRAINT [DF_SyncProcesados_Estado] DEFAULT ('PENDIENTE'),
+    [Error] NVARCHAR(MAX) NULL,
+    [CodintAfectado] INT NULL,
+    [Codiempr] SMALLINT NOT NULL CONSTRAINT [DF_SyncProcesados_Codiempr] DEFAULT (0),
+    [AddRecord] DATETIME2 NULL,
+    [LastUpdate] DATETIME2 NULL,
+    [CodiEmprNet] INT NULL,
+    [NumUsuar] INT NULL,
+
+    CONSTRAINT [PK_SyncProcesados] PRIMARY KEY CLUSTERED ([Id] ASC)
+);
+
+CREATE INDEX [IX_SyncProcesados_Archivo]
+    ON [dbo].[SyncProcesados] ([Archivo]);
+
+CREATE INDEX [IX_SyncProcesados_Tabla_Estado]
+    ON [dbo].[SyncProcesados] ([Tabla], [Estado]);
+
+CREATE INDEX [IX_SyncProcesados_FechaProcesamiento]
+    ON [dbo].[SyncProcesados] ([FechaProcesamiento]);
+*/

@@ -1,4 +1,6 @@
 using IMPLANPROD.Server.Data;
+using IMPLANPROD.Server.Services;
+using IMPLANPROD.Server.Utils;
 using IMPLANPROD.Shared.Entities;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -7,7 +9,6 @@ using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Security.Cryptography;
 using System.Text;
-using IMPLANPROD.Server.Utils;
 
 namespace IMPLANPROD.Server.Controllers
 {
@@ -18,12 +19,14 @@ namespace IMPLANPROD.Server.Controllers
         private readonly DataContext _context;
         private readonly IConfiguration _configuration;
         private readonly ILogger<AuthController> _logger;
+        private readonly IEmailEmpresaService _emailService;
 
-        public AuthController(DataContext context, IConfiguration configuration, ILogger<AuthController> logger)
+        public AuthController(DataContext context, IConfiguration configuration, ILogger<AuthController> logger, IEmailEmpresaService emailService)
         {
             _context = context;
             _configuration = configuration;
             _logger = logger;
+            _emailService = emailService;
         }
 
         [HttpPost("login")]
@@ -45,6 +48,28 @@ namespace IMPLANPROD.Server.Controllers
                     {
                         return BadRequest(result.Message);
                     }
+                }
+
+                // Bootstrap de seguridad:
+                // 1) Identificamos el PerfilId del rol SUPERADMIN.
+                // 2) Verificamos que exista al menos un usuario activo con ese perfil.
+                // Si no existe, se bloquea el login hasta crear/promover un SUPERADMIN.
+                var superAdminPerfilId = await _context.Perfiles
+                    .AsNoTracking()
+                    .Where(p => p.Nombre != null && p.Nombre.Trim().ToUpper() == "SUPERADMIN")
+                    .Select(p => p.Id)
+                    .FirstOrDefaultAsync();
+
+                var totalSuperAdmins = superAdminPerfilId > 0
+                    ? await _context.Usuarios
+                        .AsNoTracking()
+                        .CountAsync(u => u.Activo && u.PerfilId == superAdminPerfilId)
+                    : 0;
+
+                if (totalSuperAdmins <= 0)
+                {
+                    // Flujo forzado de bootstrap inicial de SUPERADMIN.
+                    return BadRequest("No existe ningún SUPERADMIN activo. Debe crear o promover un usuario a SUPERADMIN antes de iniciar sesión.");
                 }
 
                 // Buscar usuario incluyendo todas sus relaciones
@@ -95,20 +120,37 @@ namespace IMPLANPROD.Server.Controllers
                 usuario.RefreshTokenExpiryTime = DateTime.UtcNow.AddDays(7);
                 await _context.SaveChangesAsync();
 
+                // Obtener nombre del perfil — primero del Include, si no, query directa por PerfilId
+                var perfilNombre = (usuario.Perfil?.Nombre ?? "").Trim();
+                if (string.IsNullOrEmpty(perfilNombre) && usuario.PerfilId.HasValue && usuario.PerfilId.Value > 0)
+                {
+                    perfilNombre = (await _context.Perfiles
+                        .AsNoTracking()
+                        .Where(p => p.Id == usuario.PerfilId.Value)
+                        .Select(p => p.Nombre)
+                        .FirstOrDefaultAsync() ?? "").Trim();
+                    _logger.LogWarning("Perfil no cargado via Include para {Email} (PerfilId={PerfilId}). Query directa retornó: '{PerfilNombre}'",
+                        usuario.Email, usuario.PerfilId, perfilNombre);
+                }
+                if (string.IsNullOrEmpty(perfilNombre)) perfilNombre = "USUARIO";
+
+                _logger.LogInformation("Login {Email}: PerfilId={PerfilId} => PerfilNombre='{PerfilNombre}'",
+                    usuario.Email, usuario.PerfilId, perfilNombre);
+
                 // Generar token JWT
-                var token = GenerateJwtToken(usuario);
+                var token = GenerateJwtToken(usuario, perfilNombre);
 
                 return Ok(new
                 {
                     usuario.Id,
                     usuario.NombreUsuario,
                     usuario.Email,
-                    usuario.IdFlexoft,  // Campo necesario para sistema de derechos (match con DER_ACCE.NUM_USER)
-                    usuario.CodiEmprNet, // Código de empresa para sistema de derechos
+                    usuario.IdFlexoft,
+                    usuario.CodiEmprNet,
                     Perfil = new
                     {
-                        usuario.Perfil?.Id,
-                        usuario.Perfil?.Nombre
+                        Id = usuario.Perfil?.Id,
+                        Nombre = perfilNombre
                     },
                     Empresa = new
                     {
@@ -140,6 +182,128 @@ namespace IMPLANPROD.Server.Controllers
             {
                 _logger.LogError(ex, "Error en el proceso de login");
                 return StatusCode(500, "Error interno del servidor");
+            }
+        }
+
+        /// <summary>
+        /// Endpoint para solicitar recuperación de contraseña por email.
+        /// </summary>
+        [HttpPost("solicitar-reset")]
+        public async Task<IActionResult> SolicitarReset([FromBody] SolicitarResetRequest request)
+        {
+            try
+            {
+                if (request == null || string.IsNullOrWhiteSpace(request.Email))
+                    return BadRequest("Debe ingresar un email para recuperar la contraseña.");
+
+                var email = request.Email.Trim();
+
+                var usuario = await _context.Usuarios
+                    .AsNoTracking()
+                    .FirstOrDefaultAsync(u => u.Email.ToLower() == email.ToLower() && u.Activo);
+
+                if (usuario == null)
+                {
+                    _logger.LogWarning("Solicitud de reset para email no registrado o inactivo: {Email}", email);
+                    return NotFound("El email ingresado no corresponde a ninguna cuenta activa del sistema.");
+                }
+
+                // Invalidar tokens anteriores no usados para este usuario
+                var tokensAnteriores = await _context.PasswordResetTokens
+                    .Where(t => t.UsuarioId == usuario.Id && !t.Usado && t.FechaExpiracion > DateTime.UtcNow)
+                    .ToListAsync();
+                foreach (var t in tokensAnteriores)
+                    t.Usado = true;
+
+                // Generar token seguro (hex 64 chars, URL-safe)
+                var tokenBytes = RandomNumberGenerator.GetBytes(32);
+                var token = Convert.ToHexString(tokenBytes).ToLower();
+
+                var resetToken = new PasswordResetToken
+                {
+                    UsuarioId = usuario.Id,
+                    Token = token,
+                    FechaExpiracion = DateTime.UtcNow.AddMinutes(30),
+                    Usado = false,
+                    AddRecord = DateTime.UtcNow,
+                    CodiEmprNet = 0
+                };
+                _context.PasswordResetTokens.Add(resetToken);
+                await _context.SaveChangesAsync();
+
+                // Construir link de reset apuntando al cliente Blazor
+                var resetLink = $"{Request.Scheme}://{Request.Host}/reset-password?token={token}";
+
+                var body = $@"
+                    <div style='font-family:sans-serif;max-width:480px;margin:auto;'>
+                        <h2 style='color:#1F7246;'>Recuperación de Contraseña</h2>
+                        <p>Hola <strong>{usuario.NombreUsuario}</strong>,</p>
+                        <p>Recibimos una solicitud para restablecer la contraseña de tu cuenta.</p>
+                        <p>Hacé clic en el siguiente botón para crear una nueva contraseña. Este enlace expira en <strong>30 minutos</strong>.</p>
+                        <p style='text-align:center;margin:30px 0;'>
+                            <a href='{resetLink}'
+                               style='background:#1F7246;color:white;padding:12px 28px;border-radius:6px;text-decoration:none;font-size:16px;'>
+                                Restablecer Contraseña
+                            </a>
+                        </p>
+                        <p style='color:#666;font-size:13px;'>Si no solicitaste este cambio, podés ignorar este correo. Tu contraseña no será modificada.</p>
+                        <hr style='border:none;border-top:1px solid #eee;'/>
+                        <p style='color:#aaa;font-size:11px;'>Este enlace expira el {DateTime.UtcNow.AddMinutes(30):dd/MM/yyyy HH:mm} UTC.</p>
+                    </div>";
+
+                try
+                {
+                    await _emailService.EnviarEmailAsync(usuario.Email, "Recuperar contraseña - IMPLANPROD", body, true);
+                    _logger.LogInformation("Email de reset enviado a {Email}", usuario.Email);
+                    return Ok("Se envió el enlace de recuperación al email indicado.");
+                }
+                catch (Exception exMail)
+                {
+                    _logger.LogError(exMail, "Error al enviar email de reset a {Email}", usuario.Email);
+                    return StatusCode(500, "No se pudo enviar el email de recuperación. Verifique la configuración SMTP de la empresa o intente nuevamente.");
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error en SolicitarReset para {Email}", request?.Email);
+                return StatusCode(500, "Ocurrió un error al procesar la solicitud de recuperación de contraseña.");
+            }
+        }
+
+        /// <summary>
+        /// Endpoint para confirmar el reset de contraseña usando el token del email.
+        /// </summary>
+        [HttpPost("reset-password")]
+        public async Task<IActionResult> ResetPassword([FromBody] ResetPasswordRequest request)
+        {
+            try
+            {
+                var resetToken = await _context.PasswordResetTokens
+                    .FirstOrDefaultAsync(t => t.Token == request.Token && !t.Usado && t.FechaExpiracion > DateTime.UtcNow);
+
+                if (resetToken == null)
+                    return BadRequest("El enlace de recuperación es inválido o ha expirado.");
+
+                var usuario = await _context.Usuarios.FindAsync(resetToken.UsuarioId);
+                if (usuario == null || !usuario.Activo)
+                    return BadRequest("Usuario no encontrado o inactivo.");
+
+                usuario.Password = PasswordHasher.HashPassword(request.NuevaPassword);
+                usuario.Bloqueado = false;
+                usuario.IntentosLogin = 0;
+
+                resetToken.Usado = true;
+                resetToken.LastUpdate = DateTime.UtcNow;
+
+                await _context.SaveChangesAsync();
+
+                _logger.LogInformation("Contraseña restablecida via reset token para UsuarioId={Id}", usuario.Id);
+                return Ok("Contraseña actualizada exitosamente. Ya podés iniciar sesión.");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error en ResetPassword");
+                return StatusCode(500, "Error interno al restablecer la contraseña.");
             }
         }
 
@@ -208,7 +372,7 @@ namespace IMPLANPROD.Server.Controllers
             }
         }
 
-        private string GenerateJwtToken(Usuario usuario)
+        private string GenerateJwtToken(Usuario usuario, string perfilNombre = "USUARIO")
         {
             var key = Encoding.ASCII.GetBytes(_configuration["Jwt:Key"] ?? throw new InvalidOperationException("JWT Key no configurada"));
             var claims = new List<Claim>
@@ -216,13 +380,13 @@ namespace IMPLANPROD.Server.Controllers
                 new Claim(ClaimTypes.NameIdentifier, usuario.Id.ToString()),
                 new Claim(ClaimTypes.Name, usuario.NombreUsuario),
                 new Claim(ClaimTypes.Email, usuario.Email),
-                new Claim(ClaimTypes.Role, usuario.Perfil?.Nombre ?? "Usuario"),
+                new Claim(ClaimTypes.Role, perfilNombre),
                 new Claim("EmpresaId", usuario.EmpresaId.ToString()),
                 new Claim("DependenciaId", usuario.DependenciaId.ToString()),
                 new Claim("SectorId", usuario.SectorId.ToString()),
-                new Claim("CountryId", usuario.CountryId.ToString()),
-                new Claim("StateId", usuario.StateId.ToString()),
-                new Claim("CityId", usuario.CityId.ToString())
+                new Claim("CountryId", (usuario.CountryId ?? 0).ToString()),
+                new Claim("StateId", (usuario.StateId ?? 0).ToString()),
+                new Claim("CityId", (usuario.CityId ?? 0).ToString())
             };
 
             var tokenDescriptor = new SecurityTokenDescriptor
@@ -246,5 +410,16 @@ namespace IMPLANPROD.Server.Controllers
     {
         public required string Email { get; set; }
         public required string Password { get; set; }
+    }
+
+    public class SolicitarResetRequest
+    {
+        public required string Email { get; set; }
+    }
+
+    public class ResetPasswordRequest
+    {
+        public required string Token { get; set; }
+        public required string NuevaPassword { get; set; }
     }
 }

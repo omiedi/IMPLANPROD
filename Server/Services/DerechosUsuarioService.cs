@@ -233,10 +233,27 @@ namespace IMPLANPROD.Server.Services
                 var derecho = await _context.DerAcces
                     .FirstOrDefaultAsync(d => d.NumUser == numUser && d.CodApli == codApliTruncado);
 
-                // 4. Si no tiene registro en DER_ACCE, retornar 0 (sin acceso)
+                // 4. Si no tiene registro en DER_ACCE, crearlo con permisos en 0 y retornar 0 (sin acceso)
                 if (derecho == null)
                 {
-                    _logger.LogInformation($"Usuario {numUser} no tiene derechos asignados para '{codApliTruncado}' - Retornando 0 (sin acceso)");
+                    _logger.LogInformation($"Usuario {numUser} no tiene derechos asignados para '{codApliTruncado}' - Creando DER_ACCE con permisos en 0");
+
+                    var nuevoDerecho = new DerAcce
+                    {
+                        NumUser = numUser,
+                        CodApli = codApliTruncado,
+                        DerRead = 0,
+                        DerWrite = 0,
+                        CodiEmprNet = 0,
+                        NumUsuar = numUser,
+                        AddRecord = DateTime.Now,
+                        LastUpdate = DateTime.Now,
+                    };
+
+                    await _context.DerAcces.AddAsync(nuevoDerecho);
+                    await _context.SaveChangesAsync();
+
+                    _logger.LogInformation($"DER_ACCE creado para usuario {numUser}, aplicación '{codApliTruncado}' con DER_READ=0 y DER_WRITE=0");
                     return 0;
                 }
 

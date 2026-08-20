@@ -1,9 +1,19 @@
 @page "/master/elaboracion/{Id}"
+@using IMPLANPROD.Client.Services
 @using DocumentFormat.OpenXml.ExtendedProperties
 @inject IRepository repository
 @inject NavigationManager navigation
 @inject SweetAlertService sweetAlertService
+@inject PageAccessService PageAccess
 
+<PageTitle>Elaboración del Producto</PageTitle>
+
+@if (validando)
+{
+    <p>Validando acceso...</p>
+}
+else
+{
 <div class="d-flex justify-content-between align-items-stretch mb-3 gap-3">
     <h3 style="background-color: #217346; color: white; padding: 10px; margin-bottom: 0; border-radius: 4px; flex-grow: 1;">
         Elaboración del Producto: @resultado
@@ -352,6 +362,7 @@
         </div>
     }
 
+    }
 }
 
 @code {
@@ -373,6 +384,7 @@
     }
 
     private string resultado = string.Empty;
+    private bool validando = true;
     private Master? productoTerminado;
     private List<Secoper>? operaciones;
     private Secoper? operacionSeleccionada;
@@ -587,8 +599,12 @@
 
     }
 
+    // Validar que el usuario tenga permiso para acceder a esta página antes de mostrar el contenido
     protected override async Task OnInitializedAsync()
     {
+        await PageAccess.RequiereAccesoAsync("/master/elaboracion/{Id}");
+        validando = false;
+        
         await CargarProductoTerminado();
         if (productoTerminado != null)
         {

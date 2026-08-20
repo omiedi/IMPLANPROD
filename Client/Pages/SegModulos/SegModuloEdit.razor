@@ -1,0 +1,59 @@
+@page "/seg-modulos/editar/{Id:int}"
+@using Microsoft.AspNetCore.Authorization
+@attribute [Authorize(Roles = "SUPERADMIN")]
+@inject IRepository repository
+@inject NavigationManager navigationManager
+@inject SweetAlertService sweetAlertService
+
+<PageTitle>Editar Módulo</PageTitle>
+<h4><i class="fas fa-cubes me-2"></i>Editar Módulo de Seguridad</h4>
+<hr />
+
+@if (modulo is null)
+{
+    <div class="spinner" />
+}
+else
+{
+    <SegModuloForm @ref="form" Modulo="modulo" OnValidSubmit="EditAsync" ReturnAction="Return" />
+}
+
+@code {
+    [Parameter] public int Id { get; set; }
+
+    private SegModulo? modulo;
+    private SegModuloForm? form;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var resp = await repository.Get<SegModulo>($"api/SegModulos/{Id}");
+        if (resp.Error)
+        {
+            if (resp.HttpResponseMessage.StatusCode == System.Net.HttpStatusCode.NotFound)
+            {
+                navigationManager.NavigateTo("/seg-modulos");
+                return;
+            }
+            await sweetAlertService.FireAsync("Error", await resp.GetErrorMessageAsync(), SweetAlertIcon.Error);
+            return;
+        }
+        modulo = resp.Response;
+    }
+
+    private async Task EditAsync()
+    {
+        var resp = await repository.Put($"api/SegModulos/{Id}", modulo);
+        if (resp.Error)
+        {
+            await sweetAlertService.FireAsync("Error", await resp.GetErrorMessageAsync(), SweetAlertIcon.Error);
+            return;
+        }
+        Return();
+    }
+
+    private void Return()
+    {
+        form!.FormPostedSuccessfully = true;
+        navigationManager.NavigateTo("/seg-modulos");
+    }
+}

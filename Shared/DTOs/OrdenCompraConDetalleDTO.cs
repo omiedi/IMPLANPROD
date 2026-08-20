@@ -76,11 +76,6 @@ namespace IMPLANPROD.Shared.DTOs
                     errores.Add($"{prefijo} La cantidad debe ser mayor a cero");
                 }
 
-                if (!item.PreUnit.HasValue || item.PreUnit <= 0)
-                {
-                    errores.Add($"{prefijo} El precio unitario debe ser mayor a cero");
-                }
-
                 if (string.IsNullOrWhiteSpace(item.Descritem))
                 {
                     errores.Add($"{prefijo} La descripción del producto es requerida");

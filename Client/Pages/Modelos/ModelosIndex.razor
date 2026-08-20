@@ -1,4 +1,5 @@
 @page "/modelos"
+@using IMPLANPROD.Client.Services
 @using IMPLANPROD.Shared.Entities
 @using Microsoft.AspNetCore.Components.Web
 @using IMPLANPROD.Client.Pages.Reportes
@@ -6,9 +7,16 @@
 @inject NavigationManager NavigationManager
 @inject SweetAlertService sweetAlertService
 @inject IJSRuntime JS
+@inject PageAccessService PageAccess
 
 <PageTitle>Almacén de Modelos</PageTitle>
 
+@if (validando)
+{
+    <p>Validando acceso...</p>
+}
+else
+{
 <!--
 Componente: ModelosIndex.razor
 Descripción: Listado paginado de modelos (BADAMODE) con opciones de edición y gestión.
@@ -117,6 +125,7 @@ else
     <Pagination CurrentPage="currentPage"
                 TotalPages="totalPages"
                 SelectedPage="SelectedPageAsync" />
+    }
 }
 
 @* Componente de impresión *@
@@ -135,6 +144,7 @@ else
 @code {
     private List<Badamode>? Modelos;
     private bool isLoading = true;
+    private bool validando = true;
 
     [Parameter]
     [SupplyParameterFromQuery]
@@ -163,6 +173,9 @@ else
     /// </summary>
     protected override async Task OnInitializedAsync()
     {
+        await PageAccess.RequiereAccesoAsync("/modelos");
+        validando = false;
+        
         await LoadAsync();
     }
 

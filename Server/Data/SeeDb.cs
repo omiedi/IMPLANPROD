@@ -94,18 +94,30 @@ namespace IMPLANPROD.Server.Data
 
             // Verificar si la tabla Deudor12 existe usando SQL directo
             bool deudor12Exists = false;
+
             try
             {
-                // Consulta para verificar si la tabla existe en la base de datos
-                var result = await _context.Database.ExecuteSqlRawAsync(
-                    "IF EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 'Deudor12') SELECT 1 ELSE SELECT 0");
+                var connection = _context.Database.GetDbConnection();
+
+                await connection.OpenAsync();
+
+                using var command = connection.CreateCommand();
+
+                command.CommandText = @"
+                SELECT COUNT(*)
+                FROM INFORMATION_SCHEMA.TABLES
+                WHERE TABLE_NAME = 'Deudor12'";
+
+                var result = (int)(await command.ExecuteScalarAsync());
+
                 deudor12Exists = result > 0;
+                await connection.CloseAsync();
             }
             catch
             {
-                // Si hay un error, asumimos que la tabla no existe
                 deudor12Exists = false;
             }
+           
 
             // Solo creamos la tabla si no existe
             if (!deudor12Exists)
@@ -188,7 +200,12 @@ namespace IMPLANPROD.Server.Data
             //var geoSeeder = new GeoArgentinaSeeder(_context, _georefService, _loggerFactory.CreateLogger<GeoArgentinaSeeder>());
             //await geoSeeder.SeedGeoDataAsync();
 
+            await CheckEmailConfigEmpresaTableAsync();
+
             // Resto de la inicialización
+            //await CheckCountriesAsync();
+            //await CheckStatesAsync();
+            //await CheckCitiesAsync();
             await CheckEmpresasAsync();
             await CheckDependenciasAsync();
             await CheckSectoresAsync();
@@ -264,7 +281,7 @@ namespace IMPLANPROD.Server.Data
 
         //private async Task CheckCountriesAsync()
         //{
-        //    if (!_context.Countries.Any())
+        //    if (!await _context.Countries.AnyAsync())
         //    {
         //        _context.Countries.Add(new Country
         //        {
@@ -278,7 +295,7 @@ namespace IMPLANPROD.Server.Data
 
         //private async Task CheckStatesAsync()
         //{
-        //    if (!_context.States.Any())
+        //    if (!await _context.States.AnyAsync())
         //    {
         //        var country = await _context.Countries.FirstOrDefaultAsync(c => c.Name == "Argentina");
         //        if (country != null)
@@ -298,7 +315,7 @@ namespace IMPLANPROD.Server.Data
 
         //private async Task CheckCitiesAsync()
         //{
-        //    if (!_context.Cities.Any())
+        //    if (!await _context.Cities.AnyAsync())
         //    {
         //        var states = await _context.States.ToListAsync();
         //        foreach (var state in states)
@@ -327,8 +344,8 @@ namespace IMPLANPROD.Server.Data
 
         private async Task CheckEmpresasAsync()
         {
-            if (!_context.Empresas.Any())
-            {
+            if (!await _context.Empresas.AnyAsync())
+                {
                 var empresas = new List<Empresa>
                 {
                     new Empresa
@@ -350,7 +367,7 @@ namespace IMPLANPROD.Server.Data
 
         private async Task CheckDependenciasAsync()
         {
-            if (!_context.Dependencias.Any())
+            if (!await _context.Dependencias.AnyAsync())
             {
                 var empresa = await _context.Empresas.FirstOrDefaultAsync();
                 if (empresa != null)
@@ -382,7 +399,8 @@ namespace IMPLANPROD.Server.Data
 
         private async Task CheckSectoresAsync()
         {
-            if (!_context.Sectores.Any())
+            if (!await _context.Sectores.AnyAsync())
+                
             {
                 var dependencias = await _context.Dependencias.ToListAsync();
                 foreach (var dependencia in dependencias)
@@ -411,7 +429,7 @@ namespace IMPLANPROD.Server.Data
 
         private async Task CheckPerfilesYPermisosAsync()
         {
-            if (!_context.Perfiles.Any())
+            if (!await _context.Perfiles.AnyAsync())
             {
                 // Crear permisos básicos
                 var permisos = new List<Permiso>
@@ -456,7 +474,7 @@ namespace IMPLANPROD.Server.Data
             var adminExists = await _context.Usuarios.AnyAsync(u => u.NombreUsuario == "admin" || u.Email == "admin@implanprod.com");
             var usuarioExists = await _context.Usuarios.AnyAsync(u => u.NombreUsuario == "usuario" || u.Email == "usuario@implanprod.com");
 
-            // Si ambos usuarios existen, no hacer nada
+            // Si todos los usuarios existen, no hacer nada
             if (adminExists && usuarioExists)
             {
                 return;
@@ -592,10 +610,38 @@ namespace IMPLANPROD.Server.Data
         //    }
         //}
 
+        private async Task CheckEmailConfigEmpresaTableAsync()
+        {
+            await _context.Database.ExecuteSqlRawAsync(@"
+                IF NOT EXISTS (SELECT * FROM sysobjects WHERE name='EmailConfigEmpresa' AND xtype='U')
+                BEGIN
+                    CREATE TABLE dbo.EmailConfigEmpresa
+                    (
+                        Id                   INT           IDENTITY(1,1) NOT NULL PRIMARY KEY,
+                        SmtpHost             NVARCHAR(150) NOT NULL,
+                        SmtpPort             INT           NOT NULL DEFAULT(587),
+                        UsarSsl              BIT           NOT NULL DEFAULT(0),
+                        UsarStartTls         BIT           NOT NULL DEFAULT(1),
+                        UsuarioSmtp          NVARCHAR(200) NOT NULL,
+                        ContrasenaEncriptada NVARCHAR(MAX) NOT NULL,
+                        EmailDesde           NVARCHAR(200) NOT NULL,
+                        NombreDesde          NVARCHAR(200) NOT NULL,
+                        LastModified         DATETIME2     NOT NULL DEFAULT(SYSDATETIME()),
+                        Codiempr             INT           NOT NULL DEFAULT(0),
+                        AddRecord            DATETIME2     NULL     DEFAULT(SYSDATETIME()),
+                        LastUpdate           DATETIME2     NULL     DEFAULT(SYSDATETIME()),
+                        CodiEmprNet          INT           NULL     DEFAULT(0),
+                        NumUsuar             INT           NULL     DEFAULT(0)
+                    );
+                END;
+            ");
+        }
+
         private async Task CheckEmailConfigurationAsync()
         {
-            if (!_context.Set<EmailConfiguration>().Any())
-            {
+            if (!await _context.Set<EmailConfiguration>().AnyAsync())
+                
+                {
                 var defaultConfig = new EmailConfiguration
                 {
                     EmailAddress = "sistema@example.com",

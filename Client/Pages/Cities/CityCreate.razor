@@ -1,18 +1,32 @@
 ﻿@page "/cities/create/{StateId:int}"
+@using IMPLANPROD.Client.Services
 @inject IRepository repository
 @inject NavigationManager navigationManager
 @inject SweetAlertService sweetAlertService
-
-
+@inject PageAccessService PageAccess
+<PageTitle>Crear Ciudad</PageTitle>
 
 <h3>Crear Ciudad</h3>
+@if (validando)
+{
+    <p>Validando acceso...</p>
+}
+else
+{
+    <CityForm @ref="cityForm" City="city" OnValidSubmit="CreateAsync" ReturnAction="Return" />
+}
 
-<CityForm @ref="cityForm" City="city" OnValidSubmit="CreateAsync" ReturnAction="Return" />
 
 @code {
     private City city = new();
     private CityForm? cityForm;
+    private bool validando = true;
 
+	protected override async Task OnInitializedAsync()
+	{
+		await PageAccess.RequiereAccesoAsync("/cities/create");   // ? validación
+		validando = false;
+	}
     [Parameter]
     public int StateId { get; set; }
 

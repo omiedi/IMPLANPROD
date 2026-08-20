@@ -1,0 +1,248 @@
+@using IMPLANPROD.Shared.DTOs
+@using IMPLANPROD.Client.Pages.Reportes
+@inject IRepository repository
+@inject SweetAlertService sweetAlertService
+
+@* Modal de implosión de Master *@
+@if (IsVisible)
+{
+    <div class="modal fade show" style="display: block" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header bg-primary text-white">
+                    <h5 class="modal-title">
+                        <i class="oi oi-graph me-2"></i>Implosión del Producto
+                        @if (modoPorMil)
+                        {
+                            <span class="badge bg-warning text-dark ms-2">POR MILLAR</span>
+                        }
+                    </h5>
+                    <button type="button" class="btn-close btn-close-white" @onclick="CerrarModal"></button>
+                </div>
+                <div class="modal-body">
+                    @if (cargando)
+                    {
+                        <div class="d-flex justify-content-center align-items-center" style="min-height: 200px;">
+                            <div class="spinner-border text-primary" role="status">
+                                <span class="visually-hidden">Cargando implosión...</span>
+                            </div>
+                        </div>
+                    }
+                    else if (items == null || !items.Any())
+                    {
+                        <div class="alert alert-info">
+                            <i class="oi oi-info me-2"></i>No se encontraron productos en los que este ítem sea componente.
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="table-responsive" style="max-height: 400px; overflow-y: auto;">
+                            <table class="table table-striped table-sm">
+                                <thead class="table-dark sticky-top">
+                                    <tr>
+                                        <th>Código</th>
+                                        <th>Descripción</th>
+                                        <th class="text-center">U.Med.</th>
+                                        <th class="text-end">Uso Bruto</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var item in items)
+                                    {
+                                        <tr>
+                                            <td>@item.Codigo</td>
+                                            <td>@item.Descripcion</td>
+                                            <td class="text-center">@item.Umedida</td>
+                                            <td class="text-end">
+                                                @item.UsoBruto.ToString("F4")
+                                                @if (item.AjustadoPorMil)
+                                                {
+                                                    <span class="badge bg-warning text-dark ms-1">x1000</span>
+                                                }
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    }
+                </div>
+                <div class="modal-footer">
+                    @if (items != null && items.Any())
+                    {
+                        <button type="button" class="btn btn-outline-success me-auto" @onclick="ConfirmarImpresionAsync" disabled="@isPrinting">
+                            <i class="oi oi-print"></i> Imprimir/Exp.Excel
+                        </button>
+
+                        @if (isPrinting)
+                        {
+                            <div class="me-2">
+                                <div class="spinner-border text-success" role="status">
+                                    <span class="visually-hidden">Preparando impresión...</span>
+                                </div>
+                            </div>
+                        }
+                    }
+
+                    <button type="button" class="btn btn-secondary" @onclick="CerrarModal">
+                        <i class="oi oi-x me-1"></i>Cerrar
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="modal-backdrop fade show"></div>
+}
+
+@if (items != null && items.Any())
+{
+    <ImpresionLista TItem="ImplosionItemDTO"
+                    Datos="items"
+                    Titulo="@TituloReporte"
+                    UrlExportarExcel="api/excel/exportar-implosion"
+                    Encabezados="encabezadosImplosion"
+                    ModoDirecto="false"
+                    MostrarModal="mostrarModalImpresion"
+                    OnCerrar="ResetearImpresion" />
+}
+
+@code {
+    /// <summary>
+    /// Parámetros del componente
+    /// </summary>
+    [Parameter] public bool IsVisible { get; set; } = false;
+    [Parameter] public EventCallback OnCloseRequested { get; set; }
+    [Parameter] public int Codint { get; set; }
+    [Parameter] public string? CodigoProducto { get; set; }
+    [Parameter] public string? DescripcionProducto { get; set; }
+
+    /// <summary>
+    /// Variables de estado
+    /// </summary>
+    private bool cargando = false;
+    private List<ImplosionItemDTO>? items = null;
+    private bool modoPorMil = false;
+
+    // Variables para impresión
+    private bool isPrinting = false;
+    private bool mostrarModalImpresion = false;
+    private string TituloReporte => $"Implosión de: {CodigoProducto} - {DescripcionProducto}";
+
+    Dictionary<string, string> encabezadosImplosion = new()
+    {
+        { "Codigo", "Código" },
+        { "Descripcion", "Descripción" },
+        { "Umedida", "U.Med." },
+        { "UsoBruto", "Uso Bruto" }
+    };
+
+    /// <summary>
+    /// Carga la implosión cuando el modal se abre
+    /// </summary>
+    protected override async Task OnParametersSetAsync()
+    {
+        if (IsVisible && Codint > 0)
+        {
+            await CargarImplosion();
+        }
+    }
+
+    /// <summary>
+    /// Carga la implosión del producto desde el API
+    /// </summary>
+    private async Task CargarImplosion()
+    {
+        try
+        {
+            cargando = true;
+            items = null;
+            modoPorMil = false;
+            StateHasChanged();
+
+            var response = await repository.Get<List<ImplosionItemDTO>>($"api/formulas/implosion/{Codint}");
+
+            if (response.Error)
+            {
+                if (response.HttpResponseMessage?.StatusCode == System.Net.HttpStatusCode.NotFound)
+                {
+                    items = new List<ImplosionItemDTO>();
+                }
+                else
+                {
+                    await sweetAlertService.FireAsync("Error", await response.GetErrorMessageAsync(), SweetAlertIcon.Error);
+                    items = new List<ImplosionItemDTO>();
+                }
+            }
+            else
+            {
+                items = response.Response ?? new List<ImplosionItemDTO>();
+                modoPorMil = items.Any(i => i.AjustadoPorMil);
+            }
+        }
+        catch (Exception ex)
+        {
+            await sweetAlertService.FireAsync("Error", $"Error al cargar la implosión: {ex.Message}", SweetAlertIcon.Error);
+            items = new List<ImplosionItemDTO>();
+        }
+        finally
+        {
+            cargando = false;
+            StateHasChanged();
+        }
+    }
+
+    /// <summary>
+    /// Cierra el modal y notifica al componente padre
+    /// </summary>
+    private async Task CerrarModal()
+    {
+        await OnCloseRequested.InvokeAsync();
+    }
+
+    /// <summary>
+    /// Confirma la impresión del reporte de implosión
+    /// </summary>
+    private async Task ConfirmarImpresionAsync()
+    {
+        isPrinting = true;
+        StateHasChanged();
+
+        try
+        {
+            int cantidad = items?.Count ?? 0;
+
+            var result = await sweetAlertService.FireAsync(new SweetAlertOptions
+            {
+                Title = "Confirmar impresión",
+                Text = $"Se van a imprimir {cantidad} registros. ¿Deseás continuar?",
+                Icon = SweetAlertIcon.Warning,
+                ShowCancelButton = true,
+                ConfirmButtonText = "Sí, imprimir",
+                CancelButtonText = "Cancelar"
+            });
+
+            if (result.IsConfirmed)
+            {
+                mostrarModalImpresion = true;
+            }
+        }
+        catch (Exception ex)
+        {
+            await sweetAlertService.FireAsync("Error", ex.Message, SweetAlertIcon.Error);
+        }
+        finally
+        {
+            isPrinting = false;
+            StateHasChanged();
+        }
+    }
+
+    /// <summary>
+    /// Resetea el estado de impresión
+    /// </summary>
+    private void ResetearImpresion()
+    {
+        mostrarModalImpresion = false;
+        StateHasChanged();
+    }
+}

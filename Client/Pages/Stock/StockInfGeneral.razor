@@ -1,0 +1,2134 @@
+@page "/StockInfGeneral/{Codint:int}"
+@using Microsoft.AspNetCore.Authorization
+@using IMPLANPROD.Shared.DTOs
+@using IMPLANPROD.Client.Shared.Components
+@using System.Web
+@using IMPLANPROD.Client.Pages.StockAjustes
+
+@attribute [Authorize]
+@inject IRepository repository
+@inject SweetAlertService sweetAlertService
+@inject NavigationManager NavigationManager
+
+<PageTitle>Stock - Inf.General</PageTitle>
+
+<div class="container-fluid">
+    <div class="mb-4">
+        <h2 class="text-center fw-bold text-primary">
+            <i class="fas fa-info-circle me-2"></i>
+            INFORMACIÓN GENERAL DE STOCK
+        </h2>
+        <hr class="border-primary border-2 opacity-50" />
+    </div>
+
+    <div class="card shadow-sm border border-2 bg-light mb-3">
+        <div class="card-body">
+            <div class="d-flex align-items-start justify-content-between gap-3">
+                <div class="d-flex align-items-start gap-3">
+                    <div class="text-primary" style="font-size: 1.6rem; line-height: 1;">
+                        <i class="fas fa-box"></i>
+                    </div>
+
+                    <div>
+                        <div class="text-muted small">Producto</div>
+
+                        <div class="fw-bold" style="font-size: 1.15rem;">
+                            @(producto?.Descripcion ?? string.Empty)
+                        </div>
+
+                        <div class="mt-2 d-flex flex-wrap gap-2">
+                            <span class="badge bg-primary">
+                                Cód. Interno: @Codint
+                            </span>
+
+                            @if (!string.IsNullOrWhiteSpace(producto?.Codigo))
+                            {
+                                <span class="fw-bold" style="font-size: 1.15rem;">
+                                    Código: @producto!.Codigo
+                                </span>
+                            }
+                        </div>
+                    </div>
+                </div>
+
+                <div class="text-end">
+                    <div class="text-muted small">Stock</div>
+                    <div class="badge bg-info text-dark">Inf. General</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="mb-3 d-flex align-items-center flex-wrap gap-2 justify-content-between">
+        <button type="button" class="btn btn-secondary" @onclick="Regresar">
+            <i class="oi oi-arrow-left"></i> Regresar
+        </button>
+
+        <div class="d-flex align-items-center flex-wrap gap-2 ms-auto">
+            <button type="button" class="btn btn-warning" @onclick="MostrarStockPorDepositoAsync" disabled="@(producto == null || Codint <= 0)">
+                <i class="oi oi-eye"></i> X Depósito + Ajustes
+            </button>
+
+            <button type="button" class="btn btn-info" @onclick="AbrirTransferencias" disabled="@(producto == null || Codint <= 0)">
+                <i class="oi oi-transfer"></i> Transferencia Item
+            </button>
+
+            <button type="button" class="btn btn-success" @onclick="AbrirTransferenciaMultiple">
+                <i class="oi oi-list"></i> Transf. Múltiple
+            </button>
+
+            <button type="button" class="btn btn-secondary" @onclick="AbrirHistorico" disabled="@(producto == null || Codint <= 0)">
+                <i class="oi oi-clock"></i> Histórico
+            </button>
+        </div>
+    </div>
+    <!-- Instructivos colapsables -->
+    <div class="row mb-3">
+        <div class="col-12">
+            <div class="card mb-2">
+                <div class="card-header bg-info text-white p-2">
+                    <button class="btn btn-link text-white text-decoration-none w-100 text-start p-0"
+                            type="button"
+                            @onclick="() => mostrarInstructivoUsuario = !mostrarInstructivoUsuario">
+                        <i class="fas @(mostrarInstructivoUsuario ? "fa-chevron-down" : "fa-chevron-right") me-2"></i>
+                        <strong>Instructivo para el Usuario</strong>
+                    </button>
+                </div>
+                @if (mostrarInstructivoUsuario)
+                {
+                    <div class="card-body">
+                        <h6 class="text-primary"><i class="fas fa-info-circle"></i> Objetivo</h6>
+                        <p>
+                            Esta pantalla muestra la <strong>situación general de stock</strong> del producto seleccionado y un detalle de
+                            <strong>movimientos pendientes</strong> (pedidos, reservas, compras, fabricación, recepciones, terceros) que
+                            afectan el stock disponible.
+                        </p>
+
+                        <h6 class="text-primary mt-3"><i class="fas fa-hand-pointer"></i> Botones de Acción</h6>
+                        <ul>
+                            <li><strong>Regresar:</strong> vuelve a la pantalla desde la que ingresaste (si corresponde) o a la lista de stock.</li>
+                            <li><strong>X Depósito + Ajustes:</strong> muestra el stock por depósito y permite registrar un ajuste en el depósito elegido.</li>
+                            <li><strong>Transferencias:</strong> permite transferir stock entre depósitos.</li>
+                            <li><strong>Histórico:</strong> permite consultar movimientos históricos filtrando por depósito y rango de fechas.</li>
+                        </ul>
+
+                        <h6 class="text-primary mt-3"><i class="fas fa-chart-line"></i> Métricas (cómo leerlas)</h6>
+                        <ul>
+                            <li><strong>Mínimo:</strong> stock mínimo definido para el producto.</li>
+                            <li><strong>Económico:</strong> lote económico (reposición sugerida) definido para el producto.</li>
+                            <li><strong>Stock Propio:</strong> suma del stock existente en depósitos marcados como disponibles en la grilla de Existencias.</li>
+                            <li><strong>Stock Total:</strong> por el momento coincide con Stock Propio (si hubiera stock remoto se sumaría aquí).</li>
+                            <li><strong>Pedidos:</strong> cantidad comprometida por pedidos pendientes del producto.</li>
+                            <li><strong>Asignados y Reservas:</strong> stock comprometido por reservas internas y/o terceros (según corresponda).</li>
+                            <li><strong>Comprometido:</strong> total comprometido = Pedidos + Asignados y Reservas.</li>
+                            <li><strong>Compras:</strong> total a ingresar por compras pendientes.</li>
+                            <li><strong>Fabricación:</strong> total a ingresar por órdenes de fabricación pendientes.</li>
+                            <li><strong>Ingresar:</strong> total a ingresar = Compras + Fabricación.</li>
+                            <li><strong>Neto:</strong> stock total menos comprometido (nunca baja de 0).</li>
+                            <li><strong>Disponible:</strong> stock neto menos mínimo (nunca baja de 0).</li>
+                            <li><strong>Faltantes:</strong> faltante = mínimo menos stock neto (nunca baja de 0).</li>
+                            <li><strong>No Reservado:</strong> stock total menos reservas (nunca baja de 0).</li>
+                        </ul>
+
+                        <h6 class="text-primary mt-3"><i class="fas fa-table"></i> Stock Proyectado</h6>
+                        <p>
+                            La tabla <strong>Stock Proyectado</strong> muestra, en forma cronológica, los movimientos pendientes que
+                            <strong>entran</strong> o <strong>salen</strong> del stock, y el acumulado proyectado.
+                        </p>
+
+                        <h6 class="text-primary mt-3"><i class="fas fa-warehouse"></i> Existencias</h6>
+                        <p>
+                            La tabla <strong>Existencias</strong> muestra el stock por depósito. Además, puede incluir filas informativas de
+                            <strong>Recepciones</strong> y <strong>Terceros</strong> (si existen), como resumen adicional.
+                        </p>
+                    </div>
+                }
+            </div>
+            <InstructivoDesarrollador @key="InstructivoDevKey">
+                <h6 class="text-info"><i class="fas fa-code"></i> Objetivo técnico</h6>
+                <p>
+                    <strong>StockInfGeneral</strong> concentra la visualización de métricas y movimientos pendientes de un producto.
+                    Se diseñó para mantener el listado de productos (<code>StockIndex</code>) liviano y mover aquí las consultas
+                    pesadas y acciones (depósitos/ajustes, transferencias, histórico).
+                </p>
+
+                <h6 class="text-info mt-3"><i class="fas fa-route"></i> Parámetros de ruta / navegación</h6>
+                <ul>
+                    <li><strong>Route:</strong> <code>/StockInfGeneral/{Codint:int}</code></li>
+                    <li><strong>Querystring:</strong> <code>returnUrl</code> (opcional). Se usa para volver a la pantalla anterior.</li>
+                    <li><strong>Método:</strong> <code>Regresar()</code> decodifica <code>returnUrl</code> y navega; si no existe, vuelve a <code>/Stock-index</code>.</li>
+                </ul>
+
+                <h6 class="text-info mt-3"><i class="fas fa-arrows-alt-h"></i> Acciones UI (Front → Componentes)</h6>
+                <ul>
+                    <li><strong>X Depósito + Ajustes:</strong> abre modal local (tabla de depósitos) y desde allí dispara <code>StockAjustesFormModal</code> / <code>StockAjustesTrazablesFormModal</code>.</li>
+                    <li><strong>Transferencias:</strong> abre <code>StockTransferenciaModal</code> (componente Blazor).</li>
+                    <li><strong>Histórico:</strong> abre modal con <code>HistoricoMovimientosComponent</code>.</li>
+                </ul>
+
+                <h6 class="text-info mt-3"><i class="fas fa-database"></i> Carga de datos principal (Front)</h6>
+                <p>
+                    El método <code>OnParametersSetAsync()</code> es el orquestador principal. Flujo:
+                </p>
+                <ol>
+                    <li><strong>Producto:</strong> <code>CargarProductoAsync()</code> (obtiene datos base de <code>Master</code> y asigna <code>producto</code>).</li>
+                    <li><strong>DTO para acciones:</strong> <code>repuestoSeleccionado = BuildRepuestoSeleccionado()</code> (arma <code>ProductoConSaldoDTO</code> con cod/descr/umed).</li>
+                    <li><strong>Existencias:</strong> <code>CargarExistenciasAsync()</code> (depósitos + stock por depósito) y calcula <code>SALSTO</code>.</li>
+                    <li><strong>Bloques pendientes:</strong>
+                        <ul>
+                            <li><code>CargarRecepcionesPendientesAsync()</code> → acumula <code>TORECEP</code></li>
+                            <li><code>CargarPedidosPendientesAsync()</code> → acumula <code>TOPEDID</code></li>
+                            <li><code>CargarComprasPendientesAsync()</code> → acumula <code>TOCOMPR</code></li>
+                            <li><code>CargarFabricacionPendienteAsync()</code> → acumula <code>TOFABRI</code></li>
+                            <li><code>CargarReservasPendientesAsync()</code> → acumula <code>TORESER</code> (con conversión GK/1000 cuando aplica)</li>
+                            <li><code>CargarTercerosPendientesAsync()</code> → acumula <code>STOTER</code> y <code>TORESER_TERC</code></li>
+                        </ul>
+                    </li>
+                    <li><strong>Stock Proyectado:</strong> <code>RecalcularStockProyectado()</code> arma filas y recalcula acumulado proyectado.</li>
+                </ol>
+
+                <h6 class="text-info mt-3"><i class="fas fa-sitemap"></i> Endpoints utilizados (Front → API)</h6>
+                <ul>
+                    <li><strong>Producto (Master):</strong> <code>GET api/master/{Codint}</code> (ver método de carga en este Razor).</li>
+                    <li><strong>Ubicaciones del producto (UBICASQL):</strong> <code>GET api/ubicasql/por-producto/{Codint}</code> → <code>List&lt;string&gt;</code></li>
+                    <li><strong>Existencias por depósito:</strong>
+                        <ul>
+                            <li><code>GET api/tadeposi/SoloCodigos</code> (lista de depósitos)</li>
+                            <li><code>GET api/tadeposi/combo</code> (descripción de depósitos)</li>
+                            <li><code>GET api/movisto/stock/{Codint}</code> (stock por depósito)</li>
+                        </ul>
+                    </li>
+                    <li><strong>Reservas:</strong> <code>GET api/reservas/pendientes-por-producto/{Codint}</code> → DTO <code>StockReservaPendienteDTO</code></li>
+                    <li><strong>Terceros/Consignación:</strong> <code>GET api/maconsig/terceros-pendientes-por-producto/{Codint}</code> → DTO <code>StockTercerosPendienteDTO</code></li>
+                    <li><strong>Órdenes de fabricación:</strong> <code>GET api/ordefabr/pendientes-por-producto/{Codint}</code> → DTO <code>StockFabricacionPendienteDTO</code></li>
+                    <li><strong>Pedidos de venta:</strong> <code>GET api/peddeta/pendientes-por-producto/{Codint}</code> → DTO <code>StockPedidoPendienteDTO</code></li>
+                    <li><strong>Recepciones pendientes:</strong> <code>GET api/bolrecep/pendientes-por-producto/{Codint}</code> → DTO <code>StockRecepcionPendienteDTO</code></li>
+                    <li><strong>Compras pendientes:</strong> <code>GET api/ocomdeta/pendientes-por-producto/{Codint}</code> → DTO <code>StockCompraPendienteDTO</code></li>
+                    <li><strong>Trazabilidad (para ajuste):</strong> <code>GET api/masterfunciones/funcionesAtributos/{Codint}</code> → DTO <code>MasterFuncionesDTO</code></li>
+                </ul>
+
+                <h6 class="text-info mt-3"><i class="fas fa-wrench"></i> Puntos de intervención (mantenimiento futuro)</h6>
+                <ul>
+                    <li><strong>Modificar métricas:</strong> revisar propiedades calculadas en este Razor (<code>StoProp</code>, <code>StoNet</code>, <code>StoDis</code>, <code>StoFal</code>, etc.).</li>
+                    <li><strong>Modificar grilla Stock Proyectado:</strong> revisar <code>RecalcularStockProyectado()</code> y los métodos <code>Cargar*</code> que agregan filas.</li>
+                    <li><strong>Modificar origen de datos de un bloque:</strong> revisar el endpoint del controller correspondiente (Server/Controllers) y el DTO (Shared/DTOs).</li>
+                    <li><strong>Ajustes/Transferencias/Histórico:</strong> revisar componentes en <code>Client/Pages/Stock</code>:
+                        <ul>
+                            <li><code>StockTransferenciaModal.razor</code></li>
+                            <li><code>HistoricoMovimientosComponent.razor</code></li>
+                            <li><code>Client/Pages/StockAjustes/*</code> (formularios de ajuste)</li>
+                        </ul>
+                    </li>
+                </ul>
+                </InstructivoDesarrollador>
+        </div>
+    </div>
+
+    <div class="card shadow-sm border border-2 mb-3">
+        <div class="card-header bg-light border-bottom border-2">
+            Métricas
+        </div>
+        <div class="card-body bg-white">
+            <div class="row g-3">
+                <div class="col-12 col-lg-3">
+                    <div class="border border-dark rounded p-3 h-100" style="border-width: 3px;">
+                        <div class="fw-bold mb-2">Parámetros</div>
+
+                        <div class="row g-2 align-items-center">
+                            <div class="col-7">
+                                <label class="form-label mb-0">Mínimo</label>
+                            </div>
+                            <div class="col-5">
+                                <input class="form-control form-control-sm text-end" readonly value="@($"{Stomin:N2}")" />
+                            </div>
+
+                            <div class="col-7">
+                                <label class="form-label mb-0">Económico</label>
+                            </div>
+                            <div class="col-5">
+                                <input class="form-control form-control-sm text-end" readonly value="@($"{Leconom:N2}")" />
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-12 col-lg-3">
+                    <div class="border border-dark rounded p-3 h-100" style="border-width: 3px;">
+                        <div class="fw-bold mb-2">Stock</div>
+
+                        <div class="row g-2 align-items-center">
+                            <div class="col-7">
+                                <label class="form-label mb-0">Propio</label>
+                            </div>
+                            <div class="col-5">
+                                <input class="form-control form-control-sm text-end" readonly value="@($"{StoProp:N2}")" />
+                            </div>
+
+                            <div class="col-7">
+                                <label class="form-label mb-0">Remoto</label>
+                            </div>
+                            <div class="col-5">
+                                <input class="form-control form-control-sm text-end" readonly value="@($"{StoRemo:N2}")" />
+                            </div>
+
+                            <div class="col-7">
+                                <label class="form-label mb-0">Total</label>
+                            </div>
+                            <div class="col-5">
+                                <input class="form-control form-control-sm text-end" readonly value="@($"{StoTot:N2}")" />
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-12 col-lg-3">
+                    <div class="border border-dark rounded p-3 h-100" style="border-width: 3px;">
+                        <div class="fw-bold mb-2">Comprometido</div>
+
+                        <div class="row g-2 align-items-center">
+                            <div class="col-7">
+                                <label class="form-label mb-0">Pedidos</label>
+                            </div>
+                            <div class="col-5">
+                                <input class="form-control form-control-sm text-end" readonly value="@($"{ToPedid:N2}")" />
+                            </div>
+
+                            <div class="col-7">
+                                <label class="form-label mb-0">Asignados y Reservas</label>
+                            </div>
+                            <div class="col-5">
+                                <input class="form-control form-control-sm text-end" readonly value="@($"{ToReser:N2}")" />
+                            </div>
+
+                            <div class="col-7">
+                                <label class="form-label mb-0">Total</label>
+                            </div>
+                            <div class="col-5">
+                                <input class="form-control form-control-sm text-end" readonly value="@($"{ToCompr:N2}")" />
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-12 col-lg-3">
+                    <div class="border border-dark rounded p-3 h-100" style="border-width: 3px;">
+                        <div class="fw-bold mb-2">Ingresar</div>
+
+                        <div class="row g-2 align-items-center">
+                            <div class="col-7">
+                                <label class="form-label mb-0">Compras</label>
+                            </div>
+                            <div class="col-5">
+                                <input class="form-control form-control-sm text-end" readonly value="@($"{ToSumin:N2}")" />
+                            </div>
+
+                            <div class="col-7">
+                                <label class="form-label mb-0">Fabricación</label>
+                            </div>
+                            <div class="col-5">
+                                <input class="form-control form-control-sm text-end" readonly value="@($"{ToFabri:N2}")" />
+                            </div>
+
+                            <div class="col-7">
+                                <label class="form-label mb-0">Total</label>
+                            </div>
+                            <div class="col-5">
+                                <input class="form-control form-control-sm text-end" readonly value="@($"{ToInPre:N2}")" />
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                @* 
+                   Existencias (60% del ancho): tabla con stock por depósito.
+                   Nota de UI: usamos borde oscuro y más grueso para que el marco sea "notorio" y consistente con el resto de la pantalla.
+                *@
+                <div class="col-12 col-lg-8" style="flex: 0 0 60%; max-width: 60%;">
+                    <div class="card shadow-sm border border-dark" style="border-width: 3px;">
+                        <div class="card-header bg-primary text-white border-bottom border-2">
+                            Existencias
+                        </div>
+                        <div class="card-body bg-white">
+                            @if (isLoading)
+                            {
+                                <div class="spinner-border text-primary" role="status">
+                                    <span class="sr-only">Cargando...</span>
+                                </div>
+                            }
+                            else
+                            {
+                                <div class="table-responsive">
+                                    <table class="table table-striped table-hover table-bordered align-middle">
+                                        <thead>
+                                            <tr>
+                                                <th>Depósito</th>
+                                                <th>Descripción</th>
+                                                <th class="text-end">Stock</th>
+                                                <th>No Disponible</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            @if (existencias == null || existencias.Count == 0)
+                                            {
+                                                <tr>
+                                                    <td colspan="4">Sin existencias para mostrar.</td>
+                                                </tr>
+                                            }
+                                            else
+                                            {
+                                                @foreach (var row in existencias)
+                                                {
+                                                    <tr>
+                                                        <td>@row.Deposito</td>
+                                                        <td>@row.Descripcion</td>
+                                                        <td class="text-end">@row.Stock.ToString("N2")</td>
+                                                        <td>@(row.NoDisponible ? "(x)" : string.Empty)</td>
+                                                    </tr>
+                                                }
+
+                                                @if (TORECEP > 0.05m)
+                                                {
+                                                    <tr class="table-info">
+                                                        <td colspan="2">RECEPC.</td>
+                                                        <td class="text-end">@TORECEP.ToString("N2")</td>
+                                                        <td></td>
+                                                    </tr>
+                                                }
+
+                                                @if (Math.Abs(STOTER) >= 0.005m)
+                                                {
+                                                    <tr class="table-info">
+                                                        <td colspan="2">TERCEROS</td>
+                                                        <td class="text-end">@STOTER.ToString("N2")</td>
+                                                        <td></td>
+                                                    </tr>
+                                                }
+                                            }
+                                        </tbody>
+                                    </table>
+                                </div>
+
+                                <div class="mt-2 d-flex justify-content-end">
+                                    <span class="badge bg-secondary" style="font-size: 0.95rem;">
+                                        Total depósitos: @TotalStockDepositos.ToString("N2")
+                                    </span>
+                                </div>
+                            }
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-12 col-lg-4" style="flex: 0 0 40%; max-width: 40%;">
+                    <div class="border border-dark rounded p-3" style="border-width: 3px;">
+                        <div class="d-flex justify-content-between mb-2">
+                            <div class="fw-bold">Ubicaciones</div>
+                            <div class="d-flex gap-2">
+                                <button type="button" class="btn btn-sm btn-danger" @onclick="AbrirModalUbicacionesBaja" disabled="@(Codint <= 0)"
+                                        title="Ubicaciones del código activo dadas de baja" data-bs-toggle="tooltip" data-bs-placement="top">
+                                    Ubicaciones de baja
+                                </button>
+                                <button type="button" class="btn btn-sm btn-success" @onclick="AbrirModalNuevaUbicacion" disabled="@(Codint <= 0)">
+                                    <i class="oi oi-plus"></i> Agregar Ubicación
+                                </button>
+                            </div>
+                        </div>
+
+                        <div class="table-responsive" style="max-height: 140px; overflow-y: auto;">
+                            <table class="table table-sm table-striped mb-0">
+                                <thead>
+                                    <tr>
+                                        <th>Ubicación</th>
+                                        <th style="width: 1%;"></th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @if (ubicacionesProducto == null)
+                                    {
+                                        <tr>
+                                            <td colspan="2" class="text-muted">Cargando...</td>
+                                        </tr>
+                                    }
+                                    else if (!ubicacionesProducto.Any())
+                                    {
+                                        <tr>
+                                            <td colspan="2" class="text-muted">(Sin ubicaciones)</td>
+                                        </tr>
+                                    }
+                                    else
+                                    {
+                                        @foreach (var u in ubicacionesProducto)
+                                        {
+                                            <tr>
+                                                <td>@u.Codiubica</td>
+                                                <td class="text-end" style="white-space: nowrap;">
+                                                    <div class="d-inline-flex align-items-center gap-1">
+                                                        <button type="button" class="btn btn-sm btn-outline-primary" @onclick="() => AbrirModalEditarUbicacion(u)">
+                                                            <i class="oi oi-pencil"></i>
+                                                        </button>
+                                                        <button type="button" class="btn btn-sm btn-outline-danger" @onclick="async () => await EliminarUbicacionAsync(u)">
+                                                            <i class="oi oi-trash"></i>
+                                                        </button>
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        }
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                @*
+                   Situación: resumen de métricas calculadas (Neto/Disponible/Faltantes/No Reservado).
+                   Nota de UI: borde más grueso para reforzar visualmente el bloque de resumen.
+                *@
+                <div class="col-12">
+                    <div class="border border-dark rounded p-3" style="border-width: 3px;">
+                        <div class="fw-bold mb-2">Situación</div>
+
+                        <div class="row g-2 align-items-center">
+                            <div class="col-12 col-md-3">
+                                <label class="form-label mb-0">Neto</label>
+                                <input class="form-control form-control-sm text-end" readonly value="@($"{StoNet:N2}")" />
+                            </div>
+
+                            <div class="col-12 col-md-3">
+                                <label class="form-label mb-0">Disponible</label>
+                                <input class="form-control form-control-sm text-end" readonly value="@($"{StoDis:N2}")" />
+                            </div>
+
+                            <div class="col-12 col-md-3">
+                                <label class="form-label mb-0">Faltantes</label>
+                                <input class="form-control form-control-sm text-end" readonly value="@($"{StoFal:N2}")" />
+                            </div>
+
+                            <div class="col-12 col-md-3">
+                                <label class="form-label mb-0">No Reservado</label>
+                                <input class="form-control form-control-sm text-end" readonly value="@($"{NoReservado:N2}")" />
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    @*
+       Stock Proyectado: grilla cronológica con los movimientos pendientes y el acumulado proyectado.
+       Nota de UI: borde destacado para que el usuario identifique el bloque rápidamente.
+    *@
+    <div class="card shadow-sm border border-dark mb-3" style="border-width: 3px;">
+        <div class="card-header bg-primary text-white border-bottom border-2">
+            Stock Proyectado
+        </div>
+        <div class="card-body bg-white">
+            <div class="table-responsive">
+                <table class="table table-striped table-hover table-bordered align-middle">
+                    <thead>
+                        <tr>
+                            <th>Comprobante</th>
+                            <th>Referencia</th>
+                            <th class="text-end">Entra</th>
+                            <th class="text-end">Sale</th>
+                            <th class="text-end">Proyectado</th>
+                            <th>Fecha</th>
+                            <th>Observaciones</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @if (stockProyectado == null || stockProyectado.Count == 0)
+                        {
+                            <tr>
+                                <td colspan="7">Sin datos para mostrar.</td>
+                            </tr>
+                        }
+                        else
+                        {
+                            @foreach (var row in stockProyectado)
+                            {
+                                <tr>
+                                    <td>@row.Comprobante</td>
+                                    <td>@row.Referencia</td>
+                                    <td class="text-end">@row.Entra.ToString("N1")</td>
+                                    <td class="text-end">@row.Sale.ToString("N1")</td>
+                                    <td class="text-end">@row.Proyectado.ToString("N1")</td>
+                                    <td>@row.Fecha</td>
+                                    <td>@row.Observaciones</td>
+                                </tr>
+                            }
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+</div>
+
+@if (mostrarDetalleDeposito)
+{
+    <div class="modal fade show" style="display: block" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header bg-warning text-dark">
+                    <h5 class="modal-title">Stock por Depósito - @repuestoSeleccionado?.Codigo</h5>
+                    <button type="button" class="btn-close" @onclick="CerrarDetalleDeposito"></button>
+                </div>
+                <div class="modal-body">
+                    @if (stocksPorDeposito == null)
+                    {
+                        <div class="spinner-border text-primary" role="status">
+                            <span class="sr-only">Cargando...</span>
+                        </div>
+                    }
+                    else if (!stocksPorDeposito.Any())
+                    {
+                        <div class="alert alert-info">
+                            No hay stock registrado en ningún depósito.
+                        </div>
+                    }
+                    else
+                    {
+                        <div id="tablaScroll" class="table-container" style="max-height: 15cm; overflow-y: auto;">
+                            <div class="table-responsive">
+                                <table class="table table-striped table-hover">
+                                    <thead>
+                                        <tr>
+                                            <th>Depósito</th>
+                                            <th>Descripción</th>
+                                            <th class="text-end">Stock</th>
+                                            <th></th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach (var stock in stocksPorDeposito)
+                                        {
+                                            <tr>
+                                                <td>@stock.Deposito</td>
+                                                <td>@stock.Descripcion</td>
+                                                <td class="text-end">@stock.Stock.ToString("N2")</td>
+                                                <td class="text-end">
+                                                    <button class="btn btn-primary btn-sm" @onclick="async () => await PrepararAjusteAsync(stock)">
+                                                        <i class="oi oi-pencil"></i> Ajustar
+                                                    </button>
+                                                </td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    }
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" @onclick="CerrarDetalleDeposito">Cerrar</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="modal-backdrop fade show"></div>
+}
+
+@if (mostrarModalEditarUbicacion)
+{
+    <div class="modal fade show" style="display: block" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header bg-primary text-white">
+                    <h5 class="modal-title">Editar Ubicación</h5>
+                    <button type="button" class="btn-close btn-close-white" @onclick="CerrarModalEditarUbicacion"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-2 text-muted small">Código Interno: <strong>@Codint</strong></div>
+                    <label class="form-label">Ubicación (máx. 32)</label>
+                    <input class="form-control" maxlength="32" @bind="editarUbicacionTexto" />
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" @onclick="CerrarModalEditarUbicacion">Cancelar</button>
+                    <button type="button" class="btn btn-primary" @onclick="GuardarEdicionUbicacionAsync" disabled="@(string.IsNullOrWhiteSpace(editarUbicacionTexto))">Guardar</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="modal-backdrop fade show"></div>
+}
+
+@if (mostrarModalAjuste && repuestoSeleccionado != null && stockDepositoSeleccionado != null)
+{
+    @if (NivelTrazable == 1)
+    {
+        <StockAjustesTrazablesFormModal
+            Repuesto="repuestoSeleccionado"
+            StockDeposito="stockDepositoSeleccionado"
+            Visible="true"
+            OnClose="CerrarModalAjuste"
+            OnSave="GuardarAjusteAsync" />
+    }
+    else
+    {
+        <StockAjustesFormModal
+            Repuesto="repuestoSeleccionado"
+            StockDeposito="stockDepositoSeleccionado"
+            Visible="true"
+            OnClose="CerrarModalAjuste"
+            OnSave="GuardarAjusteAsync" />
+    }
+}
+
+@if (mostrarModalTransferencia)
+{
+    <StockTransferenciaModal
+        Repuesto="repuestoSeleccionado"
+        Visible="mostrarModalTransferencia"
+        OnClose="CerrarModalTransferencia"
+        OnSave="GuardarTransferenciaAsync" />
+}
+
+@if (mostrarModalHistorico)
+{
+    <div class="modal fade show" style="display: block" tabindex="-1">
+        <div class="modal-dialog modal-xl">
+            <div class="modal-content">
+                <div class="modal-header bg-secondary text-white">
+                    <h5 class="modal-title">Histórico de Movimientos</h5>
+                    <button type="button" class="btn-close btn-close-white" @onclick="CerrarHistorico"></button>
+                </div>
+                <div class="modal-body p-0">
+                    <HistoricoMovimientosComponent Repuesto="repuestoSeleccionado"
+                        ShowInModal="true"
+                        HeaderClass="bg-secondary"
+                        HeaderStyle="margin: -1px;" />
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="modal-backdrop fade show"></div>
+}
+
+@if (mostrarModalNuevaUbicacion)
+{
+    <div class="modal fade show" style="display: block" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header bg-success text-white">
+                    <h5 class="modal-title">Agregar Ubicación</h5>
+                    <button type="button" class="btn-close btn-close-white" @onclick="CerrarModalNuevaUbicacion"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-2 text-muted small">Código Interno: <strong>@Codint</strong></div>
+                    <label class="form-label">Ubicación (máx. 32)</label>
+                    <input class="form-control" maxlength="32" @bind="nuevaUbicacionTexto" />
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" @onclick="CerrarModalNuevaUbicacion">Cancelar</button>
+                    <button type="button" class="btn btn-success" @onclick="GuardarNuevaUbicacionAsync" disabled="@(string.IsNullOrWhiteSpace(nuevaUbicacionTexto))">Guardar</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="modal-backdrop fade show"></div>
+}
+
+@if (mostrarModalUbicacionesBaja)
+{
+    <div class="modal fade show" style="display: block" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header bg-secondary text-white">
+                    <h5 class="modal-title">Ubicaciones de baja</h5>
+                    <button type="button" class="btn-close btn-close-white" @onclick="CerrarModalUbicacionesBaja"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-2 text-muted small">Código Interno: <strong>@Codint</strong></div>
+
+                    <div class="table-responsive" style="max-height: 240px; overflow-y: auto;">
+                        <table class="table table-sm table-striped mb-0">
+                            <thead>
+                                <tr>
+                                    <th>Ubicación</th>
+                                    <th style="width: 1%;"></th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @if (ubicacionesProductoBaja == null)
+                                {
+                                    <tr>
+                                        <td colspan="2" class="text-muted">Cargando...</td>
+                                    </tr>
+                                }
+                                else if (!ubicacionesProductoBaja.Any())
+                                {
+                                    <tr>
+                                        <td colspan="2" class="text-muted">(Sin ubicaciones de baja)</td>
+                                    </tr>
+                                }
+                                else
+                                {
+                                    @foreach (var u in ubicacionesProductoBaja)
+                                    {
+                                        <tr>
+                                            <td>@u.Codiubica</td>
+                                            <td class="text-end">
+                                                <button type="button" class="btn btn-sm btn-outline-success" @onclick="async () => await RestaurarUbicacionAsync(u)">
+                                                    Restaurar
+                                                </button>
+                                            </td>
+                                        </tr>
+                                    }
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" @onclick="CerrarModalUbicacionesBaja">Cerrar</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="modal-backdrop fade show"></div>
+}
+
+@code {
+    [Parameter]
+    public int Codint { get; set; }
+
+    [Parameter]
+    [SupplyParameterFromQuery]
+    public string? returnUrl { get; set; }
+
+    private bool isLoading = true;
+    private List<ExistenciaRow>? existencias;
+    private Master? producto;
+    private List<StockProyectadoRow>? stockProyectado;
+    private ProductoConSaldoDTO? repuestoSeleccionado;
+    private StockDepositoDTO? stockDepositoSeleccionado;
+    private List<StockDepositoDTO>? stocksPorDeposito;
+    private bool mostrarDetalleDeposito;
+    private bool mostrarModalTransferencia;
+    private bool mostrarModalHistorico;
+    private bool mostrarModalAjuste;
+    private int? NivelTrazable;
+    private bool mostrarInstructivoUsuario = false;
+    private const string InstructivoDevKey = "instructivo-dev";
+    private decimal SALSTO;
+    private decimal TORECEP;
+    private decimal TOPEDID;
+    private decimal TOCOMPR;
+    private decimal TOFABRI;
+    private decimal TORESER;
+    private decimal TORESER_TERC;
+    private decimal STOTER;
+
+    private List<UbicacionProductoDTO>? ubicacionesProducto;
+    private bool mostrarModalNuevaUbicacion;
+    private string nuevaUbicacionTexto = string.Empty;
+
+    private bool mostrarModalEditarUbicacion;
+    private UbicacionProductoDTO? ubicacionEditando;
+    private string editarUbicacionTexto = string.Empty;
+
+    private List<UbicacionProductoDTO>? ubicacionesProductoBaja;
+    private bool mostrarModalUbicacionesBaja;
+
+    private decimal Stomin => producto?.Stomin ?? 0m;
+    private decimal Leconom => producto?.Lorepos ?? 0m;
+
+    // =====================================================================
+    // MÉTRICAS PRINCIPALES (cálculos derivados de lo cargado en la pantalla)
+    // =====================================================================
+    // Stock Propio:
+    // - Se calcula a partir de la lista de existencias por depósito.
+    // - IMPORTANTÍSIMO: solo se suma el stock de los depósitos marcados como "disponibles".
+    //   Esa disponibilidad se determina en CargarExistenciasAsync() consultando Tadeposi.disponible.
+    private decimal StoProp => (existencias ?? new List<ExistenciaRow>())
+        .Where(x => !x.NoDisponible)
+        .Sum(x => x.Stock);
+
+    private decimal StoRemo => 0m;
+    private decimal StoTot => StoProp + StoRemo;
+    private decimal TotalStockDepositos => (existencias ?? new List<ExistenciaRow>()).Sum(x => x.Stock);
+
+    private decimal ToPedid => TOPEDID;
+    private decimal ToReser => TORESER + TORESER_TERC;
+    private decimal ToCompr => ToPedid + ToReser;
+
+    private decimal ToSumin => TORECEP + TOCOMPR;
+    private decimal ToFabri => TOFABRI;
+    private decimal ToInPre => ToSumin + ToFabri;
+
+    private decimal StoNet
+    {
+        get
+        {
+            var value = StoTot - ToCompr;
+            return value < 0m ? 0m : value;
+        }
+    }
+
+    private async Task RestaurarUbicacionAsync(UbicacionProductoDTO ubicacion)
+    {
+        if (ubicacion == null || ubicacion.Id <= 0)
+        {
+            return;
+        }
+
+        try
+        {
+            var response = await repository.Put<object>($"api/ubicasql/restaurar/{ubicacion.Id}", new { });
+            if (response.Error)
+            {
+                await sweetAlertService.FireAsync("Error", "No se pudo restaurar la ubicación", SweetAlertIcon.Error);
+                return;
+            }
+
+            await CargarUbicacionesProductoAsync();
+            await CargarUbicacionesProductoBajaAsync();
+        }
+        catch (Exception ex)
+        {
+            await sweetAlertService.FireAsync("Error", ex.Message, SweetAlertIcon.Error);
+        }
+    }
+
+    private async Task CargarTercerosPendientesAsync()
+    {
+        tercerosPendientes = new List<StockTercerosPendienteDTO>();
+        STOTER = 0m;
+        TORESER_TERC = 0m;
+
+        if (Codint <= 0)
+        {
+            return;
+        }
+
+        try
+        {
+            var response = await repository.Get<List<StockTercerosPendienteDTO>>($"api/Maconsig/terceros-pendientes-por-producto/{Codint}");
+            if (response.Error || response.Response == null)
+            {
+                return;
+            }
+
+            tercerosPendientes = response.Response.ToList();
+
+            STOTER = tercerosPendientes.Sum(x => x.CapenRendir);
+            TORESER_TERC = tercerosPendientes
+                .Where(x => x.CapenEntregar >= 0.05m && (x.StatOcom ?? -1) < 8 && (x.StatOcom ?? -1) >= 0)
+                .Sum(x => x.CapenEntregar);
+        }
+        catch
+        {
+            tercerosPendientes = new List<StockTercerosPendienteDTO>();
+            STOTER = 0m;
+            TORESER_TERC = 0m;
+        }
+    }
+
+    private async Task CargarReservasPendientesAsync()
+    {
+        reservasPendientes = new List<StockReservaPendienteDTO>();
+        TORESER = 0m;
+
+        if (Codint <= 0)
+        {
+            return;
+        }
+
+        try
+        {
+            var response = await repository.Get<List<StockReservaPendienteDTO>>($"api/reservas/pendientes-por-producto/{Codint}");
+            if (response.Error || response.Response == null)
+            {
+                return;
+            }
+
+            reservasPendientes = response.Response
+                .Where(x => x.CantPendiente > 0m)
+                .OrderBy(x => x.IdSubOr)
+                .ToList();
+
+            var esGk = string.Equals(producto?.Umedida, "GK", StringComparison.OrdinalIgnoreCase);
+            TORESER = reservasPendientes.Sum(x => esGk ? (x.CantPendiente / 1000m) : x.CantPendiente);
+        }
+        catch
+        {
+            reservasPendientes = new List<StockReservaPendienteDTO>();
+            TORESER = 0m;
+        }
+    }
+
+    private async Task CargarFabricacionPendienteAsync()
+    {
+        fabricacionPendiente = new List<StockFabricacionPendienteDTO>();
+        TOFABRI = 0m;
+
+        if (Codint <= 0)
+        {
+            return;
+        }
+
+        try
+        {
+            var response = await repository.Get<List<StockFabricacionPendienteDTO>>($"api/ordefabr/pendientes-por-producto/{Codint}");
+            if (response.Error || response.Response == null)
+            {
+                return;
+            }
+
+            fabricacionPendiente = response.Response
+                .Where(x => x.CantPendiente > 0m)
+                .OrderBy(x => x.NumeOrfa)
+                .ToList();
+
+            TOFABRI = fabricacionPendiente.Sum(x => x.CantPendiente);
+        }
+        catch
+        {
+            fabricacionPendiente = new List<StockFabricacionPendienteDTO>();
+            TOFABRI = 0m;
+        }
+    }
+
+    private async Task CargarFabricacionPendienteAprobacionAsync()
+    {
+        fabricacionPendienteAprobacion = new List<StockFabricacionPendienteAprobacionDTO>();
+
+        if (Codint <= 0)
+        {
+            return;
+        }
+
+        try
+        {
+            var response = await repository.Get<List<StockFabricacionPendienteAprobacionDTO>>($"api/orfapen/pendientes-aprobacion-por-producto/{Codint}");
+            if (response.Error || response.Response == null)
+            {
+                return;
+            }
+
+            fabricacionPendienteAprobacion = response.Response
+                .Where(x => x.CantPendiente > 0m)
+                .OrderBy(x => x.DoPriCor)
+                .ToList();
+
+            // Sumar a TOFABRI (fabricaciones proyectadas) igual que en VB6: TOFABRI = TOFABRI + CAPEN
+            TOFABRI += fabricacionPendienteAprobacion.Sum(x => x.CantPendiente);
+        }
+        catch
+        {
+            fabricacionPendienteAprobacion = new List<StockFabricacionPendienteAprobacionDTO>();
+        }
+    }
+
+    private async Task CargarComprasPendientesAsync()
+    {
+        comprasPendientes = new List<StockCompraPendienteDTO>();
+        TOCOMPR = 0m;
+
+        if (Codint <= 0)
+        {
+            return;
+        }
+
+        try
+        {
+            var response = await repository.Get<List<StockCompraPendienteDTO>>($"api/Ocomdeta/pendientes-por-producto/{Codint}");
+            if (response.Error || response.Response == null)
+            {
+                return;
+            }
+
+            comprasPendientes = response.Response
+                .Where(x => x.CantPendiente > 0m)
+                .OrderBy(x => x.NumeOcom)
+                .ToList();
+
+            TOCOMPR = comprasPendientes.Sum(x => x.CantPendiente);
+        }
+        catch
+        {
+            comprasPendientes = new List<StockCompraPendienteDTO>();
+            TOCOMPR = 0m;
+        }
+    }
+
+    private async Task CargarPedidosPendientesAsync()
+    {
+        pedidosPendientes = new List<StockPedidoPendienteDTO>();
+        TOPEDID = 0m;
+
+        if (Codint <= 0)
+        {
+            return;
+        }
+
+        try
+        {
+            var response = await repository.Get<List<StockPedidoPendienteDTO>>($"api/Peddeta/pendientes-por-producto/{Codint}");
+            if (response.Error || response.Response == null)
+            {
+                return;
+            }
+
+            pedidosPendientes = response.Response
+                .Where(x => x.CantPendiente > 0m)
+                .OrderBy(x => x.NroPed)
+                .ToList();
+
+            TOPEDID = pedidosPendientes.Sum(x => x.CantPendiente);
+        }
+        catch
+        {
+            pedidosPendientes = new List<StockPedidoPendienteDTO>();
+            TOPEDID = 0m;
+        }
+    }
+
+    private decimal StoDis
+    {
+        get
+        {
+            var value = StoNet - Stomin + ToInPre;
+            return value < 0m ? 0m : value;
+        }
+    }
+
+    private decimal StoFal
+    {
+        get
+        {
+            var value = StoNet - Stomin + ToInPre;
+            return value < 0m ? Math.Abs(value) : 0m;
+        }
+    }
+
+    private decimal NoReservado
+    {
+        get
+        {
+            var value = StoTot - ToReser;
+            return value < 0m ? 0m : value;
+        }
+    }
+
+    private ProductoConSaldoDTO? BuildRepuestoSeleccionado()
+    {
+        if (producto == null)
+        {
+            return null;
+        }
+
+        return new ProductoConSaldoDTO
+        {
+            Cod_inte = producto.Codint,
+            Codigo = producto.Codigo ?? string.Empty,
+            Descripcion = producto.Descripcion ?? string.Empty,
+            UnidadMedida = producto.Umedida ?? string.Empty,
+            Saldo = 0m
+        };
+    }
+
+    private async Task MostrarStockPorDepositoAsync()
+    {
+        try
+        {
+            repuestoSeleccionado = BuildRepuestoSeleccionado();
+            if (repuestoSeleccionado == null)
+            {
+                await sweetAlertService.FireAsync("Error", "No hay un producto seleccionado", SweetAlertIcon.Error);
+                return;
+            }
+
+            stocksPorDeposito = null;
+            mostrarDetalleDeposito = true;
+
+            var responseDepositos = await repository.Get<List<int>>("api/tadeposi/SoloCodigos");
+            if (responseDepositos.Error || responseDepositos.Response == null)
+            {
+                await sweetAlertService.FireAsync("Error", "No se pudieron cargar los depósitos", SweetAlertIcon.Error);
+                stocksPorDeposito = new List<StockDepositoDTO>();
+                return;
+            }
+
+            var responseStock = await repository.Get<List<StockDepositoDTO>>($"api/movisto/stock/{Codint}");
+            if (responseStock.Error)
+            {
+                await sweetAlertService.FireAsync("Error", "No se pudo cargar el stock por depósito", SweetAlertIcon.Error);
+                stocksPorDeposito = new List<StockDepositoDTO>();
+                return;
+            }
+
+            var responseDepositosInfo = await repository.Get<Dictionary<int, string>>("api/tadeposi/combo");
+            if (responseDepositosInfo.Error)
+            {
+                await sweetAlertService.FireAsync("Error", "No se pudieron cargar las descripciones de depósitos", SweetAlertIcon.Error);
+                stocksPorDeposito = new List<StockDepositoDTO>();
+                return;
+            }
+
+            var depositosConMovimientos = (responseStock.Response ?? new List<StockDepositoDTO>())
+                .Select(s => s.Deposito ?? 0)
+                .Distinct();
+
+            var universoDepositos = responseDepositos.Response
+                .Union(depositosConMovimientos)
+                .Distinct()
+                .OrderBy(d => d)
+                .ToList();
+
+            stocksPorDeposito = universoDepositos
+                .Select(deposito =>
+                {
+                    var stockExistente = responseStock.Response?.FirstOrDefault(s => s.Deposito == deposito);
+                    var descripcion = deposito == 0 ? "Sin depósito" : "Sin descripción";
+                    if (responseDepositosInfo.Response != null && responseDepositosInfo.Response.TryGetValue(deposito, out var desc))
+                    {
+                        descripcion = desc;
+                    }
+
+                    return new StockDepositoDTO
+                    {
+                        Deposito = deposito,
+                        Stock = stockExistente?.Stock ?? 0m,
+                        Descripcion = descripcion
+                    };
+                })
+                .OrderByDescending(s => s.Stock)
+                .ToList();
+        }
+        catch (Exception ex)
+        {
+            await sweetAlertService.FireAsync("Error", $"No se pudo cargar el stock por depósito: {ex.Message}", SweetAlertIcon.Error);
+            stocksPorDeposito = new List<StockDepositoDTO>();
+        }
+    }
+
+    private void CerrarDetalleDeposito()
+    {
+        mostrarDetalleDeposito = false;
+        stocksPorDeposito = null;
+        stockDepositoSeleccionado = null;
+    }
+
+    private void AbrirTransferencias()
+    {
+        repuestoSeleccionado = BuildRepuestoSeleccionado();
+        mostrarModalTransferencia = true;
+    }
+
+    private void AbrirTransferenciaMultiple()
+    {
+        repuestoSeleccionado = null; // No pasar producto específico para habilitar modo múltiple
+        mostrarModalTransferencia = true;
+    }
+
+    private void CerrarModalTransferencia()
+    {
+        mostrarModalTransferencia = false;
+    }
+
+    private async Task GuardarTransferenciaAsync()
+    {
+        mostrarModalTransferencia = false;
+        await CargarExistenciasAsync();
+    }
+
+    private void AbrirHistorico()
+    {
+        repuestoSeleccionado = BuildRepuestoSeleccionado();
+        mostrarModalHistorico = true;
+    }
+
+    private void CerrarHistorico()
+    {
+        mostrarModalHistorico = false;
+    }
+
+    private async Task PrepararAjusteAsync(StockDepositoDTO stockDeposito)
+    {
+        repuestoSeleccionado = BuildRepuestoSeleccionado();
+        if (repuestoSeleccionado == null)
+        {
+            await sweetAlertService.FireAsync("Error", "No hay un producto seleccionado", SweetAlertIcon.Error);
+            return;
+        }
+
+        stockDepositoSeleccionado = stockDeposito;
+        await LeerTrazabilidadAsync(repuestoSeleccionado);
+
+        mostrarModalAjuste = true;
+        StateHasChanged();
+    }
+
+    private async Task LeerTrazabilidadAsync(ProductoConSaldoDTO repuesto)
+    {
+        var funcionesMaster = await repository.Get<MasterFuncionesDTO>($"api/masterfunciones/funcionesAtributos/{repuesto.Cod_inte}");
+        if (funcionesMaster?.Response != null)
+        {
+            NivelTrazable = funcionesMaster.Response.Trazable;
+            return;
+        }
+
+        NivelTrazable = 0;
+    }
+
+    private async Task GuardarAjusteAsync()
+    {
+        await CargarExistenciasAsync();
+        await MostrarStockPorDepositoAsync();
+        CerrarModalAjuste();
+    }
+
+    private void CerrarModalAjuste()
+    {
+        mostrarModalAjuste = false;
+        stockDepositoSeleccionado = null;
+    }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        mostrarInstructivoUsuario = false;
+        await CargarProductoAsync();
+        repuestoSeleccionado = BuildRepuestoSeleccionado();
+        await CargarUbicacionesProductoAsync();
+        await CargarExistenciasAsync();
+        await CargarRecepcionesPendientesAsync();
+        await CargarRecepcionesPendientesAprobacionAsync();
+        await CargarPedidosPendientesAsync();
+        await CargarComprasPendientesAsync();
+        await CargarFabricacionPendienteAsync();
+        await CargarFabricacionPendienteAprobacionAsync();
+        await CargarReservasPendientesAsync();
+        await CargarTercerosPendientesAsync();
+        RecalcularStockProyectado();
+    }
+
+    private async Task CargarUbicacionesProductoAsync()
+    {
+        ubicacionesProducto = new List<UbicacionProductoDTO>();
+
+        if (Codint <= 0)
+        {
+            return;
+        }
+
+        try
+        {
+            var response = await repository.Get<List<UbicacionProductoDTO>>($"api/ubicasql/por-producto/{Codint}");
+            if (response.Error || response.Response == null)
+            {
+                return;
+            }
+
+            ubicacionesProducto = response.Response
+                .Where(x => !string.IsNullOrWhiteSpace(x.Codiubica))
+                .OrderBy(x => x.Codiubica)
+                .ToList();
+        }
+        catch
+        {
+            ubicacionesProducto = new List<UbicacionProductoDTO>();
+        }
+    }
+
+    private void AbrirModalNuevaUbicacion()
+    {
+        nuevaUbicacionTexto = string.Empty;
+        mostrarModalNuevaUbicacion = true;
+    }
+
+    private void CerrarModalNuevaUbicacion()
+    {
+        mostrarModalNuevaUbicacion = false;
+        nuevaUbicacionTexto = string.Empty;
+    }
+
+    private void AbrirModalEditarUbicacion(UbicacionProductoDTO ubicacion)
+    {
+        ubicacionEditando = ubicacion;
+        editarUbicacionTexto = ubicacion?.Codiubica ?? string.Empty;
+        mostrarModalEditarUbicacion = true;
+    }
+
+    private void CerrarModalEditarUbicacion()
+    {
+        mostrarModalEditarUbicacion = false;
+        ubicacionEditando = null;
+        editarUbicacionTexto = string.Empty;
+    }
+
+    private async Task GuardarEdicionUbicacionAsync()
+    {
+        if (ubicacionEditando == null || ubicacionEditando.Id <= 0)
+        {
+            return;
+        }
+
+        var texto = (editarUbicacionTexto ?? string.Empty).Trim();
+        if (Codint <= 0 || string.IsNullOrWhiteSpace(texto))
+        {
+            return;
+        }
+
+        try
+        {
+            var dto = new UbicacionProductoUpdateDTO
+            {
+                Codiubica = texto
+            };
+
+            var response = await repository.Put<UbicacionProductoUpdateDTO>($"api/ubicasql/actualizar/{ubicacionEditando.Id}", dto);
+            if (response.Error)
+            {
+                var message = await response.GetErrorMessageAsync();
+                await sweetAlertService.FireAsync("Error", message, SweetAlertIcon.Error);
+                return;
+            }
+
+            CerrarModalEditarUbicacion();
+            await CargarUbicacionesProductoAsync();
+            await CargarUbicacionesProductoBajaAsync();
+        }
+        catch (Exception ex)
+        {
+            await sweetAlertService.FireAsync("Error", ex.Message, SweetAlertIcon.Error);
+        }
+    }
+
+    private async Task CargarUbicacionesProductoBajaAsync()
+    {
+        ubicacionesProductoBaja = new List<UbicacionProductoDTO>();
+
+        if (Codint <= 0)
+        {
+            return;
+        }
+
+        try
+        {
+            var response = await repository.Get<List<UbicacionProductoDTO>>($"api/ubicasql/por-producto-baja/{Codint}");
+            if (response.Error || response.Response == null)
+            {
+                ubicacionesProductoBaja = new List<UbicacionProductoDTO>();
+                return;
+            }
+
+            ubicacionesProductoBaja = response.Response
+                .Where(x => !string.IsNullOrWhiteSpace(x.Codiubica))
+                .OrderBy(x => x.Codiubica)
+                .ToList();
+        }
+        catch
+        {
+            ubicacionesProductoBaja = new List<UbicacionProductoDTO>();
+        }
+    }
+
+    private async Task AbrirModalUbicacionesBaja()
+    {
+        mostrarModalUbicacionesBaja = true;
+        await CargarUbicacionesProductoBajaAsync();
+    }
+
+    private void CerrarModalUbicacionesBaja()
+    {
+        mostrarModalUbicacionesBaja = false;
+        ubicacionesProductoBaja = null;
+    }
+
+    private async Task GuardarNuevaUbicacionAsync()
+    {
+        var texto = (nuevaUbicacionTexto ?? string.Empty).Trim();
+        if (Codint <= 0 || string.IsNullOrWhiteSpace(texto))
+        {
+            return;
+        }
+
+        var textoNormalized = texto.Trim().ToUpperInvariant();
+        var existenteActiva = (ubicacionesProducto ?? new List<UbicacionProductoDTO>())
+            .FirstOrDefault(x => (x.Codiubica ?? string.Empty).Trim().ToUpperInvariant() == textoNormalized);
+        if (existenteActiva != null)
+        {
+            await sweetAlertService.FireAsync(
+                "Atención",
+                $"La ubicación '{texto}' ya existe para este código.",
+                SweetAlertIcon.Warning);
+            return;
+        }
+
+        if (ubicacionesProductoBaja == null)
+        {
+            await CargarUbicacionesProductoBajaAsync();
+        }
+
+        var existenteBaja = (ubicacionesProductoBaja ?? new List<UbicacionProductoDTO>())
+            .FirstOrDefault(x => (x.Codiubica ?? string.Empty).Trim().ToUpperInvariant() == textoNormalized);
+        if (existenteBaja != null)
+        {
+            var result = await sweetAlertService.FireAsync(new SweetAlertOptions
+            {
+                Title = "Ubicación existente",
+                Text = $"La ubicación '{texto}' ya existe pero está dada de baja. ¿Desea restaurarla?",
+                Icon = SweetAlertIcon.Question,
+                ShowCancelButton = true,
+                CancelButtonText = "No",
+                ConfirmButtonText = "Si"
+            });
+
+            var confirm = string.IsNullOrEmpty(result.Value);
+            if (confirm)
+            {
+                return;
+            }
+
+            await RestaurarUbicacionAsync(existenteBaja);
+            CerrarModalNuevaUbicacion();
+            return;
+        }
+
+        try
+        {
+            var dto = new UbicacionProductoCreateDTO
+            {
+                CodInte = Codint,
+                Codiubica = texto
+            };
+
+            var response = await repository.Post<UbicacionProductoCreateDTO, UbicacionProductoDTO>("api/ubicasql", dto);
+            if (response.Error)
+            {
+                await sweetAlertService.FireAsync("Error", "No se pudo agregar la ubicación", SweetAlertIcon.Error);
+                return;
+            }
+
+            CerrarModalNuevaUbicacion();
+            await CargarUbicacionesProductoAsync();
+        }
+        catch (Exception ex)
+        {
+            await sweetAlertService.FireAsync("Error", ex.Message, SweetAlertIcon.Error);
+        }
+    }
+
+    private async Task EliminarUbicacionAsync(UbicacionProductoDTO ubicacion)
+    {
+        if (ubicacion == null || ubicacion.Id <= 0)
+        {
+            return;
+        }
+
+        var result = await sweetAlertService.FireAsync(new SweetAlertOptions
+        {
+            Title = "Confirmación",
+            Text = $"¿Realmente deseas eliminar la ubicación '{ubicacion.Codiubica}'?",
+            Icon = SweetAlertIcon.Question,
+            ShowCancelButton = true,
+            CancelButtonText = "No",
+            ConfirmButtonText = "Si"
+        });
+
+        var confirm = string.IsNullOrEmpty(result.Value);
+        if (confirm)
+        {
+            return;
+        }
+
+        try
+        {
+            var response = await repository.Put<object>($"api/ubicasql/baja/{ubicacion.Id}", new { });
+            if (response.Error)
+            {
+                await sweetAlertService.FireAsync("Error", "No se pudo eliminar la ubicación", SweetAlertIcon.Error);
+                return;
+            }
+
+            await CargarUbicacionesProductoAsync();
+        }
+        catch (Exception ex)
+        {
+            await sweetAlertService.FireAsync("Error", ex.Message, SweetAlertIcon.Error);
+        }
+    }
+
+    private void RecalcularStockProyectado()
+    {
+        var ho = DateTime.Now.ToString("dd/MM/yy");
+
+        stockProyectado ??= new List<StockProyectadoRow>();
+        stockProyectado.Clear();
+
+        var obser = string.Empty;
+        if (StoProp < 0m)
+        {
+            obser = "!!! Negativo !!!";
+        }
+        else if (StoProp < Stomin)
+        {
+            obser = "Sub-Mínimo";
+        }
+
+        stockProyectado.Add(new StockProyectadoRow
+        {
+            Comprobante = string.Empty,
+            Referencia = $"Stock Propio al {ho}",
+            Entra = 0m,
+            Sale = 0m,
+            Proyectado = StoProp,
+            Fecha = ho,
+            Observaciones = obser,
+            FechaOrden = "19800101"
+        });
+
+        SALSTO = StoTot;
+
+        foreach (var recep in (recepcionesPendientes ?? new List<StockRecepcionPendienteDTO>()))
+        {
+            var fecha = recep.FechaRecepcion == DateTime.MinValue
+                ? string.Empty
+                : recep.FechaRecepcion.ToString("dd/MM/yy");
+            var fechaOrden = recep.FechaRecepcion == DateTime.MinValue
+                ? string.Empty
+                : recep.FechaRecepcion.ToString("yyyyMMdd");
+
+            stockProyectado.Add(new StockProyectadoRow
+            {
+                Comprobante = $"BR.{recep.Numebore:000000}",
+                Referencia = recep.Proveedor,
+                Entra = recep.CantPendiente,
+                Sale = 0m,
+                Proyectado = 0m,
+                Fecha = fecha,
+                Observaciones = $"RT.{recep.RemitoProveedor}",
+                FechaOrden = fechaOrden
+            });
+        }
+
+        // Recepciones pendientes de aprobación (BRECEPEN)
+        foreach (var recepAprob in (recepcionesPendientesAprobacion ?? new List<StockRecepcionPendienteAprobacionDTO>()))
+        {
+            var fecha = recepAprob.FechaRecepcion == DateTime.MinValue
+                ? string.Empty
+                : recepAprob.FechaRecepcion.ToString("dd/MM/yy");
+            var fechaOrden = recepAprob.FechaRecepcion == DateTime.MinValue
+                ? string.Empty
+                : recepAprob.FechaRecepcion.ToString("yyyyMMdd");
+
+            var observaciones = $"RT.{recepAprob.RemitoProveedor}";
+            if (!string.IsNullOrWhiteSpace(recepAprob.Lote))
+            {
+                observaciones += $" | Lote: {recepAprob.Lote}";
+            }
+
+            stockProyectado.Add(new StockProyectadoRow
+            {
+                Comprobante = $"PA.{recepAprob.Numebore}",
+                Referencia = $"{recepAprob.Proveedor} (Pend. Aprob.)",
+                Entra = recepAprob.CantPendiente,
+                Sale = 0m,
+                Proyectado = 0m,
+                Fecha = fecha,
+                Observaciones = observaciones,
+                FechaOrden = fechaOrden
+            });
+        }
+
+        foreach (var ter in (tercerosPendientes ?? new List<StockTercerosPendienteDTO>()))
+        {
+            if (ter.CapenRendir > 0m)
+            {
+                var refe = $"Pendiente de rendir por {ter.Proveedor}";
+                stockProyectado.Add(new StockProyectadoRow
+                {
+                    Comprobante = "RC",
+                    Referencia = refe,
+                    Entra = ter.CapenRendir,
+                    Sale = 0m,
+                    Proyectado = 0m,
+                    Fecha = DateTime.Today.ToString("dd/MM/yy"),
+                    Observaciones = string.Empty,
+                    FechaOrden = DateTime.Today.ToString("yyyyMMdd")
+                });
+            }
+
+            if (ter.CapenEntregar >= 0.05m)
+            {
+                if ((ter.StatOcom ?? -1) < 8 && (ter.StatOcom ?? -1) >= 0)
+                {
+                    var refe = ter.Proveedor;
+                    var fex = ter.FechaEmisionOcom?.Date;
+                    var fecha = fex.HasValue ? fex.Value.ToString("dd/MM/yy") : string.Empty;
+                    var fechaOrden = fex.HasValue ? fex.Value.ToString("yyyyMMdd") : string.Empty;
+                    var ocom = (ter.Ocom ?? string.Empty);
+                    stockProyectado!.Add(new StockProyectadoRow
+                    {
+                        Comprobante = ocom.Length > 12 ? ocom.Substring(0, 12) : ocom,
+                        Referencia = refe,
+                        Entra = 0m,
+                        Sale = ter.CapenEntregar,
+                        Proyectado = 0m,
+                        Fecha = fecha,
+                        Observaciones = string.Empty,
+                        FechaOrden = fechaOrden
+                    });
+                }
+            }
+        }
+
+        var hoy = DateTime.Today;
+        foreach (var pedido in (pedidosPendientes ?? new List<StockPedidoPendienteDTO>()))
+        {
+            var fechaSolEnt = pedido.FechaSolEnt?.Date;
+            var fecha = fechaSolEnt.HasValue
+                ? fechaSolEnt.Value.ToString("dd/MM/yy")
+                : string.Empty;
+            var fechaOrden = fechaSolEnt.HasValue
+                ? fechaSolEnt.Value.ToString("yyyyMMdd")
+                : string.Empty;
+
+            var obserPed = string.Empty;
+            if (fechaSolEnt.HasValue && fechaSolEnt.Value < hoy)
+            {
+                var atras = (hoy - fechaSolEnt.Value).Days;
+                obserPed = $"Atr.{atras} Ds.";
+            }
+            if (pedido.SalPreparado > 0m)
+            {
+                if (!string.IsNullOrWhiteSpace(obserPed))
+                {
+                    obserPed += "/ ";
+                }
+                obserPed += $"Pr.{pedido.SalPreparado:N0}";
+            }
+
+            stockProyectado.Add(new StockProyectadoRow
+            {
+                Comprobante = $"PD.{pedido.NroPed:000000}",
+                Referencia = pedido.Cliente,
+                Entra = 0m,
+                Sale = pedido.CantPendiente,
+                Proyectado = 0m,
+                Fecha = fecha,
+                Observaciones = obserPed,
+                FechaOrden = fechaOrden
+            });
+        }
+
+        foreach (var compra in (comprasPendientes ?? new List<StockCompraPendienteDTO>()))
+        {
+            var fechaEnt = compra.FechaEntregaSolicitada?.Date;
+            var fecha = fechaEnt.HasValue
+                ? fechaEnt.Value.ToString("dd/MM/yy")
+                : string.Empty;
+            var fechaOrden = fechaEnt.HasValue
+                ? fechaEnt.Value.ToString("yyyyMMdd")
+                : string.Empty;
+
+            var obserOc = string.Empty;
+            if (fechaEnt.HasValue && fechaEnt.Value < hoy)
+            {
+                var atras = (hoy - fechaEnt.Value).Days;
+                obserOc = $"Atr.{atras} Ds.";
+            }
+
+            stockProyectado.Add(new StockProyectadoRow
+            {
+                Comprobante = $"OC.{compra.NumeOcom:000000}",
+                Referencia = compra.Proveedor,
+                Entra = compra.CantPendiente,
+                Sale = 0m,
+                Proyectado = 0m,
+                Fecha = fecha,
+                Observaciones = obserOc,
+                FechaOrden = fechaOrden
+            });
+        }
+
+        foreach (var of in (fabricacionPendiente ?? new List<StockFabricacionPendienteDTO>()))
+        {
+            var fechaBase = of.FechaEntregaSolicitada?.Date;
+            var fechaMostrar = fechaBase;
+            var obserOf = string.Empty;
+
+            if (of.FechaProyectadaEntrega.HasValue)
+            {
+                fechaMostrar = of.FechaProyectadaEntrega.Value.Date;
+
+                if (of.FechaRecalculo.HasValue)
+                {
+                    obserOf = $"Calc.{of.FechaRecalculo.Value:dd/MM/yy}";
+                }
+            }
+            else if (fechaBase.HasValue && fechaBase.Value < hoy)
+            {
+                var atras = (hoy - fechaBase.Value).Days;
+                obserOf = $"Atr.{atras} Ds.";
+            }
+
+            var fecha = fechaMostrar.HasValue
+                ? fechaMostrar.Value.ToString("dd/MM/yy")
+                : string.Empty;
+            var fechaOrden = fechaMostrar.HasValue
+                ? fechaMostrar.Value.ToString("yyyyMMdd")
+                : string.Empty;
+
+            stockProyectado.Add(new StockProyectadoRow
+            {
+                Comprobante = $"OF.{of.NumeOrfa:000000}",
+                Referencia = of.Referencia,
+                Entra = of.CantPendiente,
+                Sale = 0m,
+                Proyectado = 0m,
+                Fecha = fecha,
+                Observaciones = obserOf,
+                FechaOrden = fechaOrden
+            });
+        }
+
+        // FABRICACIONES PENDIENTES DE APROBACION (ORFAPEN, CodiMovi = 'OF')
+        foreach (var ofPend in (fabricacionPendienteAprobacion ?? new List<StockFabricacionPendienteAprobacionDTO>()))
+        {
+            var dopri = ofPend.DoPriCor ?? string.Empty;
+            var comprobante = dopri.Length > 12 ? dopri.Substring(0, 12) : dopri;
+
+            stockProyectado.Add(new StockProyectadoRow
+            {
+                Comprobante = comprobante,
+                Referencia = ofPend.Referencia,
+                Entra = ofPend.CantPendiente,
+                Sale = 0m,
+                Proyectado = 0m,
+                Fecha = DateTime.Today.ToString("dd/MM/yy"),
+                Observaciones = "PEND. APROBACION",
+                FechaOrden = DateTime.Today.ToString("yyyyMMdd")
+            });
+        }
+
+        var esGk = string.Equals(producto?.Umedida, "GK", StringComparison.OrdinalIgnoreCase);
+        foreach (var res in (reservasPendientes ?? new List<StockReservaPendienteDTO>()))
+        {
+            var capen = res.CantPendiente;
+            if (esGk)
+            {
+                capen = capen / 1000m;
+            }
+
+            if (Math.Abs(capen) <= 0m)
+            {
+                continue;
+            }
+
+            var fechaEnt = res.FechaEntregaSolicitada?.Date;
+            var fecha = fechaEnt.HasValue
+                ? fechaEnt.Value.ToString("dd/MM/yy")
+                : string.Empty;
+            var fechaOrden = fechaEnt.HasValue
+                ? fechaEnt.Value.ToString("yyyyMMdd")
+                : string.Empty;
+
+            var obserRes = string.Empty;
+            if (!string.IsNullOrWhiteSpace(res.IdenLote))
+            {
+                obserRes = $"Lote {res.IdenLote}";
+            }
+
+            if (fechaEnt.HasValue && fechaEnt.Value < hoy)
+            {
+                var atras = (hoy - fechaEnt.Value).Days;
+                obserRes = $"Atr.{atras} Ds.";
+            }
+
+            var destin = res.IdSubOr;
+            if (!string.IsNullOrWhiteSpace(res.CodExteDestino) || !string.IsNullOrWhiteSpace(res.DescripDestino))
+            {
+                destin = $"{res.CodExteDestino} - {res.DescripDestino}".Trim();
+            }
+
+            var refe = $"Reserva p/{destin}";
+            if ((res.IdSubOr ?? string.Empty).StartsWith("OR", StringComparison.OrdinalIgnoreCase))
+            {
+                refe = "Reserva p/Reparación";
+            }
+
+            stockProyectado.Add(new StockProyectadoRow
+            {
+                Comprobante = (res.IdSubOr ?? string.Empty).Length > 12 ? (res.IdSubOr ?? string.Empty).Substring(0, 12) : (res.IdSubOr ?? string.Empty),
+                Referencia = refe,
+                Entra = 0m,
+                Sale = capen,
+                Proyectado = 0m,
+                Fecha = fecha,
+                Observaciones = obserRes,
+                FechaOrden = fechaOrden
+            });
+        }
+
+        if (stockProyectado.Count > 1)
+        {
+            var firstRow = stockProyectado[0];
+            var rest = stockProyectado
+                .Skip(1)
+                .OrderBy(r => string.IsNullOrWhiteSpace(r.FechaOrden) ? "99999999" : r.FechaOrden)
+                .ThenBy(r => r.Comprobante)
+                .ToList();
+
+            stockProyectado.Clear();
+            stockProyectado.Add(firstRow);
+            stockProyectado.AddRange(rest);
+        }
+
+        if (stockProyectado.Count > 0)
+        {
+            var stopro = stockProyectado[0].Proyectado;
+            stockProyectado[0].Proyectado = stopro;
+
+            for (var i = 1; i < stockProyectado.Count; i++)
+            {
+                stopro += stockProyectado[i].Entra - stockProyectado[i].Sale;
+                stockProyectado[i].Proyectado = stopro;
+            }
+        }
+    }
+
+    private List<StockRecepcionPendienteDTO>? recepcionesPendientes;
+    private List<StockRecepcionPendienteAprobacionDTO>? recepcionesPendientesAprobacion;
+    private List<StockPedidoPendienteDTO>? pedidosPendientes;
+    private List<StockCompraPendienteDTO>? comprasPendientes;
+    private List<StockFabricacionPendienteDTO>? fabricacionPendiente;
+    private List<StockFabricacionPendienteAprobacionDTO>? fabricacionPendienteAprobacion;
+    private List<StockReservaPendienteDTO>? reservasPendientes;
+    private List<StockTercerosPendienteDTO>? tercerosPendientes;
+
+    private async Task CargarRecepcionesPendientesAsync()
+    {
+        recepcionesPendientes = new List<StockRecepcionPendienteDTO>();
+        TORECEP = 0m;
+
+        if (Codint <= 0)
+        {
+            return;
+        }
+
+        try
+        {
+            var response = await repository.Get<List<StockRecepcionPendienteDTO>>($"api/BolRecep/pendientes-por-producto/{Codint}");
+            if (response.Error || response.Response == null)
+            {
+                return;
+            }
+
+            recepcionesPendientes = response.Response
+                .Where(x => x.CantPendiente > 0m)
+                .OrderBy(x => x.Numebore)
+                .ToList();
+
+            TORECEP = recepcionesPendientes.Sum(x => x.CantPendiente);
+        }
+        catch
+        {
+            recepcionesPendientes = new List<StockRecepcionPendienteDTO>();
+            TORECEP = 0m;
+        }
+    }
+
+    private async Task CargarRecepcionesPendientesAprobacionAsync()
+    {
+        recepcionesPendientesAprobacion = new List<StockRecepcionPendienteAprobacionDTO>();
+
+        if (Codint <= 0)
+        {
+            return;
+        }
+
+        try
+        {
+            var response = await repository.Get<List<StockRecepcionPendienteAprobacionDTO>>($"api/brecepen/pendientes-aprobacion-por-producto/{Codint}");
+            if (response.Error || response.Response == null)
+            {
+                return;
+            }
+
+            recepcionesPendientesAprobacion = response.Response
+                .Where(x => x.CantPendiente > 0m)
+                .OrderBy(x => x.Numebore)
+                .ToList();
+        }
+        catch
+        {
+            recepcionesPendientesAprobacion = new List<StockRecepcionPendienteAprobacionDTO>();
+        }
+    }
+
+    private async Task CargarProductoAsync()
+    {
+        producto = null;
+
+        if (Codint <= 0)
+        {
+            return;
+        }
+
+        try
+        {
+            var responseProducto = await repository.Get<Master>($"api/master/xCodint{Codint}");
+            if (!responseProducto.Error)
+            {
+                producto = responseProducto.Response;
+            }
+        }
+        catch
+        {
+            producto = null;
+        }
+    }
+
+    private async Task CargarExistenciasAsync()
+    {
+        if (Codint <= 0)
+        {
+            existencias = new List<ExistenciaRow>();
+            isLoading = false;
+            return;
+        }
+
+        try
+        {
+            isLoading = true;
+
+            // 1) Lista de depósitos existentes (solo códigos).
+            //    Esto nos da el universo de depósitos a considerar en la grilla.
+            var responseDepositos = await repository.Get<List<int>>("api/tadeposi/SoloCodigos");
+            if (responseDepositos.Error || responseDepositos.Response == null)
+            {
+                await sweetAlertService.FireAsync("Error", "No se pudieron cargar los depósitos", SweetAlertIcon.Error);
+                existencias = new List<ExistenciaRow>();
+                return;
+            }
+
+            // 2) Info de depósitos activos (descripción + flag 'disponible').
+            //    NOTA: no usamos el endpoint 'combo' porque ese arma un diccionario para UI,
+            //    pero no nos asegura el flag de disponibilidad.
+            var responseDepositosInfo = await repository.Get<List<Tadeposi>>("api/tadeposi/activos");
+            if (responseDepositosInfo.Error || responseDepositosInfo.Response == null)
+            {
+                await sweetAlertService.FireAsync("Error", "No se pudo cargar el combo de depósitos", SweetAlertIcon.Error);
+                existencias = new List<ExistenciaRow>();
+                return;
+            }
+
+            // 3) Normalizamos la info en un diccionario por código:
+            //    - Descripcion: texto a mostrar en grilla.
+            //    - Disponible: bool real del depósito.
+            var depositosInfo = responseDepositosInfo.Response
+                .Where(x => x.CodigoDepo > 0)
+                .ToDictionary(
+                    x => x.CodigoDepo,
+                    x => new { Descripcion = $"{x.CodigoDepo} - {x.Descripcion}", Disponible = x.disponible });
+
+            // 4) Stock por depósito para el producto.
+            //    El backend devuelve movimientos agregados por depósito; aquí los consolidamos en un diccionario.
+            var responseStock = await repository.Get<List<StockDepositoDTO>>($"api/movisto/stock/{Codint}");
+            if (responseStock.Error)
+            {
+                await sweetAlertService.FireAsync("Error", "No se pudo cargar el stock por depósito", SweetAlertIcon.Error);
+                existencias = new List<ExistenciaRow>();
+                return;
+            }
+
+            // 4.1) Consolidamos la respuesta del backend en un diccionario:
+            //      Depósito -> Stock (sumado)
+            //      Esto simplifica el armado de la grilla.
+            var stocksByDeposito = (responseStock.Response ?? new List<StockDepositoDTO>())
+                .GroupBy(x => x.Deposito ?? 0)
+                .ToDictionary(g => g.Key, g => g.Sum(x => x.Stock));
+
+            var universoDepositos = responseDepositos.Response
+                .Union(stocksByDeposito.Keys)
+                .Distinct()
+                .OrderBy(d => d)
+                .ToList();
+
+            // 5) Armamos filas para la grilla de existencias.
+            //    - Recorremos todos los depósitos.
+            //    - Solo mostramos depósitos con stock "significativo" para no llenar de ceros la grilla.
+            //    - Marcamos NoDisponible según Tadeposi.disponible, porque esto impacta en StoProp.
+            var rows = new List<ExistenciaRow>();
+            foreach (var deposito in universoDepositos)
+            {
+                stocksByDeposito.TryGetValue(deposito, out var stock);
+                if (Math.Abs(stock) < 0.05m)
+                {
+                    continue;
+                }
+
+                // Por defecto: si no encontramos el depósito en el diccionario de activos,
+                // lo marcamos como no disponible y mostramos "Sin descripción".
+                var noDisponible = true;
+                var descripcion = deposito == 0 ? "Sin depósito" : "Sin descripción";
+                if (depositosInfo.TryGetValue(deposito, out var info))
+                {
+                    descripcion = info.Descripcion;
+
+                    // Punto clave del negocio:
+                    // - Si Tadeposi.disponible es false => NoDisponible=true.
+                    // - StoProp (Stock Propio) suma solamente depósitos con NoDisponible=false.
+                    noDisponible = !info.Disponible;
+                }
+
+                rows.Add(new ExistenciaRow
+                {
+                    Deposito = deposito,
+                    Descripcion = descripcion,
+                    Stock = stock,
+                    NoDisponible = noDisponible
+                });
+            }
+
+            existencias = rows
+                .OrderByDescending(x => x.Stock)
+                .ToList();
+        }
+        catch (Exception ex)
+        {
+            await sweetAlertService.FireAsync("Error", ex.Message, SweetAlertIcon.Error);
+            existencias = new List<ExistenciaRow>();
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private void Regresar()
+    {
+        if (!string.IsNullOrWhiteSpace(returnUrl))
+        {
+            var decoded = HttpUtility.UrlDecode(returnUrl);
+            NavigationManager.NavigateTo(decoded, forceLoad: false);
+            return;
+        }
+
+        NavigationManager.NavigateTo("/Stock-index");
+    }
+
+    private sealed class ExistenciaRow
+    {
+        public int Deposito { get; set; }
+        public string Descripcion { get; set; } = string.Empty;
+        public decimal Stock { get; set; }
+        public bool NoDisponible { get; set; }
+    }
+
+    private sealed class StockProyectadoRow
+    {
+        public string Comprobante { get; set; } = string.Empty;
+        public string Referencia { get; set; } = string.Empty;
+        public decimal Entra { get; set; }
+        public decimal Sale { get; set; }
+        public decimal Proyectado { get; set; }
+        public string Fecha { get; set; } = string.Empty;
+        public string Observaciones { get; set; } = string.Empty;
+        public string FechaOrden { get; set; } = string.Empty;
+    }
+}

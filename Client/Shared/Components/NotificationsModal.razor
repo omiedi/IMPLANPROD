@@ -1,0 +1,337 @@
+@using Blazored.Modal
+@using Blazored.Modal.Services
+@using IMPLANPROD.Client.Services
+@using IMPLANPROD.Client.Repositories
+@using IMPLANPROD.Client.Shared.Components
+@using IMPLANPROD.Shared.DTOs.Notificaciones
+@inject NotificationService NotificationService
+@inject IRepository Repository
+@inject CurrentUserService CurrentUserService
+@inject AuthErrorHandlerService AuthErrorHandler
+@implements IDisposable
+
+<div class="modal-content" style="z-index: 2002;">
+    <div class="modal-header bg-primary text-white">
+        <h5 class="modal-title">
+            <i class="fas fa-bell"></i> Notificaciones
+            @if (UnreadCountForCurrentUser > 0)
+            {
+                <span class="badge bg-warning text-dark ms-2">@UnreadCountForCurrentUser sin leer</span>
+            }
+        </h5>
+    </div>
+    <div class="modal-body" style="max-height: 600px; overflow-y: auto;">
+        <div class="mb-3">
+            <div class="card mb-2">
+                <div class="card-header bg-info text-white p-2">
+                    <button class="btn btn-link text-white text-decoration-none w-100 text-start p-0"
+                            type="button"
+                            @onclick="() => mostrarInstructivoUsuario = !mostrarInstructivoUsuario">
+                        <i class="fas @(mostrarInstructivoUsuario ? "fa-chevron-down" : "fa-chevron-right") me-2"></i>
+                        <strong>Instructivo para el Usuario</strong>
+                    </button>
+                </div>
+                @if (mostrarInstructivoUsuario)
+                {
+                    <div class="card-body">
+                        <h6 class="text-primary"><i class="fas fa-info-circle"></i> ¿Qué podés hacer acá?</h6>
+                        <ul>
+                            <li><strong>Leer el detalle:</strong> hacé click en el título de la notificación.</li>
+                            <li><strong>Marcar como leída:</strong> usá el ícono de <i class="fas fa-eye"></i>.</li>
+                            <li><strong>Borrar para mí:</strong> usá el ícono de <i class="fas fa-trash"></i> (solo se oculta para tu usuario).</li>
+                            <li><strong>Refrescar:</strong> botón <code>Refrescar</code> para volver a consultar al servidor.</li>
+                        </ul>
+
+                        <h6 class="text-primary mt-3"><i class="fas fa-lightbulb"></i> Consejos</h6>
+                        <ul class="mb-0">
+                            <li>El contador muestra cuántas te quedan <strong>sin leer</strong>.</li>
+                            <li>Si abrís el detalle, la notificación se marca como leída automáticamente.</li>
+                        </ul>
+                    </div>
+                }
+            </div>
+
+            <InstructivoDesarrollador>
+                <h6 class="text-info"><i class="fas fa-code"></i> Endpoints</h6>
+                <ul>
+                    <li><code>GET api/notificaciones</code></li>
+                    <li><code>GET api/notificaciones/unreadCount</code></li>
+                    <li><code>GET api/notificaciones/{id}/detail</code></li>
+                    <li><code>POST api/notificaciones/markRead</code></li>
+                    <li><code>POST api/notificaciones/hide</code></li>
+                </ul>
+
+                <h6 class="text-info mt-3"><i class="fas fa-sitemap"></i> Servicios involucrados</h6>
+                <ul>
+                    <li><strong>Client:</strong> <code>NotificationService</code>, <code>IRepository</code>, <code>AuthErrorHandlerService</code></li>
+                    <li><strong>Server:</strong> <code>NotificacionesService</code>, <code>DataContext</code></li>
+                </ul>
+
+                <h6 class="text-info mt-3"><i class="fas fa-project-diagram"></i> Flujo (alto nivel)</h6>
+                <pre class="bg-light p-2 rounded"><code>Abrir modal
+  ↓
+GET api/notificaciones
+  ↓
+Render lista + contador
+
+Click "ver detalle"
+  ↓
+GET api/notificaciones/{id}/detail (si TieneDetalle)
+  ↓
+POST api/notificaciones/markRead (si no estaba leída)
+  ↓
+RefreshAsync()
+
+Click "ojo"
+  ↓
+POST api/notificaciones/markRead
+  ↓
+RefreshAsync()
+
+Click "cesto"
+  ↓
+POST api/notificaciones/hide
+  ↓
+RefreshAsync()</code></pre>
+
+                <h6 class="text-info mt-3"><i class="fas fa-shield-alt"></i> Validaciones / reglas</h6>
+                <ul class="mb-0">
+                    <li><strong>Identidad:</strong> se usa <code>UserInfo.Id</code> como identificador de usuario.</li>
+                    <li><strong>markRead/hide:</strong> requiere <code>notificacionId &gt; 0</code> y usuario autenticado.</li>
+                    <li><strong>hide:</strong> no borra global, registra en <code>NotificacionOcultas</code> y se filtra en el listado.</li>
+                    <li><strong>detalle:</strong> solo se consulta si <code>TieneDetalle</code>.</li>
+                </ul>
+
+                <h6 class="text-info mt-3"><i class="fas fa-folder-open"></i> Archivos clave</h6>
+                <ul class="mb-0">
+                    <li><code>Client/Shared/Components/NotificationsModal.razor</code></li>
+                    <li><code>Client/Services/NotificationService.cs</code></li>
+                    <li><code>Server/Controllers/NotificacionesController.cs</code></li>
+                    <li><code>Server/Services/NotificacionesService.cs</code></li>
+                </ul>
+            </InstructivoDesarrollador>
+        </div>
+
+        @if (ItemsForCurrentUser.Count == 0)
+        {
+            <div class="alert alert-info mb-0">
+                <i class="fas fa-info-circle"></i> Sin notificaciones por el momento.
+            </div>
+        }
+        else
+        {
+            <div class="list-group">
+                @foreach (var n in ItemsForCurrentUser)
+                {
+                    <div class="list-group-item">
+                        <div class="d-flex justify-content-between align-items-start">
+                            <div class="me-3">
+                                <div class="fw-semibold">
+                                    @if (!n.Leida)
+                                    {
+                                        <span class="badge bg-danger me-2">Nuevo</span>
+                                    }
+                                    <button type="button" class="btn btn-link p-0 text-decoration-none" @onclick="(() => AbrirNotificacionAsync(n))">
+                                        @n.Titulo
+                                    </button>
+                                </div>
+                                @if (!string.IsNullOrWhiteSpace(n.Resumen))
+                                {
+                                    <div class="text-muted small">@n.Resumen</div>
+                                }
+                                @if (!string.IsNullOrWhiteSpace(n.DestinatariosResumen))
+                                {
+                                    <div class="text-muted small">Para: @n.DestinatariosResumen</div>
+                                }
+                                <div class="text-muted small">@((n.AddRecord ?? DateTime.Now).ToString("dd/MM/yyyy HH:mm"))</div>
+                            </div>
+
+                            <div class="d-flex gap-2">
+                                @if (!n.Leida)
+                                {
+                                    <button type="button" class="btn btn-sm btn-outline-success" title="Marcar como leída" @onclick="(async () => await MarcarLeidaIndividualAsync(n.Id))">
+                                        <i class="fas fa-eye"></i>
+                                    </button>
+                                }
+                                <button type="button" class="btn btn-sm btn-outline-danger" title="Borrar para mí" @onclick="(async () => await OcultarIndividualAsync(n.Id))">
+                                    <i class="fas fa-trash"></i>
+                                </button>
+                            </div>
+                        </div>
+
+                        @if (_detalleNotificacionId == n.Id)
+                        {
+                            @if (_detalleLoading)
+                            {
+                                <div class="text-muted mt-2">Cargando detalle...</div>
+                            }
+                            else if (!string.IsNullOrWhiteSpace(_detalleHtml))
+                            {
+                                <div class="mt-2 border rounded p-2" style="background-color: #fafafa;">
+                                    @((MarkupString)_detalleHtml)
+                                </div>
+                            }
+                        }
+                    </div>
+                }
+            </div>
+        }
+    </div>
+    <div class="modal-footer">
+        <button type="button" class="btn btn-outline-success" @onclick="(async () => await MarcarTodasLeidas())" disabled="@(UnreadCountForCurrentUser == 0)">
+            <i class="fas fa-check"></i> Marcar leídas
+        </button>
+        <button type="button" class="btn btn-outline-secondary" @onclick="(async () => await Refrescar())" disabled="@(_loading)">
+            <i class="fas fa-sync"></i> Refrescar
+        </button>
+        <button type="button" class="btn btn-secondary" @onclick="Cerrar">
+            <i class="fas fa-times"></i> Cerrar
+        </button>
+    </div>
+</div>
+
+@code {
+    [CascadingParameter] private BlazoredModalInstance Modal { get; set; } = default!;
+
+    private int _userId;
+
+    private bool mostrarInstructivoUsuario;
+
+    private bool _loading;
+
+    private int? _detalleNotificacionId;
+    private bool _detalleLoading;
+    private string? _detalleHtml;
+
+    private IReadOnlyList<NotificacionItemDTO> ItemsForCurrentUser => NotificationService.GetItemsForUser(_userId);
+
+    private int UnreadCountForCurrentUser => NotificationService.GetUnreadCountForUser(_userId);
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadUserIdFlexoftAsync();
+        await Refrescar();
+        NotificationService.OnChange += OnNotificationsChanged;
+    }
+
+    private async Task LoadUserIdFlexoftAsync()
+    {
+        _userId = await CurrentUserService.GetUserIdAsync();
+    }
+
+    private void OnNotificationsChanged()
+    {
+        InvokeAsync(StateHasChanged);
+    }
+
+    public void Dispose()
+    {
+        NotificationService.OnChange -= OnNotificationsChanged;
+    }
+
+    private async Task MarcarTodasLeidas()
+    {
+        if (_userId <= 0)
+        {
+            return;
+        }
+
+        var pendientes = ItemsForCurrentUser.Where(x => !x.Leida).Select(x => x.Id).ToList();
+        foreach (var id in pendientes)
+        {
+            await NotificationService.MarkAsReadAsync(id);
+        }
+    }
+
+    private async Task MarcarLeidaIndividualAsync(int notificacionId)
+    {
+        var response = await Repository.Post("api/notificaciones/markRead", new MarcarLeidaRequestDTO { NotificacionId = notificacionId });
+        if (await AuthErrorHandler.HandleErrorAsync(response, "Error al marcar leída"))
+        {
+            return;
+        }
+
+        await NotificationService.RefreshAsync();
+
+        if (_detalleNotificacionId == notificacionId)
+        {
+            _detalleNotificacionId = null;
+            _detalleHtml = null;
+        }
+    }
+
+    private async Task OcultarIndividualAsync(int notificacionId)
+    {
+        var response = await NotificationService.HideForMeAsync(notificacionId);
+        if (await AuthErrorHandler.HandleErrorAsync(response, "Error al ocultar"))
+        {
+            return;
+        }
+
+        if (_detalleNotificacionId == notificacionId)
+        {
+            _detalleNotificacionId = null;
+            _detalleHtml = null;
+        }
+    }
+
+    private async Task Refrescar()
+    {
+        if (_loading)
+        {
+            return;
+        }
+
+        try
+        {
+            _loading = true;
+            await NotificationService.RefreshAsync();
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private async Task AbrirNotificacionAsync(NotificacionItemDTO item)
+    {
+        if (item.Id <= 0)
+        {
+            return;
+        }
+
+        if (_detalleNotificacionId == item.Id)
+        {
+            _detalleNotificacionId = null;
+            _detalleHtml = null;
+            return;
+        }
+
+        _detalleNotificacionId = item.Id;
+        _detalleHtml = null;
+        _detalleLoading = true;
+
+        try
+        {
+            if (item.TieneDetalle)
+            {
+                var detalle = await NotificationService.GetDetailAsync(item.Id);
+                _detalleHtml = detalle?.DetalleHtml;
+            }
+
+            if (!item.Leida)
+            {
+                await NotificationService.MarkAsReadAsync(item.Id);
+            }
+        }
+        finally
+        {
+            _detalleLoading = false;
+        }
+    }
+
+    private Task Cerrar()
+    {
+        return Modal.CloseAsync();
+    }
+}

@@ -1,13 +1,74 @@
 @page "/usuarios"
+@using Microsoft.AspNetCore.Authorization
+@attribute [Authorize(Roles = "SUPERADMIN")]
 @using IMPLANPROD.Shared.Entities
-@inject HttpClient Http
+@inject IRepository repository
 @inject NavigationManager NavigationManager
+@inject SweetAlertService sweetAlertService
 
 <h3>Lista de Usuarios</h3>
 
 <div class="mb-3">
     <a href="/registro" class="btn btn-primary">Nuevo Usuario</a>
+    <button class="btn btn-info ms-2" @onclick="AbrirModalCopiar">
+        <i class="fas fa-copy me-1"></i> Copiar Permisos de Páginas
+    </button>
 </div>
+
+@if (mostrarModalCopiar)
+{
+    <div class="modal show d-block" tabindex="-1" style="background:rgba(0,0,0,0.55);">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header bg-info text-white">
+                    <h5 class="modal-title"><i class="fas fa-copy me-2"></i>Copiar Permisos de Páginas</h5>
+                    <button type="button" class="btn-close btn-close-white" @onclick="CerrarModalCopiar"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="alert alert-warning py-2">
+                        <i class="fas fa-exclamation-triangle me-1"></i>
+                        Los permisos actuales del usuario destino serán <strong>reemplazados</strong> por los del origen.
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Usuario Origen</label>
+                        <select class="form-select" @bind="copiarOrigenId">
+                            <option value="0">-- Seleccioná usuario origen --</option>
+                            @foreach (var u in usuariosParaCombos)
+                            {
+                                <option value="@u.Id">@u.NombreUsuario (@(perfiles.FirstOrDefault(p => p.Id == u.PerfilId)?.Nombre ?? "Sin perfil"))</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Usuario Destino</label>
+                        <select class="form-select" @bind="copiarDestinoId">
+                            <option value="0">-- Seleccioná usuario destino --</option>
+                            @foreach (var u in usuariosParaCombos)
+                            {
+                                <option value="@u.Id">@u.NombreUsuario (@(perfiles.FirstOrDefault(p => p.Id == u.PerfilId)?.Nombre ?? "Sin perfil"))</option>
+                            }
+                        </select>
+                    </div>
+                    @if (copiarOrigenId > 0 && copiarDestinoId > 0 && copiarOrigenId == copiarDestinoId)
+                    {
+                        <div class="alert alert-danger py-1 small">El origen y destino no pueden ser el mismo usuario.</div>
+                    }
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-secondary" @onclick="CerrarModalCopiar">Cancelar</button>
+                    <button class="btn btn-info text-white" @onclick="EjecutarCopiaAsync"
+                            disabled="@(copiarOrigenId == 0 || copiarDestinoId == 0 || copiarOrigenId == copiarDestinoId || copiando)">
+                        @if (copiando)
+                        {
+                            <span class="spinner-border spinner-border-sm me-1"></span>
+                        }
+                        <i class="fas fa-copy me-1"></i>Copiar Permisos
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
 
 @if (usuarios == null)
 {
@@ -79,6 +140,12 @@ else
     private List<Perfil> perfiles = new();
     private string? mensajeError;
 
+    private bool mostrarModalCopiar = false;
+    private bool copiando = false;
+    private int copiarOrigenId = 0;
+    private int copiarDestinoId = 0;
+    private List<Usuario> usuariosParaCombos = new();
+
     protected override async Task OnInitializedAsync()
     {
         await CargarPerfiles();
@@ -87,28 +154,22 @@ else
 
     private async Task CargarPerfiles()
     {
-        try
-        {
-            perfiles = await Http.GetFromJsonAsync<List<Perfil>>("api/Perfiles") ?? new List<Perfil>();
-        }
-        catch (Exception ex)
-        {
-            mensajeError = "Error al cargar los perfiles";
-            Console.WriteLine($"Error: {ex.Message}");
-        }
+        var resp = await repository.Get<List<Perfil>>("api/Perfiles");
+        if (!resp.Error)
+            perfiles = resp.Response ?? new();
     }
 
     private async Task CargarUsuarios()
     {
-        try
+        var resp = await repository.Get<List<Usuario>>("api/Usuarios");
+        if (resp.Error)
         {
-            usuarios = await Http.GetFromJsonAsync<List<Usuario>>("api/Usuarios");
+            var msg = await resp.GetErrorMessageAsync();
+            await sweetAlertService.FireAsync("Error", msg, SweetAlertIcon.Error);
+            usuarios = new();
+            return;
         }
-        catch (Exception ex)
-        {
-            mensajeError = "Error al cargar los usuarios";
-            Console.WriteLine($"Error: {ex.Message}");
-        }
+        usuarios = resp.Response ?? new();
     }
 
     private void EditarUsuario(int id)
@@ -116,18 +177,78 @@ else
         NavigationManager.NavigateTo($"/usuarios/editar/{id}");
     }
 
+    private void AbrirModalCopiar()
+    {
+        copiarOrigenId  = 0;
+        copiarDestinoId = 0;
+        usuariosParaCombos = usuarios?
+            .Where(u => !string.Equals(
+                perfiles.FirstOrDefault(p => p.Id == u.PerfilId)?.Nombre?.Trim(),
+                "SUPERADMIN", StringComparison.OrdinalIgnoreCase))
+            .OrderBy(u => u.NombreUsuario)
+            .ToList() ?? new();
+        mostrarModalCopiar = true;
+    }
+
+    private void CerrarModalCopiar() => mostrarModalCopiar = false;
+
+    private async Task EjecutarCopiaAsync()
+    {
+        if (copiarOrigenId == 0 || copiarDestinoId == 0 || copiarOrigenId == copiarDestinoId) return;
+
+        var origen  = usuariosParaCombos.FirstOrDefault(u => u.Id == copiarOrigenId);
+        var destino = usuariosParaCombos.FirstOrDefault(u => u.Id == copiarDestinoId);
+
+        var confirm = await sweetAlertService.FireAsync(new SweetAlertOptions
+        {
+            Title = "¿Confirmar copia de permisos?",
+            Html  = $"Se copiarán los permisos de <b>{origen?.NombreUsuario}</b> hacia <b>{destino?.NombreUsuario}</b>.<br/>" +
+                    $"Los permisos actuales de <b>{destino?.NombreUsuario}</b> serán <strong>reemplazados</strong>.",
+            Icon  = SweetAlertIcon.Warning,
+            ShowCancelButton  = true,
+            ConfirmButtonText = "Sí, copiar",
+            CancelButtonText  = "Cancelar",
+            ConfirmButtonColor = "#0dcaf0"
+        });
+
+        if (!confirm.IsConfirmed) return;
+
+        copiando = true;
+        var resp = await repository.Post<object>(
+            $"api/seguridad-rutas/usuarios/{copiarOrigenId}/copiar-permisos/{copiarDestinoId}", new {});
+        copiando = false;
+
+        if (resp.Error)
+        {
+            var msg = await resp.GetErrorMessageAsync();
+            await sweetAlertService.FireAsync("Error", msg, SweetAlertIcon.Error);
+            return;
+        }
+
+        CerrarModalCopiar();
+        await sweetAlertService.FireAsync(new SweetAlertOptions
+        {
+            Icon  = SweetAlertIcon.Success,
+            Title = "Permisos copiados",
+            Text  = $"Los permisos de {origen?.NombreUsuario} fueron copiados a {destino?.NombreUsuario}.",
+            Timer = 2500,
+            ShowConfirmButton = false
+        });
+    }
+
     private async Task ToggleEstadoUsuario(int id)
     {
         try
         {
-            var response = await Http.PutAsync($"api/Usuarios/toggle-estado/{id}", null);
-            if (response.IsSuccessStatusCode)
+            var response = await repository.Put($"api/Usuarios/toggle-estado/{id}", (object?)null);
+            if (!response.Error)
             {
                 await CargarUsuarios();
             }
             else
             {
-                mensajeError = "Error al cambiar el estado del usuario";
+                var msg = await response.GetErrorMessageAsync();
+                await sweetAlertService.FireAsync("Error", msg, SweetAlertIcon.Error);
             }
         }
         catch (Exception ex)

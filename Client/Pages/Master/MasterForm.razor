@@ -1,6 +1,7 @@
 @page "/masterForm"
 @inject SweetAlertService sweetAlertService
 @using IMPLANPROD.Shared.Entities
+@using IMPLANPROD.Shared.DTOs
 @inject IRepository repository
 @inject NavigationManager navigation
 @using Microsoft.AspNetCore.Components.Forms
@@ -15,6 +16,27 @@
         <button class="btn btn-success" @onclick="ReturnAction">Regresar</button>
     </div>
     <DataAnnotationsValidator />
+
+    <div class="d-flex align-items-center gap-2 mt-3 mb-3 p-2 border rounded bg-light">
+        <button type="button" class="btn btn-warning" title="Alta x Copia" @onclick="AbrirAltaXCopiaModal" disabled="@(!IsEdit)">Alta x copia</button>
+        <div class="vr"></div>
+        <button type="button" class="btn btn-outline-info btn-sm" title="Ver estructura directa (1 nivel)" disabled="@(!IsEdit)"
+                @onclick="() => VerEstructura(1)">
+            <i class="fas fa-sitemap me-1"></i>Estructura 1 nivel
+        </button>
+        <button type="button" class="btn btn-info btn-sm" title="Ver estructura completa multinivel" disabled="@(!IsEdit)"
+                @onclick="() => VerEstructura(0)">
+            <i class="fas fa-project-diagram me-1"></i>Multinivel
+        </button>
+        <button type="button" class="btn btn-info btn-sm" title="Navegación de componentes" disabled="@(!IsEdit)"
+                @onclick="IrANavegacionComponentes">
+            <i class="fas fa-sitemap me-1"></i>Navegación
+        </button>
+        <button type="button" class="btn btn-outline-success btn-sm" title="Implosión del producto (en qué productos es componente)" disabled="@(!IsEdit)"
+                @onclick="AbrirImplosion">
+            <i class="fas fa-arrow-up me-1"></i>Implosión
+        </button>
+    </div>
 
     <!-- Cabecera del formulario -->
     <div class="row g-3 mb-3 align-items-end">
@@ -124,12 +146,12 @@
                         <div class="col-6">
                             <label>Grupo I.V.A.:</label>
                             <InputSelect class="form-control" @bind-Value="master.Grupiva">
-                                <option value="0">Seleccione grupo...</option>
+                                <option value="">Seleccione grupo...</option>
                                 @if (gruposIva != null)
                                 {
                                     @foreach (var grupo in gruposIva)
                                     {
-                                        <option value="@grupo.Id">@grupo.Referencia</option>
+                                        <option value="@grupo.CodigoID">@grupo.Referencia (@grupo.CodigoID)</option>
                                     }
                                 }
                             </InputSelect>
@@ -349,6 +371,77 @@
 
 </EditForm>
 
+<MasterImplosionModal IsVisible="@mostrarModalImplosion"
+                      OnCloseRequested="CerrarImplosion"
+                      Codint="@master.Codint"
+                      CodigoProducto="@master.Codigo"
+                      DescripcionProducto="@master.Descripcion" />
+
+@if (mostrarModalAltaXCopia)
+{
+    <div class="modal fade show" style="display:block;" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header bg-primary text-white">
+                    <h5 class="modal-title">Alta x Copia</h5>
+                    <button type="button" class="btn-close btn-close-white" @onclick="CerrarAltaXCopiaModal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label class="form-label">Código base</label>
+                            <input class="form-control" value="@master.Codigo" readonly />
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Código a dar de alta</label>
+                            <input class="form-control" @bind="axcNuevoCodigo" />
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label">Descripción</label>
+                            <input class="form-control" @bind="axcNuevaDescripcion" />
+                            <div class="form-text">Descripción del código a dar de alta.</div>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Unidad de Medida</label>
+                            <div class="d-flex gap-2">
+                                <InputSelect class="form-control" @bind-Value="axcNuevaUnidadMedida">
+                                    <option value="">Seleccione unidad...</option>
+                                    @if (umedida != null)
+                                    {
+                                        @foreach (var um in umedida)
+                                        {
+                                            <option value="@um.DescripcionAbreviada">@um.Descripcion</option>
+                                        }
+                                    }
+                                </InputSelect>
+                                <div class="form-control" style="max-width: 80px;">@axcNuevaUnidadMedida</div>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Tipo de Material</label>
+                            <InputSelect class="form-control" @bind-Value="axcNuevoTipoMaterial">
+                                <option value="0">Seleccione un tipo...</option>
+                                @if (tiposMaterial != null)
+                                {
+                                    @foreach (var tipo in tiposMaterial)
+                                    {
+                                        <option value="@tipo.Id">@tipo.Descripcion</option>
+                                    }
+                                }
+                            </InputSelect>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-outline-secondary" @onclick="CerrarAltaXCopiaModal">Cancelar</button>
+                    <button type="button" class="btn btn-primary" @onclick="ConfirmarAltaXCopiaAsync" disabled="@axcIsSaving">Aceptar</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="modal-backdrop fade show"></div>
+}
+
 @code {
 
 
@@ -381,19 +474,123 @@
 
     public bool FormPostedSuccessfully { get; set; } = false;
 
+    private bool mostrarModalAltaXCopia = false;
+    private bool axcIsSaving = false;
+    private string axcNuevoCodigo = string.Empty;
+    private string axcNuevaDescripcion = string.Empty;
+    private string? axcNuevaUnidadMedida;
+    private short? axcNuevoTipoMaterial;
+
+    // Variables para el modal de implosión
+    private bool mostrarModalImplosion = false;
+
+    private void AbrirImplosion()
+    {
+        if (!IsEdit || master == null)
+        {
+            return;
+        }
+
+        mostrarModalImplosion = true;
+    }
+
+    private void CerrarImplosion()
+    {
+        mostrarModalImplosion = false;
+    }
+
     protected async override Task OnInitializedAsync()
     {
+        master.Grupiva ??= 0;
         editContext = new(master);//ojo el orden si esta primero como en este caso la declaracion debe ir primero si no da error de carga en la pantalla
         await CargarCombos();
         CalcularValorPesos(); // Calcular valor inicial en pesos
     }
+
+    private void AbrirAltaXCopiaModal()
+    {
+        axcNuevoCodigo = string.Empty;
+        axcNuevaDescripcion = master.Descripcion ?? string.Empty;
+        axcNuevaUnidadMedida = master.Umedida;
+        axcNuevoTipoMaterial = master.Timate;
+        mostrarModalAltaXCopia = true;
+    }
+
+    private void CerrarAltaXCopiaModal()
+    {
+        if (axcIsSaving)
+        {
+            return;
+        }
+
+        mostrarModalAltaXCopia = false;
+    }
+
+    private async Task ConfirmarAltaXCopiaAsync()
+    {
+        if (!IsEdit)
+        {
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(axcNuevoCodigo))
+        {
+            await sweetAlertService.FireAsync("Error", "El código a dar de alta es requerido.", SweetAlertIcon.Error);
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(axcNuevaDescripcion))
+        {
+            await sweetAlertService.FireAsync("Error", "La descripción es requerida.", SweetAlertIcon.Error);
+            return;
+        }
+
+        axcIsSaving = true;
+        try
+        {
+            var dto = new MasterAltaXCopiaDTO
+            {
+                BaseCodint = master.Codint,
+                NuevoCodigo = axcNuevoCodigo,
+                NuevaDescripcion = axcNuevaDescripcion,
+                NuevaUnidadMedida = axcNuevaUnidadMedida,
+                NuevoTipoMaterial = axcNuevoTipoMaterial
+            };
+
+            var response = await repository.Post<MasterAltaXCopiaDTO, Master>("api/master/alta-x-copia", dto);
+            if (response.Error || response.Response == null)
+            {
+                await sweetAlertService.FireAsync("Error", await response.GetErrorMessageAsync(), SweetAlertIcon.Error);
+                return;
+            }
+
+            mostrarModalAltaXCopia = false;
+            navigation.NavigateTo($"/master/edit/{response.Response.Id}");
+        }
+        catch (Exception ex)
+        {
+            await sweetAlertService.FireAsync("Error", ex.Message, SweetAlertIcon.Error);
+        }
+        finally
+        {
+            axcIsSaving = false;
+        }
+    }
     private void NavigateToComponentes()
     {
-
         navigation.NavigateTo($"/master/componentes/{master.Id}");
-
-
     }
+
+    private void VerEstructura(int niveles)
+    {
+        navigation.NavigateTo($"/stock/consultaStockComponentes?codint={master.Codint}&niveles={niveles}");
+    }
+
+    private void IrANavegacionComponentes()
+    {
+        navigation.NavigateTo($"/master/navegacion-componentes/{master.Id}");
+    }
+
     private void NavigateToElaboracion()
     {
         navigation.NavigateTo($"/master/elaboracion/{master.Id}");

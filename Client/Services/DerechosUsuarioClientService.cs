@@ -1,4 +1,3 @@
-using IMPLANPROD.Client.Auth;
 using IMPLANPROD.Client.Repositories;
 using IMPLANPROD.Shared.DTOs;
 using Microsoft.JSInterop;
@@ -13,13 +12,16 @@ namespace IMPLANPROD.Client.Services
     {
         private readonly IRepository _repository;
         private readonly IJSRuntime _jsRuntime;
+        private readonly CurrentUserService _currentUserService;
 
         public DerechosUsuarioClientService(
             IRepository repository,
-            IJSRuntime jsRuntime)
+            IJSRuntime jsRuntime,
+            CurrentUserService currentUserService)
         {
             _repository = repository;
             _jsRuntime = jsRuntime;
+            _currentUserService = currentUserService;
         }
 
         /// <summary>
@@ -38,40 +40,26 @@ namespace IMPLANPROD.Client.Services
         {
             try
             {
-                // Obtener el número de usuario activo desde UserInfo
-                var userInfo = await _repository.GetUserInfoAsync<Auth.UserInfo>();
-                
-                // Logging detallado para diagnosticar el problema
-                Console.WriteLine("=== DEBUG: Verificación de Derechos ===");
-                Console.WriteLine($"UserInfo obtenido: {userInfo != null}");
-                
-                if (userInfo != null)
+                // Si el usuario es SUPERADMIN, tiene acceso total a todo
+                var esSuperAdmin = await _currentUserService.EsSuperAdminAsync();
+                if (esSuperAdmin)
                 {
-                    Console.WriteLine($"IdFlexoft: {userInfo.IdFlexoft}");
-                    Console.WriteLine($"Id: {userInfo.Id}");
-                    Console.WriteLine($"NombreUsuario: {userInfo.NombreUsuario}");
-                    Console.WriteLine($"Email: {userInfo.Email}");
-                    Console.WriteLine($"Codiempresa: {userInfo.Codiempresa}");
+                    Console.WriteLine($"✅ Usuario SUPERADMIN: Acceso total concedido para {codApli}");
+                    return 2; // Nivel 2: Lectura y escritura
                 }
-                
-                if (userInfo == null || !userInfo.IdFlexoft.HasValue || userInfo.IdFlexoft.Value <= 0)
+
+                var numUser = await _currentUserService.GetIdFlexoftAsync();
+
+                if (numUser <= 0)
                 {
                     Console.WriteLine($"❌ ERROR: No se pudo obtener el número de usuario activo");
-                    Console.WriteLine($"   - userInfo es null: {userInfo == null}");
-                    if (userInfo != null)
-                    {
-                        Console.WriteLine($"   - IdFlexoft.HasValue: {userInfo.IdFlexoft.HasValue}");
-                        Console.WriteLine($"   - IdFlexoft.Value: {userInfo.IdFlexoft}");
-                    }
-                    
+
                     if (mostrarMensaje)
                     {
                         await MostrarMensajeSinSesion();
                     }
                     return 0;
                 }
-
-                var numUser = (short)userInfo.IdFlexoft.Value;
 
                 // Llamar al endpoint de verificación
                 var url = $"api/DerechosUsuario/verificar/{numUser}/{codApli}/{desApli}";

@@ -1,0 +1,413 @@
+@page "/master/navegacion-componentes/{Id}"
+@using IMPLANPROD.Client.Services
+@using IMPLANPROD.Shared.Entities
+@inject IRepository repository
+@inject NavigationManager navigation
+@inject SweetAlertService sweetAlertService
+@inject PageAccessService PageAccess
+@inject HttpClient Http
+@inject IJSRuntime JS
+
+<PageTitle>Navegación de Componentes</PageTitle>
+
+@if (validando)
+{
+    <p>Validando acceso...</p>
+}
+else
+{
+    <div class="card">
+        <div class="card-header bg-light" style="background-color: #217346; color: white; padding: 10px; margin-bottom: 20px; border-radius: 4px;">
+            <h5 class="mb-0">Navegación de Componentes</h5>
+        </div>
+        
+        <!-- Encabezado con código y descripción de solo lectura -->
+        <div class="card-body">
+            <div class="row mb-3">
+                <div class="col-md-6">
+                    <label class="form-label fw-bold">Código:</label>
+                    <input type="text" class="form-control" value="@codigoActivo" readonly />
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label fw-bold">Descripción:</label>
+                    <input type="text" class="form-control" value="@descripcionActiva" readonly />
+                </div>
+            </div>
+
+            <!-- Botón de retroceso -->
+            <div class="mb-3">
+                <button class="btn btn-secondary" @onclick="VolverAtras" disabled="@(pilaNavegacion.Count == 0)">
+                    <i class="fas fa-arrow-left me-2"></i>Volver al Código Padre
+                </button>
+            </div>
+
+            <!-- Solapas -->
+            <div class="tabs-container">
+                <div class="tabs-header gap-2">
+                    <button type="button" class="tab-button btn btn-success btn-sm @(activeTab == "Componentes" ? "active" : "")"
+                    @onclick="@(() => activeTab = "Componentes")">
+                        Componentes
+                    </button>
+                    <button type="button" class="tab-button btn btn-success btn-sm @(activeTab == "Elaboracion" ? "active" : "")" 
+                    @onclick="@(() => activeTab = "Elaboracion")">
+                        Elaboración
+                    </button>
+                    <button type="button" class="tab-button btn btn-success btn-sm @(activeTab == "Especificacion" ? "active" : "")" 
+                    @onclick="@(() => activeTab = "Especificacion")">
+                        Especificación
+                    </button>
+                </div>
+            </div>
+
+            <div class="tab-content">
+                @if (activeTab == "Componentes")
+                {
+                    @if (componentesAsignados.Count == 0)
+                    {
+                        <div class="alert alert-info">No hay componentes asignados</div>
+                    }
+                    else
+                    {
+                        <div class="table-responsive">
+                            <table class="table table-striped">
+                                <thead>
+                                    <tr>
+                                        <th>Códint</th>
+                                        <th>Código</th>
+                                        <th>Descripción</th>
+                                        <th>Cantidad</th>
+                                        <th>Unidad</th>
+                                        <th>Acciones</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var componente in componentesAsignados)
+                                    {
+                                        <tr class="@(componente.CodiElem == componenteSeleccionadoCodint ? "table-info" : "")">
+                                            <td>@componente.CodiElem</td>
+                                            <td>@componente.CodXElem</td>
+                                            <td>@componente.MasterDescripcion</td>
+                                            <td>@componente.UsoBruto</td>
+                                            <td>@componente.UMED_FORM</td>
+                                            <td>
+                                                <button class="btn btn-info btn-sm" @onclick="() => VerEstructura(componente)">
+                                                    <i class="fas fa-sitemap"></i> Ver Estructura
+                                                </button>
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    }
+                }
+                else if (activeTab == "Elaboracion")
+                {
+                    @if (operaciones == null || operaciones.Count == 0)
+                    {
+                        <div class="alert alert-info">No hay operaciones de elaboración para este producto</div>
+                    }
+                    else
+                    {
+                        <div class="table-responsive">
+                            <table class="table table-striped">
+                                <thead>
+                                    <tr>
+                                        <th>N° Op.</th>
+                                        <th>Descripción</th>
+                                        <th>Lote Estándar</th>
+                                        <th>Máquina</th>
+                                        <th>T. Prep.</th>
+                                        <th>T. Fijo</th>
+                                        <th>T. Limp.</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var op in operaciones.OrderBy(o => o.NumeOper))
+                                    {
+                                        <tr>
+                                            <td>@op.NumeOper</td>
+                                            <td>@op.DescOper</td>
+                                            <td>@op.LoteStan</td>
+                                            <td>@op.CodMaq0</td>
+                                            <td>@op.HorsPrep</td>
+                                            <td>@op.HorsFijo</td>
+                                            <td>@op.HorsLimp</td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    }
+                }
+                else if (activeTab == "Especificacion")
+                {
+                    <div class="tabs-container">
+                        <div class="tabs-header gap-2 flex-column">
+                            <button type="button" class="tab-button btn btn-success btn-sm @(activeSubTabEspecificacion == "Especificaciones" ? "active" : "")"
+                            @onclick="@(() => activeSubTabEspecificacion = "Especificaciones")">
+                                Especificación
+                            </button>
+                            <button type="button" class="tab-button btn btn-success btn-sm @(activeSubTabEspecificacion == "InformacionAdjunta" ? "active" : "")" 
+                            @onclick="@(() => activeSubTabEspecificacion = "InformacionAdjunta")">
+                                Información Adjunta
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="tab-content">
+                        @if (activeSubTabEspecificacion == "Especificaciones")
+                        {
+                            <div class="form-group">
+                                <label for="especificacionTextarea">Especificación:</label>
+                                <textarea class="form-control" id="especificacionTextarea" rows="30"
+                                readonly>@productoActivo?.Especificacion</textarea>
+                            </div>
+                        }
+                        else if (activeSubTabEspecificacion == "InformacionAdjunta")
+                        {
+                            @if (archivosAdjuntos == null || archivosAdjuntos.Count == 0)
+                            {
+                                <div class="alert alert-info">No hay archivos adjuntos</div>
+                            }
+                            else
+                            {
+                                <table class="table table-dark table-striped">
+                                    <thead>
+                                        <tr>
+                                            <th scope="col">Nombre</th>
+                                            <th scope="col">Fecha Subida</th>
+                                            <th scope="col">Descargar</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach (var archivo in archivosAdjuntos)
+                                        {
+                                            <tr>
+                                                <td>@archivo.Nombre</td>
+                                                <td>@archivo.FechaSubida</td>
+                                                <td>
+                                                    <button class="btn btn-success btn-sm" @onclick="() => DownloadFile(archivo)">
+                                                        <i class="fas fa-download"></i> Descargar
+                                                    </button>
+                                                </td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            }
+                        }
+                    </div>
+                }
+            </div>
+        </div>
+        
+        <div class="card-footer">
+            <button class="btn btn-secondary" @onclick="Regresar">
+                <i class="fas fa-arrow-left me-2"></i>Regresar
+            </button>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter]
+    public string? Id { get; set; }
+
+    private Master? productoActivo;
+    private List<Formulas> componentesAsignados = new();
+    private List<Secoper>? operaciones;
+    private List<UploadMaster>? archivosAdjuntos;
+    private string codigoActivo = string.Empty;
+    private string descripcionActiva = string.Empty;
+    private bool validando = true;
+    private string activeTab = "Componentes";
+    private string activeSubTabEspecificacion = "Especificaciones";
+    private int? componenteSeleccionadoCodint; // Para marcar visualmente el componente seleccionado
+    
+    // Pila de navegación para poder volver atrás (incluye el Codint del componente seleccionado)
+    private Stack<(int CodintPadre, string CodigoPadre, string DescripcionPadre, int? CodintComponenteSeleccionado)> pilaNavegacion = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await PageAccess.RequiereAccesoAsync("/master/navegacion-componentes/{Id}");
+        validando = false;
+        
+        // La carga inicial viene de la URL: Id es la PK del master
+        if (!string.IsNullOrEmpty(Id) && int.TryParse(Id, out var idPk))
+        {
+            await CargarProductoActivoPorId(idPk);
+        }
+    }
+
+    private async Task<string> ObtenerDescripcion(int codielem)
+    {
+        try
+        {
+            var response = await repository.Get<string>($"api/masterfunciones/descripcion/{codielem}");
+            if (!response.Error && response.Response != null)
+            {
+                return response.Response.Trim();
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error al obtener descripción: {ex.Message}");
+        }
+        return string.Empty;
+    }
+
+    // Carga el producto por Id (PK). Usado en la carga inicial desde la URL.
+    private async Task CargarProductoActivoPorId(int id)
+    {
+        var responseHttp = await repository.Get<Master>($"/api/master/{id}");
+        await ProcesarProductoCargado(responseHttp);
+    }
+
+    // Carga el producto por Codint. Usado al navegar entre componentes (CodiElem es un Codint).
+    private async Task CargarProductoActivoPorCodint(int codint)
+    {
+        var responseHttp = await repository.Get<Master>($"/api/master/xCodint{codint}");
+        await ProcesarProductoCargado(responseHttp);
+    }
+
+    private async Task ProcesarProductoCargado(HttpResponseWrapper<Master> responseHttp)
+    {
+        if (responseHttp.Error)
+        {
+            var mensajeError = await responseHttp.GetErrorMessageAsync();
+            await sweetAlertService.FireAsync("Error", mensajeError, SweetAlertIcon.Error);
+            return;
+        }
+
+        productoActivo = responseHttp.Response;
+        codigoActivo = productoActivo!.Codigo ?? string.Empty;
+        descripcionActiva = productoActivo.Descripcion ?? string.Empty;
+        
+        await CargarComponentes();
+        await CargarOperaciones();
+        await CargarArchivosAdjuntos();
+    }
+
+    private async Task CargarComponentes()
+    {
+        if (productoActivo == null) return;
+
+        var responseHttp = await repository.Get<List<Formulas>>($"/api/formulas/conjunto/{productoActivo.Codint}");
+        if (!responseHttp.Error && responseHttp.Response != null)
+        {
+            componentesAsignados = responseHttp.Response;
+            
+            // Obtener la descripción para cada componente
+            foreach (var componente in componentesAsignados)
+            {
+                if (componente.CodiElem.HasValue)
+                {
+                    componente.MasterDescripcion = await ObtenerDescripcion(componente.CodiElem.Value);
+                }
+            }
+        }
+        else
+        {
+            componentesAsignados = new List<Formulas>();
+        }
+    }
+
+    private async Task CargarOperaciones()
+    {
+        if (productoActivo == null) return;
+
+        var responseHttp = await repository.Get<List<Secoper>>($"/api/secoper/producto/{productoActivo.Codint}");
+        if (!responseHttp.Error && responseHttp.Response != null)
+        {
+            operaciones = responseHttp.Response;
+            operaciones = operaciones.OrderBy(o => o.NumeOper).ToList();
+        }
+        else
+        {
+            operaciones = new List<Secoper>();
+        }
+    }
+
+    private async Task CargarArchivosAdjuntos()
+    {
+        if (productoActivo == null) return;
+
+        try
+        {
+            var resultadoArch = await Http.GetFromJsonAsync<List<UploadMaster>>($"api/File/FileList/{productoActivo.Codint}");
+            if (resultadoArch != null)
+                archivosAdjuntos = resultadoArch;
+            else
+                archivosAdjuntos = new List<UploadMaster>();
+        }
+        catch (Exception ex)
+        {
+            archivosAdjuntos = new List<UploadMaster>();
+        }
+    }
+
+    private async Task DownloadFile(UploadMaster archivo)
+    {
+        try
+        {
+            var response = await Http.PostAsJsonAsync("/api/File/getFile", archivo);
+
+            if (!response.IsSuccessStatusCode)
+            {
+                await JS.InvokeVoidAsync("alert", "File not found.");
+            }
+            else
+            {
+                var fileStream = response.Content.ReadAsStream();
+                using var streamRef = new DotNetStreamReference(stream: fileStream);
+                await JS.InvokeVoidAsync("downloadFileFromStream", archivo.Nombre, streamRef);
+            }
+        }
+        catch (Exception ex)
+        {
+            await sweetAlertService.FireAsync("Error", $"Error al descargar el archivo: {ex.Message}", SweetAlertIcon.Error);
+        }
+    }
+
+    private async Task VerEstructura(Formulas componente)
+    {
+        if (!componente.CodiElem.HasValue) return;
+
+        // Guardar el código actual y el componente seleccionado en la pila antes de navegar
+        if (productoActivo != null)
+        {
+            pilaNavegacion.Push((
+                productoActivo.Codint, 
+                productoActivo.Codigo ?? string.Empty, 
+                productoActivo.Descripcion ?? string.Empty,
+                componente.CodiElem.Value // Guardar el Codint del componente seleccionado
+            ));
+        }
+
+        // Marcar el componente seleccionado
+        componenteSeleccionadoCodint = componente.CodiElem.Value;
+
+        // CodiElem es el Codint del componente hijo, por eso cargamos por Codint
+        await CargarProductoActivoPorCodint(componente.CodiElem.Value);
+    }
+
+    private async Task VolverAtras()
+    {
+        if (pilaNavegacion.Count == 0) return;
+
+        // En la pila guardamos el Codint del padre y el componente seleccionado
+        var codigoPadre = pilaNavegacion.Pop();
+        
+        // Restaurar el componente seleccionado
+        componenteSeleccionadoCodint = codigoPadre.CodintComponenteSeleccionado;
+        
+        // Cargar el padre por Codint
+        await CargarProductoActivoPorCodint(codigoPadre.CodintPadre);
+    }
+
+    private void Regresar()
+    {
+        navigation.NavigateTo($"/master/edit/{Id}");
+    }
+}

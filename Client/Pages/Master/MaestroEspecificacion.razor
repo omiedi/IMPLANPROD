@@ -1,10 +1,14 @@
 @page "/master/especificacion/{Id}"
+@using IMPLANPROD.Client.Services
 
 @using IMPLANPROD.Shared.Entities
+@using IMPLANPROD.Shared.DTOs
+@using IMPLANPROD.Client.Pages.Reportes
 @inject NavigationManager navigationManager
 @inject HttpClient Http
 @inject SweetAlertService sweetAlertService
 @inject IRepository repository
+@inject PageAccessService PageAccess
 
 @using System.Net.Http.Headers
 @using IMPLANPROD.Shared
@@ -50,6 +54,14 @@
     }
 </style>
 
+<PageTitle>Especificaciones</PageTitle>
+
+@if (validando)
+{
+    <p>Validando acceso...</p>
+}
+else
+{
 <h3>Especificaciones</h3>
 <div class="d-flex justify-content-between align-items-stretch mb-3 gap-3">
     <h3 style="background-color: #217346; color: white; padding: 10px; margin-bottom: 0; border-radius: 4px; flex-grow: 1;">
@@ -90,6 +102,11 @@
 <div class="tab-content">
     @if (activeTab == "Especificaciones")
     {
+        <div class="d-flex justify-content-end mb-2">
+            <button class="btn btn-success" @onclick="MostrarImpresion" disabled="@(productoTerminado == null)">
+                <i class="fas fa-print me-1"></i> Imprimir Especificación
+            </button>
+        </div>
         <div class="form-group">
             <label for="especificacionTextarea">Especificación:</label>
             <textarea class="form-control" id="especificacionTextarea" rows="30"
@@ -158,7 +175,21 @@ else{
 
         </div>
     </div>
+    }
 }
+
+@if (mostrarModalImpresion && datosImpresion != null)
+{
+    <ImpresionLista TItem="EspecificacionPrintDTO"
+                    Datos="datosImpresion"
+                    Titulo="@TituloReporte"
+                    UrlExportarExcel=""
+                    Encabezados="encabezadosEspecificacion"
+                    ModoDirecto="false"
+                    MostrarModal="mostrarModalImpresion"
+                    OnCerrar="ResetearImpresion" />
+}
+
 @code {
 
 
@@ -178,13 +209,28 @@ else{
     private List<UploadMaster> uploadResults = new();
 
     private bool loading = false;
+    private bool validando = true;
     private string errorMessage = string.Empty;
     private string activeTab = "Especificaciones";
     public static List<UploadMaster> CaracteristicasArchivo = new List<UploadMaster>();
 
-    protected override async Task OnInitializedAsync()
-
+    // Variables para impresión
+    private bool mostrarModalImpresion = false;
+    private List<EspecificacionPrintDTO>? datosImpresion;
+    private string TituloReporte => $"Especificación - {resultado} - {DateTime.Now:dd/MM/yyyy}";
+    private Dictionary<string, string> encabezadosEspecificacion = new Dictionary<string, string>
     {
+        { "Codigo", "Código" },
+        { "Descripcion", "Descripción" },
+        { "Especificacion", "Especificación" }
+    };
+
+    // Validar que el usuario tenga permiso para acceder a esta página antes de mostrar el contenido
+    protected override async Task OnInitializedAsync()
+    {
+        await PageAccess.RequiereAccesoAsync("/master/especificacion/{Id}");
+        validando = false;
+        
         await CargarProductoTerminado();
 
         await CargarArchivosAdjuntos();
@@ -316,7 +362,7 @@ else{
 
             content.Add(
             content: fileContent,
-            name: "\"files\"",
+            name: "files",
             fileName: file.Name);
         }
 
@@ -382,6 +428,31 @@ else{
         {
             await sweetAlertService.FireAsync("Error", ex.Message, SweetAlertIcon.Error);
         }
+    }
+
+    private void MostrarImpresion()
+    {
+        if (productoTerminado == null) return;
+
+        datosImpresion = new List<EspecificacionPrintDTO>
+        {
+            new EspecificacionPrintDTO
+            {
+                Codigo = productoTerminado.Codigo ?? string.Empty,
+                Descripcion = productoTerminado.Descripcion ?? string.Empty,
+                Especificacion = productoTerminado.Especificacion ?? string.Empty
+            }
+        };
+
+        mostrarModalImpresion = true;
+    }
+
+    private async void ResetearImpresion()
+    {
+        mostrarModalImpresion = false;
+        datosImpresion = null;
+        await Task.CompletedTask;
+        StateHasChanged();
     }
   
 

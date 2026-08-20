@@ -1,6 +1,7 @@
 @page "/stock/consultaStockComponentes"
 @using IMPLANPROD.Shared.Entities
 @using IMPLANPROD.Shared.DTOs
+@using IMPLANPROD.Client.Pages.Reportes
 @inject IRepository repository
 @inject NavigationManager NavigationManager
 @inject SweetAlertService sweetAlertService
@@ -63,16 +64,18 @@
                             </div>
                             <div class="col-md-6">
                                 <label for="niveles">Niveles:</label>
-                                <input type="text" class="form-control" id="niveles" @bind="TXTNIVELES" @bind:event="oninput" />
+                                <select class="form-select" id="niveles" @bind="TXTNIVELES">
+                                    <option value="0">Todos los niveles</option>
+                                    <option value="1">1 Nivel</option>
+                                    <option value="2">2 Niveles</option>
+                                    <option value="3">3 Niveles</option>
+                                </select>
                             </div>
                         </div>
                     </div>
                 </div>
             </div>
             <div class="row mt-2">
-                <div class="col-md-4">
-                    <button class="btn btn-primary" @onclick="ExportarExcel">Exportar a Excel</button>
-                </div>
                 <div class="col-md-4 text-center">
                     <button class="btn btn-info" @onclick="ActualizarDatos" disabled="@cargando">
                         @if (cargando)
@@ -115,7 +118,9 @@
                     <div class="list-group" style="max-height: 150px; overflow-y: auto;">
                         @foreach (var deposito in depositosSeleccionados)
                         {
-                            <div class="list-group-item">@deposito</div>
+                            <div class="list-group-item">
+                                @deposito - @(depositosDescripcion.ContainsKey(deposito) ? depositosDescripcion[deposito] : "")
+                            </div>
                         }
                     </div>
                 </div>
@@ -123,25 +128,67 @@
             
             <div class="row mt-3">
                 <div class="col-12">
-                    <div class="btn-group mb-2">
-                        <button class="btn @(mostrarVistaDetalle ? "btn-outline-primary" : "btn-primary")" @onclick="() => MostrarAcumularPorCodigo()">ACUMULAR X CÓDIGO</button>
-                        <button class="btn @(mostrarVistaDetalle ? "btn-primary" : "btn-outline-primary")" @onclick="MostrarVistaDetalle">VISTA DETALLE</button>
+                    <div class="d-flex align-items-center gap-2 mb-2">
+                        <div class="btn-group">
+                            <button class="@ClaseBtnAcumular" @onclick="() => MostrarAcumularPorCodigo()">ACUMULAR X CÓDIGO</button>
+                            <button class="@ClaseBtnDetalle" @onclick="MostrarVistaDetalle">VISTA DETALLE</button>
+                            <button class="@ClaseBtnEstructura" @onclick="MostrarVistaEstructura">
+                                <i class="fas fa-sitemap me-1"></i>ESTRUCTURA
+                            </button>
+                        </div>
+                        <button class="btn btn-success ms-auto" @onclick="MostrarImpresion" disabled="@(!HayDatos)" title="Imprimir o exportar la vista activa">
+                            <i class="fas fa-print me-1"></i> Imprimir / Excel
+                        </button>
                     </div>
                     
-                    <div class="table-responsive">
-                        @if (mostrarVistaDetalle)
+                    <div class="table-responsive table-sticky-container">
+                        @if (mostrarVistaEstructura)
                         {
-                            <table class="table table-striped table-bordered">
+                            <table class="table table-sm table-bordered table-hover table-sticky-header">
+                                <thead class="table-success">
+                                    <tr>
+                                        <th>ItemJerarquico</th>
+                                        <th>Nivel</th>
+                                        <th>CodiElem</th>
+                                        <th>CodXEelem</th>
+                                        <th>Descripción</th>
+                                        <th>U.M.</th>
+                                        <th class="text-end">Uso</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @if (estructuraItems != null)
+                                    {
+                                        @foreach (var fila in estructuraItems)
+                                        {
+                                            <tr>
+                                                <td>@fila.ItemJerarquico</td>
+                                                <td>@fila.Nivel</td>
+                                                <td>@fila.Item.CI1</td>
+                                                <td>@fila.Item.CodXEelem</td>
+                                                <td>@fila.Item.Descripcion</td>
+                                                <td>@fila.Item.UM</td>
+                                                <td class="text-end">@fila.Item.Uso.ToString("F4")</td>
+                                            </tr>
+                                        }
+                                    }
+                                </tbody>
+                            </table>
+                        }
+                        else if (mostrarVistaDetalle)
+                        {
+                            <table class="table table-striped table-bordered table-sticky-header">
                                 <thead>
                                     <tr>
-                                        <th>CI1</th>
+                                        <th>CI</th>
                                         <th>CodXEelem</th>
                                         <th>Descripción</th>
                                         <th>U.M.</th>
                                         <th>Uso</th>
                                         <th>Cant.Simulada</th>
-                                        <th>St.Acumulado</th>
-                                        @foreach (var deposito in depositosSeleccionados)
+                                        <th>St.Todos los Dep.</th>
+                                        <th>St.Dep.Seleccionados</th>
+                                        <th style="cursor: pointer;" @onclick="SortBySaldo">Saldo (St.Dep.Seleccionados - Cant.Simulada)@(GetSortIcon("Saldo"))</th>                                        @foreach (var deposito in depositosSeleccionados)
                                         {
                                             <th>Dep.@deposito</th>
                                         }
@@ -157,12 +204,14 @@
                                                 <td>@item.CodXEelem</td>
                                                 <td>@item.Descripcion</td>
                                                 <td>@item.UM</td>
-                                                <td>@item.Uso</td>
-                                                <td>@item.CantSimulada</td>
-                                                <td>@item.StAcumulado</td>
+                                                <td>@item.Uso.ToString("N1")</td>
+                                                <td>@item.CantSimulada.ToString("N1")</td>
+                                                <td>@item.StAcumulado.ToString("N1")</td>
+                                                <td>@item.StDepSeleccionados.ToString("N1")</td>
+                                                <td class="@GetSaldoClass(item.Saldo)">@FormatearSaldo(item.Saldo)</td>
                                                 @foreach (var deposito in depositosSeleccionados)
                                                 {
-                                                    <td>@GetStockAcumuladoDeposito(item, deposito)</td>
+                                                    <td>@GetStockAcumuladoDeposito(item, deposito).ToString("N1")</td>
                                                 }
                                             </tr>
                                         }
@@ -172,17 +221,18 @@
                         }
                         else
                         {
-                            <table class="table table-striped table-bordered">
+                            <table class="table table-striped table-bordered table-sticky-header">
                                 <thead>
                                     <tr>
-                                        <th>CI1</th>
+                                        <th>CI (Acum.)</th>
                                         <th>CodXEelem</th>
                                         <th>Descripción</th>
                                         <th>U.M.</th>
                                         <th>Uso</th>
                                         <th>Cant.Simulada</th>
-                                        <th>St.Acumulado</th>
-                                        @foreach (var deposito in depositosSeleccionados)
+                                        <th>St.Todos los Dep.</th>
+                                        <th>St.Dep.Seleccionados</th>
+                                        <th style="cursor: pointer;" @onclick="SortBySaldo">Saldo (St.Dep.Seleccionados - Cant.Simulada)@(GetSortIcon("Saldo"))</th>                                        @foreach (var deposito in depositosSeleccionados)
                                         {
                                             <th>Dep. @deposito</th>
                                         }
@@ -198,12 +248,14 @@
                                                 <td>@item.CodXEelem</td>
                                                 <td>@item.Descripcion</td>
                                                 <td>@item.UM</td>
-                                                <td>@item.Uso</td>
-                                                <td>@item.CantSimulada</td>
-                                                <td>@item.StAcumulado</td>
+                                                <td>@item.Uso.ToString("N1")</td>
+                                                <td>@item.CantSimulada.ToString("N1")</td>
+                                                <td>@item.StAcumulado.ToString("N1")</td>
+                                                <td>@item.StDepSeleccionados.ToString("N1")</td>
+                                                <td class="@GetSaldoClass(item.Saldo)">@FormatearSaldo(item.Saldo)</td>
                                                 @foreach (var deposito in depositosSeleccionados)
                                                 {
-                                                    <td>@GetStockAcumuladoDeposito(item, deposito)</td>
+                                                    <td>@GetStockAcumuladoDeposito(item, deposito).ToString("N1")</td>
                                                 }
                                             </tr>
                                         }
@@ -218,25 +270,207 @@
     </div>
 </div>
 
+@if (datosImpresion != null && datosImpresion.Any())
+{
+    <ImpresionLista TItem="DetalleStockDTO"
+                    Datos="datosImpresion"
+                    Titulo="@TituloReporte"
+                    UrlExportarExcel="api/excel/exportar-stock-componentes"
+                    Encabezados="encabezadosStock"
+                    ModoDirecto="false"
+                    MostrarModal="mostrarModalImpresion"
+                    OnCerrar="ResetearImpresion" />
+}
+
+@if (datosEstructuraImpresion != null && datosEstructuraImpresion.Any())
+{
+    <ImpresionLista TItem="DetalleStockDTO"
+                    Datos="datosEstructuraImpresion"
+                    Titulo="@TituloEstructuraReporte"
+                    UrlExportarExcel="api/excel/exportar-estructura-componentes"
+                    Encabezados="encabezadosEstructura"
+                    ModoDirecto="false"
+                    MostrarModal="mostrarModalEstructuraImpresion"
+                    OnCerrar="ResetearEstructuraImpresion" />
+}
+
 @code {
     private string Label4 { get; set; } = string.Empty; // Código
     private string Label5 { get; set; } = string.Empty; // Stock
     private string Label6 { get; set; } = string.Empty; // Descripción
-    private string TXTNIVELES { get; set; } = "1"; // Niveles
+    private string TXTNIVELES { get; set; } = "0"; // Niveles (0 = todos)
     private string Text1 { get; set; } = string.Empty; // Depósitos seleccionados
     private string Text3 { get; set; } = "1"; // Cantidad
     private int codinte { get; set; } // Código interno seleccionado
     private string selectedUMedida { get; set; } = string.Empty; // Unidad de medida
     private List<string> depositosSeleccionados = new List<string>();
+    private Dictionary<string, string> depositosDescripcion = new Dictionary<string, string>(); // Mapeo código -> descripción
     private List<DetalleStockDTO> detalleItems = new List<DetalleStockDTO>();
+    private List<EstructuraFila> estructuraItems = new List<EstructuraFila>();
     private List<DetalleStockDTO> acumuladoItems = new List<DetalleStockDTO>();
     private Dictionary<string, decimal> stockPorDeposito = new Dictionary<string, decimal>();
     private bool mostrarVistaDetalle = true;
+    private bool mostrarVistaEstructura = false;
     private bool cargando { get; set; } = false;
+    private string sortColumn = "Saldo";
+    private bool sortAscending = true;
+
+    // ── Query params (navegación desde MasterForm) ────────────────────────────
+    [Parameter][SupplyParameterFromQuery(Name = "codint")]  public int? CodIntParam  { get; set; }
+    [Parameter][SupplyParameterFromQuery(Name = "niveles")] public int? NivelesParam { get; set; }
+
+    // ── Clases CSS para botones de vista (calculadas según estado activo) ─────
+    private string ClaseBtnAcumular   => (!mostrarVistaEstructura && !mostrarVistaDetalle) ? "btn btn-primary"         : "btn btn-outline-primary";
+    private string ClaseBtnDetalle    => (!mostrarVistaEstructura &&  mostrarVistaDetalle) ? "btn btn-primary"         : "btn btn-outline-primary";
+    private string ClaseBtnEstructura => mostrarVistaEstructura                            ? "btn btn-success"         : "btn btn-outline-success";
+
+    private bool mostrarModalImpresion          = false;
+    private bool mostrarModalEstructuraImpresion = false;
+    private bool isPrinting = false;
+    private string TituloReporte          => $"Stock Componentes - {DateTime.Now:dd/MM/yyyy}";
+    private string TituloEstructuraReporte => $"Estructura Componentes - {Label4} - {DateTime.Now:dd/MM/yyyy}";
+    private List<DetalleStockDTO> datosImpresion          = new List<DetalleStockDTO>();
+    private List<DetalleStockDTO> datosEstructuraImpresion = new List<DetalleStockDTO>();
+
+    private sealed class EstructuraFila
+    {
+        public DetalleStockDTO Item { get; set; } = new DetalleStockDTO();
+        public string ItemJerarquico { get; set; } = string.Empty;
+        public int Nivel { get; set; }
+    }
+
+    private Dictionary<string, string> encabezadosStock = new Dictionary<string, string>
+    {
+        { "CI1", "CI1" },
+        { "CodXEelem", "CodXEelem" },
+        { "Descripcion", "Descripción" },
+        { "UM", "U.M." },
+        { "Uso", "Uso" },
+        { "CantSimulada", "Cant.Simulada" },
+        { "StAcumulado", "St.Acumulado" }
+    };
+
+    private Dictionary<string, string> encabezadosEstructura = new Dictionary<string, string>
+    {
+        { "ItemJerarquico", "ItemJerarquico" },
+        { "Nivel",      "Nivel"       },
+        { "CI1",        "CodiElem"    },
+        { "CodXEelem", "CodXEelem"   },
+        { "Descripcion","Descripción" },
+        { "UM",         "U.M."        },
+        { "Uso",        "Uso"         }
+    };
 
     protected override async Task OnInitializedAsync()
     {
         await base.OnInitializedAsync();
+
+        // Auto-cargar cuando se navega desde MasterForm con query params
+        if (CodIntParam.HasValue && CodIntParam.Value > 0)
+        {
+            codinte     = CodIntParam.Value;
+            TXTNIVELES  = NivelesParam.HasValue ? NivelesParam.Value.ToString() : "0";
+
+            // Cargar datos del producto
+            var mr = await repository.Get<Master>($"api/master/xCodint{codinte}");
+            if (!mr.Error && mr.Response != null)
+            {
+                Label4          = mr.Response.Codigo       ?? string.Empty;
+                Label6          = mr.Response.Descripcion  ?? string.Empty;
+                selectedUMedida = mr.Response.Umedida      ?? string.Empty;
+            }
+
+            await CargarEstructuraMultinivel(codinte);
+            mostrarVistaEstructura = true;
+            mostrarVistaDetalle    = false;
+        }
+    }
+
+    private void GenerarItemsEstructura()
+    {
+        estructuraItems = new List<EstructuraFila>();
+
+        if (detalleItems == null || !detalleItems.Any())
+        {
+            return;
+        }
+
+        var contadoresPorNivel = new List<int>();
+        var esPrimeraFila = true;
+        var nivelAnterior = 0;
+
+        foreach (var item in detalleItems)
+        {
+            var nivelActual = ObtenerNivel(item.Descripcion);
+
+            if (esPrimeraFila)
+            {
+                nivelActual = 0;
+                contadoresPorNivel.Add(1);
+                esPrimeraFila = false;
+            }
+            else
+            {
+                if (nivelActual > nivelAnterior + 1)
+                {
+                    nivelActual = nivelAnterior + 1;
+                }
+
+                if (nivelActual >= contadoresPorNivel.Count)
+                {
+                    while (contadoresPorNivel.Count < nivelActual)
+                    {
+                        contadoresPorNivel.Add(1);
+                    }
+
+                    contadoresPorNivel.Add(1);
+                }
+                else
+                {
+                    contadoresPorNivel = contadoresPorNivel.Take(nivelActual + 1).ToList();
+                    contadoresPorNivel[nivelActual]++;
+                }
+            }
+
+            var itemJerarquico = string.Join('.', contadoresPorNivel.Take(nivelActual + 1));
+
+            estructuraItems.Add(new EstructuraFila
+            {
+                Item = item,
+                ItemJerarquico = itemJerarquico,
+                Nivel = nivelActual
+            });
+
+            item.ItemJerarquico = itemJerarquico;
+            item.Nivel = nivelActual;
+
+            nivelAnterior = nivelActual;
+        }
+    }
+
+    private static int ObtenerNivel(string? descripcion)
+    {
+        if (string.IsNullOrWhiteSpace(descripcion))
+        {
+            return 0;
+        }
+
+        var texto = descripcion.TrimStart();
+        var nivel = 0;
+        var i = 0;
+
+        while (i + 1 < texto.Length && texto[i] == '-' && texto[i + 1] == '-')
+        {
+            nivel++;
+            i += 2;
+
+            while (i < texto.Length && texto[i] == ' ')
+            {
+                i++;
+            }
+        }
+
+        return nivel;
     }
 
     private async Task CódigoSeleccionado(Master master)
@@ -283,7 +517,8 @@
     {
         try
         {
-            int niveles = TXTNIVELES.ToLower() == "todos" ? 0 : int.Parse(TXTNIVELES);
+            int niveles = TXTNIVELES.ToLower() == "todos" ? 0
+                        : (int.TryParse(TXTNIVELES, out int nParsed) ? nParsed : 0);
             int cantidad = int.Parse(Text3);
             
             var url = $"api/stock/estructuramultinivel/{codInt}?niveles={niveles}&cantidad={cantidad}";
@@ -293,10 +528,12 @@
             {
                 await sweetAlertService.FireAsync("Error", $"Error al obtener estructura: {response.HttpResponseMessage.ReasonPhrase}", SweetAlertIcon.Error);
                 detalleItems = new List<DetalleStockDTO>();
+                estructuraItems = new List<EstructuraFila>();
                 return;
             }
             
             detalleItems = response.Response ?? new List<DetalleStockDTO>();
+            GenerarItemsEstructura();
             
             // Actualizar stocks por depósito si hay depósitos seleccionados
             if (depositosSeleccionados.Any())
@@ -333,11 +570,17 @@
             {
                 item.StockPorDeposito.Clear();
             }
+            
+            // Reiniciar valores calculados
+            item.StDepSeleccionados = 0;
+            item.Saldo = 0;
         }
 
         // Cargar el stock para cada item y depósito
         foreach (var item in detalleItems)
         {
+            decimal stockTotalSeleccionados = 0;
+            
             foreach (var depositoStr in depositosSeleccionados)
             {
                 try
@@ -351,6 +594,9 @@
                         
                         // Guardar también en el item para la vista acumulada
                         item.StockPorDeposito[depositoStr] = response.Response;
+                        
+                        // Acumular stock de depósitos seleccionados
+                        stockTotalSeleccionados += response.Response;
                     }
                 }
                 catch (Exception ex)
@@ -358,6 +604,11 @@
                     Console.WriteLine($"Error al obtener stock para CI1 {item.CI1} y depósito {depositoStr}: {ex.Message}");
                 }
             }
+
+            // Calcular StDepSeleccionados y Saldo
+            // Si el stock de los depósitos seleccionados es negativo se considera 0 para el cálculo del saldo
+            item.StDepSeleccionados = stockTotalSeleccionados;
+            item.Saldo = Math.Max(stockTotalSeleccionados, 0) - item.CantSimulada;
         }
     }
 
@@ -378,6 +629,39 @@
             return item.StockPorDeposito[deposito];
         }
         return 0;
+    }
+
+    private string GetSaldoClass(decimal saldo)
+    {
+        return saldo < 0 ? "text-danger fw-bold" : "";
+    }
+    /// <summary>
+    /// Formatea el saldo con un solo decimal para su presentación en la grilla
+    /// </summary>
+    private string FormatearSaldo(decimal saldo) => saldo.ToString("N1");
+    private void SortBySaldo()
+    {
+        sortAscending = !sortAscending;
+        sortColumn = "Saldo";
+
+        if (mostrarVistaDetalle && detalleItems != null)
+        {
+            detalleItems = sortAscending
+                ? detalleItems.OrderBy(x => x.Saldo).ToList()
+                : detalleItems.OrderByDescending(x => x.Saldo).ToList();
+        }
+        else if (!mostrarVistaEstructura && acumuladoItems != null)
+        {
+            acumuladoItems = sortAscending
+                ? acumuladoItems.OrderBy(x => x.Saldo).ToList()
+                : acumuladoItems.OrderByDescending(x => x.Saldo).ToList();
+        }
+    }
+
+    private string GetSortIcon(string column)
+    {
+        if (sortColumn != column) return "";
+        return sortAscending ? " ▲" : " ▼";
     }
     
     
@@ -438,6 +722,8 @@
         {
             foreach (var item in acumuladoItems)
             {
+                decimal stockTotalSeleccionados = 0;
+                
                 foreach (var depositoStr in depositosSeleccionados)
                 {
                     decimal stockTotal = 0;
@@ -455,7 +741,15 @@
                     }
                     
                     item.StockPorDeposito[depositoStr] = stockTotal;
+                    
+                    // Acumular stock de depósitos seleccionados
+                    stockTotalSeleccionados += stockTotal;
                 }
+
+                // Calcular StDepSeleccionados y Saldo para items acumulados
+                // Si el stock de los depósitos seleccionados es negativo se considera 0 para el cálculo del saldo
+                item.StDepSeleccionados = stockTotalSeleccionados;
+                item.Saldo = Math.Max(stockTotalSeleccionados, 0) - item.CantSimulada;
             }
         }
         
@@ -464,12 +758,20 @@
 
     private void MostrarVistaDetalle()
     {
-        mostrarVistaDetalle = true;
+        mostrarVistaDetalle    = true;
+        mostrarVistaEstructura = false;
+    }
+
+    private void MostrarVistaEstructura()
+    {
+        mostrarVistaEstructura = true;
+        mostrarVistaDetalle    = false;
     }
 
     private async Task MostrarAcumularPorCodigo()
     {
-        mostrarVistaDetalle = false;
+        mostrarVistaDetalle    = false;
+        mostrarVistaEstructura = false;
         
         // Ejecutar la acumulación por código si hay datos
         if (detalleItems != null && detalleItems.Any())
@@ -498,10 +800,22 @@
             // Si el usuario cerró el modal con Aceptar y hay depósitos seleccionados
             if (!result.Cancelled && result.Data != null)
             {
-                if (result.Data is List<string> depositosIdsStr && depositosIdsStr.Any())
+                // El modal ahora devuelve una lista de DepositoSeleccionadoDTO con código y descripción
+                if (result.Data is List<DepositoSeleccionadoDTO> depositosSeleccionadosConDesc && depositosSeleccionadosConDesc.Any())
                 {
-                    // Asignar directamente la lista de IDs como strings
-                    depositosSeleccionados = depositosIdsStr;
+                    // Extraer códigos y descripciones
+                    depositosSeleccionados = new List<string>();
+                    depositosDescripcion = new Dictionary<string, string>();
+                    
+                    foreach (var item in depositosSeleccionadosConDesc)
+                    {
+                        string codigo = item.CodigoDepo.ToString();
+                        string descripcion = item.Descripcion;
+                        
+                        depositosSeleccionados.Add(codigo);
+                        depositosDescripcion[codigo] = descripcion;
+                    }
+                    
                     Text1 = string.Join(", ", depositosSeleccionados);
                     
                     // Actualizar los stocks por depósito
@@ -524,9 +838,41 @@
         }
     }
 
-    private async Task ExportarExcel()
+    private bool HayDatos => (detalleItems?.Any() == true || acumuladoItems?.Any() == true);
+
+    private void MostrarImpresion()
     {
-        await sweetAlertService.FireAsync("Información", "Funcionalidad de exportación a Excel pendiente de implementar", SweetAlertIcon.Info);
+        if (mostrarVistaEstructura && detalleItems?.Any() == true)
+        {
+            datosEstructuraImpresion        = detalleItems.ToList();
+            mostrarModalEstructuraImpresion = true;
+        }
+        else if (mostrarVistaDetalle && detalleItems?.Any() == true)
+        {
+            datosImpresion        = detalleItems.ToList();
+            mostrarModalImpresion = true;
+        }
+        else if (acumuladoItems?.Any() == true)
+        {
+            datosImpresion        = acumuladoItems.ToList();
+            mostrarModalImpresion = true;
+        }
+    }
+
+    private async void ResetearImpresion()
+    {
+        mostrarModalImpresion = false;
+        datosImpresion = new List<DetalleStockDTO>();
+        await Task.CompletedTask;
+        StateHasChanged();
+    }
+
+    private async void ResetearEstructuraImpresion()
+    {
+        mostrarModalEstructuraImpresion = false;
+        datosEstructuraImpresion        = new List<DetalleStockDTO>();
+        await Task.CompletedTask;
+        StateHasChanged();
     }
     
     private async Task ActualizarDatos()

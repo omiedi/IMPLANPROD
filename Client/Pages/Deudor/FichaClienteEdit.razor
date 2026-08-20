@@ -1,7 +1,11 @@
 @page "/ficha-cliente-edit/{Id:int}"
+@using IMPLANPROD.Client.Services
 @using IMPLANPROD.Shared.Entities
 @inject IRepository repository
 @inject NavigationManager NavigationManager
+@inject PageAccessService PageAccess
+
+<PageTitle>Editar Cliente</PageTitle>
 
 <!--
     Componente: FichaClienteEdit.razor
@@ -12,18 +16,25 @@
     Este componente sigue el estándar de páginas ABM definido en el proyecto.
 -->
 
-<h3>Editar Cliente</h3>
-@if (isLoading)
+@if (validando)
 {
-    <p>Cargando datos del cliente...</p>
-}
-else if (cliente != null)
-{
-    <FichaClienteForm Id="@Id" />
+    <p>Validando acceso...</p>
 }
 else
 {
-    <div class="alert alert-danger">No se encontró el cliente solicitado.</div>
+    <h3>Editar Cliente</h3>
+    @if (isLoading)
+    {
+        <p>Cargando datos del cliente...</p>
+    }
+    else if (cliente != null)
+    {
+        <FichaClienteForm Id="@Id" />
+    }
+    else
+    {
+        <div class="alert alert-danger">No se encontró el cliente solicitado.</div>
+    }
 }
 
 @code {
@@ -31,9 +42,14 @@ else
     public int Id { get; set; }
     private Deudor12? cliente;
     private bool isLoading = true;
+    private bool validando = true;
 
+    // Validar que el usuario tenga permiso para acceder a esta página antes de mostrar el contenido
     protected override async Task OnInitializedAsync()
     {
+        await PageAccess.RequiereAccesoAsync("/ficha-cliente-edit");
+        validando = false;
+        
         var response = await repository.Get<Deudor12>($"/api/deudor12/{Id}");
         cliente = response.Response;
         isLoading = false;

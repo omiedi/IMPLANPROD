@@ -1,0 +1,443 @@
+@page "/estadisticas/pedidos"
+@using ApexCharts
+@using IMPLANPROD.Shared.DTOs
+@using IMPLANPROD.Client.Repositories
+@using IMPLANPROD.Client.Services
+@inject IJSRuntime JS
+@inject IRepository repository
+@inject NavigationManager navigationManager
+@inject PageAccessService PageAccess
+
+<PageTitle>Estadística de Pedidos de Venta</PageTitle>
+
+<style>
+    .no-spinner::-webkit-outer-spin-button,
+    .no-spinner::-webkit-inner-spin-button {
+        -webkit-appearance: none;
+        margin: 0;
+    }
+    .no-spinner {
+        -moz-appearance: textfield;
+    }
+</style>
+
+@if (validando)
+{
+    <p>Validando acceso...</p>
+}
+else
+{
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header bg-primary text-white">
+                    <h4 class="mb-0">
+                        <i class="fas fa-chart-bar me-2"></i>Estadística de Pedidos de Venta
+                    </h4>
+                </div>
+                <div class="card-body">
+                    
+                    <!-- Filtros -->
+                    <div class="row mb-4">
+                        <div class="col-md-2">
+                            <label class="form-label">Fecha Desde:</label>
+                            <div class="input-group">
+                                <input type="date" class="form-control" @bind="fechaDesde" />
+                                <button class="btn btn-outline-secondary" type="button" @onclick="() => fechaDesde = null" title="Limpiar">
+                                    <i class="fas fa-times"></i>
+                                </button>
+                            </div>
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label">Fecha Hasta:</label>
+                            <div class="input-group">
+                                <input type="date" class="form-control" @bind="fechaHasta" />
+                                <button class="btn btn-outline-secondary" type="button" @onclick="() => fechaHasta = null" title="Limpiar">
+                                    <i class="fas fa-times"></i>
+                                </button>
+                            </div>
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label">N° Pedido:</label>
+                            <div class="input-group">
+                                <input type="number" class="form-control no-spinner" @bind="nroPed" placeholder="Todos" />
+                                <button class="btn btn-outline-secondary" type="button" @onclick="() => nroPed = null" title="Limpiar">
+                                    <i class="fas fa-times"></i>
+                                </button>
+                            </div>
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label">Cliente:</label>
+                            <div class="input-group">
+                                <input type="number" class="form-control no-spinner" @bind="nroClie" placeholder="Todos" />
+                                <button class="btn btn-outline-secondary" type="button" @onclick="() => nroClie = null" title="Limpiar">
+                                    <i class="fas fa-times"></i>
+                                </button>
+                            </div>
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label">Código:</label>
+                            <div class="input-group">
+                                <input type="text" class="form-control" @bind="codExt" placeholder="Todos" />
+                                <button class="btn btn-outline-secondary" type="button" @onclick="() => codExt = null" title="Limpiar">
+                                    <i class="fas fa-times"></i>
+                                </button>
+                            </div>
+                        </div>
+                        <div class="col-md-2">
+                            <div class="d-flex align-items-end h-100">
+                                <button class="btn btn-success me-2" @onclick="GenerarEstadistica" disabled="@cargando">
+                                    @if (cargando)
+                                    {
+                                        <i class="fas fa-spinner fa-spin me-1"></i>
+                                        <span>Generando...</span>
+                                    }
+                                    else
+                                    {
+                                        <i class="fas fa-sync me-1"></i>
+                                        <span>Generar Estadística</span>
+                                    }
+                                </button>
+                                <button class="btn btn-secondary" @onclick="Volver">
+                                    <i class="fas fa-arrow-left me-1"></i>Volver
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    @if (cargando)
+                    {
+                        <div class="text-center py-5">
+                            <div class="spinner-border text-primary" role="status">
+                                <span class="visually-hidden">Generando...</span>
+                            </div>
+                            <p class="mt-2">Generando estadística de pedidos...</p>
+                        </div>
+                    }
+                    else if (!string.IsNullOrEmpty(mensajeError))
+                    {
+                        <div class="text-center py-5">
+                            <div class="alert alert-danger">
+                                <i class="fas fa-exclamation-triangle me-2"></i>
+                                <strong>Error:</strong> @mensajeError
+                            </div>
+                        </div>
+                    }
+                    else if (!estadisticaGenerada)
+                    {
+                        <div class="text-center py-5">
+                            <div class="alert alert-info">
+                                <i class="fas fa-info-circle me-2"></i>
+                                <strong>Haz clic en "Generar Estadística" para visualizar los reportes</strong>
+                                <p class="mb-0 mt-2">Análisis de pedidos de venta sin importes monetarios.</p>
+                            </div>
+                        </div>
+                    }
+                    else
+                    {
+                        <!-- Indicadores Principales -->
+                        <div class="row mb-4">
+                            <div class="col-md-3">
+                                <div class="card bg-primary text-white">
+                                    <div class="card-body">
+                                        <h6 class="card-title">Pedidos</h6>
+                                        <h3 class="card-text">@datos?.TotalPedidos</h3>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-3">
+                                <div class="card bg-info text-white">
+                                    <div class="card-body">
+                                        <h6 class="card-title">Renglones</h6>
+                                        <h3 class="card-text">@datos?.TotalRenglones</h3>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-3">
+                                <div class="card bg-success text-white">
+                                    <div class="card-body">
+                                        <h6 class="card-title">Cant. Solicitada</h6>
+                                        <h3 class="card-text">@datos?.CantidadSolicitada.ToString("N2")</h3>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-3">
+                                <div class="card bg-warning text-white">
+                                    <div class="card-body">
+                                        <h6 class="card-title">Cant. Entregada</h6>
+                                        <h3 class="card-text">@datos?.CantidadRemitida.ToString("N2")</h3>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Gráficos -->
+                        <div class="row">
+                            <!-- Evolución de Pedidos -->
+                            <div class="col-md-6 mb-4">
+                                <div class="card">
+                                    <div class="card-header bg-info text-white">
+                                        <h6 class="mb-0">
+                                            <i class="fas fa-chart-line me-2"></i>Evolución de Pedidos
+                                        </h6>
+                                    </div>
+                                    <div class="card-body" style="height: 400px;">
+                                        <ApexChart TItem="DatoMensualPedidosDTO"
+                                                   Title="Pedidos por Mes"
+                                                   Height="350">
+                                            <ApexPointSeries TItem="DatoMensualPedidosDTO"
+                                                             Items="datos?.EvolucionPedidos"
+                                                             Name="Pedidos"
+                                                             SeriesType="SeriesType.Line"
+                                                             XValue="e => e.Mes"
+                                                             YValue="e => e.CantidadPedidos" />
+                                        </ApexChart>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Pedidos por Cliente -->
+                            <div class="col-md-6 mb-4">
+                                <div class="card">
+                                    <div class="card-header bg-success text-white">
+                                        <h6 class="mb-0">
+                                            <i class="fas fa-users me-2"></i>Top 10 Clientes
+                                        </h6>
+                                    </div>
+                                    <div class="card-body" style="height: 400px;">
+                                        <ApexChart TItem="DatoClientePedidosDTO"
+                                                   Title="Pedidos por Cliente"
+                                                   Height="350">
+                                            <ApexPointSeries TItem="DatoClientePedidosDTO"
+                                                             Items="datos?.PedidosPorCliente"
+                                                             Name="Cantidad Solicitada"
+                                                             SeriesType="SeriesType.Bar"
+                                                             XValue="e => e.NombreCliente"
+                                                             YValue="e => e.CantidadSolicitada" />
+                                        </ApexChart>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Estado de Pedidos -->
+                            <div class="col-md-6 mb-4">
+                                <div class="card">
+                                    <div class="card-header bg-warning text-white">
+                                        <h6 class="mb-0">
+                                            <i class="fas fa-chart-pie me-2"></i>Estado de Pedidos
+                                        </h6>
+                                    </div>
+                                    <div class="card-body" style="height: 400px;">
+                                        <ApexChart TItem="DatoEstadoPedidosDTO"
+                                                   Title="Estado de Pedidos"
+                                                   Height="350">
+                                            <ApexPointSeries TItem="DatoEstadoPedidosDTO"
+                                                             Items="datos?.EstadoPedidos"
+                                                             Name="Cantidad"
+                                                             SeriesType="SeriesType.Pie"
+                                                             XValue="e => e.Estado"
+                                                             YValue="e => e.Cantidad" />
+                                        </ApexChart>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Cantidad Remitida vs Pendiente -->
+                            <div class="col-md-6 mb-4">
+                                <div class="card">
+                                    <div class="card-header bg-secondary text-white">
+                                        <h6 class="mb-0">
+                                            <i class="fas fa-chart-bar me-2"></i>Cantidades
+                                        </h6>
+                                    </div>
+                                    <div class="card-body" style="height: 400px;">
+                                        <div class="row h-100 align-items-center">
+                                            <div class="col-6 text-center">
+                                                <h5>Remitida</h5>
+                                                <h2 class="text-success">@datos?.CantidadRemitida.ToString("N2")</h2>
+                                            </div>
+                                            <div class="col-6 text-center">
+                                                <h5>Pendiente</h5>
+                                                <h2 class="text-danger">@datos?.CantidadPendiente.ToString("N2")</h2>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Reporte Detallado -->
+                        <div class="row mt-4">
+                            <div class="col-12">
+                                <div class="card">
+                                    <div class="card-header bg-dark text-white d-flex justify-content-between align-items-center">
+                                        <h6 class="mb-0">
+                                            <i class="fas fa-table me-2"></i>Reporte Detallado
+                                        </h6>
+                                        <button class="btn btn-success btn-sm" @onclick="ExportarExcel" disabled="@(datos?.ReporteDetallado == null || !datos.ReporteDetallado.Any())">
+                                            <i class="fas fa-file-excel me-1"></i> Exportar Excel
+                                        </button>
+                                    </div>
+                                    <div class="card-body">
+                                        <div class="table-responsive" style="max-height: 500px; overflow-y: auto;">
+                                            <table class="table table-striped table-sm">
+                                                <thead class="table-dark sticky-top">
+                                                    <tr>
+                                                        <th>N° Pedido</th>
+                                                        <th>Fecha Emisión</th>
+                                                        <th>Cliente</th>
+                                                        <th>Código</th>
+                                                        <th>Descripción</th>
+                                                        <th class="text-end">Cant. Pedida</th>
+                                                        <th class="text-end">Cant. Entregada</th>
+                                                        <th class="text-end">Cant. Pendiente</th>
+                                                        <th>Entrega Solicitada</th>
+                                                        <th>Estado</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    @if (datos?.ReporteDetallado != null)
+                                                    {
+                                                        @foreach (var item in datos.ReporteDetallado)
+                                                        {
+                                                            <tr>
+                                                                <td>@item.NroPed</td>
+                                                                <td>@item.FechEmis?.ToString("dd/MM/yyyy")</td>
+                                                                <td>@item.RasoClie</td>
+                                                                <td>@item.CodiExt</td>
+                                                                <td>@item.Descrip</td>
+                                                                <td class="text-end">@item.CanPed.ToString("N2")</td>
+                                                                <td class="text-end">@item.CantidadEntregada.ToString("N2")</td>
+                                                                <td class="text-end">@item.CantidadPendiente.ToString("N2")</td>
+                                                                <td>@item.FeSolEnt?.ToString("dd/MM/yyyy")</td>
+                                                                <td>@item.Estado</td>
+                                                            </tr>
+                                                        }
+                                                    }
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+}
+
+@code {
+    private bool validando = true;
+    private bool cargando = false;
+    private bool estadisticaGenerada = false;
+    private DateTime? fechaDesde;
+    private DateTime? fechaHasta;
+    private int? nroPed;
+    private int? nroClie;
+    private string? codExt;
+    private EstadisticaPedidosDTO? datos;
+    private string? mensajeError;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            await PageAccess.RequiereAccesoAsync("/estadisticas/pedidos");
+            validando = false;
+        }
+        catch
+        {
+            validando = false;
+        }
+    }
+
+    private async Task GenerarEstadistica()
+    {
+        cargando = true;
+        estadisticaGenerada = false;
+        mensajeError = null;
+        StateHasChanged();
+
+        try
+        {
+            var queryParams = new List<string>();
+            if (fechaDesde.HasValue) queryParams.Add($"fechaDesde={fechaDesde.Value:yyyy-MM-dd}");
+            if (fechaHasta.HasValue) queryParams.Add($"fechaHasta={fechaHasta.Value:yyyy-MM-dd}");
+            if (nroPed.HasValue) queryParams.Add($"nroPed={nroPed.Value}");
+            if (nroClie.HasValue) queryParams.Add($"nroClie={nroClie.Value}");
+            if (!string.IsNullOrEmpty(codExt)) queryParams.Add($"codExt={codExt}");
+
+            var url = "api/EstadisticaPedidos";
+            if (queryParams.Any()) url += "?" + string.Join("&", queryParams);
+
+            var response = await repository.Get<EstadisticaPedidosDTO>(url);
+
+            if (!response.Error && response.Response != null)
+            {
+                datos = response.Response;
+                estadisticaGenerada = true;
+                mensajeError = null;
+                Console.WriteLine($"Datos recibidos: {datos.TotalPedidos} pedidos, {datos.TotalRenglones} renglones");
+                Console.WriteLine($"Evolución: {datos.EvolucionPedidos?.Count ?? 0} registros");
+                Console.WriteLine($"Clientes: {datos.PedidosPorCliente?.Count ?? 0} registros");
+                Console.WriteLine($"Estado: {datos.EstadoPedidos?.Count ?? 0} registros");
+                Console.WriteLine($"Reporte: {datos.ReporteDetallado?.Count ?? 0} registros");
+            }
+            else
+            {
+                mensajeError = await response.GetErrorMessageAsync();
+                Console.WriteLine($"Error API: {mensajeError}");
+            }
+        }
+        catch (Exception ex)
+        {
+            mensajeError = $"Error al generar estadística: {ex.Message}";
+            Console.WriteLine($"Error: {ex.Message}");
+        }
+        finally
+        {
+            cargando = false;
+            StateHasChanged();
+        }
+    }
+
+    private void Volver()
+    {
+        navigationManager.NavigateTo("/pedidos-venta");
+    }
+
+    private async Task ExportarExcel()
+    {
+        if (datos?.ReporteDetallado == null || !datos.ReporteDetallado.Any())
+        {
+            return;
+        }
+
+        try
+        {
+            var response = await repository.Post("api/excel/exportar-estadistica-pedidos", datos.ReporteDetallado);
+
+            if (!response.Error && response.HttpResponseMessage != null)
+            {
+                var fileStream = await response.HttpResponseMessage.Content.ReadAsStreamAsync();
+                var fileName = $"Estadistica_Pedidos_{DateTime.Now:yyyyMMdd_HHmmss}.xlsx";
+
+                using var streamRef = new DotNetStreamReference(stream: fileStream);
+                await JS.InvokeVoidAsync("downloadFileFromStream", fileName, streamRef);
+            }
+            else
+            {
+                var errorMessage = await response.GetErrorMessageAsync();
+                Console.WriteLine($"Error al exportar Excel: {errorMessage}");
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error al exportar Excel: {ex.Message}");
+        }
+    }
+}

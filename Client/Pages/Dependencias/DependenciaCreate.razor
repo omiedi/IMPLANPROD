@@ -1,17 +1,36 @@
 ﻿@page "/dependencias/create/{EmpresaId:int}"
+@using IMPLANPROD.Client.Services
 @inject NavigationManager navigationManager
 @inject IRepository repository
 @inject SweetAlertService sweetAlertService
+@inject PageAccessService PageAccess
+
+<PageTitle>Crear Filial</PageTitle>
 <h3>Crear Filial</h3>
 
-<DependenciaForm @ref="dependenciaForm" Dependencia="dependencia" OnValidSubmit="CreateAsync" ReturnAction="Volver" />
+@if (validando)
+{
+    <p>Validando acceso...</p>
+}
+else
+{
+    <DependenciaForm @ref="dependenciaForm" Dependencia="dependencia" OnValidSubmit="CreateAsync" ReturnAction="Volver" />
+}
 
 @code {
     private Dependencia dependencia = new();
     private DependenciaForm? dependenciaForm;
+    private bool validando = true;
 
     [Parameter]
     public int EmpresaId { get; set; }
+
+    // Validar que el usuario tenga permiso para acceder a esta página antes de mostrar el contenido
+    protected override async Task OnInitializedAsync()
+    {
+        await PageAccess.RequiereAccesoAsync("/dependencias/create");
+        validando = false;
+    }
 
     private async Task CreateAsync()
     {

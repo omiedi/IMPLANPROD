@@ -7,9 +7,16 @@
 @inject IRepository repository
 @inject SweetAlertService sweetAlertService
 @inject NavigationManager navigationManager
+@inject PageAccessService PageAccess
 
 <PageTitle>Nuevo Presupuesto de Reparación</PageTitle>
 
+@if (validando)
+{
+    <p>Validando acceso...</p>
+}
+else
+{
 <div class="container-fluid">
     <div class="mb-4">
         <h2 class="text-center fw-bold text-success">
@@ -54,6 +61,7 @@
                       OnCancel="@Cancel" />
     }
 </div>
+}
 
 <SelectorReparacionSinPresupuesto @ref="selectorReparacion" 
                                    OnReparacionSeleccionada="@OnReparacionSeleccionada" />
@@ -63,6 +71,14 @@
     private bool cargandoReparacion = false;
     private SelectorReparacionSinPresupuesto? selectorReparacion;
     private PresrepaForm? presrepaForm;
+    private bool validando = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        // Validar que el usuario tenga permiso para acceder a esta página antes de mostrar el contenido
+        await PageAccess.RequiereAccesoAsync("/presupuesto-reparacion/crear");
+        validando = false;
+    }
 
     private async Task AbrirSelectorReparacion()
     {
@@ -157,6 +173,29 @@
                 var message = await responseHttp.GetErrorMessageAsync();
                 await sweetAlertService.FireAsync("Error", $"Error al guardar presupuesto: {message}", SweetAlertIcon.Error);
                 return;
+            }
+
+            // Agregar anotación automática de presupuestación en REPARA.AnotaRep (formato VB6)
+            var requestAnotacion = new
+            {
+                NumRepa = repara.NumRepa,
+                Cliente = repara.Raso_Cli,
+                Telefono = repara.Tele_Cli,
+                Fax = string.Empty,
+                NumeroSerie = repara.NumeroSerie,
+                Referencia = repara.Referen,
+                Sitio = repara.Sitio,
+                Observaciones = repara.Observa
+            };
+
+            var responseAnotacion = await repository.Post("api/repara/agregar-anotacion-presupuesto", requestAnotacion);
+            if (responseAnotacion.Error)
+            {
+                var message = await responseAnotacion.GetErrorMessageAsync();
+                await sweetAlertService.FireAsync(
+                    "Advertencia",
+                    $"Presupuesto guardado, pero no se pudo registrar la anotación automática: {message}",
+                    SweetAlertIcon.Warning);
             }
 
             // Guardar detalle de repuestos en REPUREPA

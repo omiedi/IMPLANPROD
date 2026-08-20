@@ -28,9 +28,9 @@ namespace IMPLANPROD.Server.Services
         /// <param name="monedaEmision">Moneda de emisión</param>
         /// <returns>True si se procesaron consignaciones, False si no había items con estructura</returns>
         public async Task<bool> ProcesarConsignacionesOrdenCompraAsync(
-            int numeroOrden, 
-            int numeroProveedor, 
-            string razonSocialProveedor, 
+            int numeroOrden,
+            int numeroProveedor,
+            string razonSocialProveedor,
             DateTime fechaEmision,
             short monedaEmision)
         {
@@ -39,14 +39,14 @@ namespace IMPLANPROD.Server.Services
             try
             {
                 Console.WriteLine($"[ConsignacionService] 🔍 DEBUGGING - Buscando items en OCOMDETA para O.C. {numeroOrden}");
-                
+
                 // Primero verificar si existen items en general (sin filtro de estado)
                 var todosLosItems = await _context.Ocomdetas
                     .Where(d => d.NumeOcom == numeroOrden)
                     .ToListAsync();
-                
+
                 Console.WriteLine($"[ConsignacionService] 📊 DEBUGGING - Total items encontrados (todos los estados): {todosLosItems.Count}");
-                
+
                 if (todosLosItems.Any())
                 {
                     foreach (var item in todosLosItems)
@@ -85,14 +85,14 @@ namespace IMPLANPROD.Server.Services
 
                     // 3. Buscar si este código es padre en la tabla Formulas (solo primer nivel)
                     Console.WriteLine($"[ConsignacionService] 🔍 Buscando estructura para código interno: {item.CodInte.Value}");
-                    
+
                     // Primero verificar si existen registros en Formulas para este código
                     var totalFormulas = await _context.Formulas
                         .Where(f => f.CodIConj == item.CodInte.Value)
                         .CountAsync();
-                    
+
                     Console.WriteLine($"[ConsignacionService] 📊 Total registros en Formulas para código {item.CodInte.Value}: {totalFormulas}");
-                    
+
                     var componentesHijos = await _context.Formulas
                         .Where(f => f.CodIConj == item.CodInte.Value && f.Marborra != 1) // No borrados
                         .ToListAsync();
@@ -175,24 +175,24 @@ namespace IMPLANPROD.Server.Services
                 // ITNU$ = TRIM$(Str$(ORDIT%))
                 // While Len(ITNU$) < 2: ITNU$ = "0" + ITNU$: Wend
                 // NOCOM$ = "OC-" + Left$(NOCOM$, 6) + "-" + ITNU$
-                
+
                 string numeroOrdenStr = numeroOrden.ToString().PadLeft(6, '0');
                 string numeroItemStr = numeroItemOrden.ToString().PadLeft(2, '0');
                 string nroOcomFormateado = $"OC-{numeroOrdenStr}-{numeroItemStr}";
 
                 // 2. Calcular cantidad deseada según uso por unidad (CANTIASIGN#)
                 // CANTIASIGN# = CAUNIS * USOI(i%) (cantidad deseada)
-                decimal cantidadDeseada = cantidadPadre * (componente.UsoBruto ?? 0) * (componente.Unis_Form ?? 1);
+                decimal cantidadDeseada = cantidadPadre * (componente.UsoBruto ?? 0);
                 Console.WriteLine($"[ConsignacionService] 📊 Cantidad deseada calculada: {cantidadDeseada:F4}");
 
                 // 3. Verificar cantidad ya asignada (CANYASIG#)
                 // CANYASIG# = SUM(CANT_ASIG) donde Nro_ocom = 'OC-...' AND CANT_ASIG > 0 AND COD_INTE = CII%
                 string patronOrdenComponente = $"OC-{numeroOrden.ToString().PadLeft(6, '0')}-";
-                
+
                 var cantidadYaAsignada = await _context.Maconsigs
-                    .Where(m => m.NroOcom != null && 
-                               m.NroOcom.StartsWith(patronOrdenComponente) && 
-                               m.CantAsig > 0 && 
+                    .Where(m => m.NroOcom != null &&
+                               m.NroOcom.StartsWith(patronOrdenComponente) &&
+                               m.CantAsig > 0 &&
                                m.CodInte == componente.CodiElem)
                     .SumAsync(m => m.CantAsig ?? 0);
 
@@ -205,22 +205,22 @@ namespace IMPLANPROD.Server.Services
                 // 5. Validar si debe crear registro
                 // En edición: crear registro gemelo si hay remanente > 0 (sin importar si es <= 0.05)
                 // En creación: aplicar lógica VB6 original (remanente > 0.05)
-                
+
                 // Verificar si hay registros existentes con entregas (indica que es edición)
                 var hayRegistrosConEntregas = await _context.Maconsigs
-                    .AnyAsync(m => m.NroOcom != null && 
-                              m.NroOcom.StartsWith(patronOrdenComponente) && 
+                    .AnyAsync(m => m.NroOcom != null &&
+                              m.NroOcom.StartsWith(patronOrdenComponente) &&
                               m.CodInte == componente.CodiElem &&
                               m.CantEntreg > 0);
 
                 bool esEdicion = hayRegistrosConEntregas;
-                
+
                 if (!esEdicion && cantidadRemanente <= 0.05m)
                 {
                     Console.WriteLine($"[ConsignacionService] ⚠️ CREACIÓN - Remanente {cantidadRemanente:F4} <= 0.05, no se crea consignación");
                     return;
                 }
-                
+
                 if (esEdicion && cantidadRemanente <= 0)
                 {
                     Console.WriteLine($"[ConsignacionService] ⚠️ EDICIÓN - Remanente {cantidadRemanente:F4} <= 0, no se crea consignación");
@@ -315,10 +315,10 @@ namespace IMPLANPROD.Server.Services
             {
                 // Buscar registros existentes de este componente con entregas
                 string patronOrden = $"OC-{numeroOrden.ToString().PadLeft(6, '0')}-";
-                
+
                 var registrosConEntregas = await _context.Maconsigs
-                    .Where(m => m.NroOcom != null && 
-                               m.NroOcom.StartsWith(patronOrden) && 
+                    .Where(m => m.NroOcom != null &&
+                               m.NroOcom.StartsWith(patronOrden) &&
                                m.CodInte == codigoComponente &&
                                m.CantEntreg > 0)
                     .ToListAsync();
@@ -330,12 +330,19 @@ namespace IMPLANPROD.Server.Services
                     decimal cantEntregOriginal = registro.CantEntreg ?? 0;
                     decimal cantAsigOriginal = registro.CantAsig ?? 0;
                     decimal diferencia = cantAsigOriginal - cantEntregOriginal;
-                    
+                    decimal cantRendidOriginal = registro.CantRendid ?? 0;
+
                     // Igualar Cant_Asig = Cant_Entreg
                     registro.CantAsig = registro.CantEntreg;
-                    
+
+                    // La cantidad rendida no puede superar a la entregada
+                    if (cantRendidOriginal > cantEntregOriginal)
+                    {
+                        registro.CantRendid = cantEntregOriginal;
+                    }
+
                     Console.WriteLine($"[ConsignacionService] 📝 Registro {registro.NroOcom}: CantAsig {cantAsigOriginal:F4} -> {registro.CantAsig:F4} (= CantEntreg {cantEntregOriginal:F4})");
-                    
+
                     // Crear registro gemelo por la diferencia si es > 0
                     if (diferencia > 0)
                     {
@@ -382,7 +389,7 @@ namespace IMPLANPROD.Server.Services
                 NRemiConsig = registroOriginal.NRemiConsig,
                 Observa = registroOriginal.Observa,
                 NuOrdItem = registroOriginal.NuOrdItem,
-                
+
                 // Campos específicos del gemelo
                 CantAsig = diferencia,           // La diferencia
                 CantEntreg = 0,                  // Sin entregas
@@ -408,7 +415,7 @@ namespace IMPLANPROD.Server.Services
             {
                 // Buscar consignaciones existentes que coincidan con el patrón de la orden
                 string patronOrden = $"OC-{numeroOrden.ToString().PadLeft(6, '0')}-";
-                
+
                 var consignacionesExistentes = await _context.Maconsigs
                     .Where(c => c.NroOcom != null && c.NroOcom.StartsWith(patronOrden))
                     .ToListAsync();

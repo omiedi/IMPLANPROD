@@ -43,7 +43,7 @@ else
                 </div>
                 <div class="col-md-3">
                     <label class="form-label fw-bold">Fecha:</label>
-                    <input type="text" class="form-control" value="@DateTime.Now.ToString("dd/MM/yyyy")" readonly />
+                    <input type="date" class="form-control" @bind="fechaOrdenGeneracion" />
                 </div>
             </div>
 
@@ -65,18 +65,18 @@ else
                 </div>
                 <div class="col-md-4">
                     <label class="form-label fw-bold">Número de Serie:</label>
-                    <input type="text" class="form-control" value="@reparacion.NumeroSerie" />
+                    <input type="text" class="form-control" @bind="reparacion.NumeroSerie" />
                 </div>
                 <div class="col-md-4">
                     <label class="form-label fw-bold">Referencia 2:</label>
-                    <input type="text" class="form-control" value="@reparacion.Referen2" />
+                    <input type="text" class="form-control" @bind="reparacion.Referen2" />
                 </div>
             </div>
 
             <div class="row mt-3">
                 <div class="col-md-8">
                     <label class="form-label fw-bold">Observaciones:</label>
-                    <textarea class="form-control" rows="3" readonly>@reparacion.Observa</textarea>
+                    <textarea class="form-control" rows="3" @bind="reparacion.Observa"></textarea>
                 </div>
                 <div class="col-md-4">
                     <label class="form-label fw-bold">Horas Mano de Obra:</label>
@@ -186,6 +186,7 @@ OnClose="OnCloseSelectorProductos" />
     private bool guardando = false;
     private decimal totalRepuestos = 0;
     private SelectorProductos? selectorProductosRef;
+    private DateTime fechaOrdenGeneracion = DateTime.Today;
 
     protected override async Task OnInitializedAsync()
     {
@@ -212,6 +213,7 @@ OnClose="OnCloseSelectorProductos" />
             }
 
             reparacion = responseRepara.Response;
+            fechaOrdenGeneracion = reparacion.FechOrdRep?.Date ?? DateTime.Today;
 
             // Obtener el próximo número de orden de reparación
             numeroOrdenReparacion = await ObtenerProximoNumeroOrden();
@@ -358,17 +360,38 @@ OnClose="OnCloseSelectorProductos" />
             {
                 guardando = true;
 
-                // TODO: Implementar lógica de grabación
-                // Actualizar REPARA.NuOrdRep con numeroOrdenReparacion
-                // Actualizar REPARA.RefOrdRep con referencia
-                // Actualizar REPARA.FechOrdRep con fecha actual
+                var requestData = new GenerarOrdenReparacionRequest
+                {
+                    NumRepa = NumRepa,
+                    Referen2 = reparacion?.Referen2,
+                    NumeroSerie = reparacion?.NumeroSerie,
+                    FechOrdRep = fechaOrdenGeneracion,
+                    Observa = reparacion?.Observa
+                };
 
-                Console.WriteLine($"Generando O.R. {numeroOrdenReparacion} para reparación {NumRepa}");
+                var response = await repository.Post<GenerarOrdenReparacionRequest, GenerarOrdenReparacionResponse>(
+                    "api/repara/generar-orden",
+                    requestData);
+
+                if (response.Error || response.Response == null)
+                {
+                    var errorMessage = await response.GetErrorMessageAsync();
+                    await sweetAlertService.FireAsync("Error", errorMessage, SweetAlertIcon.Error);
+                    return;
+                }
+
+                numeroOrdenReparacion = response.Response.NuOrdRep;
+                if (reparacion != null)
+                {
+                    reparacion.NuOrdRep = response.Response.NuOrdRep;
+                    reparacion.RefOrdRep = response.Response.RefOrdRep;
+                    reparacion.FechOrdRep = response.Response.FechOrdRep;
+                }
 
                 await sweetAlertService.FireAsync(new SweetAlertOptions
                 {
                     Title = "Éxito",
-                    Text = $"Orden de Reparación N° {numeroOrdenReparacion} generada correctamente",
+                    Text = $"Orden de Reparación N° {response.Response.NuOrdRep} generada correctamente",
                     Icon = SweetAlertIcon.Success
                 });
 
@@ -510,5 +533,26 @@ OnClose="OnCloseSelectorProductos" />
         public decimal Falta { get; set; }
         public decimal? PrecioUnitario { get; set; }
         public decimal? Importe { get; set; }
+    }
+
+    private class GenerarOrdenReparacionRequest
+    {
+        public int NumRepa { get; set; }
+        public string? Referen2 { get; set; }
+        public string? NumeroSerie { get; set; }
+        public DateTime? FechOrdRep { get; set; }
+        public string? Observa { get; set; }
+    }
+
+    private class GenerarOrdenReparacionResponse
+    {
+        public int NumRepa { get; set; }
+        public int NuOrdRep { get; set; }
+        public string RefOrdRep { get; set; } = string.Empty;
+        public DateTime? FechOrdRep { get; set; }
+        public int? NroPed { get; set; }
+        public int? NumeCli { get; set; }
+        public string? RasoCli { get; set; }
+        public decimal? ImpTot { get; set; }
     }
 }

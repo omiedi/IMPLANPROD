@@ -82,11 +82,31 @@ namespace IMPLANPROD.Shared.DTOs
         /// </summary>
         public decimal? PendienteAprobar { get; set; }
 
+        /// <summary>
+        /// Cantidad cerrada desde ORFAPEN (CantIngre con DOPRICOR='la orden de fabricacion activa' y CODIMOVI='OF')
+        /// </summary>
+        public decimal? CantidadCerrada { get; set; }
+
+        /// <summary>
+        /// Cantidad aprobada desde ORFAPEN (CantSalid con DOPRICOR='la orden de fabricacion activa' y CODIMOVI='OF')
+        /// </summary>
+        public decimal? CantidadAprobadaOrfapen { get; set; }
+
+        /// <summary>
+        /// Cantidad pendiente de aprobación desde ORFAPEN (CantIngre - CantSalid)
+        /// </summary>
+        public decimal? PendienteAprobacion { get; set; }
+
         public int? DepoEntrada { get; set; }
         public int? DepoSalida { get; set; }
         public int? DepoScrap { get; set; }
         public decimal? CantAprobada { get; set; }
         public decimal? CantRechazada { get; set; }
+
+        /// <summary>
+        /// Anotaciones de la orden de fabricación
+        /// </summary>
+        public string? AnotaOrf { get; set; }
 
     }
 }

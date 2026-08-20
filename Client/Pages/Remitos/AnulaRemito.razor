@@ -5,10 +5,18 @@
 @using IMPLANPROD.Client.Repositories
 @using IMPLANPROD.Client.Shared.Components
 @using IMPLANPROD.Client.Pages.Reportes
+@using IMPLANPROD.Client.Services
 @inject IRepository repository
 @inject SweetAlertService sweetAlertService
 @inject NavigationManager navigationManager
+@inject PageAccessService PageAccess
 
+@if (validando)
+{
+    <p>Validando acceso...</p>
+}
+else
+{
 <div class="container-fluid">
     <div class="row mb-3">
         <div class="col-12">
@@ -166,6 +174,7 @@
         </div>
     </div>
 </div>
+}
 
 <!-- Selector de Clientes -->
 <SelectorClientes @ref="selectorClientes" OnClienteSeleccionado="OnClienteSeleccionado" />
@@ -191,6 +200,7 @@
     private int anioSeleccionado = DateTime.Now.Year;
     private bool cargandoRemitos = false;
     private List<RemitoAnularDTO> remitos = new();
+    private bool validando = true;
     
     // Variables de cliente
     private int? numeroClienteSeleccionado = null;
@@ -206,6 +216,13 @@
         { "FechMov", "Fecha" },
         { "ReferCor", "Referencia" }
     };
+
+    protected override async Task OnInitializedAsync()
+    {
+        // Validar que el usuario tenga permiso para acceder a esta página antes de mostrar el contenido
+        await PageAccess.RequiereAccesoAsync("/remitos/anular");
+        validando = false;
+    }
 
     /// <summary>
     /// Carga los remitos del mes y año seleccionados, con filtro opcional de cliente

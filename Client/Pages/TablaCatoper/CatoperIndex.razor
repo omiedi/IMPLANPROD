@@ -1,4 +1,6 @@
 @page "/catoper/Index"
+@using Microsoft.AspNetCore.Authorization
+@attribute [Authorize(Roles = "SUPERADMIN")]
 @inject IRepository repository
 @inject NavigationManager navigationManager
 @inject SweetAlertService sweetAlertService

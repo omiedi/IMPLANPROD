@@ -14,7 +14,7 @@
                 <div class="modal-header bg-primary text-white">
                     <h5 class="modal-title">
                         <i class="fas fa-file-invoice"></i>
-                        Detalle Orden de Compra N° @(ordenCompra?.NumeOcom ?? 0)
+                        Detalle Orden de Compra N° @NumeroOrdenConVersion
                     </h5>
                     <button type="button" class="btn-close btn-close-white" @onclick="CerrarModal"></button>
                 </div>
@@ -381,7 +381,21 @@
     [Parameter] public int OrdenId { get; set; }
 
     private Ocomenca? ordenCompra;
-    private List<Ocomdeta>? detalleItems;
+    private List<Ocomdeta> detalleItems = new();
+
+    private string NumeroOrdenConVersion
+    {
+        get
+        {
+            if (ordenCompra?.NumeOcom == null)
+            {
+                return "";
+            }
+
+            var version = (ordenCompra.OcomRevis ?? 0) + 1;
+            return $"{ordenCompra.NumeOcom.Value:000000}-{version:000}";
+        }
+    }
     private List<Ocomdeta>? ordenesPendientes;
     private bool cargando = false;
 

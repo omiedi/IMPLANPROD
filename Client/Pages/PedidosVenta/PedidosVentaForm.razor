@@ -439,6 +439,8 @@
 <SelectorProductos @ref="selectorProductosProd"
 PermitirCantidad="true"
 CantidadDefault="1"
+CantidadSoloEnteros="true"
+OcultarFlechasCantidad="true"
 PermitirPrecio="true"
 PrecioDefault="0"
 OnProductoSeleccionadoCantidad="OnProductoSeleccionadoCantidad"
@@ -509,6 +511,13 @@ OnClose="TerminarCicloSeleccionProductos" />
                 return;
             }
 
+            // Validar fecha de entrega: no puede ser anterior a hoy
+            if (fechaEntrega.HasValue && fechaEntrega.Value < DateTime.Today)
+            {
+                await sweetAlertService.FireAsync("Fecha inválida", "La fecha de entrega no puede ser anterior a la fecha actual.", SweetAlertIcon.Warning);
+                return;
+            }
+
             // Determinar VenRep a partir del motivo seleccionado en encabezado (1: Venta, 2: Reparación)
             string? motivoTexto = pedido.OV_Motivo switch
             {
@@ -523,6 +532,7 @@ OnClose="TerminarCicloSeleccionProductos" />
                 FeSolEnt = fechaEntrega,
                 NroClie = pedido.NroClie!.Value,
                 RasoClie = pedido.RasoClie ?? string.Empty,
+                Observa = pedido.Observa,
                 NroOcom = pedido.NroOcom,
                 CondPag = pedido.CondPag!.Value,
                 Vended = pedido.Vended!.Value,
@@ -1027,6 +1037,17 @@ OnClose="TerminarCicloSeleccionProductos" />
                 clienteSeleccionado = $"{pedido.NroClie} - {pedido.RasoClie}";
             }
 
+            // Establecer OV_Motivo basándose en VenRep (R=Reparación, V=Ventas)
+            if (!string.IsNullOrEmpty(pedido.VenRep))
+            {
+                pedido.OV_Motivo = pedido.VenRep switch
+                {
+                    "R" => 2, // Reparación
+                    "V" => 1, // Venta
+                    _ => null
+                };
+            }
+
             // Cargar domicilio y localidad desde el pedido
             domicilioCliente = pedido.DomiEnt ?? string.Empty;
             localidadCliente = pedido.LocaEnt ?? string.Empty;
@@ -1034,10 +1055,10 @@ OnClose="TerminarCicloSeleccionProductos" />
 
 
 
-            // Además, si tenemos NroClie en edición, obtener el código de cliente desde Deudor12
+            // Además, si tenemos NroClie en edición, obtener los datos del cliente desde Deudor12
             if (pedido.NroClie.HasValue)
             {
-                _ = CargarDatosCliente(pedido.NroClie.Value);
+                await CargarDatosCliente(pedido.NroClie.Value);
             }
 
             // Cargar detalle desde PEDDETA para mostrarlo como en creación
@@ -1104,13 +1125,10 @@ OnClose="TerminarCicloSeleccionProductos" />
             {
                 var cliente = responseHttp.Response;
 
-                // Cargar datos de Deudor12 para nuevos pedidos
-                if (!IsEdit)
-                {
-                    domicilioCliente = cliente.Domi_Cli ?? string.Empty;
-                    localidadCliente = cliente.Loca_Cli ?? string.Empty;
-                    codigoPostalCliente = cliente.Cpos_Cli ?? string.Empty;
-                }
+                // Cargar datos de Deudor12 (domicilio y localidad) tanto en creación como en edición
+                domicilioCliente = cliente.Domi_Cli ?? string.Empty;
+                localidadCliente = cliente.Loca_Cli ?? string.Empty;
+                codigoPostalCliente = cliente.Cpos_Cli ?? string.Empty;
 
                 // Siempre actualizar el código de cliente (visible y readonly en UI)
                 codigoCliente = cliente.Codi_Cli ?? string.Empty;
@@ -1372,6 +1390,13 @@ OnClose="TerminarCicloSeleccionProductos" />
                 return;
             }
 
+            // Validar fecha de entrega: no puede ser anterior a hoy
+            if (fechaEntrega.HasValue && fechaEntrega.Value < DateTime.Today)
+            {
+                await sweetAlertService.FireAsync("Fecha inválida", "La fecha de entrega no puede ser anterior a la fecha actual.", SweetAlertIcon.Warning);
+                return;
+            }
+
             // Validar cantidades en edición: no pueden ser menores a las entregadas
             foreach (var item in productosPedido)
             {
@@ -1399,6 +1424,7 @@ OnClose="TerminarCicloSeleccionProductos" />
                 FeSolEnt = fechaEntrega,
                 NroClie = pedido.NroClie!.Value,
                 RasoClie = pedido.RasoClie ?? string.Empty,
+                Observa = pedido.Observa,
                 NroOcom = pedido.NroOcom,
                 CondPag = pedido.CondPag!.Value,
                 Vended = pedido.Vended!.Value,

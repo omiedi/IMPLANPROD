@@ -3,8 +3,11 @@
 @using System.Text.Json
 @using System.Text
 @using System.Net.Http.Headers
+@using System.Security.Claims
+@using Microsoft.AspNetCore.Components.Authorization
 @inject HttpClient Http
 @inject NavigationManager NavigationManager
+@inject AuthenticationStateProvider AuthStateProvider
 
 <h3>Registro de Usuario</h3>
 
@@ -25,11 +28,18 @@
 
             <div class="form-group mb-3">
                 <label for="email">Correo Electrónico:</label>
-                <InputText id="email" 
-                          @bind-Value="usuario.Email" 
-                          class="form-control" 
-                          autocomplete="off" />
+                <InputText id="email"
+                          @bind-Value="usuario.Email"
+                          class="form-control"
+                          autocomplete="off"
+                          @onfocusout="VerificarEmailAsync" />
                 <ValidationMessage For="@(() => usuario.Email)" />
+                @if (emailDuplicado)
+                {
+                    <div class="alert alert-warning py-1 mt-1 mb-0 small">
+                        <i class="oi oi-warning me-1"></i>Este email ya está registrado en otro usuario.
+                    </div>
+                }
             </div>
 
             <div class="form-group mb-3">
@@ -155,11 +165,20 @@
                 <ValidationMessage For="@(() => usuario.CityId)" />
             </div>
 
-            <button type="submit" class="btn btn-primary">Registrar</button>
+            <button type="submit" class="btn btn-primary" disabled="@emailDuplicado">Registrar</button>
             <button type="button" class="btn btn-secondary" @onclick="Cancelar">Cancelar</button>
         </EditForm>
     </div>
 </div>
+
+@if (esAdminReg)
+{
+    <div class="row mt-3">
+        <div class="col-md-10 col-lg-8">
+            <AsignadorPermisosPaginas @ref="asignadorRef" />
+        </div>
+    </div>
+}
 
 @code {
     // Modelo de usuario inicializado con valores por defecto
@@ -186,12 +205,33 @@
     private string? fotoPreview;
     private string? mensajeError;
     private bool mostrarPassword = false;
+    private bool emailDuplicado = false;
+
+    private async Task VerificarEmailAsync(FocusEventArgs e)
+    {
+        emailDuplicado = false;
+        if (string.IsNullOrWhiteSpace(usuario.Email)) return;
+        try
+        {
+            var resp = await Http.GetAsync($"api/Usuarios/check-email?email={Uri.EscapeDataString(usuario.Email)}&excludeId=0");
+            if (resp.IsSuccessStatusCode)
+            {
+                var json = await resp.Content.ReadFromJsonAsync<System.Text.Json.JsonElement>();
+                emailDuplicado = json.TryGetProperty("existe", out var existe) && existe.GetBoolean();
+            }
+        }
+        catch { }
+    }
 
     /// <summary>
     /// Se ejecuta cuando se inicializa el componente
     /// </summary>
     protected override async Task OnInitializedAsync()
     {
+        var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+        var rol = (authState.User.FindFirst(ClaimTypes.Role)?.Value ?? "").Trim().ToUpperInvariant();
+        esAdminReg = rol == "SUPERADMIN" || rol == "ADMINISTRADOR" || rol == "ADMIN";
+
         // Cargar lista de empresas al inicializar
         empresas = await Http.GetFromJsonAsync<List<Empresa>>("api/Empresas") ?? new List<Empresa>();
         
@@ -362,6 +402,9 @@
     /// <summary>
     /// Maneja el envío del formulario cuando es válido
     /// </summary>
+    private AsignadorPermisosPaginas? asignadorRef;
+    private bool esAdminReg;
+
     private async Task HandleValidSubmit()
     {
         try
@@ -385,6 +428,20 @@
             var response = await Http.PostAsync("api/Usuarios/registro", content);
             if (response.IsSuccessStatusCode)
             {
+                // Obtener el ID del usuario recién creado para guardar los permisos
+                int nuevoUsuarioId = 0;
+                try
+                {
+                    var json = await response.Content.ReadAsStringAsync();
+                    using var doc = JsonDocument.Parse(json);
+                    if (doc.RootElement.TryGetProperty("id", out var idProp))
+                        nuevoUsuarioId = idProp.GetInt32();
+                }
+                catch { }
+
+                if (asignadorRef != null && nuevoUsuarioId > 0)
+                    await asignadorRef.SaveAsync(nuevoUsuarioId);
+
                 NavigationManager.NavigateTo("/usuarios");
             }
             else

@@ -2,12 +2,20 @@
 @using ApexCharts
 @using IMPLANPROD.Shared.DTOs
 @using IMPLANPROD.Client.Repositories
+@using IMPLANPROD.Client.Services
 @inject IJSRuntime JSRuntime
 @inject IRepository repository
 @inject NavigationManager NavigationManager
+@inject PageAccessService PageAccess
 
 <PageTitle>Gráficos de Recepciones</PageTitle>
 
+@if (validando)
+{
+    <p>Validando acceso...</p>
+}
+else
+{
 <div class="container-fluid">
     <div class="row">
         <div class="col-12">
@@ -333,6 +341,7 @@ Calificación = 100 - (3 × 2) - 2 = 92 → Excelente
         </div>
     </div>
 </div>
+}
 
 @code {
     // Variables de estado
@@ -340,6 +349,7 @@ Calificación = 100 - (3 × 2) - 2 = 92 → Excelente
     private DateTime fechaHasta = DateTime.Now;
     private bool cargando = false;
     private bool graficosGenerados = false;
+    private bool validando = true;
     
     // Variables para estadísticas
     private int totalRecepciones = 0;
@@ -367,8 +377,12 @@ Calificación = 100 - (3 × 2) - 2 = 92 → Excelente
     private ApexChartOptions<DatoEstadoRecepcionDTO> opcionesPie = new();
     private ApexChartOptions<DatoProductoRecepcionDTO> opcionesBarrasProductos = new();
 
-    protected override void OnInitialized()
+    protected override async Task OnInitializedAsync()
     {
+        // Validar que el usuario tenga permiso para acceder a esta página antes de mostrar el contenido
+        await PageAccess.RequiereAccesoAsync("/graficos-recepciones");
+        validando = false;
+        
         ConfigurarOpcionesGraficos();
     }
 

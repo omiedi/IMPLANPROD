@@ -507,6 +507,20 @@ SET LastUpdate = GETDATE(),
 	UPDATE BADAMODE
 SET NumUsuar      = 10,
     [CodiEmprNet] = 101;
+***********************   pasada
 
 */
+/*  ESTO ES LPARA CARGAR LAS NOTAS EN LA TABLA BADAMODE_NOTA  
+ *  --1) Borrar el contenido de la tabla destino
+DELETE FROM arcon2.dbo.BADAMODE_NOTA;
 
+
+--2) Insertar los datos desde la tabla original
+INSERT INTO arcon2.dbo.BADAMODE_NOTA (COD_MOD, OBSERVACIONES)
+SELECT
+    COD_MOD,
+    ANOTAMOD
+FROM arcon.dbo.BADAMODE
+WHERE ANOTAMOD IS NOT NULL
+  AND CAST(ANOTAMOD AS NVARCHAR(MAX)) <> '';
+*/

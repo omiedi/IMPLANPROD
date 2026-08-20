@@ -1,4 +1,6 @@
 @page "/configuracion/email"
+@using Microsoft.AspNetCore.Authorization
+@attribute [Authorize(Roles = "SUPERADMIN")]
 @using IMPLANPROD.Shared.DTOs
 @using Microsoft.AspNetCore.Components.Forms
 @inject IRepository repository

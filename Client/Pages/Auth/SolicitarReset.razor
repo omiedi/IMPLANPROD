@@ -1,0 +1,120 @@
+@page "/recuperar-password"
+@inject IRepository repository
+@inject NavigationManager navigationManager
+
+<div class="row justify-content-center mt-5">
+    <div class="col-md-4">
+        <div class="card shadow-sm">
+            <div class="card-header" style="background-color:#1F7246; color:white;">
+                <h5 class="mb-0"><i class="oi oi-lock-locked me-2"></i>Recuperar Contraseña</h5>
+            </div>
+            <div class="card-body">
+
+                @if (enviado)
+                {
+                    <div class="alert alert-success">
+                        <i class="oi oi-check me-2"></i>
+                        <strong>Solicitud enviada.</strong><br />
+                        Se envió el enlace de recuperación al email indicado.<br />
+                        <small class="text-muted">Revisá también la carpeta de spam.</small>
+                    </div>
+                    <div class="text-center mt-3">
+                        <a href="/login" class="btn btn-outline-secondary btn-sm">
+                            <i class="oi oi-arrow-left me-1"></i>Volver al login
+                        </a>
+                    </div>
+                }
+                else
+                {
+                    <p class="text-muted small mb-3">
+                        Ingresá tu email y te enviaremos un enlace para restablecer tu contraseña.
+                    </p>
+
+                    @if (!string.IsNullOrEmpty(mensajeError))
+                    {
+                        <div class="alert alert-danger py-2">@mensajeError</div>
+                    }
+
+                    <div class="mb-3">
+                        <label for="email" class="form-label">Email</label>
+                        <input type="email"
+                               id="email"
+                               class="form-control @(mostrarValidacion && string.IsNullOrWhiteSpace(email) ? "is-invalid" : "")"
+                               @bind="email"
+                               @bind:event="oninput"
+                               placeholder="tu@email.com"
+                               disabled="@cargando" />
+                        @if (mostrarValidacion && string.IsNullOrWhiteSpace(email))
+                        {
+                            <div class="invalid-feedback">Ingresá tu email.</div>
+                        }
+                    </div>
+
+                    <div class="d-grid gap-2">
+                        <button class="btn btn-primary" @onclick="Solicitar" disabled="@cargando">
+                            @if (cargando)
+                            {
+                                <span class="spinner-border spinner-border-sm me-2" role="status"></span>
+                                <span>Enviando...</span>
+                            }
+                            else
+                            {
+                                <i class="oi oi-envelope-closed me-1"></i>
+                                <span>Enviar enlace</span>
+                            }
+                        </button>
+                    </div>
+
+                    <div class="text-center mt-3">
+                        <a href="/login" class="text-muted small">
+                            <i class="oi oi-arrow-left me-1"></i>Volver al login
+                        </a>
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    private string email = "";
+    private bool cargando = false;
+    private bool enviado = false;
+    private bool mostrarValidacion = false;
+    private string? mensajeError;
+
+    private async Task Solicitar()
+    {
+        mostrarValidacion = true;
+        mensajeError = null;
+
+        if (string.IsNullOrWhiteSpace(email))
+            return;
+
+        cargando = true;
+        try
+        {
+            var response = await repository.Post<object, string>(
+                "api/auth/solicitar-reset",
+                new { Email = email.Trim() });
+
+            if (response.Error)
+            {
+                mensajeError = await response.GetErrorMessageAsync();
+                enviado = false;
+                return;
+            }
+
+            enviado = true;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[SolicitarReset] Error: {ex.Message}");
+            mensajeError = "Ocurrió un error al procesar la solicitud. Intentá nuevamente.";
+        }
+        finally
+        {
+            cargando = false;
+        }
+    }
+}

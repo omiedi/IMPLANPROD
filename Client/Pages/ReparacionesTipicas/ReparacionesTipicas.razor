@@ -1,10 +1,20 @@
 @page "/reparaciones-tipicas"
 @using IMPLANPROD.Client.Shared.Components
+@using IMPLANPROD.Client.Services
 @inject IRepository repository
 @inject SweetAlertService sweetAlertService
 @inject NavigationManager navigationManager
 @inject IJSRuntime jsRuntime
+@inject PageAccessService PageAccess
 
+<PageTitle>Reparaciones Típicas</PageTitle>
+
+@if (validando)
+{
+    <p>Validando acceso...</p>
+}
+else
+{
 <h3><i class="fas fa-wrench"></i> Reparaciones Típicas</h3>
 
 <div class="mb-3">
@@ -325,6 +335,7 @@
         </div>
     </div>
 }
+}
 
 <!-- Selector de Productos (Modal) -->
 <SelectorProductos @ref="selectorProductos" 
@@ -347,9 +358,14 @@
     private List<PADMAQ>? equipos;
     private List<Catoper>? categorias;
     private string horasFormateadas = "00:00:00";
+    private bool validando = true;
 
     protected override async Task OnInitializedAsync()
     {
+        // Validar que el usuario tenga permiso para acceder a esta página antes de mostrar el contenido
+        await PageAccess.RequiereAccesoAsync("/reparaciones-tipicas");
+        validando = false;
+        
         await CargarCodigosReparacion();
     }
 

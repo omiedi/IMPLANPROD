@@ -217,6 +217,10 @@ namespace IMPLANPROD.Server.Controllers
         {
             try
             {
+                // Devuelve únicamente los códigos de depósito.
+                // 
+                // Se usa en pantallas donde queremos recorrer el "universo" de depósitos existentes
+                // sin traer toda la entidad (más liviano y rápido).
                 var depositos = await _context.Tadeposi
                     .Select(d => d.CodigoDepo)
                     .Distinct()
@@ -271,12 +275,25 @@ namespace IMPLANPROD.Server.Controllers
         /// <summary>
         /// Obtiene la lista de depósitos activos ordenados por código
         /// </summary>
+        /// <remarks>
+        /// Este endpoint es clave para StockInfGeneral:
+        /// - El front necesita el flag booleano <c>Tadeposi.disponible</c> para decidir
+        ///   qué depósitos se consideran "disponibles".
+        /// - Con ese flag, el front calcula el "Stock Propio" sumando SOLO depósitos disponibles.
+        /// 
+        /// Importante:
+        /// - "Activo" (Status >= 0) no significa necesariamente "Disponible".
+        /// - Por eso se devuelve la entidad completa (o al menos el campo disponible).
+        /// </remarks>
         [AllowAnonymous]
         [HttpGet("activos")]
         public async Task<ActionResult<List<Tadeposi>>> GetDepositosActivos()
         {
             try
             {
+                // Filtramos por Status >= 0 para no incluir depósitos dados de baja.
+                // NOTA: no filtramos por 'disponible' aquí porque el front
+                // muestra igualmente el depósito en la grilla (marcado como no disponible).
                 var depositos = await _context.Tadeposi
                     .Where(d => d.Status >= 0)
                     .OrderBy(d => d.CodigoDepo)

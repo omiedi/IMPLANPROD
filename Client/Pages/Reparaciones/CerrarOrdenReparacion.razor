@@ -1,8 +1,18 @@
 @page "/cerrar-orden-reparacion"
+@using IMPLANPROD.Client.Services
 @inject IRepository repository
 @inject NavigationManager navigationManager
 @inject SweetAlertService sweetAlertService
+@inject PageAccessService PageAccess
 
+<PageTitle>Cerrar Orden de Reparación</PageTitle>
+
+@if (validando)
+{
+    <p>Validando acceso...</p>
+}
+else
+{
 <div class="container-fluid mt-4">
     <div class="card shadow-sm">
         <div class="card-header bg-primary text-white">
@@ -174,6 +184,7 @@
         </div>
     </div>
 </div>
+}
 
 @code {
     private List<OrdenReparacionDTO>? ordenesEnCurso;
@@ -184,9 +195,14 @@
     private bool cargando = true;
     private bool cargandoRepuestos = false;
     private bool mostrarErrorDeposito = false;
+    private bool validando = true;
 
     protected override async Task OnInitializedAsync()
     {
+        // Validar que el usuario tenga permiso para acceder a esta página antes de mostrar el contenido
+        await PageAccess.RequiereAccesoAsync("/cerrar-orden-reparacion");
+        validando = false;
+        
         await Task.WhenAll(
             CargarOrdenesEnCurso(),
             CargarDepositosDisponibles()

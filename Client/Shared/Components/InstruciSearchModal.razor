@@ -1,0 +1,148 @@
+@inject IRepository Repository
+@inject SweetAlertService SweetAlertService
+@inject IJSRuntime JSRuntime
+@using IMPLANPROD.Shared.Entities
+
+@if (IsVisible)
+{
+    <div class="modal fade show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5);" role="dialog">
+        <div class="modal-dialog modal-lg modal-dialog-centered" role="document">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">
+                        <i class="fas fa-file-alt me-2"></i>
+                        Buscar Instrucción@(string.IsNullOrEmpty(Titulo) ? "" : $" — {Titulo}")
+                    </h5>
+                    <button type="button" class="btn-close" @onclick="CloseModal" aria-label="Cerrar"></button>
+                </div>
+
+                <div class="modal-body">
+                    <form @onsubmit="HandleSubmit" @onsubmit:preventDefault>
+                        <div class="input-group mb-3">
+                            <input type="text"
+                                   class="form-control"
+                                   placeholder="Buscar por código o descripción..."
+                                   @bind="searchQuery"
+                                   @bind:event="oninput"
+                                   @ref="searchInput" />
+                            <button class="btn btn-outline-primary" type="submit">
+                                <i class="oi oi-magnifying-glass"></i> Buscar
+                            </button>
+                        </div>
+                    </form>
+
+                    @if (isLoading)
+                    {
+                        <div class="text-center py-3">
+                            <div class="spinner-border text-primary" role="status"></div>
+                        </div>
+                    }
+                    else if (showResults && searchResults.Any())
+                    {
+                        <div class="list-group list-group-flush" style="max-height: 400px; overflow-y: auto;">
+                            @foreach (var item in searchResults)
+                            {
+                                <button type="button"
+                                        class="list-group-item list-group-item-action py-2"
+                                        @onclick="() => SelectItem(item)">
+                                    <div class="d-flex justify-content-between align-items-center">
+                                        <div class="d-flex align-items-center gap-3">
+                                            <span class="badge bg-primary" style="min-width:38px;">@item.Cod_Inte</span>
+                                            <strong class="text-nowrap">@item.Codigo</strong>
+                                            <span class="text-truncate" style="max-width:300px;">@item.Descripcion</span>
+                                        </div>
+                                        @if (!string.IsNullOrWhiteSpace(item.Revision))
+                                        {
+                                            <span class="badge bg-secondary">Rev. @item.Revision</span>
+                                        }
+                                    </div>
+                                </button>
+                            }
+                        </div>
+                    }
+                    else if (showResults)
+                    {
+                        <div class="alert alert-info mb-0">No se encontraron instrucciones.</div>
+                    }
+                </div>
+
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" @onclick="CloseModal">Cancelar</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] public bool IsVisible { get; set; }
+    [Parameter] public string? Titulo { get; set; }
+    [Parameter] public EventCallback<Instruci> OnInstruciSelected { get; set; }
+    [Parameter] public EventCallback OnCloseRequested { get; set; }
+
+    private string searchQuery = "";
+    private List<Instruci> searchResults = new();
+    private bool showResults = false;
+    private bool isLoading = false;
+    private ElementReference searchInput;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (IsVisible)
+        {
+            await Task.Delay(50);
+            try { await JSRuntime.InvokeVoidAsync("focusElement", searchInput); } catch { }
+        }
+        await base.OnParametersSetAsync();
+    }
+
+    private async Task HandleSubmit()
+    {
+        if (string.IsNullOrWhiteSpace(searchQuery)) return;
+
+        isLoading = true;
+        showResults = false;
+        StateHasChanged();
+
+        try
+        {
+            var response = await Repository.Get<List<Instruci>>(
+                $"api/instruci/search?filter={Uri.EscapeDataString(searchQuery)}");
+
+            if (response.Error)
+            {
+                var msg = await response.GetErrorMessageAsync();
+                await SweetAlertService.FireAsync("Error", msg, SweetAlertIcon.Error);
+                searchResults.Clear();
+            }
+            else
+            {
+                searchResults = response.Response ?? new();
+            }
+        }
+        catch (Exception ex)
+        {
+            await SweetAlertService.FireAsync("Error", $"Error al buscar: {ex.Message}", SweetAlertIcon.Error);
+            searchResults.Clear();
+        }
+        finally
+        {
+            isLoading = false;
+            showResults = true;
+        }
+    }
+
+    private async Task SelectItem(Instruci item)
+    {
+        await OnInstruciSelected.InvokeAsync(item);
+        await CloseModal();
+    }
+
+    private async Task CloseModal()
+    {
+        searchQuery = "";
+        searchResults.Clear();
+        showResults = false;
+        await OnCloseRequested.InvokeAsync();
+    }
+}

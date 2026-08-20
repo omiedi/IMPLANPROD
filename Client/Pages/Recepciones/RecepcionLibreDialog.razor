@@ -23,7 +23,7 @@
                         <div class="col-md-6">
                             <div class="form-group">
                                 <label>Número de Remito:</label>
-                                <InputText class="form-control" @bind-Value="RecepcionLibre.NumeroRemito" />
+                                <InputText class="form-control" @bind-Value="RecepcionLibre.NumeroRemito" @onblur="ValidarRemitoOnBlurAsync" />
                                 <ValidationMessage For="@(() => RecepcionLibre.NumeroRemito)" />
                             </div>
                         </div>
@@ -96,6 +96,36 @@
     [CascadingParameter] BlazoredModalInstance BlazoredModal { get; set; } = default!;
     [Parameter] public RecepcionLibreDTO RecepcionLibre { get; set; } = new();
     [Parameter] public List<RecepcionLibreDTO> Items { get; set; } = new();
+
+    private async Task ValidarRemitoOnBlurAsync()
+    {
+        try
+        {
+            if (string.IsNullOrWhiteSpace(RecepcionLibre.NumeroRemito))
+            {
+                return;
+            }
+
+            if (RecepcionLibre.NumeroProveedor <= 0)
+            {
+                return;
+            }
+
+            var remitoEncoded = Uri.EscapeDataString(RecepcionLibre.NumeroRemito);
+            var url = $"api/BolRecep/validar-remito?numeroRemito={remitoEncoded}&numeroProveedor={RecepcionLibre.NumeroProveedor}";
+            var response = await repository.Get<object>(url);
+            if (response.Error)
+            {
+                var mensajeError = await response.GetErrorMessageAsync();
+                await sweetAlertService.FireAsync("Error", mensajeError, SweetAlertIcon.Error);
+                StateHasChanged();
+            }
+        }
+        catch (Exception ex)
+        {
+            await sweetAlertService.FireAsync("Error", ex.Message, SweetAlertIcon.Error);
+        }
+    }
 
     private async Task BuscarDeposito()
     {

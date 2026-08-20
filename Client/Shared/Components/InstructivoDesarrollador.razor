@@ -84,7 +84,7 @@
     {
         // Generar clave esperada: DDMMAAAA !!
         var fechaHoy = DateTime.Now;
-        var claveEsperada = $"{fechaHoy:ddMMyyyy} !!";
+		var claveEsperada = $"{fechaHoy:ddMMyyyy} !!"; // solo un espacio después de la fecha y antes de los signos de exclamación
 
         if (claveIngresada == claveEsperada)
         {

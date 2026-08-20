@@ -1,4 +1,5 @@
 using System.Security.Claims;
+using System.Text;
 using System.Text.Json;
 using IMPLANPROD.Client.Repositories;
 using IMPLANPROD.Shared.Entities;
@@ -30,13 +31,20 @@ namespace IMPLANPROD.Client.Auth
                 return new AuthenticationState(new ClaimsPrincipal(new ClaimsIdentity()));
             }
 
+            var rolNormalizado = ParseRoleFromJwt(token);
+            if (string.IsNullOrEmpty(rolNormalizado))
+                rolNormalizado = NormalizeRole(userInfo.PerfilNombre);
+
             var claims = new List<Claim>
             {
                 new Claim(ClaimTypes.Name, userInfo.NombreUsuario),
                 new Claim(ClaimTypes.Email, userInfo.Email),
-                new Claim(ClaimTypes.Role, userInfo.PerfilNombre),
+                new Claim(ClaimTypes.Role, rolNormalizado),
+                new Claim("UserId", userInfo.Id.ToString()),
                 new Claim("EmpresaId", userInfo.EmpresaId.ToString()),
-                new Claim("PerfilId", userInfo.PerfilId.ToString())
+                new Claim("PerfilId", (userInfo.PerfilId ?? 0).ToString()),
+                new Claim("IdFlexoft", (userInfo.IdFlexoft ?? 0).ToString()),
+                new Claim("Codiempresa", (userInfo.Codiempresa ?? 0).ToString())
             };
 
             var identity = new ClaimsIdentity(claims, "JwtAuth");
@@ -48,13 +56,20 @@ namespace IMPLANPROD.Client.Auth
             await _repository.SetTokenAsync(token);
             await _repository.SetUserInfoAsync(userInfo);
 
+            var rolNormalizado = ParseRoleFromJwt(token);
+            if (string.IsNullOrEmpty(rolNormalizado))
+                rolNormalizado = NormalizeRole(userInfo.PerfilNombre);
+
             var claims = new List<Claim>
             {
                 new Claim(ClaimTypes.Name, userInfo.NombreUsuario),
                 new Claim(ClaimTypes.Email, userInfo.Email),
-                new Claim(ClaimTypes.Role, userInfo.PerfilNombre),
+                new Claim(ClaimTypes.Role, rolNormalizado),
+                new Claim("UserId", userInfo.Id.ToString()),
                 new Claim("EmpresaId", userInfo.EmpresaId.ToString()),
-                new Claim("PerfilId", userInfo.PerfilId.ToString())
+                new Claim("PerfilId", (userInfo.PerfilId ?? 0).ToString()),
+                new Claim("IdFlexoft", (userInfo.IdFlexoft ?? 0).ToString()),
+                new Claim("Codiempresa", (userInfo.Codiempresa ?? 0).ToString())
             };
 
             var identity = new ClaimsIdentity(claims, "JwtAuth");
@@ -67,6 +82,29 @@ namespace IMPLANPROD.Client.Auth
             await _repository.RemoveTokenAsync();
             await _repository.RemoveUserInfoAsync();
             NotifyAuthenticationStateChanged(Task.FromResult(new AuthenticationState(new ClaimsPrincipal(new ClaimsIdentity()))));
+        }
+
+        private static string NormalizeRole(string? perfilNombre)
+        {
+            var rol = (perfilNombre ?? string.Empty).Trim().ToUpperInvariant();
+            return string.IsNullOrWhiteSpace(rol) ? "USUARIO" : rol;
+        }
+
+        private static string ParseRoleFromJwt(string token)
+        {
+            try
+            {
+                var payload = token.Split('.')[1];
+                var padded = payload + new string('=', (4 - payload.Length % 4) % 4);
+                var bytes = Convert.FromBase64String(padded);
+                var json = Encoding.UTF8.GetString(bytes);
+                using var doc = JsonDocument.Parse(json);
+                // JwtSecurityTokenHandler serializa ClaimTypes.Role como "role" en el JWT
+                if (doc.RootElement.TryGetProperty("role", out var roleProp))
+                    return (roleProp.GetString() ?? "").Trim().ToUpperInvariant();
+            }
+            catch { }
+            return "";
         }
     }
 

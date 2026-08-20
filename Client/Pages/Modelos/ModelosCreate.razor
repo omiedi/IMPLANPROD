@@ -1,11 +1,19 @@
 @page "/modelos-create"
+@using IMPLANPROD.Client.Services
 @using IMPLANPROD.Shared.Entities
 @inject IRepository repository
 @inject NavigationManager NavigationManager
 @inject SweetAlertService sweetAlertService
+@inject PageAccessService PageAccess
 
 <PageTitle>Nuevo Modelo</PageTitle>
 
+@if (validando)
+{
+    <p>Validando acceso...</p>
+}
+else
+{
 <!--
 Componente: ModelosCreate.razor
 Descripción: Página para crear un nuevo modelo (BADAMODE)
@@ -24,9 +32,18 @@ Fecha: 2026-01-08
              OnValidSubmit="CreateAsync"
              OnCancel="Cancel"
              IsEdit="false" />
+}
 
 @code {
     private Badamode modelo = new();
+    private bool validando = true;
+
+    // Validar que el usuario tenga permiso para acceder a esta página antes de mostrar el contenido
+    protected override async Task OnInitializedAsync()
+    {
+        await PageAccess.RequiereAccesoAsync("/modelos-create");
+        validando = false;
+    }
 
     /// <summary>
     /// Crea un nuevo modelo

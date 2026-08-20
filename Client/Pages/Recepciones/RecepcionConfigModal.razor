@@ -1,0 +1,189 @@
+@using IMPLANPROD.Shared.Entities
+@inject IRepository repository
+@inject SweetAlertService sweetAlertService
+
+@* Modal de configuración de Recepciones *@
+@if (IsVisible)
+{
+    <div class="modal fade show" style="display: block" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header bg-primary text-white">
+                    <h5 class="modal-title">
+                        <i class="fas fa-cogs me-2"></i>Configuración de Recepciones
+                    </h5>
+                    <button type="button" class="btn-close btn-close-white" @onclick="CerrarModal"></button>
+                </div>
+                <div class="modal-body">
+                    @if (cargandoConfiguracion)
+                    {
+                        <div class="d-flex justify-content-center align-items-center" style="min-height: 200px;">
+                            <div class="spinner-border text-primary" role="status">
+                                <span class="visually-hidden">Cargando configuración...</span>
+                            </div>
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="card">
+                            <div class="card-header bg-info text-white">
+                                <h6 class="card-title mb-0">
+                                    <i class="fas fa-check-double me-2"></i>Aprobación de Calidad
+                                </h6>
+                            </div>
+                            <div class="card-body">
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" id="apruebaCalidad" @bind="apruebaCalidad" />
+                                    <label class="form-check-label" for="apruebaCalidad">
+                                        <strong>Aprueba Calidad</strong>
+                                    </label>
+                                </div>
+
+                                <div class="form-text mt-2">
+                                    Si está activado, el circuito de recepción considerará que existe instancia de aprobación de calidad.
+                                </div>
+
+                                <div class="alert @(apruebaCalidad ? "alert-success" : "alert-secondary") mt-3 mb-0 p-2">
+                                    <strong>Estado:</strong>
+                                    <span class="badge bg-@(apruebaCalidad ? "success" : "secondary") ms-2">
+                                        @(apruebaCalidad ? "ACTIVADO" : "DESACTIVADO")
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+                    }
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" @onclick="CerrarModal" disabled="@(guardandoConfiguracion)">
+                        <i class="fas fa-times me-1"></i>Cerrar
+                    </button>
+                    <button type="button" class="btn btn-success" @onclick="GuardarConfiguracion" disabled="@(cargandoConfiguracion || guardandoConfiguracion)">
+                        @if (guardandoConfiguracion)
+                        {
+                            <span class="spinner-border spinner-border-sm me-2" role="status"></span>
+                        }
+                        else
+                        {
+                            <i class="fas fa-save me-1"></i>
+                        }
+                        Guardar
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="modal-backdrop fade show"></div>
+}
+
+@code {
+    [Parameter] public bool IsVisible { get; set; }
+    [Parameter] public EventCallback OnCloseRequested { get; set; }
+    [Parameter] public EventCallback OnConfigurationSaved { get; set; }
+
+    private bool cargandoConfiguracion;
+    private bool guardandoConfiguracion;
+
+    // Claves FLEXCRL requeridas por negocio
+    private const string PROBUS_RECEPCION = "RECEPCIO";
+    private const string CLABUS_APRUEBA_CALIDAD = "APRUCALI";
+
+    // Valor lógico que se persiste como "1" (true) / "0" (false) en VALCONTROL.
+    private bool apruebaCalidad;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (IsVisible && !cargandoConfiguracion)
+        {
+            await CargarConfiguracion();
+        }
+    }
+
+    private async Task CargarConfiguracion()
+    {
+        try
+        {
+            cargandoConfiguracion = true;
+            StateHasChanged();
+
+            var response = await repository.Get<FLEXCRL>($"api/flexcrl/{CLABUS_APRUEBA_CALIDAD}/{PROBUS_RECEPCION}");
+            if (response.Error || response.Response == null)
+            {
+                // Si no existe el registro, asumimos valor por defecto false.
+                apruebaCalidad = false;
+                return;
+            }
+
+            var valor = (response.Response.VALCONTROL ?? string.Empty).Trim();
+            apruebaCalidad = valor == "1" || valor.Equals("true", StringComparison.OrdinalIgnoreCase);
+        }
+        catch (Exception ex)
+        {
+            apruebaCalidad = false;
+            await sweetAlertService.FireAsync("Error", $"No se pudo cargar la configuración: {ex.Message}", SweetAlertIcon.Error);
+        }
+        finally
+        {
+            cargandoConfiguracion = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task GuardarConfiguracion()
+    {
+        try
+        {
+            guardandoConfiguracion = true;
+            StateHasChanged();
+
+            var valorAGuardar = apruebaCalidad ? "1" : "0";
+
+            var result = await sweetAlertService.FireAsync(new SweetAlertOptions
+            {
+                Title = "Confirmar",
+                Text = $"¿Deseas guardar la configuración?\n\nAprueba Calidad: {(apruebaCalidad ? "ACTIVADO" : "DESACTIVADO")}",
+                Icon = SweetAlertIcon.Question,
+                ShowCancelButton = true,
+                ConfirmButtonText = "Sí, guardar",
+                CancelButtonText = "Cancelar"
+            });
+
+            if (!result.IsConfirmed)
+            {
+                return;
+            }
+
+            var configData = new
+            {
+                clabus = CLABUS_APRUEBA_CALIDAD,
+                probus = PROBUS_RECEPCION,
+                valcontrol = valorAGuardar
+            };
+
+            var response = await repository.Put("api/flexcrl", configData);
+            if (response.Error)
+            {
+                var errorMessage = await response.GetErrorMessageAsync();
+                await sweetAlertService.FireAsync("Error", errorMessage, SweetAlertIcon.Error);
+                return;
+            }
+
+            await sweetAlertService.FireAsync("Éxito", "Configuración guardada.", SweetAlertIcon.Success);
+            await OnConfigurationSaved.InvokeAsync();
+            await CerrarModal();
+        }
+        catch (Exception ex)
+        {
+            await sweetAlertService.FireAsync("Error", $"Error inesperado al guardar: {ex.Message}", SweetAlertIcon.Error);
+        }
+        finally
+        {
+            guardandoConfiguracion = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task CerrarModal()
+    {
+        await OnCloseRequested.InvokeAsync();
+    }
+}

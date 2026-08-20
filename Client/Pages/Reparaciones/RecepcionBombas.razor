@@ -1,12 +1,22 @@
 @page "/recepcion-bombas"
 @page "/recepcion-bombas/{NumRepa:int}"
 @using IMPLANPROD.Client.Shared.Components
+@using IMPLANPROD.Client.Services
 @using static IMPLANPROD.Client.Shared.Components.SelectorClientes
 @using System.Text.Json
 @inject IRepository repository
 @inject SweetAlertService sweetAlertService
 @inject NavigationManager navigationManager
+@inject PageAccessService PageAccess
 
+<PageTitle>Recepción de Bombas</PageTitle>
+
+@if (validando)
+{
+    <p>Validando acceso...</p>
+}
+else
+{
 @code {
     [Parameter] public int? NumRepa { get; set; }
     private bool modoSoloLectura = false;
@@ -311,6 +321,7 @@
         </div>
     </EditForm>
 </div>
+}
 
 <!-- Componentes de selección -->
 <SelectorClientes @ref="selectorClientes" OnClienteSeleccionado="@OnClienteSeleccionado" />
@@ -338,9 +349,14 @@
     private string talonNumero = string.Empty;
     private bool guardando = false;
     private int ultimaReparacionGuardada = 0;
+    private bool validando = true;
 
     protected override async Task OnInitializedAsync()
     {
+        // Validar que el usuario tenga permiso para acceder a esta página antes de mostrar el contenido
+        await PageAccess.RequiereAccesoAsync("/recepcion-bombas");
+        validando = false;
+        
         if (NumRepa.HasValue && NumRepa.Value > 0)
         {
             modoSoloLectura = true;

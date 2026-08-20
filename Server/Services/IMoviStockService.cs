@@ -23,8 +23,8 @@ namespace IMPLANPROD.Server.Services
         /// Valida si un movimiento de stock es válido antes de registrarlo
         /// </summary>
         /// <param name="movimiento">Datos del movimiento a validar</param>
-        /// <returns>True si el movimiento es válido, False en caso contrario</returns>
-        Task<bool> ValidarMovimientoAsync(MoviStockDTO movimiento);
+        /// <returns>Tupla con (IsValid, ErrorMessage) - IsValid indica si es válido, ErrorMessage contiene el mensaje de error si no lo es</returns>
+        Task<(bool IsValid, string ErrorMessage)> ValidarMovimientoAsync(MoviStockDTO movimiento);
 
         /// <summary>
         /// Valida si existe un remito duplicado (mismo prefijo y número)
@@ -54,12 +54,22 @@ namespace IMPLANPROD.Server.Services
         Task<List<RemitoAnularDTO>> ObtenerRemitosMesTodosAsync(int anio, int mes, int? numeroCliente = null);
 
         /// <summary>
-        /// Obtiene el último número de remito registrado en MOVISTO
-        /// Filtra por código de movimiento RT y fecha mayor o igual a la fecha de nueva numeración
+        /// Obtiene los remitos de traslado del mes (códigos RC y DV)
         /// </summary>
-        /// <param name="fechaNuevaNumeracion">Fecha desde la cual considerar los remitos (opcional, default 01/01/1980)</param>
+        /// <param name="anio">Año</param>
+        /// <param name="mes">Mes (1-12)</param>
+        /// <param name="numeroCliente">Número de cliente (opcional)</param>
+        /// <returns>Lista de remitos de traslado del mes</returns>
+        Task<List<RemitoAnularDTO>> ObtenerRemitosTrasladoMesAsync(int anio, int mes, int? numeroCliente = null);
+
+        /// <summary>
+        /// Obtiene el último número de remito registrado en MOVISTO
+        /// Filtra por código de movimiento y fecha y hora mayor o igual a la fecha de nueva numeración
+        /// </summary>
+        /// <param name="fechaNuevaNumeracion">Fecha y hora desde la cual considerar los remitos (opcional, default 01/01/1980 00:00)</param>
+        /// <param name="codigoMovimiento">Código de movimiento a filtrar (opcional, default "RT" para remitos de cliente, usar "RC" para traslados)</param>
         /// <returns>Último número de remito</returns>
-        Task<int> ObtenerUltimoNumeroRemitoAsync(DateTime? fechaNuevaNumeracion = null);
+        Task<int> ObtenerUltimoNumeroRemitoAsync(DateTime? fechaNuevaNumeracion = null, string codigoMovimiento = "RT");
 
         /// <summary>
         /// Anula un remito específico

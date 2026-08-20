@@ -6,10 +6,20 @@
 @using IMPLANPROD.Client.Shared.Components
 @using IMPLANPROD.Client.Pages.Reportes
 @using IMPLANPROD.Client.Helpers
+@using IMPLANPROD.Client.Services
 @inject IRepository repository
 @inject SweetAlertService sweetAlertService
 @inject NavigationManager navigationManager
+@inject PageAccessService PageAccess
 
+<PageTitle>Consulta de Remitos</PageTitle>
+
+@if (validando)
+{
+    <p>Validando acceso...</p>
+}
+else
+{
 <div class="container-fluid">
     <!-- Título de la página -->
     <div class="mb-4">
@@ -185,6 +195,7 @@
         </div>
     </div>
 </div>
+}
 
 <SelectorClientes @ref="selectorClientes" OnClienteSeleccionado="OnClienteSeleccionado" />
 
@@ -229,6 +240,7 @@
     private bool isPrinting = false;
     private bool mostrarModalImpresion = false;
     private string TituloReporte => "Listado de Remitos";
+    private bool validando = true;
     
     // Variables para impresión de remito individual
     private bool imprimiendoRemito = false;
@@ -255,6 +267,13 @@
         { "FechMov", "Fecha" },
         { "ReferCor", "Referencia" }
     };
+
+    protected override async Task OnInitializedAsync()
+    {
+        // Validar que el usuario tenga permiso para acceder a esta página antes de mostrar el contenido
+        await PageAccess.RequiereAccesoAsync("/remitos");
+        validando = false;
+    }
 
     private async Task CargarRemitos()
     {

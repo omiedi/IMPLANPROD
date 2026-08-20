@@ -19,7 +19,7 @@ namespace IMPLANPROD.Shared.Entities
 
         [Display(Name = "Descripción Abreviada")]
         [Required(ErrorMessage = "El campo {0} es obligatorio.")]
-        [MaxLength(12, ErrorMessage = "El campo {0} no puede tener más de {1} caracteres")]
+        [MaxLength(24, ErrorMessage = "El campo {0} no puede tener más de {1} caracteres")]
         public string? DescripAbreviada { get; set; }
 
         public int? CodPlanta { get; set; }
@@ -57,4 +57,8 @@ namespace IMPLANPROD.Shared.Entities
         [Column("NumUsuar")]
         public int? NumUsuar { get; set; }
     }
+    /*
+      ALTER TABLE TADEPOSI
+      ALTER COLUMN DescripAbreviada VARCHAR(24);
+     */
 }

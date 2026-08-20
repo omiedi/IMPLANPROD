@@ -163,6 +163,74 @@ window.descargarArchivo = function (nombreArchivo, base64String) {
     }
 };
 
+window.saveAsFile = function (fileName, base64String) {
+    try {
+        if (!fileName || !base64String) {
+            throw new Error('Nombre de archivo o contenido Base64 no proporcionado');
+        }
+
+        const base64Limpio = base64String.replace(/\s/g, '');
+        const byteCharacters = atob(base64Limpio);
+        const byteNumbers = new Array(byteCharacters.length);
+        for (let i = 0; i < byteCharacters.length; i++) {
+            byteNumbers[i] = byteCharacters.charCodeAt(i);
+        }
+        const byteArray = new Uint8Array(byteNumbers);
+
+        const lower = (fileName || '').toLowerCase();
+        const mimeType = lower.endsWith('.xlsx')
+            ? 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+            : 'application/octet-stream';
+
+        const blob = new Blob([byteArray], { type: mimeType });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = fileName;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+        return true;
+    } catch (error) {
+        console.error('[saveAsFile] ❌ Error:', error);
+        alert('Error al descargar el archivo: ' + error.message);
+        return false;
+    }
+};
+
+window.openPdfInNewTab = function (base64String) {
+    try {
+        if (!base64String) {
+            throw new Error('Contenido Base64 no proporcionado');
+        }
+
+        const base64Limpio = base64String.replace(/\s/g, '');
+        const byteCharacters = atob(base64Limpio);
+        const byteNumbers = new Array(byteCharacters.length);
+        for (let i = 0; i < byteCharacters.length; i++) {
+            byteNumbers[i] = byteCharacters.charCodeAt(i);
+        }
+
+        const byteArray = new Uint8Array(byteNumbers);
+        const blob = new Blob([byteArray], { type: 'application/pdf' });
+        const url = URL.createObjectURL(blob);
+
+        const newWindow = window.open(url, '_blank');
+        if (!newWindow) {
+            URL.revokeObjectURL(url);
+            throw new Error('No se pudo abrir la nueva pestaña. Verifique bloqueador de pop-ups.');
+        }
+
+        setTimeout(() => URL.revokeObjectURL(url), 30000);
+        return true;
+    } catch (error) {
+        console.error('[openPdfInNewTab] ❌ Error:', error);
+        alert('Error al abrir el PDF: ' + error.message);
+        return false;
+    }
+};
+
 //function descargarArchivo(bytes, fileName, mimeType) {
 //    const blob = new Blob([bytes], { type: mimeType });
 //    const url = URL.createObjectURL(blob);
@@ -222,7 +290,7 @@ window.removeEscapeKeyListener = function (modalId) {
     if (modal && modal._escapeHandler) {
         // Remover el event listener
         document.removeEventListener('keydown', modal._escapeHandler);
-        
+
         // Limpiar las referencias
         delete modal._escapeHandler;
         if (modal._dotNetRef) {
@@ -230,4 +298,132 @@ window.removeEscapeKeyListener = function (modalId) {
             delete modal._dotNetRef;
         }
     }
+};
+
+/**
+ * Imprime el vale interno en formato A4
+ * @param {string} elementId - ID del elemento a imprimir
+ */
+window.imprimirVale = function (elementId) {
+    const elemento = document.getElementById(elementId);
+    if (!elemento) {
+        console.error('No se encontró el elemento con ID:', elementId);
+        return;
+    }
+
+    const contenido = elemento.innerHTML;
+    const ventanaImpresion = window.open('', '_blank', 'width=900,height=700');
+
+    if (!ventanaImpresion) {
+        console.error('No se pudo abrir la ventana de impresión. Verifique que los pop-ups estén permitidos.');
+        alert('No se pudo abrir la ventana de impresión. Por favor, permita las ventanas emergentes para este sitio.');
+        return;
+    }
+
+    ventanaImpresion.document.write(`
+        <!DOCTYPE html>
+        <html>
+            <head>
+                <meta charset="UTF-8">
+                <title>Vale Interno</title>
+                <style>
+                    @page {
+                        margin: 0;
+                        size: A4;
+                    }
+                    body {
+                        font-family: 'Courier New', monospace;
+                        font-size: 12px;
+                        margin: 20px;
+                        padding: 0;
+                    }
+                    .d-flex {
+                        display: flex;
+                    }
+                    .justify-content-between {
+                        justify-content: space-between;
+                    }
+                    .align-items-start {
+                        align-items: flex-start;
+                    }
+                    .mb-2 {
+                        margin-bottom: 0.5rem;
+                    }
+                    .text-end {
+                        text-align: right;
+                    }
+                    .row {
+                        display: flex;
+                        flex-direction: row;
+                    }
+                    .mb-2 {
+                        margin-bottom: 0.5rem;
+                    }
+                    .col-3 {
+                        flex: 0 0 25%;
+                        max-width: 25%;
+                    }
+                    .col-6 {
+                        flex: 0 0 50%;
+                        max-width: 50%;
+                    }
+                    .text-end {
+                        text-align: right;
+                    }
+                    .mt-3 {
+                        margin-top: 1rem;
+                    }
+                    strong {
+                        font-weight: bold;
+                    }
+                    @media print {
+                        body { margin: 20px; }
+                    }
+                </style>
+            </head>
+            <body>
+                ${contenido}
+            </body>
+        </html>
+    `);
+
+    ventanaImpresion.document.close();
+
+    setTimeout(function() {
+        try {
+            ventanaImpresion.focus();
+            ventanaImpresion.print();
+        } catch (error) {
+            console.error('Error al intentar imprimir:', error);
+        }
+    }, 500);
+};
+
+/**
+ * Genera un PDF del vale interno en formato A4
+ * @param {string} elementId - ID del elemento a convertir en PDF
+ * @param {string} nombreArchivo - Nombre del archivo PDF
+ */
+window.generarPdfVale = function (elementId, nombreArchivo) {
+    const elemento = document.getElementById(elementId);
+    if (!elemento) {
+        console.error('No se encontró el elemento con ID:', elementId);
+        return;
+    }
+
+    if (typeof html2pdf === 'undefined') {
+        console.error('La librería html2pdf no está disponible.');
+        alert('No se pudo generar el PDF. La librería no está disponible.');
+        return;
+    }
+
+    const opciones = {
+        margin: 15,
+        filename: nombreArchivo || 'ValeInterno.pdf',
+        image: { type: 'jpeg', quality: 0.98 },
+        html2canvas: { scale: 2 },
+        jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+    };
+
+    html2pdf().set(opciones).from(elemento).save();
 };

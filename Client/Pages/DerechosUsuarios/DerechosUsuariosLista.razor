@@ -1,4 +1,6 @@
 @page "/derechos-usuarios/lista"
+@using Microsoft.AspNetCore.Authorization
+@attribute [Authorize(Roles = "SUPERADMIN")]
 @using IMPLANPROD.Shared.Entities
 @inject IRepository repository
 @inject HttpClient Http

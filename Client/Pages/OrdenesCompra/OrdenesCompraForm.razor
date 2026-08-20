@@ -1,5 +1,6 @@
 @using IMPLANPROD.Shared.Entities
 @using IMPLANPROD.Shared.DTOs
+@using IMPLANPROD.Shared.DTOs.Impresiones
 @using IMPLANPROD.Client.Repositories
 @using IMPLANPROD.Client.Shared.Components
 @using IMPLANPROD.Client.Services
@@ -8,6 +9,8 @@
 @inject SweetAlertService sweetAlertService
 @inject NavigationManager navigationManager
 @inject AuthErrorHandlerService authErrorHandler
+@inject IJSRuntime JS
+@inject HttpClient Http
 
 <div class="container-fluid">
     <div class="row">
@@ -72,6 +75,23 @@
                                     <option value="9">Anulada</option>
                                 </InputSelect>
                             </div> *@
+                        </div>
+
+                        <div class="row mb-3">
+                            <div class="col-md-4">
+                                <label class="form-label">Depósito para remisión de consignación:</label>
+                                <InputSelect class="form-select" @bind-Value="depositoRemisionSeleccionado">
+                                    <option value="0">Seleccionar depósito...</option>
+                                    @if (depositosRemision != null)
+                                    {
+                                        @foreach (var deposito in depositosRemision)
+                                        {
+                                            <option value="@deposito.CodigoDepo">@deposito.CodigoDepo - @deposito.Descripcion</option>
+                                        }
+                                    }
+                                </InputSelect>
+                                <small class="text-muted">Se usa para consultar/remitir consignaciones al guardar la OC.</small>
+                            </div>
                         </div>
 
 
@@ -267,11 +287,11 @@
                                                 <td>@item.CodExte</td>
                                                 <td>@item.Descritem</td>
                                                 <td>
-                                                    <input type="number" class="form-control form-control-sm text-end" step="0.01" 
+                                                    <input type="number" class="form-control form-control-sm text-end input-number-sin-flechas" step="0.01" 
                                                            @bind="item.CantOcom" @bind:after="RecalcularDescuentoDesdeTexto" />
                                                 </td>
                                                 <td>
-                                                    <input type="number" class="form-control form-control-sm text-end" step="0.0001" 
+                                                    <input type="number" class="form-control form-control-sm text-end input-number-sin-flechas" step="0.0001" 
                                                            @bind="item.PreUnit" @bind:after="RecalcularDescuentoDesdeTexto" />
                                                 </td>
                                                 <td>@((item.CantOcom * item.PreUnit)?.ToString("C2"))</td>
@@ -485,6 +505,103 @@
                           OnProductoSeleccionadoCompras="OnProductoSeleccionadoCompras" 
                           OnClose="TerminarCicloSeleccionProductos" />
 
+@if (mostrarModalRemisionConsignaciones)
+{
+    <div class="modal fade show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5);">
+        <div class="modal-dialog modal-xl modal-dialog-scrollable">
+            <div class="modal-content">
+                <div class="modal-header bg-warning">
+                    <h5 class="modal-title">
+                        Remitir componentes de consignación - @numeroOrdenFormateadoRemisionModal
+                    </h5>
+                    <button type="button" class="btn-close" @onclick="CerrarModalRemision"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="row mb-3">
+                        <div class="col-md-5">
+                            <label class="form-label">Depósito de salida:</label>
+                            <select class="form-select" value="@depositoRemisionModalSeleccionado" @onchange="OnDepositoRemisionModalChanged">
+                                <option value="0">Seleccionar depósito...</option>
+                                @if (depositosRemision != null)
+                                {
+                                    @foreach (var deposito in depositosRemision)
+                                    {
+                                        <option value="@deposito.CodigoDepo">@deposito.CodigoDepo - @deposito.Descripcion</option>
+                                    }
+                                }
+                            </select>
+                        </div>
+                    </div>
+
+                    @if (cargandoPendientesRemision)
+                    {
+                        <div class="text-center py-4">
+                            <div class="spinner-border" role="status"></div>
+                            <div class="mt-2">Actualizando pendientes por depósito...</div>
+                        </div>
+                    }
+                    else if (!pendientesRemisionModal.Any())
+                    {
+                        <div class="alert alert-info mb-0">
+                            No hay componentes pendientes para remitir en el depósito seleccionado.
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="table-responsive">
+                            <table class="table table-sm table-striped table-bordered align-middle">
+                                <thead class="table-dark">
+                                    <tr>
+                                        <th>Cod. Inte</th>
+                                        <th>Cod. Exte</th>
+                                        <th>Descripción</th>
+                                        <th>Unidad</th>
+                                        <th class="text-end">Cant. Asig</th>
+                                        <th class="text-end">Cant. Entreg</th>
+                                        <th class="text-end">Falta Entregar</th>
+                                        <th class="text-end">Stock</th>
+                                        <th class="text-end">Remitir</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var item in pendientesRemisionModal)
+                                    {
+                                        <tr>
+                                            <td>@item.CodInte</td>
+                                            <td>@item.CodExte</td>
+                                            <td>@item.Descripcion</td>
+                                            <td>@item.Unidad</td>
+                                            <td class="text-end">@item.CantAsig.ToString("N4")</td>
+                                            <td class="text-end">@item.CantEntreg.ToString("N4")</td>
+                                            <td class="text-end">@item.FaltaEntregar.ToString("N4")</td>
+                                            <td class="text-end">@item.StockDeposito.ToString("N4")</td>
+                                            <td>
+                                                <input type="number" class="form-control form-control-sm text-end input-number-sin-flechas" step="0.0001"
+                                                       min="0" max="@item.MaxRemitir" @bind="item.CantidadEntregar" @bind:event="oninput"
+                                                       @onblur="(() => NormalizarCantidadRemitir(item))" />
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    }
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" @onclick="CerrarModalRemision">Cerrar</button>
+                    <button type="button" class="btn btn-success" @onclick="ConfirmarRemisionDesdeModalAsync" disabled="@remitiendoConsignaciones">
+                        @if (remitiendoConsignaciones)
+                        {
+                            <span class="spinner-border spinner-border-sm me-2"></span>
+                        }
+                        Confirmar Remito
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
 <!-- Modal de distribución de IVA -->
 @if (mostrarModalIva)
 {
@@ -595,7 +712,7 @@
                                     </label>
                                     <div class="input-group">
                                         <span class="input-group-text">$</span>
-                                        <input type="number" class="form-control form-control-lg text-end" step="0.01" 
+                                        <input type="number" class="form-control form-control-lg text-end input-number-sin-flechas" step="0.01" 
                                                @bind="baseImponible105" @bind:after="RecalcularDistribucionIva" 
                                                @ondblclick="(() => PonerTodoEnCampo(1))" 
                                                title="Editable - Doble clic para poner todo el total aquí" 
@@ -629,7 +746,7 @@
                                     </label>
                                     <div class="input-group">
                                         <span class="input-group-text">$</span>
-                                        <input type="number" class="form-control form-control-lg text-end" step="0.01" 
+                                        <input type="number" class="form-control form-control-lg text-end input-number-sin-flechas" step="0.01" 
                                                @bind="baseImponible21" @bind:after="RecalcularDistribucionIva" 
                                                @ondblclick="(() => PonerTodoEnCampo(2))" 
                                                title="Editable - Doble clic para poner todo el total aquí" 
@@ -663,7 +780,7 @@
                                     </label>
                                     <div class="input-group">
                                         <span class="input-group-text">$</span>
-                                        <input type="number" class="form-control form-control-lg text-end" step="0.01" 
+                                        <input type="number" class="form-control form-control-lg text-end input-number-sin-flechas" step="0.01" 
                                                @bind="baseImponible27" @bind:after="RecalcularDistribucionIva" 
                                                @ondblclick="(() => PonerTodoEnCampo(3))" 
                                                title="Editable - Doble clic para poner todo el total aquí" 
@@ -804,7 +921,22 @@
     private List<CondPag>? condicionesPago;
     private List<Plancuen>? cuentasDestino;
     private List<UnidadMedidas>? unidadesMedida;
+    private List<Tadeposi>? depositosRemision;
     private SelectorProveedores.ProveedorSeleccionado proveedorInfo = new();
+    private int depositoRemisionSeleccionado = 0;
+    private bool mostrarModalRemisionConsignaciones = false;
+    private bool cargandoPendientesRemision = false;
+    private bool remitiendoConsignaciones = false;
+    private int depositoRemisionModalSeleccionado = 0;
+    private int numeroProveedorRemisionModal = 0;
+    private string razonSocialProveedorRemisionModal = string.Empty;
+    private string numeroOrdenFormateadoRemisionModal = string.Empty;
+    private string numeroOrdenFiltroConsignacionRemisionModal = string.Empty;
+    private readonly List<ConsignacionPendienteRemisionDto> pendientesRemisionModal = new();
+    private const string NombrePlantillaRemitoConsignacion = "REMITO CONSIGNACION";
+    private int? plantillaRemitoConsignacionId;
+    private const string CLABUS_PARAM_OCOMPRA = "OCOMPRA";
+    private const string PROBUS_PARAM_MONECOS = "MONECOS";
 
     // Variables para Sector y Destino por defecto
     private string sectorPorDefecto = string.Empty;
@@ -933,6 +1065,7 @@
         await CargarCondicionesPago();
         await CargarCuentasDestino();
         await CargarUnidadesMedida();
+        await CargarDepositosRemision();
         
         if (IsEdit && ordenCompra.NumeOcom.HasValue)
         {
@@ -956,7 +1089,7 @@
             // Para órdenes nuevas, establecer valores por defecto
             ordenCompra.FemiOcom = DateTime.Now;
             ordenCompra.StatOcom = 0;
-            ordenCompra.CodiEmpr = 1; // Valor por defecto
+            ordenCompra.CodiEmpr = 0; // Valor por defecto
             
             // Inicializar lista de detalle vacía para órdenes nuevas
             detalleItems = new List<Ocomdeta>();
@@ -1040,37 +1173,88 @@
     }
 
     /// <summary>
-    /// Establece las monedas por defecto (PESOS con código 1 para emisión y valorización, y tipo de cambio 1)
+    /// Carga depósitos activos para usar en la remisión de consignaciones
+    /// </summary>
+    private async Task CargarDepositosRemision()
+    {
+        try
+        {
+            var responseHttp = await repository.Get<List<Tadeposi>>("api/tadeposi/activos");
+            if (!responseHttp.Error && responseHttp.Response != null)
+            {
+                depositosRemision = responseHttp.Response;
+                if (depositoRemisionSeleccionado <= 0 && depositosRemision.Any())
+                {
+                    depositoRemisionSeleccionado = depositosRemision.First().CodigoDepo;
+                }
+            }
+            else
+            {
+                depositosRemision = new List<Tadeposi>();
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error al cargar depósitos para remisión: {ex.Message}");
+            depositosRemision = new List<Tadeposi>();
+        }
+    }
+
+    /// <summary>
+    /// Establece moneda por defecto para nueva O.C.
+    /// - Emisión: PESOS (código 1) con fallback seguro
+    /// - Valorización de costos: valor configurado en FLEXCRL (OCOMPRA/MONECOS)
     /// </summary>
     private async Task EstablecerMonedaPorDefecto()
     {
         try
         {
-            // Buscar la moneda PESOS (código 1) en la lista de monedas
-            var monedaPesos = monedas?.FirstOrDefault(m => m.CodigoMoneda == 1);
+            var monedaCostoDefecto = await ObtenerMonedaCostoPorDefectoAsync();
+            var codigoMonedaPreferida = monedaCostoDefecto ?? 1;
+            var monedaSeleccionada = monedas?.FirstOrDefault(m => m.CodigoMoneda == codigoMonedaPreferida)
+                                  ?? monedas?.FirstOrDefault(m => m.CodigoMoneda == 1)
+                                  ?? monedas?.FirstOrDefault();
 
-            if (monedaPesos != null)
-            {
-                // Establecer PESOS como moneda por defecto para emisión y valorización
-                ordenCompra.MoneEmis = Convert.ToInt16(monedaPesos.CodigoMoneda);
-                ordenCompra.MoneCos = Convert.ToInt16(monedaPesos.CodigoMoneda); // Valorizar en PESOS por defecto
-                ordenCompra.TcamOcom = monedaPesos.Cotizacion;
-            }
-            else
-            {
-                // Si no se encuentra PESOS, establecer valores por defecto
-                ordenCompra.MoneEmis = 1; // Código 1 para PESOS
-                ordenCompra.MoneCos = 1; // Valorizar en PESOS por defecto
-                ordenCompra.TcamOcom = 1; // Tipo de cambio 1
-            }
+            var codigoMonedaSeleccionada = checked((short)(monedaSeleccionada?.CodigoMoneda ?? 1));
+
+            // Moneda de emisión (InputSelect "Moneda")
+            ordenCompra.MoneEmis = codigoMonedaSeleccionada;
+            ordenCompra.TcamOcom = monedaSeleccionada?.Cotizacion ?? 1;
+
+            // Moneda de valorización de costos
+            ordenCompra.MoneCos = codigoMonedaSeleccionada;
         }
         catch (Exception ex)
         {
-            // En caso de error, establecer valores por defecto
+            // En caso de error, establecer valores por defecto seguros
             ordenCompra.MoneEmis = 1;
-            ordenCompra.MoneCos = 1; // Valorizar en PESOS por defecto
+            ordenCompra.MoneCos = 1;
             ordenCompra.TcamOcom = 1;
             await sweetAlertService.FireAsync("Advertencia", $"Se estableció la moneda por defecto debido a un error: {ex.Message}", SweetAlertIcon.Warning);
+        }
+    }
+
+    private async Task<short?> ObtenerMonedaCostoPorDefectoAsync()
+    {
+        try
+        {
+            var response = await repository.Get<FLEXCRL>($"api/flexcrl/{CLABUS_PARAM_OCOMPRA}/{PROBUS_PARAM_MONECOS}");
+            if (response.Error || response.Response == null || string.IsNullOrWhiteSpace(response.Response.VALCONTROL))
+            {
+                return null;
+            }
+
+            if (!short.TryParse(response.Response.VALCONTROL, out var codigoMonedaConfigurada) || codigoMonedaConfigurada <= 0)
+            {
+                return null;
+            }
+
+            var monedaExisteEnCombo = monedas?.Any(m => m.CodigoMoneda == codigoMonedaConfigurada) == true;
+            return monedaExisteEnCombo ? codigoMonedaConfigurada : null;
+        }
+        catch
+        {
+            return null;
         }
     }
 
@@ -1342,52 +1526,37 @@
 
     /// <summary>
     /// Carga automáticamente el "Atte. Señor" para el proveedor seleccionado
-    /// Primero busca en la última orden de compra (OCOMENCA.AtSr_Ocom)
-    /// Si está vacío, busca en la tabla de proveedores (PROVED12.CTAC_CLI)
+    /// Toma el valor directamente desde la tabla de proveedores (PROVED12.CTAC_CLI)
     /// </summary>
     /// <param name="numeroProveedor">Número del proveedor seleccionado</param>
     private async Task CargarAtteSenorProveedor(int numeroProveedor)
     {
         try
         {
-            Console.WriteLine($"[CargarAtteSenorProveedor] 🔍 Buscando Atte. Señor para proveedor: {numeroProveedor}");
+            Console.WriteLine($"[CargarAtteSenorProveedor] 🔍 Buscando CTAC_CLI para proveedor: {numeroProveedor}");
 
             using var httpClient = new HttpClient { BaseAddress = new Uri(navigationManager.BaseUri) };
-            
-            // Paso 1: Buscar en la última orden de compra del proveedor
-            var response1 = await httpClient.GetAsync($"api/ocomenca/ultimo-atte-senor/{numeroProveedor}");
-            
-            if (response1.IsSuccessStatusCode)
-            {
-                var atteSenor = await response1.Content.ReadAsStringAsync();
-                if (!string.IsNullOrWhiteSpace(atteSenor))
-                {
-                    // Encontrado en última orden de compra
-                    ordenCompra.AtSrOcom = atteSenor;
-                    Console.WriteLine($"[CargarAtteSenorProveedor] ✅ Encontrado en última O.C.: '{atteSenor}'");
-                    return;
-                }
-            }
 
-            Console.WriteLine($"[CargarAtteSenorProveedor] ⚠️ No encontrado en últimas órdenes, buscando en PROVED12...");
+            // Buscar directamente en PROVED12.CTAC_CLI
+            var response = await httpClient.GetAsync($"api/proved12/ctac-cli/{numeroProveedor}");
 
-            // Paso 2: Si no se encontró o está vacío, buscar en PROVED12.CTAC_CLI
-            var response2 = await httpClient.GetAsync($"api/proved12/ctac-cli/{numeroProveedor}");
-            
-            if (response2.IsSuccessStatusCode)
+            if (response.IsSuccessStatusCode)
             {
-                var ctacCli = await response2.Content.ReadAsStringAsync();
+                var ctacCli = await response.Content.ReadAsStringAsync();
                 if (!string.IsNullOrWhiteSpace(ctacCli))
                 {
-                    // Encontrado en tabla de proveedores
                     ordenCompra.AtSrOcom = ctacCli;
                     Console.WriteLine($"[CargarAtteSenorProveedor] ✅ Encontrado en PROVED12: '{ctacCli}'");
+                }
+                else
+                {
+                    Console.WriteLine($"[CargarAtteSenorProveedor] ⚠️ CTAC_CLI vacío para proveedor {numeroProveedor}");
+                    ordenCompra.AtSrOcom = string.Empty;
                 }
             }
             else
             {
-                Console.WriteLine($"[CargarAtteSenorProveedor] ⚠️ No se encontró Atte. Señor para el proveedor {numeroProveedor}");
-                // Dejar el campo vacío para que el usuario lo complete manualmente
+                Console.WriteLine($"[CargarAtteSenorProveedor] ⚠️ No se encontró CTAC_CLI para el proveedor {numeroProveedor}");
                 ordenCompra.AtSrOcom = string.Empty;
             }
         }
@@ -1475,22 +1644,9 @@
                 precioFinal = await CalcularPrecioConConversionMoneda(seleccion.Producto);
                 Console.WriteLine($"[OnProductoSeleccionado] 🔄 Precio calculado desde MASTER.COSUNI: {precioFinal:C4}");
                 
-                // Si el precio calculado sigue siendo 0, mostrar advertencia pero continuar
                 if (precioFinal == 0)
                 {
                     Console.WriteLine($"[OnProductoSeleccionado] ⚠️ ADVERTENCIA: El producto {seleccion.Producto.Codigo} no tiene precio en MASTER.COSUNI");
-                    // Mostrar mensaje informativo al usuario
-                    await sweetAlertService.FireAsync(new SweetAlertOptions
-                    {
-                        Title = "Precio no disponible",
-                        Text = $"El producto {seleccion.Producto.Codigo} - {seleccion.Producto.Descripcion} no tiene precio definido en el catálogo.\n\n" +
-                               "Puede editar el precio directamente en la tabla después de agregarlo.",
-                        Icon = SweetAlertIcon.Warning,
-                        Timer = 4000,
-                        ShowConfirmButton = false,
-                        Toast = true,
-                        Position = SweetAlertPosition.TopEnd
-                    });
                 }
             }
             
@@ -1581,7 +1737,9 @@
                            (seleccion.Producto.Descripcion ?? "").Length > 64 ? 
                            (seleccion.Producto.Descripcion ?? "").Substring(0, 64) : 
                            (seleccion.Producto.Descripcion ?? ""),
-                Delibre = esItemLibre ? seleccion.Producto.Descripcion : null,
+                Delibre = (seleccion.Producto.Descripcion ?? "").Length > 64 ?
+                         (seleccion.Producto.Descripcion ?? "").Substring(0, 64) :
+                         (seleccion.Producto.Descripcion ?? ""),
                 
                 // ===== VALORES Y CANTIDADES =====
                 ValoUnid = valorUnitarioFormateado.Length > 12 ? valorUnitarioFormateado.Substring(0, 12) : valorUnitarioFormateado,
@@ -1698,13 +1856,15 @@
                     return;
                 }
                 await CargarDetalle();
+                RenumerarItems();
             }
             else
             {
-                // Para órdenes nuevas, eliminar de la lista local
+                // Para órdenes nuevas, eliminar de la lista local y renumerar
                 if (detalleItems != null)
                 {
                     detalleItems.Remove(item);
+                    RenumerarItems();
                     StateHasChanged();
                 }
             }
@@ -1713,6 +1873,13 @@
             RecalcularDescuentoDesdeTexto();
             await sweetAlertService.FireAsync("Eliminado", "Item eliminado correctamente", SweetAlertIcon.Success);
         }
+    }
+
+    private void RenumerarItems()
+    {
+        if (detalleItems == null) return;
+        for (int i = 0; i < detalleItems.Count; i++)
+            detalleItems[i].NuOrdItem = (short)(i + 1);
     }
 
     private decimal CalcularTotal()
@@ -2402,13 +2569,19 @@
                 return; // El AuthErrorHandlerService ya manejó el error
             }
 
-            // Éxito - mostrar mensaje y redirigir
+            // Éxito en guardado de OC
             await sweetAlertService.FireAsync("Éxito", 
                 $"Orden de compra {(IsEdit ? "actualizada" : "creada")} exitosamente con {detalleItems?.Count ?? 0} item(s).", 
                 SweetAlertIcon.Success);
 
-            // Redirigir al índice de órdenes de compra
-            navigationManager.NavigateTo("/ordenes-compra");
+            // Disparador: si hay pendientes de consignación, permitir remisión inmediata
+            var redirigirAlIndice = await GestionarRemisionConsignacionesAsync(responseHttp.Response);
+
+            if (redirigirAlIndice)
+            {
+                // Redirigir al índice de órdenes de compra
+                navigationManager.NavigateTo("/ordenes-compra");
+            }
         }
         catch (Exception ex)
         {
@@ -2451,14 +2624,13 @@
             var itemsInvalidos = detalleItems.Where(item => 
                 !item.CodInte.HasValue || item.CodInte <= 0 ||
                 !item.CantOcom.HasValue || item.CantOcom <= 0 ||
-                !item.PreUnit.HasValue || item.PreUnit <= 0 ||
                 string.IsNullOrWhiteSpace(item.Descritem)
             ).ToList();
 
             if (itemsInvalidos.Any())
             {
                 await sweetAlertService.FireAsync("Validación", 
-                    $"Hay {itemsInvalidos.Count} item(s) con datos incompletos. Verifique que todos los items tengan producto, cantidad, precio y descripción.", 
+                    $"Hay {itemsInvalidos.Count} item(s) con datos incompletos. Verifique que todos los items tengan producto, cantidad y descripción.", 
                     SweetAlertIcon.Warning);
                 return;
             }
@@ -2488,4 +2660,358 @@
 
         await OnCancel.InvokeAsync();
     }
+
+    /// <summary>
+    /// Evalúa pendientes de consignación de la OC guardada y, si corresponde, permite remitir en el momento
+    /// </summary>
+    private async Task<bool> GestionarRemisionConsignacionesAsync(Ocomenca? ordenGuardada)
+    {
+        if (!ordenCompra.NproOcom.HasValue || ordenCompra.NproOcom <= 0)
+        {
+            return true;
+        }
+
+        if (depositoRemisionSeleccionado <= 0)
+        {
+            return true;
+        }
+
+        var numeroOrden = ordenGuardada?.NumeOcom ?? ordenCompra.NumeOcom;
+        if (!numeroOrden.HasValue || numeroOrden <= 0)
+        {
+            return true;
+        }
+
+        numeroProveedorRemisionModal = ordenCompra.NproOcom.Value;
+        razonSocialProveedorRemisionModal = ordenCompra.RaSoProv ?? string.Empty;
+        numeroOrdenFormateadoRemisionModal = $"OC.{numeroOrden.Value:000000}";
+        numeroOrdenFiltroConsignacionRemisionModal = $"OC-{numeroOrden.Value:000000}-";
+        depositoRemisionModalSeleccionado = depositoRemisionSeleccionado;
+
+        var confirmarRemision = await sweetAlertService.FireAsync(new SweetAlertOptions
+        {
+            Title = "Consignaciones pendientes",
+            Text = $"La O.C. {numeroOrdenFormateadoRemisionModal} puede tener consignaciones pendientes. ¿Desea revisarlas y remitir ahora?",
+            Icon = SweetAlertIcon.Warning,
+            ShowCancelButton = true,
+            ConfirmButtonText = "Sí, remitir",
+            CancelButtonText = "No",
+            ConfirmButtonColor = "#198754",
+            CancelButtonColor = "#6c757d"
+        });
+
+        if (!confirmarRemision.IsConfirmed)
+        {
+            return true;
+        }
+
+        await CargarPendientesRemisionModalAsync();
+
+        if (!pendientesRemisionModal.Any())
+        {
+            await sweetAlertService.FireAsync("Sin pendientes", "No se encontraron componentes pendientes para remitir con el depósito seleccionado.", SweetAlertIcon.Info);
+            return true;
+        }
+
+        mostrarModalRemisionConsignaciones = true;
+        StateHasChanged();
+        return false;
+    }
+
+    private async Task CargarPendientesRemisionModalAsync()
+    {
+        if (depositoRemisionModalSeleccionado <= 0 || numeroProveedorRemisionModal <= 0)
+        {
+            pendientesRemisionModal.Clear();
+            return;
+        }
+
+        cargandoPendientesRemision = true;
+        StateHasChanged();
+
+        try
+        {
+            var pendientesRequest = new PendientesRemisionRequestDto
+            {
+                NumeroProveedor = numeroProveedorRemisionModal,
+                NumeroOrdenCompra = numeroOrdenFiltroConsignacionRemisionModal,
+                Deposito = depositoRemisionModalSeleccionado
+            };
+
+            var pendientesResponse = await repository.Post<PendientesRemisionRequestDto, List<ConsignacionPendienteRemisionDto>>("api/maconsig/pendientes-remitir", pendientesRequest);
+            if (pendientesResponse.Error || pendientesResponse.Response == null)
+            {
+                pendientesRemisionModal.Clear();
+                return;
+            }
+
+            pendientesRemisionModal.Clear();
+            foreach (var item in pendientesResponse.Response)
+            {
+                item.MaxRemitir = Math.Round(Math.Max(0m, Math.Min(item.StockDeposito, item.FaltaEntregar)), 4);
+                item.CantidadEntregar = item.MaxRemitir;
+                pendientesRemisionModal.Add(item);
+            }
+        }
+        finally
+        {
+            cargandoPendientesRemision = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task OnDepositoRemisionModalChanged(ChangeEventArgs e)
+    {
+        if (e.Value != null && int.TryParse(e.Value.ToString(), out int deposito) && deposito > 0)
+        {
+            depositoRemisionModalSeleccionado = deposito;
+            await CargarPendientesRemisionModalAsync();
+        }
+        else
+        {
+            depositoRemisionModalSeleccionado = 0;
+            pendientesRemisionModal.Clear();
+            StateHasChanged();
+        }
+    }
+
+    private void NormalizarCantidadRemitir(ConsignacionPendienteRemisionDto item)
+    {
+        if (item.CantidadEntregar < 0)
+        {
+            item.CantidadEntregar = 0;
+        }
+
+        if (item.CantidadEntregar > item.MaxRemitir)
+        {
+            item.CantidadEntregar = item.MaxRemitir;
+        }
+    }
+
+    private async Task ConfirmarRemisionDesdeModalAsync()
+    {
+        if (depositoRemisionModalSeleccionado <= 0)
+        {
+            await sweetAlertService.FireAsync("Atención", "Debe seleccionar un depósito de salida.", SweetAlertIcon.Warning);
+            return;
+        }
+
+        foreach (var item in pendientesRemisionModal)
+        {
+            NormalizarCantidadRemitir(item);
+        }
+
+        var itemsARemitir = pendientesRemisionModal
+            .Where(x => x.CantidadEntregar > 0.005m)
+            .ToList();
+
+        if (!itemsARemitir.Any())
+        {
+            await sweetAlertService.FireAsync("Atención", "No hay cantidades a remitir.", SweetAlertIcon.Warning);
+            return;
+        }
+
+        remitiendoConsignaciones = true;
+        StateHasChanged();
+
+        try
+        {
+            var proximoComprobanteResponse = await repository.Get<int>("api/maconsig/proximo-comprobante-rc");
+            if (proximoComprobanteResponse.Error || proximoComprobanteResponse.Response <= 0)
+            {
+                await sweetAlertService.FireAsync("Atención", "No se pudo obtener el próximo comprobante RC. La O.C. quedó guardada sin remitir consignaciones.", SweetAlertIcon.Warning);
+                return;
+            }
+
+            var remitirRequest = new RemitirConsignacionesRequestDto
+            {
+                NumeroProveedor = numeroProveedorRemisionModal,
+                RazonSocialProveedor = razonSocialProveedorRemisionModal,
+                NumeroOrdenCompra = numeroOrdenFormateadoRemisionModal,
+                Deposito = depositoRemisionModalSeleccionado,
+                FechaRemito = DateTime.Now,
+                CodigoMovimiento = "RC",
+                NumeroComprobante = proximoComprobanteResponse.Response,
+                Items = itemsARemitir.Select(item => new RemitirConsignacionItemRequestDto
+                {
+                    IdMaconsig = item.IdMaconsig,
+                    CodInte = item.CodInte,
+                    CodExte = item.CodExte,
+                    Descripcion = item.Descripcion,
+                    Unidad = item.Unidad,
+                    NroOcom = item.OCompra,
+                    NuOrdItem = null,
+                    Lote = item.Lote,
+                    CantidadEntregar = item.CantidadEntregar
+                }).ToList()
+            };
+
+            var remitirResponse = await repository.Post<RemitirConsignacionesRequestDto, RemitirConsignacionesResponseDto>("api/maconsig/remitir", remitirRequest);
+            if (remitirResponse.Error || remitirResponse.Response == null || !remitirResponse.Response.Success)
+            {
+                var mensajeError = remitirResponse.Error ? await remitirResponse.GetErrorMessageAsync() : "Respuesta inválida del servicio de remisión.";
+                await sweetAlertService.FireAsync("Atención", $"La O.C. quedó guardada, pero falló la remisión de consignaciones: {mensajeError}", SweetAlertIcon.Warning);
+                return;
+            }
+
+            await sweetAlertService.FireAsync("Remisión realizada",
+                $"Se remitieron {remitirResponse.Response.ItemsProcesados} item(s) con comprobante {remitirResponse.Response.DoPriCor}.",
+                SweetAlertIcon.Success);
+
+            await ImprimirRemitoConsignacionPorPlantillaAsync(remitirResponse.Response.DoPriCor);
+
+            CerrarModalRemision();
+            navigationManager.NavigateTo("/ordenes-compra");
+        }
+        finally
+        {
+            remitiendoConsignaciones = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task ImprimirRemitoConsignacionPorPlantillaAsync(string? doPriCor)
+    {
+        if (string.IsNullOrWhiteSpace(doPriCor))
+        {
+            return;
+        }
+
+        var plantillaId = await GetPlantillaRemitoConsignacionIdAsync();
+        if (!plantillaId.HasValue)
+        {
+            return;
+        }
+
+        var doprilar = Uri.EscapeDataString(doPriCor.Trim());
+        var endpoint = $"api/impresiones/remito-plantillas/{plantillaId.Value}/pdf?Doprilar={doprilar}";
+        var responsePdf = await Http.GetAsync(endpoint);
+        if (!responsePdf.IsSuccessStatusCode)
+        {
+            var message = await responsePdf.Content.ReadAsStringAsync();
+            await sweetAlertService.FireAsync("Atención", $"Se generó la remisión, pero no se pudo abrir la impresión del remito: {message}", SweetAlertIcon.Warning);
+            return;
+        }
+
+        var pdfBytes = await responsePdf.Content.ReadAsByteArrayAsync();
+        if (pdfBytes.Length == 0)
+        {
+            await sweetAlertService.FireAsync("Atención", "Se generó la remisión, pero el PDF del remito llegó vacío.", SweetAlertIcon.Warning);
+            return;
+        }
+
+        var base64 = Convert.ToBase64String(pdfBytes);
+        var opened = await JS.InvokeAsync<bool>("openPdfInNewTab", base64);
+        if (!opened)
+        {
+            await sweetAlertService.FireAsync("Atención", "No se pudo abrir el PDF del remito en una nueva pestaña. Verificá el bloqueador de pop-ups.", SweetAlertIcon.Warning);
+        }
+    }
+
+    private async Task<int?> GetPlantillaRemitoConsignacionIdAsync()
+    {
+        if (plantillaRemitoConsignacionId.HasValue)
+        {
+            return plantillaRemitoConsignacionId;
+        }
+
+        var response = await repository.Get<List<RemitoPlantillaItemDto>>("api/impresiones/remito-plantillas");
+        if (response.Error || response.Response == null)
+        {
+            var message = await response.GetErrorMessageAsync();
+            await sweetAlertService.FireAsync("Error", $"No se pudo obtener el listado de plantillas de remito: {message}", SweetAlertIcon.Error);
+            return null;
+        }
+
+        var plantilla = response.Response
+            .FirstOrDefault(x => string.Equals(x.Nombre?.Trim(), NombrePlantillaRemitoConsignacion, StringComparison.OrdinalIgnoreCase));
+        if (plantilla == null)
+        {
+            await sweetAlertService.FireAsync("Atención", $"No se encontró la plantilla '{NombrePlantillaRemitoConsignacion}'.", SweetAlertIcon.Warning);
+            return null;
+        }
+
+        plantillaRemitoConsignacionId = plantilla.Id;
+        return plantillaRemitoConsignacionId;
+    }
+
+    private void CerrarModalRemision()
+    {
+        mostrarModalRemisionConsignaciones = false;
+        pendientesRemisionModal.Clear();
+    }
+
+    private class PendientesRemisionRequestDto
+    {
+        public int NumeroProveedor { get; set; }
+        public string? NumeroOrdenCompra { get; set; }
+        public int Deposito { get; set; }
+    }
+
+    private class ConsignacionPendienteRemisionDto
+    {
+        public int IdMaconsig { get; set; }
+        public int CodInte { get; set; }
+        public string CodExte { get; set; } = string.Empty;
+        public string Descripcion { get; set; } = string.Empty;
+        public string Unidad { get; set; } = string.Empty;
+        public decimal CantAsig { get; set; }
+        public decimal CantEntreg { get; set; }
+        public decimal CantRendid { get; set; }
+        public decimal FaltaEntregar { get; set; }
+        public decimal StockDeposito { get; set; }
+        public decimal MaxRemitir { get; set; }
+        public decimal CantidadEntregar { get; set; }
+        public string OCompra { get; set; } = string.Empty;
+        public string Lote { get; set; } = string.Empty;
+    }
+
+    private class RemitirConsignacionesRequestDto
+    {
+        public int NumeroProveedor { get; set; }
+        public string? RazonSocialProveedor { get; set; }
+        public string? NumeroOrdenCompra { get; set; }
+        public int Deposito { get; set; }
+        public DateTime? FechaRemito { get; set; }
+        public string CodigoMovimiento { get; set; } = "RC";
+        public int? NumeroComprobante { get; set; }
+        public List<RemitirConsignacionItemRequestDto> Items { get; set; } = new();
+    }
+
+    private class RemitirConsignacionItemRequestDto
+    {
+        public int IdMaconsig { get; set; }
+        public int CodInte { get; set; }
+        public string? CodExte { get; set; }
+        public string? Descripcion { get; set; }
+        public string? Unidad { get; set; }
+        public string? NroOcom { get; set; }
+        public short? NuOrdItem { get; set; }
+        public string? Lote { get; set; }
+        public decimal CantidadEntregar { get; set; }
+    }
+
+    private class RemitirConsignacionesResponseDto
+    {
+        public bool Success { get; set; }
+        public string CodigoMovimiento { get; set; } = string.Empty;
+        public int NumeroComprobante { get; set; }
+        public string DoPriCor { get; set; } = string.Empty;
+        public int Deposito { get; set; }
+        public int ItemsProcesados { get; set; }
+        public decimal CantidadTotalRemitida { get; set; }
+    }
 }
+
+<style>
+    .input-number-sin-flechas::-webkit-outer-spin-button,
+    .input-number-sin-flechas::-webkit-inner-spin-button {
+        -webkit-appearance: none;
+        margin: 0;
+    }
+
+    .input-number-sin-flechas {
+        -moz-appearance: textfield;
+        appearance: textfield;
+    }
+</style>

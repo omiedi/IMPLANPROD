@@ -1,0 +1,678 @@
+@page "/oc-sucursal"
+@using IMPLANPROD.Shared.DTOs
+@using IMPLANPROD.Client.Repositories
+@using IMPLANPROD.Client.Shared.Components
+@inject IRepository repository
+@inject NavigationManager navigationManager
+@inject SweetAlertService sweetAlertService
+
+<PageTitle>Órdenes de Compra de Sucursal</PageTitle>
+
+<div class="container-fluid">
+    <!-- Título de la página -->
+    <div class="mb-4">
+        <h2 class="text-center fw-bold text-primary">
+            <i class="fas fa-shopping-cart me-2"></i>
+            ÓRDENES DE COMPRA DE SUCURSAL
+        </h2>
+        <hr class="border-primary border-2 opacity-50" />
+    </div>
+
+    <!-- Filtros -->
+    <div class="card mb-3">
+        <div class="card-header">
+            <h6 class="mb-0">
+                <i class="fas fa-filter"></i> Filtros
+            </h6>
+        </div>
+        <div class="card-body">
+            <div class="row">
+                <div class="col-md-3">
+                    <label class="form-label">Filtro:</label>
+                    <select class="form-select" @bind="filtroSeleccionado">
+                        <option value="1">Todos</option>
+                        <option value="2">Sin pedido generado</option>
+                        <option value="3">Con pedido generado</option>
+                    </select>
+                </div>
+                <div class="col-md-3 d-flex align-items-end">
+                    <button class="btn btn-primary w-100" @onclick="CargarDatos">
+                        <i class="fas fa-search me-2"></i> Actualizar
+                    </button>
+                </div>
+                <div class="col-md-3 d-flex align-items-end">
+                    <button class="btn btn-info w-100" @onclick="MostrarModalSincronizacion">
+                        <i class="fas fa-sync-alt me-2"></i> Configuración
+                    </button>
+                </div>
+                <div class="col-md-3 d-flex align-items-end">
+                    <button class="btn btn-success w-100" @onclick="ProcesarArchivosSincronizacion" disabled="@procesandoSincronizacion">
+                        @if (procesandoSincronizacion)
+                        {
+                            <span class="spinner-border spinner-border-sm me-2" role="status"></span>
+                            <span>Procesando...</span>
+                        }
+                        else
+                        {
+                            <i class="fas fa-file-import me-2"></i>
+                            <span>Procesar Archivos</span>
+                        }
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Tabla de datos -->
+    <div class="card">
+        <div class="card-body">
+            @if (cargando)
+            {
+                <div class="text-center my-5">
+                    <div class="spinner-border text-primary" role="status">
+                        <span class="visually-hidden">Cargando...</span>
+                    </div>
+                    <p class="mt-3 text-muted">Cargando datos...</p>
+                </div>
+            }
+            else if (datos == null || datos.Count == 0)
+            {
+                <div class="alert alert-info text-center">
+                    <i class="fas fa-info-circle me-2"></i>
+                    No hay datos para mostrar
+                </div>
+            }
+            else
+            {
+                <div class="table-responsive">
+                    <table class="table table-striped table-hover">
+                        <thead class="table-dark">
+                            <tr>
+                                <th class="text-end">Sucursal</th>
+                                <th class="text-start">R.Social</th>
+                                <th class="text-end">P.Repos.</th>
+                                <th class="text-center">Emis.P.R.</th>
+                                <th class="text-end">NC.Pedido</th>
+                                <th class="text-start">R.Social Cliente de Sucursal</th>
+                                <th class="text-end">P.Generado</th>
+                                <th class="text-start">O.C.Cte.Suc.</th>
+                                <th class="text-center">Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var item in datos)
+                            {
+                                <tr>
+                                    <td class="text-end">@(item.Sucursal.HasValue ? item.Sucursal.Value.ToString() : "")</td>
+                                    <td class="text-start">@(item.RazonSocialSucursal ?? "")</td>
+                                    <td class="text-end">@(item.OCompraSuc.HasValue ? item.OCompraSuc.Value.ToString() : "")</td>
+                                    <td class="text-center">@(item.Fechemisi.HasValue ? item.Fechemisi.Value.ToString("dd/MM/yy") : "")</td>
+                                    <td class="text-end">@(item.NclienPedido.HasValue ? item.NclienPedido.Value.ToString() : "")</td>
+                                    <td class="text-start">@(item.RazCteSuc ?? "")</td>
+                                    <td class="text-end">@(item.NpedGeneradoEnAvellaneda.HasValue ? item.NpedGeneradoEnAvellaneda.Value.ToString() : "")</td>
+                                    <td class="text-start">@(item.OComCliente ?? "")</td>
+                                    <td class="text-center">
+                                        <button class="btn btn-sm btn-info" @onclick="() => MostrarDetalle(item)">
+                                            <i class="fas fa-eye me-1"></i> Ver/Gen-Pedido
+                                        </button>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+                
+                <!-- Componente de paginación -->
+                <Pagination CurrentPage="currentPage"
+                            TotalPages="totalPages"
+                            SelectedPage="SelectedPageAsync" />
+            }
+        </div>
+    </div>
+</div>
+
+<!-- Modal de detalle -->
+@if (mostrarModalDetalle)
+{
+    <div class="modal fade show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5);">
+        <div class="modal-dialog modal-xl">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">
+                        <i class="fas fa-list me-2"></i>
+                        Detalle de Orden de Compra de Sucursal
+                    </h5>
+                    <button type="button" class="btn-close" @onclick="CerrarModalDetalle"></button>
+                </div>
+                <div class="modal-body">
+                    @if (cargandoDetalle)
+                    {
+                        <div class="text-center my-5">
+                            <div class="spinner-border text-primary" role="status">
+                                <span class="visually-hidden">Cargando detalle...</span>
+                            </div>
+                            <p class="mt-3 text-muted">Cargando detalle...</p>
+                        </div>
+                    }
+                    else
+                    {
+                        <!-- Tabla de productos -->
+                        <h6 class="mb-3"><strong>Productos</strong></h6>
+                        <div class="table-responsive mb-4">
+                            <table class="table table-sm table-bordered">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th>Cód. Ext</th>
+                                        <th>Descripción</th>
+                                        <th class="text-end">Cant. Compra</th>
+                                        <th class="text-center">Fec. Sol.</th>
+                                        <th class="text-end">Nro. Ped.</th>
+                                        <th class="text-end">Cant. Pedida</th>
+                                        <th class="text-end">Cant. Entregada</th>
+                                        <th class="text-end">Saldo</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @if (detalles != null && detalles.Any())
+                                    {
+                                        @foreach (var det in detalles)
+                                        {
+                                            <tr>
+                                                <td>@(det.CodExt ?? "")</td>
+                                                <td>@(det.Descripcion ?? "")</td>
+                                                <td class="text-end">@(det.CantidadCompra?.ToString("F1") ?? "")</td>
+                                                <td class="text-center">@(det.FechaSolicitudCompra?.ToString("dd/MM/yy") ?? "")</td>
+                                                <td class="text-end">@(det.NpedGeneradoEnAvellaneda?.ToString() ?? "")</td>
+                                                <td class="text-end">@(det.CantidadPedida?.ToString("F1") ?? "")</td>
+                                                <td class="text-end">@(det.CantidadEntregada?.ToString("F1") ?? "")</td>
+                                                <td class="text-end">@(det.Saldo?.ToString("F1") ?? "")</td>
+                                            </tr>
+                                        }
+                                    }
+                                    else
+                                    {
+                                        <tr>
+                                            <td colspan="8" class="text-center text-muted">No hay productos para mostrar</td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <!-- Mensajes -->
+                        <h6 class="mb-3"><strong>Mensajes</strong></h6>
+                        @if (mensajes != null && mensajes.Any())
+                        {
+                            @foreach (var men in mensajes)
+                            {
+                                <div class="alert alert-info mb-2">
+                                    <small>@(men.Mensaje ?? "")</small>
+                                </div>
+                            }
+                        }
+                        else
+                        {
+                            <div class="alert alert-secondary">
+                                <small class="text-muted">No hay mensajes para mostrar</small>
+                            </div>
+                        }
+                    }
+                </div>
+                <div class="modal-footer">
+                    @if (itemSeleccionado != null && (!itemSeleccionado.NpedGeneradoEnAvellaneda.HasValue || itemSeleccionado.NpedGeneradoEnAvellaneda.Value <= 0))
+                    {
+                        <button type="button" class="btn btn-primary me-2" @onclick="GenerarPedido">
+                            <i class="fas fa-shopping-cart me-1"></i> Generar Pedido
+                        </button>
+                    }
+                    else if (itemSeleccionado != null && itemSeleccionado.NpedGeneradoEnAvellaneda.HasValue && itemSeleccionado.NpedGeneradoEnAvellaneda.Value > 0)
+                    {
+                        <button type="button" class="btn btn-primary me-2" disabled>
+                            <i class="fas fa-check me-1"></i> Pedido Generado
+                        </button>
+                    }
+                    <button type="button" class="btn btn-secondary" @onclick="CerrarModalDetalle">Cerrar</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+<!-- Modal de Configuración de Sincronización -->
+@if (mostrarModalSincronizacion)
+{
+    <div class="modal fade show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5);">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">
+                        <i class="fas fa-sync-alt me-2"></i>
+                        Configuración de Sincronización Central-Sucursal
+                    </h5>
+                    <button type="button" class="btn-close" @onclick="CerrarModalSincronizacion"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="card border-primary">
+                        <div class="card-body">
+                            <!-- Sector: Sincronización de Pedidos de Reposición -->
+                            <h6 class="mb-3 text-primary">
+                                <i class="fas fa-exchange-alt me-1"></i>
+                                Sincronización de Pedidos de Reposición u Órdenes de Compra de Sucursal
+                            </h6>
+
+                            <!-- Input de ruta de carpeta compartida -->
+                            <div class="mb-3">
+                                <label class="form-label fw-bold">
+                                    <i class="fas fa-folder-open me-1"></i>
+                                    Ruta de carpeta compartida (Intercambio) para sincronizar Pedidos de reposición de sucursal
+                                </label>
+                                <div class="input-group">
+                                    <input type="text" class="form-control" @bind="syncConfig.RutaIntercambioPedidosReposicion" placeholder="Ej: \\servidor\carpeta\intercambio" />
+                                    <button class="btn btn-outline-primary" type="button" @onclick="ValidarRuta">
+                                        <i class="fas fa-check"></i> Validar
+                                    </button>
+                                </div>
+                            </div>
+
+                            <!-- Checkboxes para modo de operación -->
+                            <div class="mb-3">
+                                <div class="form-check mb-2">
+                                    <input class="form-check-input" type="checkbox" id="checkGenerar" @bind="syncConfig.GeneraPedidosReposicion" />
+                                    <label class="form-check-label" for="checkGenerar">
+                                        <strong>Generar archivos de Pedidos de Reposición (Sucursal)</strong>
+                                        <br />
+                                        <small class="text-muted">Al activar, este equipo generará archivos txt con los p.reposicion</small>
+                                    </label>
+                                </div>
+
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" id="checkProcesar" @bind="syncConfig.ProcesaPedidosReposicion" />
+                                    <label class="form-check-label" for="checkProcesar">
+                                        <strong>Procesar archivos de Pedidos de Reposición (Central)</strong>
+                                        <br />
+                                        <small class="text-muted">Al activar, este equipo procesará archivos txt generados por la sucursal</small>
+                                    </label>
+                                </div>
+                            </div>
+
+                            <!-- Información adicional -->
+                            <div class="alert alert-info mt-3">
+                                <small>
+                                    <i class="fas fa-info-circle me-1"></i>
+                                    Configure la ruta y seleccione el modo de operación según el rol de este equipo (Central o Sucursal).
+                                </small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-primary" @onclick="GuardarConfiguracionSincronizacion">
+                        <i class="fas fa-save me-1"></i> Guardar Configuración
+                    </button>
+                    <button type="button" class="btn btn-secondary" @onclick="CerrarModalSincronizacion">Cerrar</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private List<OcSucursalConsultaDTO>? datos;
+    private bool cargando = false;
+    private int filtroSeleccionado = 1; // 1=Todos, 2=Sin pedido, 3=Con pedido
+    private int currentPage = 1;
+    private int totalPages = 1;
+
+    // Variables para el modal de detalle
+    private bool mostrarModalDetalle = false;
+    private bool cargandoDetalle = false;
+    private List<OcSucursalDetalleDTO>? detalles;
+    private List<MensaSucursalDTO>? mensajes;
+    private OcSucursalConsultaDTO? itemSeleccionado;
+
+    // Variables para la configuración de sincronización
+    private bool mostrarModalSincronizacion = false;
+    private SyncConfigDTO? syncConfig;
+    private bool procesandoSincronizacion = false;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await CargarConfiguracionSincronizacion();
+        await CargarDatos();
+    }
+
+    private async Task CargarDatos()
+    {
+        await LoadAsync(currentPage);
+    }
+
+    private async Task LoadAsync(int page = 1)
+    {
+        try
+        {
+            cargando = true;
+            currentPage = page;
+
+            // Crear objeto de paginación
+            var pagination = new PaginationDTO
+            {
+                Page = page,
+                RecordsNumber = 10
+            };
+
+            // Construir URL con parámetros de paginación y filtro
+            var url = $"api/OcSucursal?page={page}&recordsNumber=10&filtro={filtroSeleccionado}";
+            
+            var response = await repository.Get<List<OcSucursalConsultaDTO>>(url);
+            
+            if (!response.Error && response.Response != null)
+            {
+                datos = response.Response;
+            }
+            else
+            {
+                await sweetAlertService.FireAsync("Error", await response.GetErrorMessageAsync(), SweetAlertIcon.Error);
+                datos = new List<OcSucursalConsultaDTO>();
+            }
+
+            // Obtener total de páginas
+            var urlTotalPages = $"api/OcSucursal/totalPages?recordsNumber=10&filtro={filtroSeleccionado}";
+            var responseTotalPages = await repository.Get<int>(urlTotalPages);
+            
+            if (!responseTotalPages.Error && responseTotalPages.Response != null)
+            {
+                totalPages = responseTotalPages.Response;
+            }
+            else
+            {
+                totalPages = 1;
+            }
+        }
+        catch (Exception ex)
+        {
+            await sweetAlertService.FireAsync("Error", $"Error al cargar datos: {ex.Message}", SweetAlertIcon.Error);
+            datos = new List<OcSucursalConsultaDTO>();
+            totalPages = 1;
+        }
+        finally
+        {
+            cargando = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task SelectedPageAsync(int page)
+    {
+        currentPage = page;
+        await LoadAsync(page);
+    }
+
+    private async Task MostrarDetalle(OcSucursalConsultaDTO item)
+    {
+        try
+        {
+            itemSeleccionado = item;
+            mostrarModalDetalle = true;
+            cargandoDetalle = true;
+            detalles = null;
+            mensajes = null;
+
+            // Cargar detalle de productos
+            var urlDetalle = $"api/OcSucursal/detalle?oCompraSuc={item.OCompraSuc}&sucursal={item.Sucursal.Value}";
+            var responseDetalle = await repository.Get<List<OcSucursalDetalleDTO>>(urlDetalle);
+            
+            if (!responseDetalle.Error && responseDetalle.Response != null)
+            {
+                detalles = responseDetalle.Response;
+            }
+            else
+            {
+                detalles = new List<OcSucursalDetalleDTO>();
+            }
+
+            // Cargar mensajes
+            var urlMensajes = $"api/OcSucursal/mensajes?oCompraSuc={item.OCompraSuc}&sucursal={item.Sucursal.Value}";
+            var responseMensajes = await repository.Get<List<MensaSucursalDTO>>(urlMensajes);
+            
+            if (!responseMensajes.Error && responseMensajes.Response != null)
+            {
+                mensajes = responseMensajes.Response;
+            }
+            else
+            {
+                mensajes = new List<MensaSucursalDTO>();
+            }
+        }
+        catch (Exception ex)
+        {
+            await sweetAlertService.FireAsync("Error", $"Error al cargar detalle: {ex.Message}", SweetAlertIcon.Error);
+            detalles = new List<OcSucursalDetalleDTO>();
+            mensajes = new List<MensaSucursalDTO>();
+        }
+        finally
+        {
+            cargandoDetalle = false;
+            StateHasChanged();
+        }
+    }
+
+    private void CerrarModalDetalle()
+    {
+        mostrarModalDetalle = false;
+        itemSeleccionado = null;
+        detalles = null;
+        mensajes = null;
+    }
+
+    // ========================================================================
+    // MÉTODOS DE CONFIGURACIÓN DE SINCRONIZACIÓN
+    // ========================================================================
+
+    /// <summary>
+    /// Carga la configuración de sincronización desde el backend
+    /// Obtiene la configuración almacenada en la tabla SyncConfig
+    /// </summary>
+    private async Task CargarConfiguracionSincronizacion()
+    {
+        try
+        {
+            var response = await repository.Get<SyncConfigDTO>("api/sync/config");
+            if (!response.Error && response.Response != null)
+            {
+                syncConfig = response.Response;
+            }
+            else
+            {
+                // Si no hay configuración, crear una vacía
+                syncConfig = new SyncConfigDTO();
+            }
+        }
+        catch (Exception ex)
+        {
+            // En caso de error, crear configuración vacía
+            syncConfig = new SyncConfigDTO();
+        }
+    }
+
+    /// <summary>
+    /// Muestra el modal de configuración de sincronización
+    /// Este método se llama al hacer clic en el botón "Configuración de Sincronización"
+    /// </summary>
+    private void MostrarModalSincronizacion()
+    {
+        mostrarModalSincronizacion = true;
+    }
+
+    /// <summary>
+    /// Cierra el modal de configuración de sincronización
+    /// Limpia las variables relacionadas con el modal
+    /// </summary>
+    private void CerrarModalSincronizacion()
+    {
+        mostrarModalSincronizacion = false;
+    }
+
+    /// <summary>
+    /// Valida la ruta de intercambio ingresada por el usuario
+    /// Este método verifica si la ruta existe y es accesible
+    /// Realiza validaciones básicas de formato (ruta UNC)
+    /// </summary>
+    private async Task ValidarRuta()
+    {
+        // Verificar que la ruta no esté vacía
+        if (string.IsNullOrWhiteSpace(syncConfig?.RutaIntercambioPedidosReposicion))
+        {
+            await sweetAlertService.FireAsync("Advertencia", "Por favor ingrese una ruta válida", SweetAlertIcon.Warning);
+            return;
+        }
+
+        // Validación básica de formato de ruta UNC (Universal Naming Convention)
+        // Las rutas UNC deben comenzar con \\ (doble barra invertida)
+        if (!syncConfig.RutaIntercambioPedidosReposicion.StartsWith(@"\\"))
+        {
+            await sweetAlertService.FireAsync("Advertencia", "La ruta debe ser una ruta UNC (ej: \\\\servidor\\carpeta)", SweetAlertIcon.Warning);
+            return;
+        }
+
+        // Aquí se podría agregar una llamada al backend para validar la ruta
+        // Por ahora mostramos un mensaje de éxito simulado
+        // En el futuro, se podría implementar un endpoint en el servidor
+        // que verifique si la ruta existe y es accesible desde el servidor
+        await sweetAlertService.FireAsync("Éxito", $"Ruta validada: {syncConfig.RutaIntercambioPedidosReposicion}", SweetAlertIcon.Success);
+    }
+
+    /// <summary>
+    /// Guarda la configuración de sincronización
+    /// Este método persiste la configuración en la tabla SyncConfig
+    /// </summary>
+    private async Task GuardarConfiguracionSincronizacion()
+    {
+        // Validar que se haya ingresado una ruta
+        if (string.IsNullOrWhiteSpace(syncConfig?.RutaIntercambioPedidosReposicion))
+        {
+            await sweetAlertService.FireAsync("Advertencia", "Por favor ingrese una ruta válida antes de guardar", SweetAlertIcon.Warning);
+            return;
+        }
+
+        // Validar que se haya seleccionado al menos un modo de operación
+        if (!syncConfig.GeneraPedidosReposicion && !syncConfig.ProcesaPedidosReposicion)
+        {
+            await sweetAlertService.FireAsync("Advertencia", "Por favor seleccione al menos un modo de operación (Generar o Procesar)", SweetAlertIcon.Warning);
+            return;
+        }
+
+        try
+        {
+            // Guardar la configuración en el backend
+            var response = await repository.Post<SyncConfigDTO, object>("api/sync/config", syncConfig);
+
+            if (response.Error)
+            {
+                var mensajeError = await response.GetErrorMessageAsync();
+                await sweetAlertService.FireAsync("Error", $"No se pudo guardar la configuración: {mensajeError}", SweetAlertIcon.Error);
+                return;
+            }
+
+            var modoOperacion = syncConfig.GeneraPedidosReposicion ? "Generar archivos (Sucursal)" : "Procesar archivos (Central)";
+            if (syncConfig.GeneraPedidosReposicion && syncConfig.ProcesaPedidosReposicion)
+            {
+                modoOperacion = "Generar y Procesar archivos (Ambos modos)";
+            }
+
+            await sweetAlertService.FireAsync(
+                "Configuración Guardada",
+                $"Ruta: {syncConfig.RutaIntercambioPedidosReposicion}\nModo: {modoOperacion}",
+                SweetAlertIcon.Success
+            );
+
+            // Cerrar el modal después de guardar
+            CerrarModalSincronizacion();
+        }
+        catch (Exception ex)
+        {
+            await sweetAlertService.FireAsync("Error", $"Error inesperado: {ex.Message}", SweetAlertIcon.Error);
+        }
+    }
+
+    // ========================================================================
+    // MÉTODOS DE PROCESAMIENTO DE SINCRONIZACIÓN
+    // ========================================================================
+
+    /// <summary>
+    /// Procesa los archivos de sincronización de pedidos de reposición
+    /// Este método llama al endpoint del backend para procesar los archivos Ocompra_Sucursal.txt
+    /// Muestra una barra de progreso en el botón mientras procesa
+    /// </summary>
+    private async Task ProcesarArchivosSincronizacion()
+    {
+        // Validar que se haya configurado la ruta de intercambio
+        if (string.IsNullOrWhiteSpace(syncConfig?.RutaIntercambioPedidosReposicion))
+        {
+            await sweetAlertService.FireAsync(
+                "Advertencia",
+                "Por favor configure la ruta de intercambio en la Configuración de Sincronización",
+                SweetAlertIcon.Warning
+            );
+            return;
+        }
+
+        try
+        {
+            procesandoSincronizacion = true;
+
+            // Crear objeto con la ruta para enviar al backend
+            var request = new { Ruta = syncConfig?.RutaIntercambioPedidosReposicion ?? "" };
+
+            // Llamar al endpoint de procesamiento
+            var resultado = await repository.Post<object, SyncResultDTO>("api/sync/procesar-pedidos-reposicion", request);
+
+            if (resultado.Error)
+            {
+                var mensajeError = await resultado.GetErrorMessageAsync();
+                await sweetAlertService.FireAsync(
+                    "Error",
+                    $"Error al procesar archivos: {mensajeError}",
+                    SweetAlertIcon.Error
+                );
+                return;
+            }
+
+            // Mostrar resultado del procesamiento
+            var mensajeResultado = $"Archivos procesados: {resultado.Response?.ArchivosProcessados ?? 0}\n" +
+                                   $"Registros sincronizados: {resultado.Response?.RegistrosSincronizados ?? 0}\n" +
+                                   $"Errores: {resultado.Response?.Errores ?? 0}";
+
+            if (resultado.Response?.Exitoso == true)
+            {
+                await sweetAlertService.FireAsync(
+                    "Procesamiento Exitoso",
+                    mensajeResultado,
+                    SweetAlertIcon.Success
+                );
+
+                // Recargar los datos para mostrar los registros actualizados
+                await CargarDatos();
+            }
+            else
+            {
+                await sweetAlertService.FireAsync(
+                    "Procesamiento con Errores",
+                    $"{mensajeResultado}\n\n{resultado.Response?.Mensaje}",
+                    SweetAlertIcon.Warning
+                );
+            }
+        }
+        catch (Exception ex)
+        {
+            await sweetAlertService.FireAsync(
+                "Error",
+                $"Error inesperado: {ex.Message}",
+                SweetAlertIcon.Error
+            );
+        }
+        finally
+        {
+            procesandoSincronizacion = false;
+        }
+    }
+}

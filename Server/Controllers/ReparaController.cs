@@ -5,6 +5,8 @@ using IMPLANPROD.Shared.DTOs;
 using IMPLANPROD.Shared.Entities;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using System.Security.Claims;
+using System.Text;
 
 namespace IMPLANPROD.Server.Controllers
 {
@@ -24,6 +26,264 @@ namespace IMPLANPROD.Server.Controllers
             _context = context;
             _logger = logger;
             _empresaDependenciaService = empresaDependenciaService;
+        }
+
+        /// <summary>
+        /// Agrega una anotación manual al campo memo REPARA.AnotaRep usando formato posicional VB6.
+        /// </summary>
+        [HttpPost("agregar-anotacion")]
+        public async Task<IActionResult> AgregarAnotacionAsync([FromBody] AgregarAnotacionReparacionRequest request)
+        {
+            try
+            {
+                if (request.NumRepa <= 0)
+                {
+                    return BadRequest("NumRepa inválido");
+                }
+
+                var texto = (request.Texto ?? string.Empty).Trim();
+                if (string.IsNullOrWhiteSpace(texto))
+                {
+                    return BadRequest("El texto de la anotación es obligatorio");
+                }
+
+                var reparacion = await _context.Reparas.FirstOrDefaultAsync(x => x.NumRepa == request.NumRepa);
+                if (reparacion == null)
+                {
+                    return NotFound($"No se encontró la reparación N° {request.NumRepa}");
+                }
+
+                AgregarAnotacionPosicional(reparacion, texto, request.Usuario);
+
+                _context.Reparas.Update(reparacion);
+                await _context.SaveChangesAsync();
+
+                return Ok(new AgregarAnotacionReparacionResponse
+                {
+                    NumRepa = reparacion.NumRepa,
+                    AnotaRep = reparacion.AnotaRep
+                });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error al agregar anotación manual para NumRepa={NumRepa}", request.NumRepa);
+                return StatusCode(500, $"Error al agregar anotación: {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// Agrega anotación de presupuestación de reparación replicando el formato posicional VB6.
+        /// </summary>
+        [HttpPost("agregar-anotacion-presupuesto")]
+        public async Task<IActionResult> AgregarAnotacionPresupuestoAsync([FromBody] AgregarAnotacionPresupuestoRequest request)
+        {
+            try
+            {
+                if (request.NumRepa <= 0)
+                {
+                    return BadRequest("NumRepa inválido");
+                }
+
+                var reparacion = await _context.Reparas.FirstOrDefaultAsync(x => x.NumRepa == request.NumRepa);
+                if (reparacion == null)
+                {
+                    return NotFound($"No se encontró la reparación N° {request.NumRepa}");
+                }
+
+                var usuario = ObtenerUsuarioActual();
+                AgregarAnotacionPresupuestoPosicional(reparacion, request, usuario);
+
+                _context.Reparas.Update(reparacion);
+                await _context.SaveChangesAsync();
+
+                return Ok(new AgregarAnotacionReparacionResponse
+                {
+                    NumRepa = reparacion.NumRepa,
+                    AnotaRep = reparacion.AnotaRep
+                });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error al agregar anotación de presupuesto para NumRepa={NumRepa}", request.NumRepa);
+                return StatusCode(500, $"Error al agregar anotación de presupuesto: {ex.Message}");
+            }
+        }
+
+        private static void AgregarAnotacionPosicional(Repara reparacion, string texto, string? usuario = null)
+        {
+            var textoLimpio = (texto ?? string.Empty).Trim();
+            if (string.IsNullOrWhiteSpace(textoLimpio))
+            {
+                return;
+            }
+
+            var fechaTexto = DateTime.Now.ToString("dd/MM/yy");
+            var usuarioTexto = string.IsNullOrWhiteSpace(usuario) ? "SISTEMA" : usuario.Trim();
+
+            var lineas = FraccionarTexto(textoLimpio, 56);
+            var anotacion = new StringBuilder();
+
+            for (var i = 0; i < lineas.Count; i++)
+            {
+                var caracteres = new string(' ', 96).ToCharArray();
+
+                if (i == 0)
+                {
+                    ReemplazarEnPosicion(caracteres, fechaTexto, 0, 8);
+                    ReemplazarEnPosicion(caracteres, usuarioTexto, 68, 24);
+                }
+
+                ReemplazarEnPosicion(caracteres, lineas[i], 10, 56);
+                anotacion.AppendLine(new string(caracteres));
+            }
+
+            anotacion.AppendLine(new string('=', 88));
+            reparacion.AnotaRep = (reparacion.AnotaRep ?? string.Empty) + anotacion;
+        }
+
+        private static List<string> FraccionarTexto(string texto, int longitudMaxima)
+        {
+            var lineas = new List<string>();
+            if (string.IsNullOrWhiteSpace(texto))
+            {
+                return lineas;
+            }
+
+            var palabras = texto.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+            var lineaActual = new StringBuilder();
+
+            foreach (var palabra in palabras)
+            {
+                if (lineaActual.Length + palabra.Length + 1 <= longitudMaxima)
+                {
+                    if (lineaActual.Length > 0)
+                    {
+                        lineaActual.Append(' ');
+                    }
+
+                    lineaActual.Append(palabra);
+                }
+                else
+                {
+                    if (lineaActual.Length > 0)
+                    {
+                        lineas.Add(lineaActual.ToString());
+                        lineaActual.Clear();
+                    }
+
+                    lineaActual.Append(palabra);
+                }
+            }
+
+            if (lineaActual.Length > 0)
+            {
+                lineas.Add(lineaActual.ToString());
+            }
+
+            return lineas;
+        }
+
+        private static void ReemplazarEnPosicion(char[] destino, string texto, int posicionInicio, int longitudMaxima)
+        {
+            if (string.IsNullOrEmpty(texto) || posicionInicio < 0 || posicionInicio >= destino.Length)
+            {
+                return;
+            }
+
+            var textoAInsertar = texto.Length > longitudMaxima ? texto.Substring(0, longitudMaxima) : texto;
+            for (var i = 0; i < textoAInsertar.Length && (posicionInicio + i) < destino.Length; i++)
+            {
+                destino[posicionInicio + i] = textoAInsertar[i];
+            }
+        }
+
+        private static void AgregarAnotacionPresupuestoPosicional(Repara reparacion, AgregarAnotacionPresupuestoRequest request, string usuario)
+        {
+            var fechaTexto = DateTime.Now.ToString("dd/MM/yy");
+            var usuarioTexto = string.IsNullOrWhiteSpace(usuario) ? "SISTEMA" : usuario.Trim();
+
+            var lineas = new List<string>
+            {
+                CrearLineaPosicional92(fechaTexto, usuarioTexto, "Recepción Material para Presupuestación de Reparación:", 10, 56),
+                CrearLineaPosicional92(null, null, string.Empty, 10, 56),
+                CrearLineaPosicional92(null, null, $"Cliente: {request.Cliente ?? string.Empty}", 10, 56),
+                CrearLineaPosicional92(null, null, $"    Tel: {(request.Telefono ?? string.Empty).Trim()}", 10, 56),
+                CrearLineaPosicional92(null, null, $"    Fax: {(request.Fax ?? string.Empty).Trim()}", 10, 56),
+                CrearLineaPosicional92(null, null, string.Empty, 10, 56),
+                CrearLineaPosicional92(null, null, $"  S/Nro: {request.NumeroSerie ?? string.Empty}", 10, 56),
+                CrearLineaPosicional92(null, null, $"Referen: {request.Referencia ?? string.Empty}", 10, 56),
+                CrearLineaPosicional92(null, null, string.Empty, 10, 56)
+            };
+
+            var lineasSitio = FraccionarTexto(request.Sitio ?? string.Empty, 46);
+            for (var i = 0; i < lineasSitio.Count; i++)
+            {
+                var linea = CrearLineaPosicional92(null, null, lineasSitio[i], 19, 46);
+                if (i == 0)
+                {
+                    linea = AplicarTextoEnLinea(linea, "  Sitio: ", 10, 9);
+                }
+
+                lineas.Add(linea);
+            }
+
+            lineas.Add(CrearLineaPosicional92(null, null, string.Empty, 10, 56));
+
+            var lineasObserv = FraccionarTexto(request.Observaciones ?? string.Empty, 46);
+            for (var i = 0; i < lineasObserv.Count; i++)
+            {
+                var linea = CrearLineaPosicional92(null, null, lineasObserv[i], 19, 46);
+                if (i == 0)
+                {
+                    linea = AplicarTextoEnLinea(linea, " Observ: ", 10, 9);
+                }
+
+                lineas.Add(linea);
+            }
+
+            var anotacion = new StringBuilder();
+            foreach (var linea in lineas)
+            {
+                anotacion.AppendLine(linea);
+            }
+
+            anotacion.AppendLine(new string('=', 88));
+
+            reparacion.AnotaRep = (reparacion.AnotaRep ?? string.Empty) + anotacion;
+        }
+
+        private static string CrearLineaPosicional92(string? fecha, string? usuario, string texto, int posicionTexto, int longitudTexto)
+        {
+            var caracteres = new string(' ', 92).ToCharArray();
+
+            if (!string.IsNullOrWhiteSpace(fecha))
+            {
+                ReemplazarEnPosicion(caracteres, fecha, 0, 8);
+            }
+
+            if (!string.IsNullOrWhiteSpace(usuario))
+            {
+                ReemplazarEnPosicion(caracteres, usuario, 68, 24);
+            }
+
+            ReemplazarEnPosicion(caracteres, texto ?? string.Empty, posicionTexto, longitudTexto);
+            return new string(caracteres);
+        }
+
+        private static string AplicarTextoEnLinea(string linea, string texto, int posicion, int longitud)
+        {
+            var caracteres = (linea ?? string.Empty).PadRight(92).ToCharArray();
+            ReemplazarEnPosicion(caracteres, texto, posicion, longitud);
+            return new string(caracteres);
+        }
+
+        private string ObtenerUsuarioActual()
+        {
+            var usuario = User?.FindFirst("idflexoft")?.Value
+                ?? User?.FindFirst(ClaimTypes.NameIdentifier)?.Value
+                ?? User?.Identity?.Name;
+
+            return string.IsNullOrWhiteSpace(usuario) ? "SISTEMA" : usuario.Trim();
         }
 
         /// <summary>
@@ -847,6 +1107,162 @@ namespace IMPLANPROD.Server.Controllers
         }
 
         /// <summary>
+        /// Genera una orden de reparación a partir de una reparación existente.
+        /// Replica la lógica VB6 para persistir NuOrdRep, RefOrdRep, Referen2,
+        /// NumeroSerie, FechOrdRep y Observa sobre REPARA.
+        /// </summary>
+        [HttpPost("generar-orden")]
+        public async Task<IActionResult> GenerarOrdenReparacionAsync([FromBody] GenerarOrdenReparacionRequest request)
+        {
+            using var transaction = await _context.Database.BeginTransactionAsync();
+            try
+            {
+                if (request.NumRepa <= 0)
+                {
+                    return BadRequest("NumRepa inválido");
+                }
+
+                var reparacion = await _context.Reparas.FirstOrDefaultAsync(x => x.NumRepa == request.NumRepa);
+                if (reparacion == null)
+                {
+                    return NotFound($"No se encontró la reparación N° {request.NumRepa}");
+                }
+
+                var maxNuOrdRep = await _context.Reparas
+                    .Where(x => x.NumRepa > 0 && x.NuOrdRep.HasValue && x.NuOrdRep > 0)
+                    .MaxAsync(x => (int?)x.NuOrdRep) ?? 0;
+
+                var nuevoNumeroOrden = maxNuOrdRep + 1;
+                var fechaOrden = request.FechOrdRep?.Date ?? DateTime.Today;
+
+                var codRepa = (reparacion.CodRepa ?? string.Empty).Trim();
+                var razonSocial = (reparacion.Raso_Cli ?? string.Empty).Trim();
+                if (razonSocial.Length > 30)
+                {
+                    razonSocial = razonSocial.Substring(0, 30);
+                }
+
+                var referen2 = (request.Referen2 ?? string.Empty).Trim();
+                var referenciaOrden = $"{codRepa} - {razonSocial} - R: {referen2} - {fechaOrden:dd/MM/yyyy}";
+                if (referenciaOrden.Length > 128)
+                {
+                    referenciaOrden = referenciaOrden.Substring(0, 128);
+                }
+
+                reparacion.NuOrdRep = nuevoNumeroOrden;
+                reparacion.RefOrdRep = referenciaOrden;
+                reparacion.Referen2 = request.Referen2;
+                reparacion.NumeroSerie = request.NumeroSerie;
+                reparacion.FechOrdRep = fechaOrden;
+                reparacion.Observa = request.Observa;
+
+                var usuarioActual = ObtenerUsuarioActual();
+
+                AgregarAnotacionPosicional(
+                    reparacion,
+                    $"Generación O.R. {nuevoNumeroOrden} para reparación {reparacion.NumRepa}",
+                    usuarioActual);
+
+                _context.Reparas.Update(reparacion);
+
+                var numeroOrdenFormateado = $"OR-{nuevoNumeroOrden:D6}";
+
+                var reservasExistentes = await _context.Reservas
+                    .Where(r => r.IdSubOr == numeroOrdenFormateado)
+                    .ToListAsync();
+
+                if (reservasExistentes.Any())
+                {
+                    _context.Reservas.RemoveRange(reservasExistentes);
+                }
+
+                var repuestos = await _context.Repurepas
+                    .Where(x => x.NumRepa == request.NumRepa
+                        && x.Cod_Inte > 0
+                        && x.Cant_Sol.HasValue
+                        && Math.Abs(x.Cant_Sol.Value) >= 0.05m)
+                    .ToListAsync();
+
+                var codigosInternos = repuestos
+                    .Select(x => x.Cod_Inte)
+                    .Distinct()
+                    .ToList();
+
+                var mastersByCodint = await _context.masters
+                    .AsNoTracking()
+                    .Where(m => codigosInternos.Contains(m.Codint))
+                    .ToDictionaryAsync(m => m.Codint);
+
+                short nuOrItem = 0;
+                var nuevasReservas = new List<Reserva>();
+
+                foreach (var repuesto in repuestos)
+                {
+                    nuOrItem++;
+                    mastersByCodint.TryGetValue(repuesto.Cod_Inte, out var masterItem);
+
+                    var cantidad = repuesto.Cant_Sol ?? 0m;
+                    var now = DateTime.Now;
+
+                    nuevasReservas.Add(new Reserva
+                    {
+                        CodiEmpr = 0,
+                        CodiEmprNet = 0,
+                        Cod_Inte = repuesto.Cod_Inte,
+                        Cod_Exte = masterItem?.Codigo ?? string.Empty,
+                        Descrip = masterItem?.Descripcion ?? string.Empty,
+                        IdSubOr = numeroOrdenFormateado,
+                        NuOrItem = nuOrItem,
+                        Status = 0,
+                        FechRes = now,
+                        CantRes = cantidad,
+                        CantCons = 0m,
+                        Saldo_Entre = cantidad,
+                        IdenLote = string.IsNullOrWhiteSpace(repuesto.IdenLote) ? string.Empty : repuesto.IdenLote,
+                        Deposito = 0,
+                        UsoUnit = cantidad,
+                        AddRecord = now,
+                        LastUpdate = now
+                    });
+                }
+
+                if (nuevasReservas.Any())
+                {
+                    _context.Reservas.AddRange(nuevasReservas);
+                }
+
+                await _context.SaveChangesAsync();
+                await transaction.CommitAsync();
+
+                _logger.LogInformation(
+                    "Orden de reparación generada. NumRepa={NumRepa}, NuOrdRep={NuOrdRep}, NroPed={NroPed}, ImpTot={ImpTot}, Reservas={ReservasCount}",
+                    reparacion.NumRepa,
+                    reparacion.NuOrdRep,
+                    reparacion.NroPed,
+                    reparacion.Imp_Tot,
+                    nuevasReservas.Count);
+
+                return Ok(new GenerarOrdenReparacionResponse
+                {
+                    NumRepa = reparacion.NumRepa,
+                    NuOrdRep = reparacion.NuOrdRep ?? 0,
+                    RefOrdRep = reparacion.RefOrdRep ?? string.Empty,
+                    FechOrdRep = reparacion.FechOrdRep,
+                    NroPed = reparacion.NroPed,
+                    NumeCli = reparacion.Nume_Cli,
+                    RasoCli = reparacion.Raso_Cli,
+                    ImpTot = reparacion.Imp_Tot
+                });
+            }
+            catch (Exception ex)
+            {
+                await transaction.RollbackAsync();
+                _logger.LogError(ex, "Error al generar orden de reparación para NumRepa={NumRepa}", request.NumRepa);
+                return StatusCode(500, $"Error al generar orden de reparación: {ex.Message}");
+            }
+        }
+
+        /// <summary>
         /// Obtiene órdenes de reparación en curso que pueden cerrarse
         /// Condición: NuOrdRep > 0 AND Status < 3
         /// </summary>
@@ -986,6 +1402,9 @@ namespace IMPLANPROD.Server.Controllers
 
                 reparacion.RefOrdRep = nuevaReferencia;
                 reparacion.Status = 3; // Status cerrado
+
+                var usuarioActual = ObtenerUsuarioActual();
+                AgregarAnotacionPosicional(reparacion, "Generación de Cierre de Reparación", usuarioActual);
 
                 _context.Reparas.Update(reparacion);
 
@@ -1485,6 +1904,58 @@ namespace IMPLANPROD.Server.Controllers
         {
             public int NumRepa { get; set; }
             public int NuOrdRep { get; set; }
+        }
+
+        /// <summary>
+        /// DTO para generar orden de reparación.
+        /// </summary>
+        public class GenerarOrdenReparacionRequest
+        {
+            public int NumRepa { get; set; }
+            public string? Referen2 { get; set; }
+            public string? NumeroSerie { get; set; }
+            public DateTime? FechOrdRep { get; set; }
+            public string? Observa { get; set; }
+        }
+
+        /// <summary>
+        /// Respuesta de generación de orden de reparación.
+        /// </summary>
+        public class GenerarOrdenReparacionResponse
+        {
+            public int NumRepa { get; set; }
+            public int NuOrdRep { get; set; }
+            public string RefOrdRep { get; set; } = string.Empty;
+            public DateTime? FechOrdRep { get; set; }
+            public int? NroPed { get; set; }
+            public int? NumeCli { get; set; }
+            public string? RasoCli { get; set; }
+            public decimal? ImpTot { get; set; }
+        }
+
+        public class AgregarAnotacionReparacionRequest
+        {
+            public int NumRepa { get; set; }
+            public string Texto { get; set; } = string.Empty;
+            public string? Usuario { get; set; }
+        }
+
+        public class AgregarAnotacionPresupuestoRequest
+        {
+            public int NumRepa { get; set; }
+            public string? Cliente { get; set; }
+            public string? Telefono { get; set; }
+            public string? Fax { get; set; }
+            public string? NumeroSerie { get; set; }
+            public string? Referencia { get; set; }
+            public string? Sitio { get; set; }
+            public string? Observaciones { get; set; }
+        }
+
+        public class AgregarAnotacionReparacionResponse
+        {
+            public int NumRepa { get; set; }
+            public string? AnotaRep { get; set; }
         }
 
         /// <summary>

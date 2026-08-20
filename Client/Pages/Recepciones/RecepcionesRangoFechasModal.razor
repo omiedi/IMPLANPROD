@@ -1,10 +1,12 @@
 @using IMPLANPROD.Shared.Entities
+@using IMPLANPROD.Shared.DTOs
 @using IMPLANPROD.Client.Repositories
 @using IMPLANPROD.Client.Services
 @inject IRepository repository
 @inject SweetAlertService sweetAlertService
 @inject IJSRuntime JS
 @inject HttpClient Http
+@inject NavigationManager Navigation
 
 <div class="modal fade show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5);">
     <div class="modal-dialog modal-xl modal-dialog-scrollable">
@@ -16,6 +18,100 @@
                 </h5>
                 <button type="button" class="btn-close btn-close-white" @onclick="Cerrar"></button>
             </div>
+
+<div id="@idElementoImpresionRecepcion" style="display: none;">
+    <div class="container" style="font-family: Arial, sans-serif; font-size: 12px;">
+        <div class="row mb-2">
+            <div class="col-6">
+                <img src="@(new Uri(new Uri(Navigation.BaseUri), "images/logo.png").ToString())" alt="Logo" style="max-height: 60px;" />
+            </div>
+            <div class="col-6 text-end">
+                <div><strong>NOTA DE RECEPCION</strong></div>
+                @if (recepcionParaImprimir != null)
+                {
+                    <div><strong>NR-</strong> @recepcionParaImprimir.NumeBoRe</div>
+                    <div>Fecha: @recepcionParaImprimir.FechRecep?.ToString("dd/MM/yyyy")</div>
+                }
+            </div>
+        </div>
+
+        @if (recepcionParaImprimir != null)
+        {
+            <div class="row mb-2">
+                <div class="col-12">
+                    <div><strong>Proveedor:</strong> @recepcionParaImprimir.NumProv</div>
+                    <div><strong>RTO N°:</strong> @recepcionParaImprimir.NumRemProv</div>
+                </div>
+            </div>
+        }
+
+        <table class="table table-bordered table-sm" style="border: 1px solid #000;">
+            <thead>
+                <tr>
+                    <th style="width: 12%;">CANTIDAD</th>
+                    <th style="width: 18%;">CODIGO</th>
+                    <th>DESCRIPCION</th>
+                    <th style="width: 10%;">UM</th>
+                    <th style="width: 10%;">O.C</th>
+                    <th style="width: 12%;">F.Entrega</th>
+                    <th style="width: 10%;">OBS</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var item in itemsRecepcionParaImprimir)
+                {
+                    <tr>
+                        <td class="text-end">@item.CantidadNominal.ToString("N2")</td>
+                        <td>@item.CodigoInterno</td>
+                        <td>@item.DescripcionItem</td>
+                        <td>@item.Unidad</td>
+                        <td class="text-end">@((item.NumeroOrdenCompra.HasValue && item.NumeroOrdenCompra.Value > 0) ? item.NumeroOrdenCompra.Value.ToString() : "")</td>
+                        <td class="text-center">@(item.FechaEntregaSolicitada.HasValue ? item.FechaEntregaSolicitada.Value.ToString("dd/MM/yy") : "")</td>
+                        <td></td>
+                    </tr>
+                }
+
+                @{
+                    var totalFilasObjetivo = 22;
+                    var filasVacias = Math.Max(0, totalFilasObjetivo - (itemsRecepcionParaImprimir?.Count ?? 0));
+                }
+
+                @for (var i = 0; i < filasVacias; i++)
+                {
+                    <tr>
+                        <td>&nbsp;</td>
+                        <td></td>
+                        <td></td>
+                        <td></td>
+                        <td></td>
+                        <td></td>
+                        <td></td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+
+        <div class="row mt-3">
+            <div class="col-6">
+                <div style="border: 1px solid #000; height: 3cm; padding: 6px;">
+                    <div><strong>Obs:</strong></div>
+                </div>
+            </div>
+            <div class="col-6">
+                <div style="border: 1px solid #000; height: 3cm; padding: 6px;">
+                    <div><strong>Conforme</strong></div>
+                    <div style="margin-top: 2.2cm; border-top: 1px dotted #000;"></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="row mt-2">
+            <div class="col-12">
+                <div style="border: 1px solid #000; height: 3cm;"></div>
+            </div>
+        </div>
+    </div>
+</div>
             <div class="modal-body">
                 <!-- Filtros -->
                 <div class="card mb-3">
@@ -110,6 +206,7 @@
                             <thead class="table-dark sticky-top">
                                 <tr>
                                     <th>N° Boleta</th>
+                                    <th>Cód. Exte.</th>
                                     <th>Descripción</th>
                                     <th>Lote</th>
                                     <th>Fecha Recep.</th>
@@ -120,6 +217,7 @@
                                     <th>N° Prov.</th>
                                     <th>Remito</th>
                                     <th>N° O.C.</th>
+                                    <th class="text-center">Acciones</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -127,6 +225,7 @@
                                 {
                                     <tr>
                                         <td>@recep.NumeBoRe?.ToString("N0")</td>
+                                        <td>@recep.CodExte</td>
                                         <td>@recep.Descrip</td>
                                         <td>@recep.IdenLote</td>
                                         <td>@recep.FechRecep?.ToString("dd/MM/yyyy")</td>
@@ -137,6 +236,11 @@
                                         <td>@recep.NumProv</td>
                                         <td>@recep.NumRemProv</td>
                                         <td>@recep.NumOC</td>
+                                        <td class="text-center">
+                                            <button class="btn btn-sm btn-success" @onclick="() => ImprimirRecepcionAsync(recep.NumeBoRe)">
+                                                <i class="fas fa-print"></i>
+                                            </button>
+                                        </td>
                                     </tr>
                                 }
                             </tbody>
@@ -173,6 +277,7 @@
                 <thead>
                     <tr style="background-color: #212529; color: white;">
                         <th style="border: 1px solid #000; padding: 5px;">N° Boleta</th>
+                        <th style="border: 1px solid #000; padding: 5px;">Cód. Exte.</th>
                         <th style="border: 1px solid #000; padding: 5px;">Descripción</th>
                         <th style="border: 1px solid #000; padding: 5px;">Lote</th>
                         <th style="border: 1px solid #000; padding: 5px;">Fecha</th>
@@ -190,6 +295,7 @@
                     {
                         <tr>
                             <td style="border: 1px solid #000; padding: 3px;">@recep.NumeBoRe?.ToString("N0")</td>
+                            <td style="border: 1px solid #000; padding: 3px;">@recep.CodExte</td>
                             <td style="border: 1px solid #000; padding: 3px;">@recep.Descrip</td>
                             <td style="border: 1px solid #000; padding: 3px;">@recep.IdenLote</td>
                             <td style="border: 1px solid #000; padding: 3px;">@recep.FechRecep?.ToString("dd/MM/yyyy")</td>
@@ -219,6 +325,10 @@
     private bool cargando = false;
     private bool imprimiendo = false;
     private bool exportando = false;
+
+    private string idElementoImpresionRecepcion = $"nota-recepcion-rango-{Guid.NewGuid()}";
+    private Bolrecep? recepcionParaImprimir;
+    private List<RecepcionItemDTO> itemsRecepcionParaImprimir = new();
 
     private void LimpiarFiltros()
     {
@@ -325,6 +435,45 @@
         {
             exportando = false;
             StateHasChanged();
+        }
+    }
+
+    private async Task ImprimirRecepcionAsync(decimal? numeroRecepcion)
+    {
+        try
+        {
+            if (!numeroRecepcion.HasValue)
+            {
+                await sweetAlertService.FireAsync("Error", "La recepción no tiene número de boleta.", SweetAlertIcon.Error);
+                return;
+            }
+
+            var numeroRecepcionInt = Convert.ToInt32(numeroRecepcion.Value);
+
+            recepcionParaImprimir = recepciones?.FirstOrDefault(r => r.NumeBoRe == numeroRecepcion);
+            if (recepcionParaImprimir == null)
+            {
+                await sweetAlertService.FireAsync("Error", "No se encontró la recepción.", SweetAlertIcon.Error);
+                return;
+            }
+
+            var response = await repository.Get<List<RecepcionItemDTO>>($"api/bolrecep/items/{numeroRecepcionInt}");
+            if (response.Error)
+            {
+                var mensaje = await response.GetErrorMessageAsync();
+                await sweetAlertService.FireAsync("Error", mensaje, SweetAlertIcon.Error);
+                return;
+            }
+
+            itemsRecepcionParaImprimir = response.Response ?? new List<RecepcionItemDTO>();
+            StateHasChanged();
+            await Task.Delay(50);
+
+            await JS.InvokeVoidAsync("imprimirElemento", idElementoImpresionRecepcion);
+        }
+        catch (Exception ex)
+        {
+            await sweetAlertService.FireAsync("Error", $"Error al imprimir: {ex.Message}", SweetAlertIcon.Error);
         }
     }
 

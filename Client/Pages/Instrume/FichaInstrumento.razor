@@ -1,0 +1,1120 @@
+@page "/ficha-instrumento"
+@inject IRepository repository
+@inject NavigationManager navigationManager
+@inject IJSRuntime JS
+@inject CurrentUserService currentUserService
+@inject PageAccessService PageAccess
+@using IMPLANPROD.Shared.Entities
+@using IMPLANPROD.Client.Services
+@using Microsoft.AspNetCore.WebUtilities
+@using System.Globalization
+
+<PageTitle>Ficha de Calibración</PageTitle>
+
+@if (validando)
+{
+    <p>Validando acceso...</p>
+}
+else
+{
+    <div class="bg-primary bg-opacity-10 p-3 rounded-3 mb-4">
+    <h4 class="m-0 text-primary">
+        <i class="fas fa-ruler-combined me-2"></i>
+        Ficha de Calibración
+    </h4>
+</div>
+
+<div class="mb-3">
+    <button class="btn btn-outline-secondary" @onclick="VolverAFichaCalibracion">
+        <i class="fas fa-arrow-left me-2"></i>Volver
+    </button>
+</div>
+
+<!-- ===== FICHA DE DETALLE (SOLO LECTURA) ===== -->
+@if (instrumenoSeleccionado != null)
+{
+    <div class="card shadow border-0">
+        <div class="card-header bg-primary text-white d-flex align-items-center gap-2">
+            <i class="fas fa-clipboard-list"></i>
+            <strong>Ficha del Instrumento</strong>
+            <span class="ms-auto badge bg-light text-primary">Cód. Interno: @instrumenoSeleccionado.CodIntMedIdent</span>
+        </div>
+
+        @if (cargandoDetalle)
+        {
+            <div class="card-body text-center py-5">
+                <div class="spinner-border text-primary" role="status"></div>
+                <div class="mt-2 text-muted">Cargando...</div>
+            </div>
+        }
+        else
+        {
+            <div class="card-body">
+                <div class="row g-3">
+
+                    <!-- CODIGO INTERNO (CodIntMedIdent) - READONLY -->
+                    <div class="col-md-4">
+                        <label class="form-label fw-semibold">Código Interno</label>
+                        <input type="text" class="form-control bg-light" readonly value="@(instrumenoSeleccionado.CodIntMedIdent?.ToString() ?? "")" />
+                    </div>
+
+                    <!-- CODIGO - READONLY -->
+                    <div class="col-md-4">
+                        <label class="form-label fw-semibold">Código</label>
+                        <input type="text" class="form-control bg-light" readonly value="@LimpiarTexto(instrumenoSeleccionado.Codigo)" />
+                    </div>
+
+                    <!-- DESCRIPCION - READONLY -->
+                    <div class="col-md-4">
+                        <label class="form-label fw-semibold">Descripción</label>
+                        <input type="text" class="form-control bg-light" readonly value="@LimpiarTexto(instrumenoSeleccionado.Descripcion)" />
+                    </div>
+
+                    <!-- TIPO - READONLY -->
+                    <div class="col-md-4">
+                        <label class="form-label fw-semibold">Tipo</label>
+                        <input type="text" class="form-control bg-light" readonly value="@LimpiarTexto(instrumenoSeleccionado.Tipo)" />
+                    </div>
+
+                    <!-- MARCA - READONLY -->
+                    <div class="col-md-4">
+                        <label class="form-label fw-semibold">Marca</label>
+                        <input type="text" class="form-control bg-light" readonly value="@LimpiarTexto(instrumenoSeleccionado.Marca)" />
+                    </div>
+
+                    <!-- MODELO - READONLY -->
+                    <div class="col-md-4">
+                        <label class="form-label fw-semibold">Modelo</label>
+                        <input type="text" class="form-control bg-light" readonly value="@LimpiarTexto(instrumenoSeleccionado.Modelo)" />
+                    </div>
+
+                    <!-- NRO SERIE - READONLY -->
+                    <div class="col-md-4">
+                        <label class="form-label fw-semibold">Nro. de Serie</label>
+                        <input type="text" class="form-control bg-light" readonly value="@LimpiarTexto(instrumenoSeleccionado.NroSerie)" />
+                    </div>
+
+                    <!-- RANGO - READONLY -->
+                    <div class="col-md-4">
+                        <label class="form-label fw-semibold">Rango</label>
+                        <input type="text" class="form-control bg-light" readonly value="@LimpiarTexto(instrumenoSeleccionado.Rango)" />
+                    </div>
+
+                    <!-- PRECISION (Posicion) - READONLY -->
+                    <div class="col-md-4">
+                        <label class="form-label fw-semibold">Precisión</label>
+                        <input type="text" class="form-control bg-light" readonly value="@LimpiarTexto(instrumenoSeleccionado.Posicion)" />
+                    </div>
+
+                    <!-- UBICACION - READONLY -->
+                    <div class="col-md-4">
+                        <label class="form-label fw-semibold">Ubicación</label>
+                        <input type="text" class="form-control bg-light" readonly value="@LimpiarTexto(instrumenoSeleccionado.Ubicacion)" />
+                    </div>
+
+                    <!-- GRUPO - READONLY -->
+                    <div class="col-md-4">
+                        <label class="form-label fw-semibold">Grupo</label>
+                        <input type="text" class="form-control bg-light" readonly value="@(instrumenoSeleccionado.NroGrupo?.ToString() ?? "")" />
+                    </div>
+
+                    <!-- INTERVCALIBRA - READONLY -->
+                    <div class="col-md-4">
+                        <label class="form-label fw-semibold">Intervalo de Calibración</label>
+                        <input type="text" class="form-control bg-light" readonly value="@LimpiarTexto(instrumenoSeleccionado.IntervCalibra)" />
+                    </div>
+
+                    <!-- CodIntMedCalib - READONLY -->
+                    <div class="col-md-4">
+                        <label class="form-label fw-semibold">Cód. Interno Instrumento Calibrador</label>
+                        <input type="text" class="form-control bg-light" readonly value="@(instrumenoSeleccionado.CodIntMedCalib?.ToString() ?? "")" />
+                    </div>
+
+                    <!-- OBSERVACIONES - READONLY -->
+                    <div class="col-12 mt-2">
+                        <label class="form-label fw-semibold">Componentes y/o Accesorios</label>
+                        <textarea class="form-control bg-light" readonly rows="6">@LimpiarTexto(instrumenoSeleccionado.Observaciones)</textarea>
+                    </div>
+
+                </div>
+            </div>
+        }
+    </div>
+}
+
+<!-- ===== TABLA DE REGISTROS DE CALIBRACIÓN ===== -->
+@if (instrumenoSeleccionado != null)
+{
+    <div class="card shadow border-0 mt-4">
+        <div class="card-header bg-success text-white d-flex align-items-center gap-2">
+            <i class="fas fa-clipboard-check"></i>
+            <strong>Registros de Calibración</strong>
+            <button class="btn btn-light btn-sm ms-auto"
+                    @onclick="AbrirModalNuevoRecalib">
+                <i class="fas fa-plus me-1"></i>Nuevo Reg. Calibración
+            </button>
+        </div>
+
+        @if (cargandoRecalibs)
+        {
+            <div class="card-body text-center py-4">
+                <div class="spinner-border text-success" role="status"></div>
+                <div class="mt-2 text-muted">Cargando registros...</div>
+            </div>
+        }
+        else if (registrosRecalib == null || !registrosRecalib.Any())
+        {
+            <div class="card-body text-center py-4 text-muted">
+                <i class="fas fa-info-circle me-2"></i>
+                No hay registros de calibración para este instrumento
+            </div>
+        }
+        else
+        {
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-hover table-striped mb-0">
+                        <thead class="table-success">
+                            <tr>
+                                <th>Fecha de Calibración</th>
+                                <th>IC_NRO</th>
+                                <th>Patrón Utilizado</th>
+                                <th>Requirió Calibración</th>
+                                <th>Requirió Ajuste</th>
+                                <th>Fecha de Próx. Calibr.</th>
+                                <th>Responsable</th>
+                                <th>ID RECALIB</th>
+                                <th>Acción</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var recalib in registrosRecalib)
+                            {
+                                <tr>
+                                    <td>@(recalib.FeCalibracion?.ToString("dd/MM/yyyy") ?? "-")</td>
+                                    <td>@LimpiarTexto(recalib.IcNro)</td>
+                                    <td>@LimpiarTexto(recalib.PatronUtilizado)</td>
+                                    <td>@LimpiarTexto(recalib.RequirioCalib)</td>
+                                    <td>@LimpiarTexto(recalib.RequirioAjuste)</td>
+                                    <td>@(recalib.FeProxCalibr?.ToString("dd/MM/yyyy") ?? "-")</td>
+                                    <td>@LimpiarTexto(recalib.Responsable)</td>
+                                    <td>@recalib.Id</td>
+                                    <td>
+                                        <button class="btn btn-sm btn-outline-primary"
+                                                @onclick="() => AbrirModalDecalib(recalib.Id)">
+                                            I. Med. Ensayo
+                                        </button>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        }
+    </div>
+}
+
+@if (mostrarModalNuevoRecalib)
+{
+    <div class="modal fade show" style="display:block;" tabindex="-1" role="dialog" aria-modal="true">
+        <div class="modal-dialog modal-dialog-scrollable" role="document" style="max-width:95vw; width:95vw;">
+            <div class="modal-content">
+                <div class="modal-header bg-success text-white">
+                    <h5 class="modal-title mb-0">Nuevo Reg. Calibración</h5>
+                    <button type="button" class="btn-close btn-close-white" @onclick="CerrarModalNuevoRecalib"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="row g-2 mb-3">
+                        <div class="col-md-4">
+                            <label class="form-label fw-semibold">Código</label>
+                            <input class="form-control bg-light" readonly value="@LimpiarTexto(instrumenoSeleccionado?.Codigo)" />
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label fw-semibold">Descripción</label>
+                            <input class="form-control bg-light" readonly value="@LimpiarTexto(instrumenoSeleccionado?.Descripcion)" />
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label fw-semibold">Código Interno</label>
+                            <input class="form-control bg-light" readonly value="@(instrumenoSeleccionado?.CodIntMedIdent?.ToString() ?? "")" />
+                        </div>
+                    </div>
+
+                    @if (!string.IsNullOrWhiteSpace(mensajeModalNuevoRecalib))
+                    {
+                        <div class="alert @claseMensajeModalNuevoRecalib" role="alert">@mensajeModalNuevoRecalib</div>
+                    }
+
+                    <div class="mb-2 d-flex gap-2">
+                        <button class="btn btn-outline-success btn-sm" @onclick="AgregarFilaNuevoDecalib" disabled="@guardandoModalNuevoRecalib">
+                            <i class="fas fa-plus me-1"></i>Agregar fila DECALIB
+                        </button>
+                    </div>
+
+                    <div class="table-responsive mb-3">
+                        <table class="table table-sm table-striped align-middle">
+                            <thead>
+                                <tr>
+                                    <th>PATRON</th>
+                                    <th>MEDIDA</th>
+                                    <th>X1</th>
+                                    <th>X2</th>
+                                    <th>X3</th>
+                                    <th>X4</th>
+                                    <th>X5</th>
+                                    <th>E-PROM</th>
+                                    <th>I-ME</th>
+                                    <th>Acción</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var detalle in detallesNuevoRecalib)
+                                {
+                                    <tr>
+                                        <td><input class="form-control form-control-sm" value="@detalle.Patron" @oninput="e => ActualizarPatronNuevo(detalle, e.Value?.ToString())" /></td>
+                                        <td><input type="number" step="0.001" class="form-control form-control-sm" value="@FormatearDecimalEditable(detalle.Medida)" @oninput="e => ActualizarCampoYRecalcularNuevo(detalle, nameof(Decalib.Medida), e.Value?.ToString())" /></td>
+                                        <td><input type="number" step="0.001" class="form-control form-control-sm" value="@FormatearDecimalEditable(detalle.X1)" @oninput="e => ActualizarCampoYRecalcularNuevo(detalle, nameof(Decalib.X1), e.Value?.ToString())" /></td>
+                                        <td><input type="number" step="0.001" class="form-control form-control-sm" value="@FormatearDecimalEditable(detalle.X2)" @oninput="e => ActualizarCampoYRecalcularNuevo(detalle, nameof(Decalib.X2), e.Value?.ToString())" /></td>
+                                        <td><input type="number" step="0.001" class="form-control form-control-sm" value="@FormatearDecimalEditable(detalle.X3)" @oninput="e => ActualizarCampoYRecalcularNuevo(detalle, nameof(Decalib.X3), e.Value?.ToString())" /></td>
+                                        <td><input type="number" step="0.001" class="form-control form-control-sm" value="@FormatearDecimalEditable(detalle.X4)" @oninput="e => ActualizarCampoYRecalcularNuevo(detalle, nameof(Decalib.X4), e.Value?.ToString())" /></td>
+                                        <td><input type="number" step="0.001" class="form-control form-control-sm" value="@FormatearDecimalEditable(detalle.X5)" @oninput="e => ActualizarCampoYRecalcularNuevo(detalle, nameof(Decalib.X5), e.Value?.ToString())" /></td>
+                                        <td><input class="form-control form-control-sm bg-light" readonly value="@(detalle.EProm?.ToString("0.000") ?? "0.000")" /></td>
+                                        <td><input class="form-control form-control-sm bg-light" readonly value="@(detalle.IMe?.ToString("0.000") ?? "0.000")" /></td>
+                                        <td>
+                                            <button class="btn btn-danger btn-sm px-2"
+                                                    @onclick="() => EliminarFilaNuevoDecalib(detalle)"
+                                                    disabled="@(guardandoModalNuevoRecalib || detallesNuevoRecalib.Count == 1)">
+                                                <i class="fas fa-trash"></i>
+                                            </button>
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <div class="row g-3">
+                        <div class="col-md-3">
+                            <label class="form-label fw-semibold">IC-NRO *</label>
+                            <input class="form-control bg-light" readonly value="@nuevoRecalib.IcNro" />
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label fw-semibold">Patrón Utilizado *</label>
+                            <input class="form-control" @bind="nuevoRecalib.PatronUtilizado" />
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label fw-semibold">Req. Calibración (Fecha) *</label>
+                            <input type="date" class="form-control"
+                                   value="@FormatearFechaInput(nuevoRecalib.FeCalibracion)"
+                                   @oninput="e => nuevoRecalib.FeCalibracion = ParseFecha(e.Value?.ToString())" />
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label fw-semibold">Requirió Ajuste *</label>
+                            <input class="form-control" @bind="nuevoRecalib.RequirioAjuste" />
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label fw-semibold">Prox. Calibración (Fecha) *</label>
+                            <input type="date" class="form-control"
+                                   value="@FormatearFechaInput(nuevoRecalib.FeProxCalibr)"
+                                   @oninput="e => nuevoRecalib.FeProxCalibr = ParseFecha(e.Value?.ToString())" />
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label fw-semibold">Responsable *</label>
+                            <input class="form-control" @bind="nuevoRecalib.Responsable" />
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label fw-semibold">Fecha del día *</label>
+                            <input type="date" class="form-control"
+                                   value="@FormatearFechaInput(nuevoRecalib.AddRecord)"
+                                   @oninput="e => nuevoRecalib.AddRecord = ParseFecha(e.Value?.ToString())" />
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label fw-semibold">Siguiente ID</label>
+                            <input class="form-control bg-light" readonly value="@proximoIdRecalib" />
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-success" @onclick="GuardarNuevoRegCalibracion" disabled="@guardandoModalNuevoRecalib">
+                        Guardar
+                    </button>
+                    <button class="btn btn-secondary" @onclick="CerrarModalNuevoRecalib" disabled="@guardandoModalNuevoRecalib">
+                        Cerrar
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal-backdrop fade show" @onclick="CerrarModalNuevoRecalib"></div>
+}
+
+@if (mostrarModalDecalib)
+{
+    <div class="modal fade show" style="display:block;" tabindex="-1" role="dialog" aria-modal="true">
+        <div class="modal-dialog modal-dialog-scrollable" role="document" style="max-width:95vw; width:95vw;">
+            <div class="modal-content">
+                <div class="modal-header bg-primary text-white">
+                    <h5 class="modal-title mb-0">I. Med. Ensayo</h5>
+                    <button type="button" class="btn-close btn-close-white" @onclick="CerrarModalDecalib"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <span class="badge bg-primary">RECALIB.Id seleccionado: @recalibIdSeleccionado</span>
+                    </div>
+
+                    @if (!string.IsNullOrWhiteSpace(mensajeModalDecalib))
+                    {
+                        <div class="alert @claseMensajeModalDecalib" role="alert">@mensajeModalDecalib</div>
+                    }
+
+                    <div class="mb-3">
+                        <button class="btn btn-outline-primary btn-sm" @onclick="AgregarFilaDecalib">
+                            <i class="fas fa-plus me-1"></i>Agregar fila
+                        </button>
+                    </div>
+
+                    @if (cargandoModalDecalib)
+                    {
+                        <div class="text-center py-4">
+                            <div class="spinner-border text-primary" role="status"></div>
+                            <div class="mt-2 text-muted">Cargando datos DECALIB...</div>
+                        </div>
+                    }
+                    else if (detallesDecalib == null || !detallesDecalib.Any())
+                    {
+                        <div class="alert alert-info mb-0" role="alert">
+                            No hay registros en DECALIB para este RECALIB.
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="table-responsive">
+                            <table class="table table-sm table-striped align-middle">
+                                <thead>
+                                    <tr>
+                                        <th>PATRON</th>
+                                        <th>MEDIDA</th>
+                                        <th>X1</th>
+                                        <th>X2</th>
+                                        <th>X3</th>
+                                        <th>X4</th>
+                                        <th>X5</th>
+                                        <th>E-PROM</th>
+                                        <th>I-ME</th>
+                                        <th>Acción</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var detalle in detallesDecalib)
+                                    {
+                                        <tr>
+                                            <td><input class="form-control form-control-sm" @bind="detalle.Patron" /></td>
+                                            <td><input type="number" step="0.001" class="form-control form-control-sm" value="@FormatearDecimalEditable(detalle.Medida)" @oninput="e => ActualizarCampoYRecalcular(detalle, nameof(Decalib.Medida), e.Value?.ToString())" /></td>
+                                            <td><input type="number" step="0.001" class="form-control form-control-sm" value="@FormatearDecimalEditable(detalle.X1)" @oninput="e => ActualizarCampoYRecalcular(detalle, nameof(Decalib.X1), e.Value?.ToString())" /></td>
+                                            <td><input type="number" step="0.001" class="form-control form-control-sm" value="@FormatearDecimalEditable(detalle.X2)" @oninput="e => ActualizarCampoYRecalcular(detalle, nameof(Decalib.X2), e.Value?.ToString())" /></td>
+                                            <td><input type="number" step="0.001" class="form-control form-control-sm" value="@FormatearDecimalEditable(detalle.X3)" @oninput="e => ActualizarCampoYRecalcular(detalle, nameof(Decalib.X3), e.Value?.ToString())" /></td>
+                                            <td><input type="number" step="0.001" class="form-control form-control-sm" value="@FormatearDecimalEditable(detalle.X4)" @oninput="e => ActualizarCampoYRecalcular(detalle, nameof(Decalib.X4), e.Value?.ToString())" /></td>
+                                            <td><input type="number" step="0.001" class="form-control form-control-sm" value="@FormatearDecimalEditable(detalle.X5)" @oninput="e => ActualizarCampoYRecalcular(detalle, nameof(Decalib.X5), e.Value?.ToString())" /></td>
+                                            <td><input class="form-control form-control-sm bg-light" readonly value="@(detalle.EProm?.ToString("0.000") ?? "0.000")" /></td>
+                                            <td><input class="form-control form-control-sm bg-light" readonly value="@(detalle.IMe?.ToString("0.000") ?? "0.000")" /></td>
+                                            <td class="text-nowrap">
+                                                <button class="btn btn-success btn-sm px-2"
+                                                        @onclick="() => GuardarDetalleDecalib(detalle)"
+                                                        disabled="@guardandoModalDecalib"
+                                                        title="Guardar"
+                                                        aria-label="Guardar">
+                                                    <i class="fas fa-save"></i>
+                                                </button>
+                                                <button class="btn btn-danger btn-sm px-2 ms-1"
+                                                        @onclick="() => EliminarDetalleDecalib(detalle)"
+                                                        title="Eliminar"
+                                                        aria-label="Eliminar">
+                                                    <i class="fas fa-trash"></i>
+                                                </button>
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    }
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-primary" @onclick="AceptarModalDecalib" disabled="@(!modalDecalibTieneCambios || guardandoModalDecalib)">Aceptar</button>
+                    <button class="btn btn-secondary" @onclick="CerrarModalDecalib">Cerrar</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal-backdrop fade show" @onclick="CerrarModalDecalib"></div>
+    }
+}
+
+@code {
+    private Instrume? instrumenoSeleccionado;
+    private bool cargandoDetalle = false;
+    private bool validando = true;
+    private List<Recalib>? registrosRecalib;
+    private bool cargandoRecalibs = false;
+    private int? idInstrumentoActual;
+    private bool mostrarModalDecalib = false;
+    private bool cargandoModalDecalib = false;
+    private bool guardandoModalDecalib = false;
+    private bool modalDecalibTieneCambios = false;
+    private bool mostrarModalNuevoRecalib = false;
+    private bool guardandoModalNuevoRecalib = false;
+    private string mensajeModalNuevoRecalib = string.Empty;
+    private string claseMensajeModalNuevoRecalib = "alert-info";
+    private int proximoIdRecalib;
+    private Recalib nuevoRecalib = new();
+    private List<Decalib> detallesNuevoRecalib = new();
+    private int recalibIdSeleccionado;
+    private List<Decalib> detallesDecalib = new();
+    private string mensajeModalDecalib = string.Empty;
+    private string claseMensajeModalDecalib = "alert-info";
+
+    // Validar que el usuario tenga permiso para acceder a esta página antes de mostrar el contenido
+    protected override async Task OnInitializedAsync()
+    {
+        await PageAccess.RequiereAccesoAsync("/ficha-instrumento");
+        validando = false;
+        
+        // Verificar si viene un ID por query string
+        var uri = navigationManager.ToAbsoluteUri(navigationManager.Uri);
+        if (QueryHelpers.ParseQuery(uri.Query).TryGetValue("id", out var idValue))
+        {
+            if (int.TryParse(idValue, out var id) && id > 0)
+            {
+                idInstrumentoActual = id;
+                await CargarInstrumentoPorId(id);
+                if (instrumenoSeleccionado?.CodIntMedIdent is int codIntMedIdent && codIntMedIdent > 0)
+                {
+                    await CargarRegistrosRecalib(codIntMedIdent);
+                }
+            }
+        }
+    }
+
+    private void AgregarFilaDecalib()
+    {
+        var nueva = new Decalib
+        {
+            Status = 0,
+            CodiEmprNet = 0,
+            IdReCalib = 0
+        };
+
+        RecalcularFilaDecalib(nueva);
+        detallesDecalib.Add(nueva);
+        modalDecalibTieneCambios = true;
+    }
+
+    private async Task EliminarDetalleDecalib(Decalib detalle)
+    {
+        var confirmar = await JS.InvokeAsync<bool>("confirm", "¿Confirma eliminar esta fila de DECALIB?");
+        if (!confirmar)
+        {
+            return;
+        }
+
+        if (detalle.Id <= 0)
+        {
+            detallesDecalib.Remove(detalle);
+            modalDecalibTieneCambios = true;
+            claseMensajeModalDecalib = "alert-info";
+            mensajeModalDecalib = "Fila nueva eliminada.";
+            StateHasChanged();
+            return;
+        }
+
+        var response = await repository.Delete($"api/Decalib/{detalle.Id}");
+        if (!response.Error)
+        {
+            detallesDecalib.Remove(detalle);
+            modalDecalibTieneCambios = true;
+            claseMensajeModalDecalib = "alert-success";
+            mensajeModalDecalib = "Registro DECALIB eliminado correctamente.";
+            await CargarDetallesDecalib();
+            return;
+        }
+
+        claseMensajeModalDecalib = "alert-danger";
+        mensajeModalDecalib = "No se pudo eliminar el registro DECALIB.";
+        StateHasChanged();
+    }
+
+    private void VolverAFichaCalibracion()
+    {
+        if (idInstrumentoActual.HasValue && idInstrumentoActual.Value > 0)
+        {
+            navigationManager.NavigateTo($"/ficha-calibracion?id={idInstrumentoActual.Value}");
+            return;
+        }
+
+        navigationManager.NavigateTo("/ficha-calibracion");
+    }
+
+    private async Task CargarInstrumentoPorId(int id)
+    {
+        try
+        {
+            cargandoDetalle = true;
+            StateHasChanged();
+
+            var response = await repository.Get<Instrume>($"api/Instrume/{id}");
+            
+            if (!response.Error && response.Response != null)
+            {
+                instrumenoSeleccionado = response.Response;
+                
+                // Limpiar caracteres basura
+                instrumenoSeleccionado.Tipo = LimpiarTexto(instrumenoSeleccionado.Tipo);
+                instrumenoSeleccionado.Marca = LimpiarTexto(instrumenoSeleccionado.Marca);
+                instrumenoSeleccionado.Modelo = LimpiarTexto(instrumenoSeleccionado.Modelo);
+                instrumenoSeleccionado.NroSerie = LimpiarTexto(instrumenoSeleccionado.NroSerie);
+                instrumenoSeleccionado.Rango = LimpiarTexto(instrumenoSeleccionado.Rango);
+                instrumenoSeleccionado.Posicion = LimpiarTexto(instrumenoSeleccionado.Posicion);
+                instrumenoSeleccionado.Ubicacion = LimpiarTexto(instrumenoSeleccionado.Ubicacion);
+                instrumenoSeleccionado.IntervCalibra = LimpiarTexto(instrumenoSeleccionado.IntervCalibra);
+                instrumenoSeleccionado.Observaciones = LimpiarTexto(instrumenoSeleccionado.Observaciones);
+            }
+        }
+        catch
+        {
+            // Error al cargar
+        }
+        finally
+        {
+            cargandoDetalle = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task CargarRegistrosRecalib(int codIntMedIdent)
+    {
+        try
+        {
+            cargandoRecalibs = true;
+            StateHasChanged();
+
+            var response = await repository.Get<List<Recalib>>($"api/Recalib/ByInstrumento/{codIntMedIdent}");
+            
+            if (!response.Error && response.Response != null)
+            {
+                registrosRecalib = response.Response;
+            }
+            else
+            {
+                registrosRecalib = new List<Recalib>();
+            }
+        }
+        catch
+        {
+            registrosRecalib = new List<Recalib>();
+        }
+        finally
+        {
+            cargandoRecalibs = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task AbrirModalDecalib(int recalibId)
+    {
+        recalibIdSeleccionado = recalibId;
+        mostrarModalDecalib = true;
+        mensajeModalDecalib = string.Empty;
+        claseMensajeModalDecalib = "alert-info";
+        detallesDecalib = new List<Decalib>();
+        await CargarDetallesDecalib();
+    }
+
+    private async Task AbrirModalNuevoRecalib()
+    {
+        mostrarModalNuevoRecalib = true;
+        guardandoModalNuevoRecalib = false;
+        mensajeModalNuevoRecalib = string.Empty;
+        claseMensajeModalNuevoRecalib = "alert-info";
+
+        var hoy = DateTime.Today;
+        proximoIdRecalib = 0;
+
+        var responseNextId = await repository.Get<int>("api/Recalib/NextId");
+        if (!responseNextId.Error)
+        {
+            proximoIdRecalib = responseNextId.Response;
+        }
+
+        var idFlexoft = await currentUserService.GetIdFlexoftAsync();
+        var userId = await currentUserService.GetUserIdAsync();
+        var nombreUsuario = await currentUserService.GetNombreUsuarioAsync();
+        var numUsuar = idFlexoft > 0 ? idFlexoft : userId;
+
+        nuevoRecalib = new Recalib
+        {
+            CodIntMedIdent = instrumenoSeleccionado?.CodIntMedIdent,
+            IcNro = proximoIdRecalib > 0 ? $"IC.{proximoIdRecalib}" : string.Empty,
+            FeCalibracion = hoy,
+            FeProxCalibr = hoy,
+            Responsable = nombreUsuario,
+            AddRecord = hoy,
+            Status = 0,
+            CodiEmprNet = 0,
+            NumUsuar = numUsuar
+        };
+
+        detallesNuevoRecalib = new List<Decalib>();
+        AgregarFilaNuevoDecalib();
+    }
+
+    private void CerrarModalNuevoRecalib()
+    {
+        mostrarModalNuevoRecalib = false;
+        mensajeModalNuevoRecalib = string.Empty;
+        claseMensajeModalNuevoRecalib = "alert-info";
+        proximoIdRecalib = 0;
+        nuevoRecalib = new Recalib();
+        detallesNuevoRecalib = new List<Decalib>();
+    }
+
+    private void AgregarFilaNuevoDecalib()
+    {
+        var nueva = new Decalib
+        {
+            Status = 0,
+            CodiEmprNet = 0,
+            NumUsuar = nuevoRecalib.NumUsuar,
+            IdReCalib = 0
+        };
+
+        RecalcularFilaDecalib(nueva);
+        detallesNuevoRecalib.Add(nueva);
+    }
+
+    private void EliminarFilaNuevoDecalib(Decalib detalle)
+    {
+        if (detallesNuevoRecalib.Count <= 1)
+        {
+            claseMensajeModalNuevoRecalib = "alert-warning";
+            mensajeModalNuevoRecalib = "Debe quedar al menos una fila en DECALIB.";
+            return;
+        }
+
+        detallesNuevoRecalib.Remove(detalle);
+    }
+
+    private void ActualizarPatronNuevo(Decalib detalle, string? valor)
+    {
+        detalle.Patron = valor;
+    }
+
+    private void ActualizarCampoYRecalcularNuevo(Decalib detalle, string campo, string? valorTexto)
+    {
+        var valor = ParseDecimal(valorTexto);
+
+        switch (campo)
+        {
+            case nameof(Decalib.Medida):
+                detalle.Medida = valor;
+                break;
+            case nameof(Decalib.X1):
+                detalle.X1 = valor;
+                break;
+            case nameof(Decalib.X2):
+                detalle.X2 = valor;
+                break;
+            case nameof(Decalib.X3):
+                detalle.X3 = valor;
+                break;
+            case nameof(Decalib.X4):
+                detalle.X4 = valor;
+                break;
+            case nameof(Decalib.X5):
+                detalle.X5 = valor;
+                break;
+        }
+
+        RecalcularFilaDecalib(detalle);
+    }
+
+    private async Task GuardarNuevoRegCalibracion()
+    {
+        if (instrumenoSeleccionado?.CodIntMedIdent is null || instrumenoSeleccionado.CodIntMedIdent <= 0)
+        {
+            claseMensajeModalNuevoRecalib = "alert-danger";
+            mensajeModalNuevoRecalib = "No hay instrumento activo válido para guardar.";
+            return;
+        }
+
+        if (!ValidarNuevoRecalib())
+        {
+            return;
+        }
+
+        guardandoModalNuevoRecalib = true;
+        mensajeModalNuevoRecalib = string.Empty;
+        StateHasChanged();
+
+        try
+        {
+            nuevoRecalib.CodIntMedIdent = instrumenoSeleccionado.CodIntMedIdent;
+            nuevoRecalib.Status = 0;
+            nuevoRecalib.CodiEmprNet ??= 0;
+            nuevoRecalib.LastUpdate = DateTime.Now;
+
+            var responseRecalib = await repository.Post<Recalib, Recalib>("api/Recalib", nuevoRecalib);
+            if (responseRecalib.Error || responseRecalib.Response == null)
+            {
+                var detalleError = await responseRecalib.GetErrorMessageAsync();
+                claseMensajeModalNuevoRecalib = "alert-danger";
+                mensajeModalNuevoRecalib = string.IsNullOrWhiteSpace(detalleError)
+                    ? "No se pudo guardar el registro RECALIB."
+                    : $"No se pudo guardar el registro RECALIB. {detalleError}";
+                return;
+            }
+
+            var recalibCreado = responseRecalib.Response;
+            var filasValidas = detallesNuevoRecalib
+                .Where(d => !string.IsNullOrWhiteSpace(d.Patron) || d.Medida.HasValue || d.X1.HasValue || d.X2.HasValue || d.X3.HasValue || d.X4.HasValue || d.X5.HasValue)
+                .ToList();
+
+            foreach (var detalle in filasValidas)
+            {
+                RecalcularFilaDecalib(detalle);
+                detalle.Status = 0;
+                detalle.CodiEmprNet ??= 0;
+                detalle.NumUsuar = nuevoRecalib.NumUsuar;
+
+                var responseDecalib = await repository.Post($"api/Decalib/by-recalib/{recalibCreado.Id}", detalle);
+                if (responseDecalib.Error)
+                {
+                    claseMensajeModalNuevoRecalib = "alert-warning";
+                    mensajeModalNuevoRecalib = "RECALIB guardado, pero ocurrió un error al guardar una o más filas DECALIB.";
+                    await CargarRegistrosRecalib(instrumenoSeleccionado.CodIntMedIdent.Value);
+                    return;
+                }
+            }
+
+            claseMensajeModalNuevoRecalib = "alert-success";
+            mensajeModalNuevoRecalib = "Registro de calibración guardado correctamente.";
+
+            await CargarRegistrosRecalib(instrumenoSeleccionado.CodIntMedIdent.Value);
+            CerrarModalNuevoRecalib();
+        }
+        catch
+        {
+            claseMensajeModalNuevoRecalib = "alert-danger";
+            mensajeModalNuevoRecalib = "Ocurrió un error al guardar el nuevo registro de calibración.";
+        }
+        finally
+        {
+            guardandoModalNuevoRecalib = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task CerrarModalDecalib()
+    {
+        if (modalDecalibTieneCambios)
+        {
+            var confirmar = await JS.InvokeAsync<bool>("confirm", "Hay cambios sin guardar. ¿Desea cerrar el modal igualmente?");
+            if (!confirmar)
+            {
+                return;
+            }
+        }
+
+        mostrarModalDecalib = false;
+        mensajeModalDecalib = string.Empty;
+        detallesDecalib = new List<Decalib>();
+        modalDecalibTieneCambios = false;
+    }
+
+    private async Task CargarDetallesDecalib()
+    {
+        try
+        {
+            cargandoModalDecalib = true;
+            StateHasChanged();
+
+            var response = await repository.Get<List<Decalib>>($"api/Decalib/by-recalib/{recalibIdSeleccionado}");
+            if (!response.Error && response.Response != null)
+            {
+                detallesDecalib = response.Response;
+                foreach (var detalle in detallesDecalib)
+                {
+                    RecalcularFilaDecalib(detalle);
+                }
+                modalDecalibTieneCambios = false;
+            }
+            else
+            {
+                detallesDecalib = new List<Decalib>();
+                modalDecalibTieneCambios = false;
+            }
+        }
+        catch
+        {
+            detallesDecalib = new List<Decalib>();
+            claseMensajeModalDecalib = "alert-danger";
+            mensajeModalDecalib = "Ocurrió un error al consultar DECALIB.";
+        }
+        finally
+        {
+            cargandoModalDecalib = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task GuardarDetalleDecalib(Decalib detalle)
+    {
+        try
+        {
+            guardandoModalDecalib = true;
+            mensajeModalDecalib = string.Empty;
+            StateHasChanged();
+
+            HttpResponseWrapper<object> response;
+            if (detalle.Id > 0)
+            {
+                response = await repository.Put($"api/Decalib/{detalle.Id}", detalle);
+            }
+            else
+            {
+                response = await repository.Post($"api/Decalib/by-recalib/{recalibIdSeleccionado}", detalle);
+            }
+
+            if (!response.Error)
+            {
+                claseMensajeModalDecalib = "alert-success";
+                mensajeModalDecalib = "Registro DECALIB guardado correctamente.";
+                await CargarDetallesDecalib();
+                return;
+            }
+
+            claseMensajeModalDecalib = "alert-danger";
+            mensajeModalDecalib = "No se pudo guardar el registro DECALIB.";
+        }
+        catch
+        {
+            claseMensajeModalDecalib = "alert-danger";
+            mensajeModalDecalib = "Error de conexión al guardar DECALIB.";
+        }
+        finally
+        {
+            guardandoModalDecalib = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task AceptarModalDecalib()
+    {
+        guardandoModalDecalib = true;
+        mensajeModalDecalib = string.Empty;
+        StateHasChanged();
+
+        var guardados = 0;
+        var errores = 0;
+
+        foreach (var detalle in detallesDecalib)
+        {
+            RecalcularFilaDecalib(detalle);
+
+            HttpResponseWrapper<object> response;
+            if (detalle.Id > 0)
+            {
+                response = await repository.Put($"api/Decalib/{detalle.Id}", detalle);
+            }
+            else
+            {
+                response = await repository.Post($"api/Decalib/by-recalib/{recalibIdSeleccionado}", detalle);
+            }
+
+            if (response.Error)
+            {
+                errores++;
+            }
+            else
+            {
+                guardados++;
+            }
+        }
+
+        guardandoModalDecalib = false;
+
+        if (errores == 0)
+        {
+            claseMensajeModalDecalib = "alert-success";
+            mensajeModalDecalib = $"Se guardaron correctamente {guardados} fila(s).";
+            await CargarDetallesDecalib();
+        }
+        else
+        {
+            claseMensajeModalDecalib = "alert-warning";
+            mensajeModalDecalib = $"Guardadas: {guardados}. Con error: {errores}. Revise e intente nuevamente.";
+        }
+
+        StateHasChanged();
+    }
+
+    private void ActualizarCampoYRecalcular(Decalib detalle, string campo, string? valorTexto)
+    {
+        var valor = ParseDecimal(valorTexto);
+
+        switch (campo)
+        {
+            case nameof(Decalib.Medida):
+                detalle.Medida = valor;
+                break;
+            case nameof(Decalib.X1):
+                detalle.X1 = valor;
+                break;
+            case nameof(Decalib.X2):
+                detalle.X2 = valor;
+                break;
+            case nameof(Decalib.X3):
+                detalle.X3 = valor;
+                break;
+            case nameof(Decalib.X4):
+                detalle.X4 = valor;
+                break;
+            case nameof(Decalib.X5):
+                detalle.X5 = valor;
+                break;
+        }
+
+        RecalcularFilaDecalib(detalle);
+        modalDecalibTieneCambios = true;
+    }
+
+    private static decimal? ParseDecimal(string? texto)
+    {
+        if (string.IsNullOrWhiteSpace(texto))
+        {
+            return null;
+        }
+
+        if (decimal.TryParse(texto, NumberStyles.Any, CultureInfo.CurrentCulture, out var valorActual))
+        {
+            return valorActual;
+        }
+
+        if (decimal.TryParse(texto, NumberStyles.Any, CultureInfo.InvariantCulture, out var valorInvariante))
+        {
+            return valorInvariante;
+        }
+
+        return null;
+    }
+
+    private static string FormatearDecimalEditable(decimal? valor)
+    {
+        return valor?.ToString(CultureInfo.InvariantCulture) ?? string.Empty;
+    }
+
+    private static string FormatearFechaInput(DateTime? fecha)
+    {
+        return fecha?.ToString("yyyy-MM-dd") ?? string.Empty;
+    }
+
+    private static DateTime? ParseFecha(string? valor)
+    {
+        if (string.IsNullOrWhiteSpace(valor))
+        {
+            return null;
+        }
+
+        if (DateTime.TryParse(valor, out var fecha))
+        {
+            return fecha;
+        }
+
+        return null;
+    }
+
+    private bool ValidarNuevoRecalib()
+    {
+        if (string.IsNullOrWhiteSpace(nuevoRecalib.IcNro)
+            || string.IsNullOrWhiteSpace(nuevoRecalib.PatronUtilizado)
+            || nuevoRecalib.FeCalibracion is null
+            || string.IsNullOrWhiteSpace(nuevoRecalib.RequirioAjuste)
+            || nuevoRecalib.FeProxCalibr is null
+            || string.IsNullOrWhiteSpace(nuevoRecalib.Responsable)
+            || nuevoRecalib.AddRecord is null)
+        {
+            claseMensajeModalNuevoRecalib = "alert-warning";
+            mensajeModalNuevoRecalib = "Todos los datos de RECALIB son obligatorios.";
+            return false;
+        }
+
+        var filasConDatos = detallesNuevoRecalib
+            .Where(d => !string.IsNullOrWhiteSpace(d.Patron) || d.Medida.HasValue || d.X1.HasValue || d.X2.HasValue || d.X3.HasValue || d.X4.HasValue || d.X5.HasValue)
+            .ToList();
+
+        if (!filasConDatos.Any())
+        {
+            claseMensajeModalNuevoRecalib = "alert-warning";
+            mensajeModalNuevoRecalib = "Debe agregar al menos una fila en DECALIB con Patrón y Medida.";
+            return false;
+        }
+
+        if (filasConDatos.Any(d => string.IsNullOrWhiteSpace(d.Patron) || !d.Medida.HasValue))
+        {
+            claseMensajeModalNuevoRecalib = "alert-warning";
+            mensajeModalNuevoRecalib = "Cada fila DECALIB con datos debe completar Patrón y Medida.";
+            return false;
+        }
+
+        return true;
+    }
+
+    // ===================================================================
+    // CÁLCULO AUTOMÁTICO DE E-PROM E I-ME
+    // ===================================================================
+    // Fórmulas solicitadas (usando MEDIDA como referencia):
+    // 1) E-PROM = (|X1-MEDIDA| + |X2-MEDIDA| + |X3-MEDIDA| + |X4-MEDIDA| + |X5-MEDIDA|) / 5
+    // 2) I-ME   = 1.6 * sqrt( ((X1-MEDIDA)^2 + (X2-MEDIDA)^2 + (X3-MEDIDA)^2 + (X4-MEDIDA)^2 + (X5-MEDIDA)^2) / 4 )
+    //
+    // Ejemplo guardado para validación:
+    // MEDIDA=10, X1=1, X2=2, X3=3, X4=4, X5=5
+    // Resultado esperado:
+    // E-PROM = 7.000
+    // I-ME   = 12.775
+    private static void RecalcularFilaDecalib(Decalib detalle)
+    {
+        var medida = detalle.Medida ?? 0m;
+        var x1 = detalle.X1 ?? 0m;
+        var x2 = detalle.X2 ?? 0m;
+        var x3 = detalle.X3 ?? 0m;
+        var x4 = detalle.X4 ?? 0m;
+        var x5 = detalle.X5 ?? 0m;
+
+        var eProm = (Math.Abs(x1 - medida)
+                   + Math.Abs(x2 - medida)
+                   + Math.Abs(x3 - medida)
+                   + Math.Abs(x4 - medida)
+                   + Math.Abs(x5 - medida)) / 5m;
+
+        var sumCuadrados = Math.Pow((double)(x1 - medida), 2)
+                         + Math.Pow((double)(x2 - medida), 2)
+                         + Math.Pow((double)(x3 - medida), 2)
+                         + Math.Pow((double)(x4 - medida), 2)
+                         + Math.Pow((double)(x5 - medida), 2);
+
+        var iMe = 1.6m * (decimal)Math.Sqrt(sumCuadrados / 4d);
+        var valorMaximo = 9999.999m;
+
+        detalle.EProm = Math.Min(Math.Round(eProm, 3, MidpointRounding.AwayFromZero), valorMaximo);
+        detalle.IMe = Math.Min(Math.Round(iMe, 3, MidpointRounding.AwayFromZero), valorMaximo);
+    }
+
+    private string LimpiarTexto(string? texto)
+    {
+        if (string.IsNullOrEmpty(texto))
+            return "";
+        
+        return new string(texto.Where(c => c >= 32 || c == '\r' || c == '\n' || c == '\t').ToArray()).Trim();
+    }
+}

@@ -1,13 +1,21 @@
 @page "/graficos-compras-apex"
 @page "/graficos-compras"
+@using IMPLANPROD.Client.Services
 @using ApexCharts
 @using IMPLANPROD.Shared.DTOs
 @using IMPLANPROD.Client.Repositories
 @inject IJSRuntime JSRuntime
 @inject IRepository repository
+@inject PageAccessService PageAccess
 
 <PageTitle>Gráficos de Compras</PageTitle>
 
+@if (validando)
+{
+    <p>Validando acceso...</p>
+}
+else
+{
 <div class="container-fluid">
     <div class="row">
         <div class="col-12">
@@ -230,6 +238,7 @@
         </div>
     </div>
 </div>
+}
 
 @code {
     // Variables de estado
@@ -237,6 +246,7 @@
     private DateTime fechaHasta = DateTime.Now;
     private bool cargando = false;
     private bool graficosGenerados = false;
+    private bool validando = true;
     
     // Variables para estadísticas
     private int totalOrdenes = 0;
@@ -261,10 +271,13 @@
     private ApexChartOptions<DatoMonedaDTO> opcionesDonut = new();
 
     /// <summary>
-    /// Inicialización del componente
+    /// Inicialización del componente - Valida acceso y configura gráficos
     /// </summary>
-    protected override void OnInitialized()
+    protected override async Task OnInitializedAsync()
     {
+        await PageAccess.RequiereAccesoAsync("/graficos-compras");
+        validando = false;
+        
         ConfigurarOpcionesGraficos();
     }
 

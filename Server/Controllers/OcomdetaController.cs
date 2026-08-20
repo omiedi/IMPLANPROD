@@ -23,6 +23,71 @@ namespace IMPLANPROD.Server.Controllers
             _logger = logger;
         }
 
+        [HttpGet("pendientes-por-producto/{codint:int}")]
+        public async Task<ActionResult<List<StockCompraPendienteDTO>>> GetPendientesPorProducto(int codint)
+        {
+            try
+            {
+                var query = from o in _context.Ocomdetas.AsNoTracking()
+                            join p in _context.Proveedores.AsNoTracking()
+                                on (int)(o.NproOcom ?? 0) equals p.Nume_Cli into provJoin
+                            from p in provJoin.DefaultIfEmpty()
+                            where o.CodInte == codint
+                                  && (o.StatOcom ?? 0) < 8
+                                  && o.StatOcom != -1
+                                  && (o.NOrServ ?? 0m) < 1m
+                                  && (o.CantRec ?? 0m) < ((o.CantOcom ?? 0m) - 0.005m)
+                            orderby o.NumeOcom
+                            select new
+                            {
+                                o.NumeOcom,
+                                o.NproOcom,
+                                Proveedor = p != null ? (p.Raso_Cli ?? string.Empty) : string.Empty,
+                                o.CoefUnids,
+                                o.CantOcom,
+                                o.CantRec,
+                                o.FentreSol
+                            };
+
+                var rows = await query.ToListAsync();
+                var result = rows
+                    .Select(x =>
+                    {
+                        var coef = x.CoefUnids ?? 0m;
+                        if (coef < 0.005m)
+                        {
+                            coef = 1m;
+                        }
+
+                        var cacom = (x.CantOcom ?? 0m) * coef;
+                        var carec = (x.CantRec ?? 0m) * coef;
+                        var capen = cacom - carec;
+                        if (capen < 0m)
+                        {
+                            capen = 0m;
+                        }
+
+                        return new StockCompraPendienteDTO
+                        {
+                            NumeOcom = x.NumeOcom ?? 0,
+                            NproOcom = x.NproOcom ?? 0,
+                            Proveedor = x.Proveedor,
+                            CantPendiente = capen,
+                            FechaEntregaSolicitada = x.FentreSol
+                        };
+                    })
+                    .Where(x => x.CantPendiente > 0m)
+                    .ToList();
+
+                return Ok(result);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error al obtener compras pendientes por producto {Codint}", codint);
+                return StatusCode(500, "Error interno del servidor");
+            }
+        }
+
         /// <summary>
         /// Obtiene el detalle de una orden de compra específica
         /// </summary>

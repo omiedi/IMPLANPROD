@@ -4,12 +4,14 @@
     <TargetFramework>net7.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
+    <DefaultItemExcludes>$(DefaultItemExcludes);artifacts\**</DefaultItemExcludes>
   </PropertyGroup>
 
   <ItemGroup>
     <PackageReference Include="Azure.Storage.Blobs" Version="12.23.0" />
     <PackageReference Include="ClosedXML" Version="0.104.2" />
     <PackageReference Include="iTextSharp" Version="5.5.13.4" />
+    <PackageReference Include="MailKit" Version="4.17.0" />
     <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="7.0.0" />
     <PackageReference Include="Microsoft.AspNetCore.Components.WebAssembly.Server" Version="7.0.19" />
     <PackageReference Include="Microsoft.EntityFrameworkCore" Version="7.0.17" />
@@ -22,10 +24,18 @@
       <PrivateAssets>all</PrivateAssets>
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
     </PackageReference>
+    <PackageReference Include="Microsoft.Data.SqlClient" Version="5.2.2" />
+    <PackageReference Include="Azure.Identity" Version="1.11.4" />
+    <PackageReference Include="Microsoft.Bcl.Memory" Version="9.0.1" />
+    <PackageReference Include="PDFsharp-MigraDoc" Version="6.2.4" />
+    <PackageReference Include="QRCoder" Version="1.4.3" />
     <PackageReference Include="Serilog.AspNetCore" Version="8.0.1" />
     <PackageReference Include="Serilog.Sinks.File" Version="5.0.0" />
+    <PackageReference Include="SixLabors.ImageSharp" Version="3.1.10" />
+    <PackageReference Include="System.Text.Json" Version="8.0.5" />
     <PackageReference Include="System.IdentityModel.Tokens.Jwt" Version="8.7.0" />
     <PackageReference Include="System.Linq.Dynamic.Core" Version="1.6.2" />
+    <PackageReference Include="ZXing.Net" Version="0.16.9" />
   </ItemGroup>
 
   <ItemGroup>
@@ -39,6 +49,11 @@
     <Folder Include="wwwroot\uploads\Imagenes\Master\" />
     <Folder Include="wwwroot\uploads\RepalDoc\" />
     <Folder Include="wwwroot\uploads\RepaImagenes\" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Content Remove="wwwroot\Images\logoempresa.png" />
+    <None Include="wwwroot\Images\logoempresa.png" />
   </ItemGroup>
 
 

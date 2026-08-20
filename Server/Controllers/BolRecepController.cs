@@ -1,4 +1,5 @@
 using IMPLANPROD.Server.Data;
+using IMPLANPROD.Server.Services;
 using IMPLANPROD.Shared.DTOs;
 using IMPLANPROD.Shared.Entities;
 using Microsoft.AspNetCore.Mvc;
@@ -11,10 +12,69 @@ namespace MantenimientoImp.Server.Controllers
     public class BolRecepController : ControllerBase
     {
         private readonly DataContext _context;
+        private readonly IDerechosUsuarioService _derechosUsuarioService;
+        private readonly IUsuarioFlexoftService _usuarioFlexoftService;
 
-        public BolRecepController(DataContext context)
+        public BolRecepController(DataContext context, IDerechosUsuarioService derechosUsuarioService, IUsuarioFlexoftService usuarioFlexoftService)
         {
             _context = context;
+            _derechosUsuarioService = derechosUsuarioService;
+            _usuarioFlexoftService = usuarioFlexoftService;
+        }
+
+        [HttpGet("validar-remito")]
+        public async Task<ActionResult> ValidarRemitoAsync([FromQuery] string numeroRemito, [FromQuery] int numeroProveedor)
+        {
+            if (string.IsNullOrWhiteSpace(numeroRemito) || numeroProveedor <= 0)
+            {
+                return Ok(new { Valid = true });
+            }
+
+            var remitoExistente = await _context.Bolreceps
+                .AsNoTracking()
+                .AnyAsync(b => b.NumRemProv == numeroRemito && b.NumProv == numeroProveedor);
+
+            if (remitoExistente)
+            {
+                return BadRequest($"Ya existe una recepción con el remito {numeroRemito} para el proveedor {numeroProveedor}");
+            }
+
+            return Ok(new { Valid = true });
+        }
+
+        [HttpGet("pendientes-por-producto/{codint:int}")]
+        public async Task<ActionResult<List<StockRecepcionPendienteDTO>>> GetPendientesPorProducto(int codint)
+        {
+            try
+            {
+                var query = from b in _context.Bolreceps.AsNoTracking()
+                            join p in _context.Proveedores.AsNoTracking()
+                                on (b.NumProv ?? 0) equals p.Nume_Cli into provJoin
+                            from p in provJoin.DefaultIfEmpty()
+                            where b.Status == 0 && b.CodInte == codint
+                            orderby b.NumeBoRe
+                            select new StockRecepcionPendienteDTO
+                            {
+                                Numebore = (int)(b.NumeBoRe ?? 0m),
+                                NumProv = b.NumProv ?? 0,
+                                Proveedor = p != null ? (p.Raso_Cli ?? string.Empty) : string.Empty,
+                                CantPendiente = (b.CantNom ?? 0m) - (b.CanToApro ?? 0m),
+                                RemitoProveedor = b.NumRemProv ?? string.Empty,
+                                FechaRecepcion = b.FechRecep ?? DateTime.MinValue
+                            };
+
+                var pendientes = await query.ToListAsync();
+
+                pendientes = pendientes
+                    .Where(x => x.CantPendiente > 0m)
+                    .ToList();
+
+                return Ok(pendientes);
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, $"Error al obtener recepciones pendientes: {ex.Message}");
+            }
         }
 
         [HttpPost("recibir")]
@@ -73,8 +133,8 @@ namespace MantenimientoImp.Server.Controllers
                                 .FirstOrDefaultAsync();
 
                             // Generar IdenLote: BR-NNNNNN-II (BR- + 6 dígitos recepción + - + 2 dígitos índice)
-                            var numeroRecepcion = ((int)numeroBoleta).ToString("D6"); // 6 dígitos con ceros a la izquierda
-                            var numeroIndice = index.ToString("D2"); // 2 dígitos con ceros a la izquierda
+                            var numeroRecepcion = ((int)numeroBoleta).ToString();
+                            var numeroIndice = index.ToString();
                             var idenLote = $"BR-{numeroRecepcion}-{numeroIndice}"; // Resultado: BR-019881-01
 
                             // 2. Crear el registro en BOLRECEP
@@ -176,8 +236,8 @@ namespace MantenimientoImp.Server.Controllers
                     foreach (var item in items)
                     {
                         // Generar IdenLote: BR-NNNNNN-II (BR- + 6 dígitos recepción + - + 2 dígitos índice)
-                        var numeroRecepcion = ((int)numeroBoleta).ToString("D6"); // 6 dígitos con ceros a la izquierda
-                        var numeroIndice = index.ToString("D2"); // 2 dígitos con ceros a la izquierda
+                        var numeroRecepcion = ((int)numeroBoleta).ToString();
+                        var numeroIndice = index.ToString();
                         var idenLote = $"BR-{numeroRecepcion}-{numeroIndice}"; // Resultado: BR-019881-01
 
                         var bolRecep = new Bolrecep
@@ -275,25 +335,43 @@ namespace MantenimientoImp.Server.Controllers
             }
         }
 
+        // Devuelve los items de una recepción pendiente.
+        // Importante: la grilla de pendientes agrupa por (NumeBoRe + NumOC), por lo que una misma
+        // recepción puede aparecer en varias filas si tiene distintas órdenes de compra.
+        // Por eso este endpoint acepta un parámetro opcional numeroOrdenCompra para traer SOLO
+        // los items que correspondan a esa recepción Y a esa orden de compra seleccionada.
+        // Si numeroOrdenCompra es null, se devuelven todos los items de la recepción (comportamiento anterior).
         [HttpGet("items/{numeroRecepcion}")]
-        public async Task<ActionResult<List<RecepcionItemDTO>>> GetItemsRecepcion(int numeroRecepcion)
+        public async Task<ActionResult<List<RecepcionItemDTO>>> GetItemsRecepcion(int numeroRecepcion, [FromQuery] int? numeroOrdenCompra = null)
         {
             try
             {
-                var items = await _context.Bolreceps
-                    .Where(b => b.NumeBoRe == numeroRecepcion && b.Status == 0) // Solo items pendientes (Status = 0)
-                    .Select(b => new RecepcionItemDTO
-                    {
-                        CodigoInterno = b.CodInte ?? 0,
-                        NumeBore = (int?)b.NumeBoRe,
-                        CodigoExterno = b.CodExte,
-                        DescripcionItem = b.DescripItem,
-                        CantidadNominal = b.CantNom ?? 0,
-                        Unidad = b.Unidad,
-                        CantidadRechazada = b.CanToRech,
-                        CantidadFaltante = b.CanToFalta,
-                        Status = b.Status ?? 0
-                    })
+                var numeroRecepcionDecimal = (decimal)numeroRecepcion;
+
+                var items = await (
+                        from b in _context.Bolreceps
+                        join od in _context.Ocomdetas
+                            on new { NumeOcom = b.NumOC, NuOrdItem = b.NroItemOC }
+                            equals new { NumeOcom = od.NumeOcom, NuOrdItem = od.NuOrdItem }
+                            into odJoin
+                        from od in odJoin.DefaultIfEmpty()
+                        where b.NumeBoRe == numeroRecepcionDecimal && b.Status == 0
+                              && (numeroOrdenCompra == null || b.NumOC == numeroOrdenCompra)
+                        select new RecepcionItemDTO
+                        {
+                            CodigoInterno = b.CodInte ?? 0,
+                            NumeBore = (int?)b.NumeBoRe,
+                            NumeroOrdenCompra = b.NumOC,
+                            FechaEntregaSolicitada = od != null ? od.FentreSol : null,
+                            FechaRecepcion = b.FechRecep,
+                            CodigoExterno = b.CodExte,
+                            DescripcionItem = b.DescripItem,
+                            CantidadNominal = b.CantNom ?? 0,
+                            Unidad = b.Unidad,
+                            CantidadRechazada = b.CanToRech,
+                            CantidadFaltante = b.CanToFalta,
+                            Status = b.Status ?? 0
+                        })
                     .ToListAsync();
 
                 Console.WriteLine($"[BolRecep] Items pendientes encontrados para recepción {numeroRecepcion}: {items.Count}");
@@ -312,10 +390,12 @@ namespace MantenimientoImp.Server.Controllers
         {
             try
             {
+                var numeroRecepcionDecimal = (decimal)numeroRecepcion;
+
                 foreach (var item in items)
                 {
                     var bolrecep = await _context.Bolreceps
-                        .Where(b => b.NumeBoRe == numeroRecepcion &&
+                        .Where(b => b.NumeBoRe == numeroRecepcionDecimal &&
                                b.CodInte == item.CodigoInterno)
                         .FirstOrDefaultAsync();
 
@@ -346,8 +426,10 @@ namespace MantenimientoImp.Server.Controllers
         {
             try
             {
+                var numeroRecepcionDecimal = (decimal)numeroRecepcion;
+
                 var recepcion = await _context.Bolreceps
-                    .FirstOrDefaultAsync(b => b.NumeBoRe == numeroRecepcion);
+                    .FirstOrDefaultAsync(b => b.NumeBoRe == numeroRecepcionDecimal);
 
                 if (recepcion == null)
                     return NotFound($"No se encontró la recepción {numeroRecepcion}");
@@ -371,8 +453,10 @@ namespace MantenimientoImp.Server.Controllers
         {
             try
             {
+                var numeroRecepcionDecimal = (decimal)numeroRecepcion;
+
                 var recepcionesABorrar = await _context.Bolreceps
-                    .Where(b => b.NumeBoRe == numeroRecepcion)
+                    .Where(b => b.NumeBoRe == numeroRecepcionDecimal)
                     .ToListAsync();
 
                 if (!recepcionesABorrar.Any())
@@ -425,6 +509,9 @@ namespace MantenimientoImp.Server.Controllers
         {
             try
             {
+                // Verificar derecho APRSINLI en DER_ACCE
+                const string COD_APLI = "APRSINLI";
+
                 // Hacer el JOIN con MASTER
                 var query = from b in _context.Bolreceps
                             join m in _context.masters on b.CodInte equals m.Codint into masterJoin
@@ -696,6 +783,110 @@ namespace MantenimientoImp.Server.Controllers
             catch (Exception ex)
             {
                 return StatusCode(500, $"Error al obtener datos de gráficos: {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// Valida si el usuario puede aprobar una recepción según la tolerancia de días configurada
+        /// </summary>
+        /// <param name="numeroRecepcion">Número de recepción a validar</param>
+        /// <returns>Resultado de la validación con mensaje si corresponde</returns>
+        [HttpGet("validar-tolerancia-aprobacion/{numeroRecepcion}")]
+        public async Task<ActionResult<ValidacionToleranciaDTO>> ValidarToleranciaAprobacionAsync(int numeroRecepcion)
+        {
+            try
+            {
+                // Obtener el IdFlexoft del usuario actual usando el servicio
+                int? idFlexoft = _usuarioFlexoftService.InterObtenerIdFlexoft(User);
+                if (!idFlexoft.HasValue)
+                {
+                    return BadRequest("Sesión caducada - Debe cerrar sesión y loguearse nuevamente.");
+                }
+
+                // Verificar derecho APRSINLI en DER_ACCE
+                const string COD_APLI = "APRSINLI";
+                const string DES_APLI = "";
+                var nivelAcceso = await _derechosUsuarioService.VerificarDerechoAsync((short)idFlexoft.Value, COD_APLI, DES_APLI);
+
+                // Si tiene nivel 2 (escritura), puede aprobar sin límite de días
+                if (nivelAcceso >= 2)
+                {
+                    return Ok(new ValidacionToleranciaDTO
+                    {
+                        PuedeAprobar = true,
+                        Mensaje = null
+                    });
+                }
+
+                // Si no tiene el derecho, validar tolerancia de días
+                // Obtener tolerancia desde FLEXCRL (BOLRECEP/TOLEAPRO)
+                const string PROBUS = "BOLRECEP";
+                const string CLABUS = "TOLEAPRO";
+
+                var configTolerancia = await _context.Flexcrls
+                    .AsNoTracking()
+                    .FirstOrDefaultAsync(f => f.PROBUS == PROBUS && f.CLABUS == CLABUS);
+
+                int toleranciaDias = 0;
+                if (configTolerancia != null && !string.IsNullOrEmpty(configTolerancia.VALCONTROL))
+                {
+                    if (int.TryParse(configTolerancia.VALCONTROL.Trim(), out int dias))
+                    {
+                        toleranciaDias = dias;
+                    }
+                }
+
+                // Si no hay tolerancia configurada (o es 0), no se valida
+                if (toleranciaDias <= 0)
+                {
+                    return Ok(new ValidacionToleranciaDTO
+                    {
+                        PuedeAprobar = true,
+                        Mensaje = null
+                    });
+                }
+
+                // Obtener fecha de recepción
+                var recepcion = await _context.Bolreceps
+                    .AsNoTracking()
+                    .Where(b => b.NumeBoRe == numeroRecepcion)
+                    .Select(b => b.FechRecep)
+                    .FirstOrDefaultAsync();
+
+                if (!recepcion.HasValue)
+                {
+                    return BadRequest("No se encontró la recepción");
+                }
+
+                // Obtener fecha del servidor
+                var fechaServidor = await _context.Database
+                    .SqlQueryRaw<DateTime>("SELECT GETDATE() AS Value")
+                    .FirstOrDefaultAsync();
+
+                // Calcular días de diferencia
+                var diasDiferencia = (fechaServidor - recepcion.Value).Days;
+
+                // Si excede la tolerancia, bloquear aprobación
+                if (diasDiferencia > toleranciaDias)
+                {
+                    return Ok(new ValidacionToleranciaDTO
+                    {
+                        PuedeAprobar = false,
+                        Mensaje = $"Atención plazo de tolerancia entre la recepción y Aprobación Vencido\nFecha Recepción: {recepcion.Value:dd/MM/yyyy}\nDías pasados: {diasDiferencia}\nTolerancia: {toleranciaDias}"
+                    });
+                }
+
+                // Puede aprobar
+                return Ok(new ValidacionToleranciaDTO
+                {
+                    PuedeAprobar = true,
+                    Mensaje = null
+                });
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[BolRecep] Error al validar tolerancia: {ex.Message}");
+                return BadRequest(ex.Message);
             }
         }
     }

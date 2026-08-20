@@ -1,0 +1,194 @@
+@page "/notificaciones/admin/create"
+@using Microsoft.AspNetCore.Authorization
+@attribute [Authorize(Roles = "SUPERADMIN")]
+@using Microsoft.AspNetCore.Components
+@using Microsoft.AspNetCore.Components.Forms
+@using IMPLANPROD.Client.Repositories
+@using IMPLANPROD.Client.Shared.Components
+@using IMPLANPROD.Shared.DTOs.Notificaciones
+@using IMPLANPROD.Shared.Entities
+@inject IRepository repository
+@inject NavigationManager navigationManager
+@inject SweetAlertService sweetAlertService
+
+<PageTitle>Nueva notificación</PageTitle>
+
+<h3>Nueva notificación</h3>
+
+<div class="mb-3">
+    <div class="card mb-2">
+        <div class="card-header bg-info text-white p-2">
+            <button class="btn btn-link text-white text-decoration-none w-100 text-start p-0"
+                    type="button"
+                    @onclick="() => mostrarInstructivoUsuario = !mostrarInstructivoUsuario">
+                <i class="fas @(mostrarInstructivoUsuario ? "fa-chevron-down" : "fa-chevron-right") me-2"></i>
+                <strong>Instructivo para el Usuario</strong>
+            </button>
+        </div>
+        @if (mostrarInstructivoUsuario)
+        {
+            <div class="card-body">
+                <h6 class="text-primary"><i class="fas fa-info-circle"></i> ¿Qué estás creando?</h6>
+                <p>
+                    Estás creando una notificación manual que le aparecerá a todos los usuarios o a usuarios específicos.
+                </p>
+
+                <h6 class="text-primary"><i class="fas fa-list-check"></i> Campos importantes</h6>
+                <ul class="mb-0">
+                    <li><strong>Título:</strong> obligatorio.</li>
+                    <li><strong>Resumen:</strong> texto corto (opcional).</li>
+                    <li><strong>Detalle HTML:</strong> contenido completo (podés usar HTML simple).</li>
+                    <li><strong>Para todos:</strong> si lo activás, no hace falta elegir destinatarios.</li>
+                    <li><strong>Destinatarios:</strong> si NO es para todos, seleccioná al menos 1 usuario.</li>
+                    <li><strong>Vence:</strong> si completás fecha, luego de esa fecha deja de mostrarse.</li>
+                </ul>
+            </div>
+        }
+    </div>
+
+    <InstructivoDesarrollador>
+        <h6 class="text-info"><i class="fas fa-code"></i> API</h6>
+        <ul>
+            <li><code>POST api/notificaciones/admin</code></li>
+            <li><code>GET /api/Usuarios/activos</code></li>
+        </ul>
+
+        <h6 class="text-info mt-3"><i class="fas fa-sitemap"></i> Servicios involucrados</h6>
+        <ul>
+            <li><strong>Client:</strong> <code>IRepository</code>, <code>SweetAlertService</code></li>
+            <li><strong>Server:</strong> <code>NotificacionesService</code> (AdminCreate), <code>DataContext</code></li>
+        </ul>
+
+        <h6 class="text-info mt-3"><i class="fas fa-project-diagram"></i> Flujo (alto nivel)</h6>
+        <pre class="bg-light p-2 rounded"><code>OnInitialized
+  ↓
+GET /api/Usuarios/activos
+  ↓
+Inicializa dictionary selected
+
+Submit
+  ↓
+Construye UsuarioIds (checked)
+  ↓
+POST api/notificaciones/admin
+  ↓
+NavigateTo /notificaciones/admin</code></pre>
+
+        <h6 class="text-info mt-3"><i class="fas fa-shield-alt"></i> Validaciones / reglas</h6>
+        <ul class="mb-0">
+            <li><strong>Destino:</strong> si <code>EsParaTodos</code> es false, debe haber al menos 1 <code>UsuarioId</code>.</li>
+            <li><strong>Contenido:</strong> <code>Titulo</code> requerido (validación server).</li>
+        </ul>
+        <h6 class="text-info mt-3"><i class="fas fa-folder-open"></i> Archivos</h6>
+        <ul class="mb-0">
+            <li><code>Client/Pages/Notificaciones/AdminCreate.razor</code></li>
+            <li><code>Server/Controllers/NotificacionesAdminController.cs</code></li>
+        </ul>
+    </InstructivoDesarrollador>
+</div>
+
+@if (usuarios is null)
+{
+    <div class="spinner" />
+}
+else
+{
+    <EditForm Model="model" OnValidSubmit="CreateAsync">
+        <DataAnnotationsValidator />
+        <ValidationSummary />
+
+        <div class="mb-3">
+            <label class="form-label">Título</label>
+            <InputText class="form-control" @bind-Value="model.Titulo" />
+            <ValidationMessage For="() => model.Titulo" />
+        </div>
+
+        <div class="mb-3">
+            <label class="form-label">Resumen</label>
+            <InputText class="form-control" @bind-Value="model.Resumen" />
+        </div>
+
+        <div class="mb-3">
+            <label class="form-label">Detalle HTML</label>
+            <InputTextArea class="form-control" @bind-Value="model.DetalleHtml" rows="8" />
+        </div>
+
+        <div class="row">
+            <div class="col-md-3 mb-3">
+                <label class="form-label">Para todos</label>
+                <InputCheckbox class="form-check-input ms-2" @bind-Value="model.EsParaTodos" />
+            </div>
+            <div class="col-md-3 mb-3">
+                <label class="form-label">Vence</label>
+                <InputDate class="form-control" @bind-Value="model.FechaExpiracion" />
+            </div>
+        </div>
+
+        @if (!model.EsParaTodos)
+        {
+            <div class="mb-3">
+                <label class="form-label">Destinatarios</label>
+                <div style="max-height: 260px; overflow-y: auto;" class="border rounded p-2">
+                    @foreach (var u in usuarios)
+                    {
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="usr_@u.Id" @bind="selected[u.Id]" />
+                            <label class="form-check-label" for="usr_@u.Id">@u.NombreUsuario (Id: @u.Id)</label>
+                        </div>
+                    }
+                </div>
+            </div>
+        }
+
+        <button class="btn btn-primary" type="submit">Guardar</button>
+        <button class="btn btn-secondary" type="button" @onclick="Return">Volver</button>
+    </EditForm>
+}
+
+@code {
+    private NotificacionAdminUpsertDTO model = new();
+    private List<Usuario>? usuarios;
+    private Dictionary<int, bool> selected = new();
+
+    private bool mostrarInstructivoUsuario;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadUsuariosAsync();
+    }
+
+    private async Task LoadUsuariosAsync()
+    {
+        var response = await repository.Get<List<Usuario>>("/api/Usuarios/activos");
+        if (response.Error)
+        {
+            var message = await response.GetErrorMessageAsync();
+            await sweetAlertService.FireAsync("Error", message, SweetAlertIcon.Error);
+            usuarios = new List<Usuario>();
+            return;
+        }
+
+        usuarios = response.Response ?? new List<Usuario>();
+        selected = usuarios.ToDictionary(x => x.Id, _ => false);
+    }
+
+    private async Task CreateAsync()
+    {
+        model.UsuarioIds = selected.Where(kv => kv.Value).Select(kv => kv.Key).ToList();
+
+        var httpResponse = await repository.Post("api/notificaciones/admin", model);
+        if (httpResponse.Error)
+        {
+            var message = await httpResponse.GetErrorMessageAsync();
+            await sweetAlertService.FireAsync("Error", message, SweetAlertIcon.Error);
+            return;
+        }
+
+        Return();
+    }
+
+    private void Return()
+    {
+        navigationManager.NavigateTo("/notificaciones/admin");
+    }
+}

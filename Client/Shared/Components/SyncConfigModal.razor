@@ -369,49 +369,241 @@ private Task ProcesarSecOperUpsertAsync(SyncSecOperDTO syncDto)</code></pre>
 
                         @if (config.GeneraScriptSync)
                         {
-                            <div class="mb-3">
-                                <div class="form-check form-switch">
-                                    <input class="form-check-input" type="checkbox" id="esCentral" 
-                                           @bind="config.EsCentral">
-                                    <label class="form-check-label" for="esCentral">
-                                        <strong>Este equipo es la Central</strong>
-                                    </label>
+                            <!-- Sección Sincronización de Productos -->
+                            <div class="card mb-3">
+                                <div class="card-header bg-primary text-white">
+                                    <h6 class="mb-0"><i class="oi oi-box"></i> Sincronización de Productos</h6>
                                 </div>
-                                <small class="text-muted">
-                                    Si es Central, genera archivos. Si es Sucursal, procesa archivos.
-                                </small>
-                            </div>
-
-                            <div class="mb-3">
-                                <label for="rutaIntercambio" class="form-label">
-                                    <strong>Ruta de carpeta compartida (Intercambio)</strong>
-                                </label>
-                                <div class="input-group">
-                                    <input type="text" class="form-control" id="rutaIntercambio" 
-                                           @bind="config.RutaIntercambio" 
-                                           placeholder="Ej: \\servidor\intercambio o C:\intercambio">
-                                    <button class="btn btn-outline-secondary" type="button" @onclick="ValidarRuta">
-                                        <i class="oi oi-check"></i> Validar
-                                    </button>
-                                </div>
-                                <small class="text-muted">
-                                    Ruta de red compartida o local donde se guardarán/leerán los archivos de sincronización.
-                                </small>
-                                @if (!string.IsNullOrEmpty(mensajeValidacion))
-                                {
-                                    <div class="alert @(rutaValida ? "alert-success" : "alert-warning") mt-2 py-2">
-                                        <small>@mensajeValidacion</small>
+                                <div class="card-body">
+                                    <div class="mb-3">
+                                        <div class="form-check form-switch">
+                                            <input class="form-check-input" type="checkbox" id="generaProductos" 
+                                                   @bind="config.GeneraProductos">
+                                            <label class="form-check-label" for="generaProductos">
+                                                <strong>Generar archivos de productos (Central)</strong>
+                                            </label>
+                                        </div>
+                                        <small class="text-muted">
+                                            Al activar, este equipo generará archivos JSON cuando se creen o modifiquen productos (Master, Formulas, SecOper).
+                                        </small>
                                     </div>
-                                }
+
+                                    <div class="mb-3">
+                                        <div class="form-check form-switch">
+                                            <input class="form-check-input" type="checkbox" id="procesaProductos" 
+                                                   @bind="config.ProcesaProductos">
+                                            <label class="form-check-label" for="procesaProductos">
+                                                <strong>Procesar archivos de productos (Sucursales)</strong>
+                                            </label>
+                                        </div>
+                                        <small class="text-muted">
+                                            Al activar, este equipo procesará archivos JSON generados por la Central.
+                                        </small>
+                                    </div>
+
+                                    <div class="mb-3">
+                                        <label for="rutaIntercambio" class="form-label">
+                                            <strong>Ruta de carpeta compartida (Intercambio) para sincronizar productos</strong>
+                                        </label>
+                                        <div class="input-group">
+                                            <input type="text" class="form-control" id="rutaIntercambio" 
+                                                   @bind="config.RutaIntercambio" 
+                                                   placeholder="Ej: \\servidor\intercambio o C:\intercambio">
+                                            <button class="btn btn-outline-secondary" type="button" @onclick="ValidarRuta">
+                                                <i class="oi oi-check"></i> Validar
+                                            </button>
+                                        </div>
+                                        <small class="text-muted">
+                                            Ruta de red compartida o local donde se guardarán/leerán los archivos de sincronización de productos (Master, Formulas, SecOper).
+                                        </small>
+                                        @if (!string.IsNullOrEmpty(mensajeValidacion))
+                                        {
+                                            <div class="alert @(rutaValida ? "alert-success" : "alert-warning") mt-2 py-2">
+                                                <small>@mensajeValidacion</small>
+                                            </div>
+                                        }
+                                    </div>
+                                </div>
                             </div>
 
-                            @if (!config.EsCentral)
-                            {
-                                <div class="alert alert-warning">
-                                    <i class="oi oi-warning"></i>
-                                    <strong>Modo Sucursal:</strong> Para procesar archivos pendientes, usa el botón "Sincronizar" en la página de productos.
+                            <!-- Sección Sincronización de Remitos -->
+                            <div class="card mb-3">
+                                <div class="card-header bg-success text-white">
+                                    <h6 class="mb-0"><i class="oi oi-file"></i> Sincronización de Remitos</h6>
                                 </div>
-                            }
+                                <div class="card-body">
+                                    <div class="mb-3">
+                                        <div class="form-check form-switch">
+                                            <input class="form-check-input" type="checkbox" id="generaRemitos" 
+                                                   @bind="config.GeneraRemitos">
+                                            <label class="form-check-label" for="generaRemitos">
+                                                <strong>Generar archivos de remitos (Sucursal Neuquén)</strong>
+                                            </label>
+                                        </div>
+                                        <small class="text-muted">
+                                            Al activar, este equipo generará archivos JSON cuando se creen o modifiquen remitos.
+                                        </small>
+                                    </div>
+
+                                    <div class="mb-3">
+                                        <div class="form-check form-switch">
+                                            <input class="form-check-input" type="checkbox" id="procesaRemitos" 
+                                                   @bind="config.ProcesaRemitos">
+                                            <label class="form-check-label" for="procesaRemitos">
+                                                <strong>Procesar archivos de remitos (Central)</strong>
+                                            </label>
+                                        </div>
+                                        <small class="text-muted">
+                                            Al activar, este equipo procesará archivos JSON generados por la Sucursal de Neuquén.
+                                        </small>
+                                    </div>
+
+                                    <div class="mb-3">
+                                        <label for="rutaIntercambioRemitos" class="form-label">
+                                            <strong>Ruta de carpeta compartida (Intercambio) para sincronizar remitos</strong>
+                                        </label>
+                                        <div class="input-group">
+                                            <input type="text" class="form-control" id="rutaIntercambioRemitos" 
+                                                   @bind="config.RutaIntercambioRemitos" 
+                                                   placeholder="Ej: \\servidor\intercambio-remitos o C:\intercambio-remitos">
+                                            <button class="btn btn-outline-secondary" type="button" @onclick="ValidarRutaRemitos">
+                                                <i class="oi oi-check"></i> Validar
+                                            </button>
+                                        </div>
+                                        <small class="text-muted">
+                                            Ruta de red compartida o local donde se guardarán/leerán los archivos de sincronización de remitos (Central ↔ Sucursal Neuquén).
+                                        </small>
+                                        <small class="text-muted">
+                                            <strong>Esto es para actualizar los movimientos de Neuquén en Avellaneda y mantener el stock del depósito 10.</strong>
+                                        </small>
+                                        @if (!string.IsNullOrEmpty(mensajeValidacionRemitos))
+                                        {
+                                            <div class="alert @(rutaValidaRemitos ? "alert-success" : "alert-warning") mt-2 py-2">
+                                                <small>@mensajeValidacionRemitos</small>
+                                            </div>
+                                        }
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Sección Sincronización de Órdenes de Reparación -->
+                            <div class="card mb-3">
+                                <div class="card-header bg-warning text-dark">
+                                    <h6 class="mb-0"><i class="oi oi-wrench"></i> Sincronización de Órdenes de Reparación</h6>
+                                </div>
+                                <div class="card-body">
+                                    <div class="mb-3">
+                                        <div class="form-check form-switch">
+                                            <input class="form-check-input" type="checkbox" id="generaReparaciones"
+                                                   @bind="config.GeneraReparaciones">
+                                            <label class="form-check-label" for="generaReparaciones">
+                                                <strong>Generar archivos de reparaciones (Sucursal)</strong>
+                                            </label>
+                                        </div>
+                                        <small class="text-muted">
+                                            Al activar, este equipo generará archivos JSON con las órdenes de reparación.
+                                        </small>
+                                    </div>
+
+                                    <div class="mb-3">
+                                        <div class="form-check form-switch">
+                                            <input class="form-check-input" type="checkbox" id="procesaReparaciones"
+                                                   @bind="config.ProcesaReparaciones">
+                                            <label class="form-check-label" for="procesaReparaciones">
+                                                <strong>Procesar archivos de reparaciones (Central)</strong>
+                                            </label>
+                                        </div>
+                                        <small class="text-muted">
+                                            Al activar, este equipo procesará archivos JSON de órdenes de reparación generados por la Sucursal.
+                                        </small>
+                                    </div>
+
+                                    <div class="mb-3">
+                                        <label for="rutaIntercambioReparaciones" class="form-label">
+                                            <strong>Ruta de carpeta compartida (Intercambio) para sincronizar reparaciones</strong>
+                                        </label>
+                                        <div class="input-group">
+                                            <input type="text" class="form-control" id="rutaIntercambioReparaciones"
+                                                   @bind="config.RutaIntercambioReparaciones"
+                                                   placeholder="Ej: \\servidor\intercambio-reparaciones o C:\intercambio-reparaciones">
+                                            <button class="btn btn-outline-secondary" type="button" @onclick="ValidarRutaReparaciones">
+                                                <i class="oi oi-check"></i> Validar
+                                            </button>
+                                        </div>
+                                        <small class="text-muted">
+                                            Ruta de red compartida o local donde se guardarán/leerán los archivos de sincronización de órdenes de reparación (Central ↔ Sucursal).
+                                        </small>
+                                        @if (!string.IsNullOrEmpty(mensajeValidacionReparaciones))
+                                        {
+                                            <div class="alert @(rutaValidaReparaciones ? "alert-success" : "alert-warning") mt-2 py-2">
+                                                <small>@mensajeValidacionReparaciones</small>
+                                            </div>
+                                        }
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Sección Sincronización de Ajustes de Stock -->
+                            <div class="card mb-3">
+                                <div class="card-header bg-info text-white">
+                                    <h6 class="mb-0"><i class="oi oi-adjust"></i> Sincronización de Ajustes de Stock</h6>
+                                </div>
+                                <div class="card-body">
+                                    <div class="mb-3">
+                                        <div class="form-check form-switch">
+                                            <input class="form-check-input" type="checkbox" id="generaAjustes"
+                                                   @bind="config.GeneraAjustes">
+                                            <label class="form-check-label" for="generaAjustes">
+                                                <strong>Generar archivos de ajustes (Sucursal)</strong>
+                                            </label>
+                                        </div>
+                                        <small class="text-muted">
+                                            Al activar, este equipo generará archivos JSON con los ajustes de stock.
+                                        </small>
+                                    </div>
+
+                                    <div class="mb-3">
+                                        <div class="form-check form-switch">
+                                            <input class="form-check-input" type="checkbox" id="procesaAjustes"
+                                                   @bind="config.ProcesaAjustes">
+                                            <label class="form-check-label" for="procesaAjustes">
+                                                <strong>Procesar archivos de ajustes (Central)</strong>
+                                            </label>
+                                        </div>
+                                        <small class="text-muted">
+                                            Al activar, este equipo procesará archivos JSON de ajustes de stock generados por la Sucursal.
+                                        </small>
+                                    </div>
+
+                                    <div class="mb-3">
+                                        <label for="rutaIntercambioAjustes" class="form-label">
+                                            <strong>Ruta de carpeta compartida (Intercambio) para sincronizar ajustes</strong>
+                                        </label>
+                                        <div class="input-group">
+                                            <input type="text" class="form-control" id="rutaIntercambioAjustes"
+                                                   @bind="config.RutaIntercambioAjustes"
+                                                   placeholder="Ej: \\servidor\intercambio-ajustes o C:\intercambio-ajustes">
+                                            <button class="btn btn-outline-secondary" type="button" @onclick="ValidarRutaAjustes">
+                                                <i class="oi oi-check"></i> Validar
+                                            </button>
+                                        </div>
+                                        <small class="text-muted">
+                                            Ruta de red compartida o local donde se guardarán/leerán los archivos de sincronización de ajustes de stock (Central ↔ Sucursal).
+                                        </small>
+                                        @if (!string.IsNullOrEmpty(mensajeValidacionAjustes))
+                                        {
+                                            <div class="alert @(rutaValidaAjustes ? "alert-success" : "alert-warning") mt-2 py-2">
+                                                <small>@mensajeValidacionAjustes</small>
+                                            </div>
+                                        }
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="alert alert-info">
+                                <i class="oi oi-info"></i>
+                                <strong>Nota:</strong> Para cada tipo de sincronización, solo debe estar activada una opción (generar O procesar).
+                            </div>
                         }
                     }
                 </div>
@@ -442,6 +634,12 @@ private Task ProcesarSecOperUpsertAsync(SyncSecOperDTO syncDto)</code></pre>
     private bool isLoading = false;
     private string mensajeValidacion = string.Empty;
     private bool rutaValida = false;
+    private string mensajeValidacionRemitos = string.Empty;
+    private bool rutaValidaRemitos = false;
+    private string mensajeValidacionReparaciones = string.Empty;
+    private bool rutaValidaReparaciones = false;
+    private string mensajeValidacionAjustes = string.Empty;
+    private bool rutaValidaAjustes = false;
     private bool mostrarInstructivoUsuario = false;
 
     protected override async Task OnParametersSetAsync()
@@ -499,6 +697,96 @@ private Task ProcesarSecOperUpsertAsync(SyncSecOperDTO syncDto)</code></pre>
         }
     }
 
+    /// <summary>
+    /// Valida la ruta de intercambio para remitos
+    /// Reutiliza el mismo endpoint de validación que se usa para productos
+    /// </summary>
+    private async Task ValidarRutaRemitos()
+    {
+        if (string.IsNullOrWhiteSpace(config.RutaIntercambioRemitos))
+        {
+            mensajeValidacionRemitos = "Debe ingresar una ruta";
+            rutaValidaRemitos = false;
+            return;
+        }
+
+        try
+        {
+            var request = new ValidarRutaDTO { Ruta = config.RutaIntercambioRemitos };
+            var response = await repository.Post<ValidarRutaDTO, ValidarRutaResponseDTO>("api/sync/validar-ruta", request);
+            if (!response.Error && response.Response != null)
+            {
+                rutaValidaRemitos = response.Response.Valida;
+                mensajeValidacionRemitos = response.Response.Mensaje;
+            }
+        }
+        catch (Exception ex)
+        {
+            mensajeValidacionRemitos = $"Error al validar ruta: {ex.Message}";
+            rutaValidaRemitos = false;
+        }
+    }
+
+    /// <summary>
+    /// Valida la ruta de intercambio para órdenes de reparación
+    /// Reutiliza el mismo endpoint de validación que se usa para productos
+    /// </summary>
+    private async Task ValidarRutaReparaciones()
+    {
+        if (string.IsNullOrWhiteSpace(config.RutaIntercambioReparaciones))
+        {
+            mensajeValidacionReparaciones = "Debe ingresar una ruta";
+            rutaValidaReparaciones = false;
+            return;
+        }
+
+        try
+        {
+            var request = new ValidarRutaDTO { Ruta = config.RutaIntercambioReparaciones };
+            var response = await repository.Post<ValidarRutaDTO, ValidarRutaResponseDTO>("api/sync/validar-ruta", request);
+            if (!response.Error && response.Response != null)
+            {
+                rutaValidaReparaciones = response.Response.Valida;
+                mensajeValidacionReparaciones = response.Response.Mensaje;
+            }
+        }
+        catch (Exception ex)
+        {
+            mensajeValidacionReparaciones = $"Error al validar ruta: {ex.Message}";
+            rutaValidaReparaciones = false;
+        }
+    }
+
+    /// <summary>
+    /// Valida la ruta de intercambio para ajustes de stock
+    /// Reutiliza el mismo endpoint de validación que se usa para productos
+    /// </summary>
+    private async Task ValidarRutaAjustes()
+    {
+        if (string.IsNullOrWhiteSpace(config.RutaIntercambioAjustes))
+        {
+            mensajeValidacionAjustes = "Debe ingresar una ruta";
+            rutaValidaAjustes = false;
+            return;
+        }
+
+        try
+        {
+            var request = new ValidarRutaDTO { Ruta = config.RutaIntercambioAjustes };
+            var response = await repository.Post<ValidarRutaDTO, ValidarRutaResponseDTO>("api/sync/validar-ruta", request);
+            if (!response.Error && response.Response != null)
+            {
+                rutaValidaAjustes = response.Response.Valida;
+                mensajeValidacionAjustes = response.Response.Mensaje;
+            }
+        }
+        catch (Exception ex)
+        {
+            mensajeValidacionAjustes = $"Error al validar ruta: {ex.Message}";
+            rutaValidaAjustes = false;
+        }
+    }
+
     private async Task GuardarConfiguracion()
     {
         try
@@ -537,6 +825,12 @@ private Task ProcesarSecOperUpsertAsync(SyncSecOperDTO syncDto)</code></pre>
     {
         mensajeValidacion = string.Empty;
         rutaValida = false;
+        mensajeValidacionRemitos = string.Empty;
+        rutaValidaRemitos = false;
+        mensajeValidacionReparaciones = string.Empty;
+        rutaValidaReparaciones = false;
+        mensajeValidacionAjustes = string.Empty;
+        rutaValidaAjustes = false;
         await OnCerrar.InvokeAsync();
     }
 }

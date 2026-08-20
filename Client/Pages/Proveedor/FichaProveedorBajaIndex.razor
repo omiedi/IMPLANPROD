@@ -1,9 +1,12 @@
 @page "/ficha-proveedor-baja"
+@using IMPLANPROD.Client.Services
 @using IMPLANPROD.Shared.Entities
 @inject IRepository repository
 @using IMPLANPROD.Shared.DTOs
 @inject NavigationManager NavigationManager
 @inject SweetAlertService sweetAlertService
+@inject PageAccessService PageAccess
+
 
 <!--
     Componente: FichaProveedorBajaIndex.razor
@@ -133,6 +136,7 @@ else
     /// </summary>
     protected override async Task OnInitializedAsync()
     {
+        await PageAccess.RequiereAccesoAsync("/ficha-proveedor-baja");   // ? validación
         await LoadAsync();
     }
 

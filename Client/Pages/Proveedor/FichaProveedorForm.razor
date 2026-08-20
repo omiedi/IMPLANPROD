@@ -1,8 +1,10 @@
 @page "/ficha-proveedor-form/{Id:int?}"
+@using IMPLANPROD.Client.Services
 @using IMPLANPROD.Shared.Entities
 @inject IRepository repository
 @inject NavigationManager NavigationManager
 @inject SweetAlertService sweetAlertService
+@inject PageAccessService PageAccess
 
 <!--
     Componente: FichaProveedorForm.razor
@@ -69,7 +71,7 @@
                 <!-- Código de Proveedor reducido -->
                 <div class="col-auto" style="min-width:120px;max-width:140px;">
                     <label class="fw-bold small text-secondary">Código</label>
-                    <input type="text" class="form-control cabecera-input" @bind="Proveedor.Codi_Cli" />
+                    <input type="text" class="form-control cabecera-input" @bind="Proveedor.Codi_Cli" readonly />
                 </div>
                 <!-- Razón Social más amplia -->
                 <div class="col flex-grow-1">
@@ -302,6 +304,7 @@
 
     protected override async Task OnInitializedAsync()
     {
+        await PageAccess.RequiereAccesoAsync("/ficha-proveedor-form");   // ? validación
         Paises = (await repository.Get<List<Country>>("/api/countries/combo")).Response ?? new List<Country>();
         if (!string.IsNullOrEmpty(Proveedor.Pais_Cli))
         {

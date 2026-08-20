@@ -317,7 +317,8 @@ namespace IMPLANPROD.Server.Controllers
         public async Task<ActionResult<List<Movisto>>> GetPorRemito(
             [FromQuery] string doPriLar,
             [FromQuery] int numeCli,
-            [FromQuery] string fechMov)
+            [FromQuery] string fechMov,
+            [FromQuery] string? codiMovi = null)
         {
             try
             {
@@ -337,11 +338,19 @@ namespace IMPLANPROD.Server.Controllers
                 }
 
                 // Buscar movimientos por clave compuesta: DoPriLar + NumeCli + FechMov
-                var movimientos = await _context.Movistos
+                var query = _context.Movistos
                     .Where(m => m.DoPriLar == doPriLar 
                              && m.Nume_Clie == numeCli 
                              && m.FechMov.HasValue 
-                             && m.FechMov.Value.Date == fecha.Date)
+                             && m.FechMov.Value.Date == fecha.Date);
+
+                // Si se especifica CodiMovi, filtrar también por ese código
+                if (!string.IsNullOrWhiteSpace(codiMovi))
+                {
+                    query = query.Where(m => m.CodiMovi == codiMovi);
+                }
+
+                var movimientos = await query
                     .OrderBy(m => m.Id)
                     .ToListAsync();
 
@@ -352,6 +361,52 @@ namespace IMPLANPROD.Server.Controllers
                 _logger.LogError(ex, "Error al obtener movimientos del remito {DoPriLar} - Cliente {NumeCli} - Fecha {FechMov}", 
                     doPriLar, numeCli, fechMov);
                 return StatusCode(500, $"Error interno del servidor: {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// Verifica si hay materiales transferidos para una orden de fabricación
+        /// Replica la validación VB6: WHERE DOSECCOR = NORFA$ AND CODIMOVI = 'TR'
+        /// Verifica si (CANTINGRE - CANTSALID) > 0.5 para algún material
+        /// </summary>
+        /// <param name="numeroOrdenFabricacion">Número de orden de fabricación (NORFA$)</param>
+        /// <returns>
+        /// true si hay materiales transferidos con saldo pendiente (> 0.5)
+        /// false si no hay materiales transferidos pendientes
+        /// </returns>
+        [HttpGet("verificar-materiales-transferidos/{numeroOrdenFabricacion}")]
+        public async Task<ActionResult<bool>> VerificarMaterialesTransferidosAsync(string numeroOrdenFabricacion)
+        {
+            try
+            {
+                Console.WriteLine($"[MovistoController] Verificando materiales transferidos para O.F. {numeroOrdenFabricacion}");
+
+                // Buscar en MOVISTO donde DOSECCOR = NORFA$ y CODIMOVI = 'TR'
+                var movimientosTransferidos = await _context.Movistos
+                    .AsNoTracking()
+                    .Where(m => m.DoSecCor == numeroOrdenFabricacion && m.CodiMovi == "TR")
+                    .ToListAsync();
+
+                Console.WriteLine($"[MovistoController] Se encontraron {movimientosTransferidos.Count} movimientos de transferencia");
+
+                // Verificar si algún movimiento tiene saldo pendiente > 0.5
+                // CAN = CANTINGRE - CANTSALID
+                bool tieneMaterialesPendientes = movimientosTransferidos.Any(m =>
+                {
+                    var cantIngre = m.CantIngre ?? 0m;
+                    var cantSalid = m.CantSalid ?? 0m;
+                    var saldo = cantIngre - cantSalid;
+                    return saldo > 0.5m;
+                });
+
+                Console.WriteLine($"[MovistoController] Resultado: {(tieneMaterialesPendientes ? "TIENE" : "NO TIENE")} materiales transferidos pendientes");
+
+                return Ok(tieneMaterialesPendientes);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[MovistoController] Error al verificar materiales transferidos: {ex.Message}");
+                return StatusCode(500, $"Error al verificar materiales transferidos: {ex.Message}");
             }
         }
     }

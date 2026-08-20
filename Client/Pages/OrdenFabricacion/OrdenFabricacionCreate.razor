@@ -1,17 +1,36 @@
 @page "/orden-fabricacion-create"
+@using IMPLANPROD.Client.Services
 @inject NavigationManager navigationManager
 @inject IRepository repository
 @inject SweetAlertService sweetAlertService
+@inject PageAccessService PageAccess
 
+<PageTitle>Crear Nueva Orden de Fabricación</PageTitle>
+
+@if (validando)
+{
+    <p>Validando acceso...</p>
+}
+else
+{
 <div class="bg-primary bg-opacity-10 p-3 rounded-3 mb-3">
     <h3 class="m-0 text-primary">Crear Nueva Orden de Fabricación</h3>
 </div>
 
 <OrdenFabricacionForm @ref="ordenFabricacionForm" ordenFabricacion="ordenFabricacion" OnValidSubmit="CreateAsync" ReturnAction="Return" IsEdit="false" />
+}
 
 @code {
     private OrdeFabr ordenFabricacion = new();
     private OrdenFabricacionForm? ordenFabricacionForm;
+    private bool validando = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        // Validar que el usuario tenga permiso para acceder a esta página antes de mostrar el contenido
+        await PageAccess.RequiereAccesoAsync("/orden-fabricacion-create");
+        validando = false;
+    }
 
     /// <summary>
     /// Método para crear una nueva orden de fabricación

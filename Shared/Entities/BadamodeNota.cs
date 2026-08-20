@@ -209,3 +209,18 @@ END
 ====================================== LUEGO CRE DE NUEVO EL SCRIPT EN ARCON SIN LOS CAMPOS (ELIMINADOS) Y EJECUTE EL SCRIPT PARA INSERTAR LOS DATOS ===========
 
 */
+// *** --- MIGRACION DE DATOS DESDE BADAMODE A BADAMODE_NOTA --- ***
+/*  ESTO ES LPARA CARGAR LAS NOTAS EN LA TABLA BADAMODE_NOTA  
+ *  --1) Borrar el contenido de la tabla destino
+DELETE FROM arcon2.dbo.BADAMODE_NOTA;
+
+
+--2) Insertar los datos desde la tabla original
+INSERT INTO arcon2.dbo.BADAMODE_NOTA (COD_MOD, OBSERVACIONES)
+SELECT 
+    COD_MOD,
+    ANOTAMOD
+FROM arcon.dbo.BADAMODE
+WHERE ANOTAMOD IS NOT NULL
+      AND ANOTAMOD <> '';
+*/

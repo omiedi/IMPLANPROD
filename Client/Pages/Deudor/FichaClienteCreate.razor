@@ -1,7 +1,11 @@
 @page "/ficha-cliente-create"
+@using IMPLANPROD.Client.Services
 @using IMPLANPROD.Shared.Entities
 @inject IRepository repository
 @inject NavigationManager NavigationManager
+@inject PageAccessService PageAccess
+
+<PageTitle>Nuevo Cliente</PageTitle>
 
 <!--
     Componente: FichaClienteCreate.razor
@@ -12,7 +16,25 @@
     Este componente sigue el estándar de páginas ABM definido en el proyecto.
 -->
 
-<div class="bg-primary bg-opacity-10 p-3 rounded-3 mb-3">
-    <h3 class="m-0 text-primary">Nuevo Cliente</h3>
-</div>
-<FichaClienteForm Id="0" />
+@if (validando)
+{
+    <p>Validando acceso...</p>
+}
+else
+{
+    <div class="bg-primary bg-opacity-10 p-3 rounded-3 mb-3">
+        <h3 class="m-0 text-primary">Nuevo Cliente</h3>
+    </div>
+    <FichaClienteForm Id="0" />
+}
+
+@code {
+    private bool validando = true;
+
+    // Validar que el usuario tenga permiso para acceder a esta página antes de mostrar el contenido
+    protected override async Task OnInitializedAsync()
+    {
+        await PageAccess.RequiereAccesoAsync("/ficha-cliente-create");
+        validando = false;
+    }
+}

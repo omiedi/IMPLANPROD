@@ -1,8 +1,18 @@
 @page "/generar-orden-reparacion"
+@using IMPLANPROD.Client.Services
 @inject IRepository repository
 @inject NavigationManager navigationManager
 @inject SweetAlertService sweetAlertService
+@inject PageAccessService PageAccess
 
+<PageTitle>Generar Orden de Reparación</PageTitle>
+
+@if (validando)
+{
+    <p>Validando acceso...</p>
+}
+else
+{
 <h3>Generar Orden de Reparación</h3>
 
 <div class="card">
@@ -69,13 +79,19 @@
         }
     </div>
 </div>
+}
 
 @code {
     private List<Repara>? ordenesPendientes;
     private bool cargando = true;
+    private bool validando = true;
 
     protected override async Task OnInitializedAsync()
     {
+        // Validar que el usuario tenga permiso para acceder a esta página antes de mostrar el contenido
+        await PageAccess.RequiereAccesoAsync("/generar-orden-reparacion");
+        validando = false;
+        
         await CargarOrdenesPendientes();
     }
 
@@ -84,7 +100,22 @@
         try
         {
             cargando = true;
-            var responseHttp = await repository.Get<List<Repara>>("api/repara/pendientes-generar-or");
+            var getTask = repository.Get<List<Repara>>("api/repara/pendientes-generar-or");
+            var completedTask = await Task.WhenAny(getTask, Task.Delay(TimeSpan.FromSeconds(20)));
+
+            if (completedTask != getTask)
+            {
+                ordenesPendientes = new List<Repara>();
+                await sweetAlertService.FireAsync(new SweetAlertOptions
+                {
+                    Title = "Aviso",
+                    Text = "La carga de órdenes pendientes demoró demasiado. Reintente en unos segundos.",
+                    Icon = SweetAlertIcon.Warning
+                });
+                return;
+            }
+
+            var responseHttp = await getTask;
             
             if (!responseHttp.Error && responseHttp.Response != null)
             {
@@ -117,6 +148,7 @@
         finally
         {
             cargando = false;
+            await InvokeAsync(StateHasChanged);
         }
     }
 

@@ -6,7 +6,7 @@
 @inject SweetAlertService sweetAlertService
 @using IMPLANPROD.Client.Services
 @inject DerechosUsuarioClientService derechosService
-
+@inject PageAccessService PageAccess
 <PageTitle>Ficha de Clientes</PageTitle>
 
 <!--
@@ -21,61 +21,60 @@
     Implementa el modelo de carga y paginación LoadAsync como el resto del sistema.
 -->
 
-<div class="bg-primary bg-opacity-10 p-3 rounded-3 mb-3">
-    <h3 class="m-0 text-primary">Lista de Clientes</h3>
-</div>
-
-@if (verificandoPermisos)
+@if (validando)
 {
-    <div class="alert alert-info">
-        <div class="spinner-border spinner-border-sm me-2" role="status">
-            <span class="visually-hidden">Verificando permisos...</span>
+    <p>Validando acceso...</p>
+}
+else
+{
+    <div class="bg-primary bg-opacity-10 p-3 rounded-3 mb-3">
+        <h3 class="m-0 text-primary">Lista de Clientes</h3>
+    </div>
+
+    @* @if (verificandoPermisos)
+    {
+        <div class="alert alert-info">
+            <div class="spinner-border spinner-border-sm me-2" role="status">
+                <span class="visually-hidden">Verificando permisos...</span>
+            </div>
+            <span>Verificando permisos de acceso...</span>
         </div>
-        <span>Verificando permisos de acceso...</span>
-    </div>
-}
-else if (!tieneAccesoEscritura)
-{
-    <div class="alert alert-warning">
-        <i class="fas fa-exclamation-triangle me-2"></i>
-        <strong>Modo Solo Lectura:</strong> Usted tiene permisos de solo lectura. No puede crear, editar o dar de baja clientes.
-    </div>
-}
+    }
+    else if (!tieneAccesoEscritura)
+    {
+        <div class="alert alert-warning">
+            <i class="fas fa-exclamation-triangle me-2"></i>
+            <strong>Modo Solo Lectura:</strong> Usted tiene permisos de solo lectura. No puede crear, editar o dar de baja clientes.
+        </div>
+    } *@
 
-<div class="mb-3">
-    <button class="btn btn-primary" @onclick="NuevoCliente" disabled="@(!tieneAccesoEscritura)">
-        @if (tieneAccesoEscritura)
-        {
+
+    <div class="mb-3">
+    <button class="btn btn-primary" @onclick="NuevoCliente" >
+        
             <i class="fas fa-user-plus"></i>
             <text> Nuevo Cliente</text>
-        }
-        else
-        {
-            <i class="fas fa-lock"></i>
-            <text> Nuevo Cliente (Sin Permisos)</text>
-        }
+       
+     
     </button>
-    <button class="btn btn-secondary ms-2" @onclick="IrAClientesDadosDeBaja" disabled="@(!tieneAccesoEscritura)">
-        @if (tieneAccesoEscritura)
-        {
+    <button class="btn btn-secondary ms-2" @onclick="IrAClientesDadosDeBaja">
             <i class="fas fa-user-slash"></i>
             <text> Ver clientes dados de baja</text>
-        }
-        else
-        {
-            <i class="fas fa-lock"></i>
-            <text> Ver clientes dados de baja (Sin Permisos)</text>
-        }
+       
     </button>
 </div>
 
 <div class="row mb-3">
     <div class="col-md-4">
-        <input class="form-control" placeholder="Buscar por Razón Social..." @bind="Filter" @bind:event="oninput" />
+        <input class="form-control" placeholder="Buscar por Código o Razón Social..." @bind="Filter" @bind:event="oninput" @onkeydown="OnSearchKeyDown" />
     </div>
     <div class="col-md-2">
         <button class="btn btn-outline-secondary" @onclick="()=>LoadAsync(1)"><i class="fas fa-search"></i> Buscar</button>
     </div>
+</div>
+
+<div class="text-muted" style="font-size: 0.85rem; margin-top: -0.5rem;">
+    Podés combinar términos con <b>+</b> para exigir coincidencia de ambos (AND). Ej: <code>1001 + perez</code>
 </div>
 
 @if (isLoading)
@@ -110,16 +109,12 @@ else
                         <td>@cliente.Mail_Cli</td>
                         <td>
                             <button class="btn btn-sm btn-outline-primary me-1" 
-                                    @onclick="() => EditarCliente(cliente.Id)" 
-                                    disabled="@(!tieneAccesoEscritura)"
-                                    title="@(tieneAccesoEscritura ? "Editar cliente" : "Sin permisos de escritura")">
-                                <i class="fas @(tieneAccesoEscritura ? "fa-edit" : "fa-lock")"></i>
+                                    @onclick="() => EditarCliente(cliente.Id)">
+                                <i class="fas fa-edit"></i> Editar
                             </button>
                             <button class="btn btn-sm btn-outline-danger" 
-                                    @onclick="() => DarDeBaja(cliente.Id)" 
-                                    disabled="@(!tieneAccesoEscritura)"
-                                    title="@(tieneAccesoEscritura ? "Dar de baja cliente" : "Sin permisos de escritura")">
-                                <i class="fas @(tieneAccesoEscritura ? "fa-user-slash" : "fa-lock")"></i>
+                                    @onclick="() => DarDeBaja(cliente.Id)">
+                                <i class="fas fa-user-slash"></i> Baja
                             </button>
                         </td>
                     </tr>
@@ -136,6 +131,7 @@ else
         <span>Página @PaginaActual de @TotalPaginas</span>
         <button class="btn btn-outline-secondary" @onclick="()=>LoadAsync(PaginaActual+1)" disabled="@(PaginaActual == TotalPaginas)">Siguiente</button>
     </div>
+    }
 }
 
 @code {
@@ -145,20 +141,30 @@ else
     private int TotalPaginas = 10;
     private int RegistrosPorPagina = 10;
     private bool isLoading = true;
+    private bool validando = true;
     private string? Filter = string.Empty;
     private string? Page = string.Empty;
 
     // Variables de control de permisos
-    private bool tieneAccesoEscritura = false;
-    private bool verificandoPermisos = true;
+    // private bool tieneAccesoEscritura = false;
+    // private bool verificandoPermisos = true;
     private const string COD_APLI = "CLIENTES";
     private const string DES_APLI = "ACCESO A LISTA DE CLIENTES";
+
+    // Validar que el usuario tenga permiso para acceder a esta página antes de mostrar el contenido
+    protected override async Task OnInitializedAsync()
+    {
+        await PageAccess.RequiereAccesoAsync("/ficha-cliente-index");
+        validando = false;
+        await LoadAsync();
+    }
 
     /// <summary>
     /// Carga los clientes paginados desde el backend usando el patrón LoadAsync
     /// </summary>
     private async Task LoadAsync(int page = 1)
     {
+
         if (!string.IsNullOrWhiteSpace(Page))
         {
             page = Convert.ToInt32(Page);
@@ -173,8 +179,9 @@ else
         }
         else
         {
-            url1 = $"api/deudor12?page={page}&recordsNumber={RegistrosPorPagina}&filter={Filter}";
-            url2 = $"api/deudor12/totalPages?recordsNumber={RegistrosPorPagina}&filter={Filter}";
+            var encodedFilter = Uri.EscapeDataString(Filter);
+            url1 = $"api/deudor12?page={page}&recordsNumber={RegistrosPorPagina}&filter={encodedFilter}";
+            url2 = $"api/deudor12/totalPages?recordsNumber={RegistrosPorPagina}&filter={encodedFilter}";
         }
         try
         {
@@ -192,37 +199,6 @@ else
         StateHasChanged();
     }
 
-    protected override async Task OnInitializedAsync()
-    {
-        // Verificar derechos de acceso del usuario
-        verificandoPermisos = true;
-        
-        // Verificar si el usuario tiene acceso de lectura mínimo
-        var nivelAcceso = await derechosService.VerificarDerechoAsync(
-            COD_APLI,
-            DES_APLI,
-            mostrarMensaje: true // Mostrar mensaje si no tiene acceso
-        );
-
-        // Si no tiene acceso (nivel 0), redirigir al inicio
-        if (nivelAcceso == 0)
-        {
-            Console.WriteLine($"Usuario sin acceso a {COD_APLI}. Redirigiendo...");
-            await Task.Delay(2000); // Esperar 2 segundos para que vea el mensaje
-            NavigationManager.NavigateTo("/");
-            return;
-        }
-
-        // Determinar si tiene permisos de escritura (nivel 2)
-        tieneAccesoEscritura = nivelAcceso >= 2;
-        
-        Console.WriteLine($"Acceso a {COD_APLI}: Nivel {nivelAcceso} - Escritura: {tieneAccesoEscritura}");
-        
-        verificandoPermisos = false;
-        
-        // Cargar datos solo si tiene acceso
-        await LoadAsync();
-    }
 
     private void NuevoCliente()
     {
@@ -248,5 +224,13 @@ else
     private void IrAClientesDadosDeBaja()
     {
         NavigationManager.NavigateTo("/ficha-cliente-baja");
+    }
+
+    private async Task OnSearchKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+        {
+            await LoadAsync(1);
+        }
     }
 }

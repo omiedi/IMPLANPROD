@@ -1,28 +1,43 @@
 ﻿@page "/cities/edit/{CityId:int}"
+@using IMPLANPROD.Client.Services
 @inject IRepository repository
 @inject NavigationManager navigationManager
 @inject SweetAlertService sweetAlertService
-
-<h3>Editar Ciudad</h3>
-
-@if (city is null)
+@inject PageAccessService PageAccess
+<PageTitle>Editar Ciudad</PageTitle>
+@if (validando)
 {
-    <div class="spinner" />
+    <p>Validando acceso...</p>
 }
 else
 {
-    <CityForm @ref="cityForm" City="city" OnValidSubmit="EditAsync" ReturnAction="Return" />
+
+    <h3>Editar Ciudad</h3>
+
+    @if (city is null)
+    {
+        <div class="spinner" />
+    }
+    else
+    {
+        <CityForm @ref="cityForm" City="city" OnValidSubmit="EditAsync" ReturnAction="Return" />
+    }
 }
+
 
 @code {
     private City? city;
     private CityForm? cityForm;
+    private bool validando = true;
 
     [Parameter]
     public int CityId { get; set; }
 
     protected override async Task OnInitializedAsync()
     {
+        await PageAccess.RequiereAccesoAsync("/cities/edit");   // ? validación
+        validando = false;
+
         var responseHttp = await repository.Get<City>($"/api/cities/{CityId}");
         if (responseHttp.Error)
         {

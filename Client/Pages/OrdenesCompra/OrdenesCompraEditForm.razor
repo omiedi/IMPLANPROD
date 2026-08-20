@@ -1,5 +1,6 @@
 @using IMPLANPROD.Shared.Entities
 @using IMPLANPROD.Shared.DTOs
+@using IMPLANPROD.Shared.DTOs.Impresiones
 @using IMPLANPROD.Client.Repositories
 @using IMPLANPROD.Client.Shared.Components
 @using IMPLANPROD.Client.Services
@@ -8,6 +9,8 @@
 @inject SweetAlertService sweetAlertService
 @inject NavigationManager navigationManager
 @inject AuthErrorHandlerService authErrorHandler
+@inject IJSRuntime JS
+@inject HttpClient Http
 
 <div class="container-fluid">
     <div class="row">
@@ -45,10 +48,14 @@
 
                             <!-- Información del encabezado -->
                             <div class="row mb-3">
-                                <div class="col-md-3">
+                                <div class="col-md-2">
                                     <label class="form-label">N° Orden:</label>
                                     <InputNumber class="form-control" @bind-Value="ordenCompra.NumeOcom" readonly="true" />
                                     <ValidationMessage For="@(() => ordenCompra.NumeOcom)" />
+                                </div>
+                                <div class="col-md-1">
+                                    <label class="form-label">Versión:</label>
+                                    <input type="text" class="form-control" value="@((ordenCompra.OcomRevis ?? 0) + 1)" readonly />
                                 </div>
                                 <div class="col-md-3">
                                     <label class="form-label">Fecha Emisión:</label>
@@ -210,6 +217,12 @@
                             <!-- Botones de acción -->
                             <div class="row">
                                 <div class="col-12 d-flex justify-content-end gap-2">
+                                    @if (ordenCompra.StatOcom == 0)
+                                    {
+                                        <button type="button" class="btn btn-success" @onclick="AbrirModalRemisionConsignacionesAsync" disabled="@guardando">
+                                            <i class="fas fa-truck"></i> Remitir Componentes
+                                        </button>
+                                    }
                                     <button type="button" class="btn btn-secondary" @onclick="Cancelar" disabled="@guardando">
                                         <i class="fas fa-times"></i> Cancelar y Regresar
                                     </button>
@@ -477,6 +490,103 @@ PrecioDefault="0"
 OnProductoSeleccionadoCantidad="OnProductoSeleccionado"
 OnClose="TerminarCicloSeleccionProductos" />
 
+@if (mostrarModalRemisionConsignaciones)
+{
+    <div class="modal fade show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5);">
+        <div class="modal-dialog modal-xl modal-dialog-scrollable">
+            <div class="modal-content">
+                <div class="modal-header bg-warning">
+                    <h5 class="modal-title">
+                        Remitir componentes de consignación - @numeroOrdenFormateadoRemisionModal
+                    </h5>
+                    <button type="button" class="btn-close" @onclick="CerrarModalRemision"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="row mb-3">
+                        <div class="col-md-5">
+                            <label class="form-label">Depósito de salida:</label>
+                            <select class="form-select" value="@depositoRemisionModalSeleccionado" @onchange="OnDepositoRemisionModalChanged">
+                                <option value="0">Seleccionar depósito...</option>
+                                @if (depositosRemision != null)
+                                {
+                                    @foreach (var deposito in depositosRemision)
+                                    {
+                                        <option value="@deposito.CodigoDepo">@deposito.CodigoDepo - @deposito.Descripcion</option>
+                                    }
+                                }
+                            </select>
+                        </div>
+                    </div>
+
+                    @if (cargandoPendientesRemision)
+                    {
+                        <div class="text-center py-4">
+                            <div class="spinner-border" role="status"></div>
+                            <div class="mt-2">Actualizando pendientes por depósito...</div>
+                        </div>
+                    }
+                    else if (!pendientesRemisionModal.Any())
+                    {
+                        <div class="alert alert-info mb-0">
+                            No hay componentes pendientes para remitir en el depósito seleccionado.
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="table-responsive">
+                            <table class="table table-sm table-striped table-bordered align-middle">
+                                <thead class="table-dark">
+                                    <tr>
+                                        <th>Cod. Inte</th>
+                                        <th>Cod. Exte</th>
+                                        <th>Descripción</th>
+                                        <th>Unidad</th>
+                                        <th class="text-end">Cant. Asig</th>
+                                        <th class="text-end">Cant. Entreg</th>
+                                        <th class="text-end">Falta Entregar</th>
+                                        <th class="text-end">Stock</th>
+                                        <th class="text-end">Remitir</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var item in pendientesRemisionModal)
+                                    {
+                                        <tr>
+                                            <td>@item.CodInte</td>
+                                            <td>@item.CodExte</td>
+                                            <td>@item.Descripcion</td>
+                                            <td>@item.Unidad</td>
+                                            <td class="text-end">@item.CantAsig.ToString("N4")</td>
+                                            <td class="text-end">@item.CantEntreg.ToString("N4")</td>
+                                            <td class="text-end">@item.FaltaEntregar.ToString("N4")</td>
+                                            <td class="text-end">@item.StockDeposito.ToString("N4")</td>
+                                            <td>
+                                                <input type="number" class="form-control form-control-sm text-end input-number-sin-flechas" step="0.0001"
+                                                       min="0" max="@item.MaxRemitir" @bind="item.CantidadEntregar" @bind:event="oninput"
+                                                       @onblur="(() => NormalizarCantidadRemitir(item))" />
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    }
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" @onclick="CerrarModalRemision">Cerrar</button>
+                    <button type="button" class="btn btn-success" @onclick="ConfirmarRemisionDesdeModalAsync" disabled="@remitiendoConsignaciones">
+                        @if (remitiendoConsignaciones)
+                        {
+                            <span class="spinner-border spinner-border-sm me-2"></span>
+                        }
+                        Confirmar Remito
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
 <!-- Modal de edición de item -->
 @if (mostrarModalEdicionItem && itemEnEdicion != null)
 {
@@ -548,7 +658,7 @@ OnClose="TerminarCicloSeleccionProductos" />
                                     <!-- Cantidad -->
                                     <div class="mb-3">
                                         <label class="form-label">Cantidad <span class="text-danger">*</span></label>
-                                        <input type="number" class="form-control" step="0.01" min="0" 
+                                        <input type="number" class="form-control input-number-sin-flechas" step="0.01" min="0" 
                                         @bind="itemEnEdicion.CantOcom" />
                                         <small class="text-muted">Cantidad a solicitar (puede ser 0 para anular)</small>
                                     </div>
@@ -556,7 +666,7 @@ OnClose="TerminarCicloSeleccionProductos" />
                                     <!-- Precio Unitario -->
                                     <div class="mb-3">
                                         <label class="form-label">Precio Unitario <span class="text-danger">*</span></label>
-                                        <input type="number" class="form-control" step="0.0001" min="0.0001" 
+                                        <input type="number" class="form-control input-number-sin-flechas" step="0.0001" min="0" 
                                         @bind="itemEnEdicion.PreUnit" />
                                         <small class="text-muted">Precio por unidad</small>
                                     </div>
@@ -738,7 +848,7 @@ OnClose="TerminarCicloSeleccionProductos" />
                                     </label>
                                     <div class="input-group">
                                         <span class="input-group-text">$</span>
-                                        <input type="number" class="form-control form-control-lg text-end" step="0.01" 
+                                        <input type="number" class="form-control form-control-lg text-end input-number-sin-flechas" step="0.01" 
                                         @bind="baseImponible105" @bind:after="RecalcularDistribucionIva" 
                                         @ondblclick="(() => PonerTodoEnCampo(1))" 
                                         title="Editable - Doble clic para poner todo el total aquí" 
@@ -772,7 +882,7 @@ OnClose="TerminarCicloSeleccionProductos" />
                                     </label>
                                     <div class="input-group">
                                         <span class="input-group-text">$</span>
-                                        <input type="number" class="form-control form-control-lg text-end" step="0.01" 
+                                        <input type="number" class="form-control form-control-lg text-end input-number-sin-flechas" step="0.01" 
                                         @bind="baseImponible21" @bind:after="RecalcularDistribucionIva" 
                                         @ondblclick="(() => PonerTodoEnCampo(2))" 
                                         title="Editable - Doble clic para poner todo el total aquí" 
@@ -806,7 +916,7 @@ OnClose="TerminarCicloSeleccionProductos" />
                                     </label>
                                     <div class="input-group">
                                         <span class="input-group-text">$</span>
-                                        <input type="number" class="form-control form-control-lg text-end" step="0.01" 
+                                        <input type="number" class="form-control form-control-lg text-end input-number-sin-flechas" step="0.01" 
                                         @bind="baseImponible27" @bind:after="RecalcularDistribucionIva" 
                                         @ondblclick="(() => PonerTodoEnCampo(3))" 
                                         title="Editable - Doble clic para poner todo el total aquí" 
@@ -936,8 +1046,6 @@ OnClose="TerminarCicloSeleccionProductos" />
 
 @code {
 
-
-
     [Parameter] public int OrdenId { get; set; }
     [Parameter] public EventCallback OnCancel { get; set; }
 
@@ -952,8 +1060,20 @@ OnClose="TerminarCicloSeleccionProductos" />
     private List<Tamoned>? monedas;
     private List<CondPag>? condicionesPago;
     private List<Plancuen>? cuentasDestino;
+    private List<Tadeposi>? depositosRemision;
     private SelectorProveedores.ProveedorSeleccionado proveedorInfo = new();
     private int? tipoIvaProveedor; // PROVED12.Piva_Cli - Tipo de IVA del proveedor
+    private bool mostrarModalRemisionConsignaciones = false;
+    private bool cargandoPendientesRemision = false;
+    private bool remitiendoConsignaciones = false;
+    private int depositoRemisionModalSeleccionado = 0;
+    private int numeroProveedorRemisionModal = 0;
+    private string razonSocialProveedorRemisionModal = string.Empty;
+    private string numeroOrdenFormateadoRemisionModal = string.Empty;
+    private string numeroOrdenFiltroConsignacionRemisionModal = string.Empty;
+    private readonly List<ConsignacionPendienteRemisionDto> pendientesRemisionModal = new();
+    private const string NombrePlantillaRemitoConsignacion = "REMITO CONSIGNACION";
+    private int? plantillaRemitoConsignacionId;
 
     // ===== Sistema de Descuentos =====
     private decimal descuentoMonto = 0m;
@@ -1032,6 +1152,31 @@ OnClose="TerminarCicloSeleccionProductos" />
 
             // Por defecto, 0%
             return "0%";
+        }
+    }
+
+    private async Task CargarDepositosRemision()
+    {
+        try
+        {
+            var responseHttp = await repository.Get<List<Tadeposi>>("api/tadeposi/activos");
+            if (!responseHttp.Error && responseHttp.Response != null)
+            {
+                depositosRemision = responseHttp.Response;
+                if (depositoRemisionModalSeleccionado <= 0 && depositosRemision.Any())
+                {
+                    depositoRemisionModalSeleccionado = depositosRemision.First().CodigoDepo;
+                }
+            }
+            else
+            {
+                depositosRemision = new List<Tadeposi>();
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error al cargar depósitos para remisión: {ex.Message}");
+            depositosRemision = new List<Tadeposi>();
         }
     }
 
@@ -1147,6 +1292,8 @@ OnClose="TerminarCicloSeleccionProductos" />
                 cuentasDestino = responseCuentas.Response;
                 Console.WriteLine($"[CargarDatosIniciales] Cuentas destino cargadas: {cuentasDestino?.Count ?? 0}");
             }
+
+            await CargarDepositosRemision();
 
             // Cargar sectores y destinos para edición de items
             Console.WriteLine("[CargarDatosIniciales] Cargando sectores y destinos...");
@@ -1550,9 +1697,102 @@ OnClose="TerminarCicloSeleccionProductos" />
 
     private async Task OnProductoSeleccionado(SelectorProductos.SeleccionProducto seleccion)
     {
-        // Implementar lógica de agregar producto (similar al formulario original)
-        // Por ahora, placeholder
-        await sweetAlertService.FireAsync("Info", "Funcionalidad de agregar item en desarrollo", SweetAlertIcon.Info);
+        try
+        {
+            if (seleccion?.Producto == null)
+            {
+                return;
+            }
+
+            if (detalleItems == null)
+            {
+                detalleItems = new List<Ocomdeta>();
+            }
+
+            var producto = seleccion.Producto;
+            var itemReferencia = detalleItems.OrderBy(i => i.NuOrdItem ?? 0).FirstOrDefault();
+
+            var siguienteNumeroItem = (short)((detalleItems
+                .Select(i => (int)(i.NuOrdItem ?? 0))
+                .DefaultIfEmpty(0)
+                .Max()) + 1);
+
+            var cantidad = seleccion.Cantidad > 0 ? seleccion.Cantidad : 1m;
+            var precio = seleccion.Precio > 0 ? seleccion.Precio : (producto.Cosuni ?? 0m);
+
+            var codInte = producto.Codint > 0 && producto.Codint <= short.MaxValue
+                ? (short?)producto.Codint
+                : (short?)0;
+
+            var codigoExterno = producto.Codigo ?? string.Empty;
+            if (codigoExterno.Length > 24)
+            {
+                codigoExterno = codigoExterno.Substring(0, 24);
+            }
+
+            var descripcion = producto.Descripcion ?? string.Empty;
+            if (descripcion.Length > 64)
+            {
+                descripcion = descripcion.Substring(0, 64);
+            }
+
+            var unidad = producto.Umedida ?? string.Empty;
+            if (unidad.Length > 4)
+            {
+                unidad = unidad.Substring(0, 4);
+            }
+
+            var nuevoItem = new Ocomdeta
+            {
+                OCOMDETA_ID = 0,
+                CodiEmpr = 0,
+                NumeOcom = ordenCompra.NumeOcom,
+                NuOrdItem = siguienteNumeroItem,
+                FemiOcom = ordenCompra.FemiOcom ?? DateTime.Now,
+                NproOcom = ordenCompra.NproOcom.HasValue ? (short?)ordenCompra.NproOcom.Value : null,
+                RaSoProv = ordenCompra.RaSoProv,
+                CodInte = codInte,
+                CodExte = codigoExterno,
+                Descritem = descripcion,
+                Delibre = codInte <= 0 ? descripcion : null,
+                UniMas = unidad,
+                UniCom = unidad,
+                CoefUnids = 1m,
+                UnidsOcom = cantidad,
+                CantOcom = cantidad,
+                PreUnit = precio,
+                DescItem = 0m,
+                PrUnNeto = precio,
+                INetItem = cantidad * precio,
+                FentreSol = DateTime.Now.AddDays(7),
+                SectOcom = itemReferencia?.SectOcom,
+                IContab = itemReferencia?.IContab,
+                MoneEmis = ordenCompra.MoneEmis,
+                MoneCos = ordenCompra.MoneCos,
+                StatOcom = 0,
+                AddRecord = DateTime.Now,
+                LastUpdate = DateTime.Now,
+                CodiEmprNet = 0,
+                Rowguid = Guid.NewGuid(),
+                SectorItem = itemReferencia?.SectOcom ?? string.Empty,
+                DestinoItem = itemReferencia?.IContab
+            };
+
+            detalleItems.Add(nuevoItem);
+            RecalcularDescuentoDesdeTexto();
+            StateHasChanged();
+
+            if (cicloSeleccionProductos)
+            {
+                await Task.Delay(100);
+                await selectorProductos.AbrirModal();
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[OnProductoSeleccionado] Error: {ex.Message}");
+            await sweetAlertService.FireAsync("Error", $"Error al agregar item: {ex.Message}", SweetAlertIcon.Error);
+        }
     }
 
     private void TerminarCicloSeleccionProductos()
@@ -1614,12 +1854,6 @@ OnClose="TerminarCicloSeleccionProductos" />
                 return;
             }
 
-            if (itemEnEdicion.PreUnit <= 0)
-            {
-                await sweetAlertService.FireAsync("Error", "El precio unitario debe ser mayor a cero", SweetAlertIcon.Error);
-                return;
-            }
-
             // Buscar el item original en la lista
             var itemOriginal = detalleItems?.FirstOrDefault(i => i.OCOMDETA_ID == itemEnEdicion.OCOMDETA_ID);
             if (itemOriginal != null)
@@ -1640,7 +1874,7 @@ OnClose="TerminarCicloSeleccionProductos" />
             // Cerrar modal
             CerrarModalEdicionItem();
 
-            await sweetAlertService.FireAsync("Éxito", "Item actualizado correctamente", SweetAlertIcon.Success);
+            await sweetAlertService.FireAsync("Éxito", "Item actualizado correctamente. Para persistir los cambios realizados debe usar el botón 'Actualizar Orden'.", SweetAlertIcon.Success);
         }
         catch (Exception ex)
         {
@@ -1741,6 +1975,11 @@ OnClose="TerminarCicloSeleccionProductos" />
             Console.WriteLine($"[GuardarOrdenCompra] Proveedor: {ordenCompra.NproOcom} - {ordenCompra.RaSoProv}");
             Console.WriteLine($"[GuardarOrdenCompra] Items en detalle: {detalleItems?.Count ?? 0}");
 
+            if (!await ValidarEdicionConsignacionesAntesDeGuardar())
+            {
+                return;
+            }
+
             // PASO 1: Borrar consignaciones sin entregas (BORRACONSIG)
             await BorrarConsignacionesSinEntregas(ordenCompra.NumeOcom.Value);
 
@@ -1755,6 +1994,9 @@ OnClose="TerminarCicloSeleccionProductos" />
 
             // PASO 5: Procesar detalle OCOMDETA
             await ProcesarDetalleOcomdeta(ordenCompra.NumeOcom.Value);
+
+            // PASO 5.1: Sincronizar consignaciones con nuevo índice de items y topes de rendido
+            await SincronizarConsignacionesEdicion(ordenCompra.NumeOcom.Value);
 
             // PASO 6: Procesar MACONSIG según lógica VB6
             await ProcesarMaconsig(ordenCompra.NumeOcom.Value);
@@ -1894,7 +2136,7 @@ OnClose="TerminarCicloSeleccionProductos" />
                 CpagOcom = ordenCompra.CpagOcom,
 
                 // Número de revisión/versión
-                // OcomRevis = NRO DE VERSION, // Se incrementará en el backend
+                OcomRevis = (short?)((ordenCompra.OcomRevis ?? 0) + 1),
 
                 // Contacto
                 AtSrOcom = ordenCompra.AtSrOcom,
@@ -1934,6 +2176,179 @@ OnClose="TerminarCicloSeleccionProductos" />
         {
             Console.WriteLine($"[ActualizarEncabezadoOrden] Excepción: {ex.Message}");
             throw; // Re-lanzar para manejo en método padre
+        }
+    }
+
+    private async Task<bool> ValidarEdicionConsignacionesAntesDeGuardar()
+    {
+        if (!ordenCompra.NumeOcom.HasValue || ordenCompra.NumeOcom.Value <= 0)
+        {
+            return false;
+        }
+
+        var itemsValidacion = detalleItems?
+            .Where(x => (x.CodInte ?? 0) > 0 && (x.CantOcom ?? 0m) > 0.0001m)
+            .Select(x => new ValidarEdicionConsignacionItemRequestDto
+            {
+                NumeroItem = x.NuOrdItem ?? 0,
+                CodIntePadre = x.CodInte ?? 0,
+                CodExtePadre = x.CodExte ?? string.Empty,
+                DescripcionPadre = x.Descritem ?? x.Delibre ?? string.Empty,
+                Cantidad = x.CantOcom ?? 0m
+            })
+            .ToList() ?? new List<ValidarEdicionConsignacionItemRequestDto>();
+
+        var request = new ValidarEdicionConsignacionRequestDto
+        {
+            NumeroOrden = ordenCompra.NumeOcom.Value,
+            Items = itemsValidacion
+        };
+
+        var response = await repository.Post<ValidarEdicionConsignacionRequestDto, ValidacionEdicionConsignacionResponseDto>("api/maconsig/validar-edicion-orden", request);
+        if (response.Error)
+        {
+            var errorMessage = await response.GetErrorMessageAsync();
+            await sweetAlertService.FireAsync("Error", $"No se pudo validar consignaciones antes de guardar: {errorMessage}", SweetAlertIcon.Error);
+            return false;
+        }
+
+        var data = response.Response;
+        if (data == null || data.PuedeContinuar)
+        {
+            return true;
+        }
+
+        var conflictosAgrupadosPorItem = data.Conflictos
+            .SelectMany(c => (c.ItemsAfectadosNumeros != null && c.ItemsAfectadosNumeros.Any()
+                    ? c.ItemsAfectadosNumeros
+                    : ParseItemsAfectados(c.ItemsAfectados))
+                .Distinct()
+                .Select(item => new { Item = item, Conflicto = c }))
+            .GroupBy(x => x.Item)
+            .OrderBy(g => g.Key)
+            .ToList();
+
+        var filasAgrupadas = string.Join("", conflictosAgrupadosPorItem.Select(g =>
+        {
+            var filasItem = string.Join("", g.Select(x => $@"
+                <tr>
+                    <td>{x.Conflicto.CodExte}</td>
+                    <td>{x.Conflicto.Descripcion}</td>
+                    <td class='text-end'>{x.Conflicto.CantidadNecesaria:N4}</td>
+                    <td class='text-end'>{x.Conflicto.CantidadEntregada:N4}</td>
+                    <td class='text-end'>{x.Conflicto.CantidadRendida:N4}</td>
+                    <td class='text-end text-danger fw-bold'>{x.Conflicto.ExcesoEntregado:N4}</td>
+                    <td>{x.Conflicto.ItemsAfectados}</td>
+                </tr>"));
+
+            return $@"
+                <tr class='table-warning'>
+                    <td colspan='7'><strong>Ítem O.C.: {g.Key:00}</strong></td>
+                </tr>
+                {filasItem}";
+        }));
+
+        var filas = string.IsNullOrWhiteSpace(filasAgrupadas)
+            ? string.Join("", data.Conflictos.Select(c => $@"
+                <tr>
+                    <td>{c.CodExte}</td>
+                    <td>{c.Descripcion}</td>
+                    <td class='text-end'>{c.CantidadNecesaria:N4}</td>
+                    <td class='text-end'>{c.CantidadEntregada:N4}</td>
+                    <td class='text-end'>{c.CantidadRendida:N4}</td>
+                    <td class='text-end text-danger fw-bold'>{c.ExcesoEntregado:N4}</td>
+                    <td>{c.ItemsAfectados}</td>
+                </tr>"))
+            : filasAgrupadas;
+
+        var cantidadItemsAfectados = conflictosAgrupadosPorItem.Count;
+        var cantidadComponentesEnConflicto = data.Conflictos.Count;
+
+        var html = $@"
+            <div class='text-start' style='height:78vh; display:flex; flex-direction:column;'>
+                <p><strong>No se puede continuar con la modificación.</strong></p>
+                <p class='mb-2'>Hay componentes con cantidad entregada mayor a la necesaria para la nueva cantidad pedida.</p>
+                <div class='alert alert-warning py-2 mb-3'>
+                    <strong>Resumen:</strong> {cantidadItemsAfectados} ítem(s) de O.C. afectado(s) / {cantidadComponentesEnConflicto} componente(s) en conflicto.
+                </div>
+                <div class='table-responsive' style='flex:1 1 auto; min-height:0; overflow:auto; border:1px solid #dee2e6;'>
+                    <table class='table table-sm table-bordered align-middle'>
+                        <thead class='table-light'>
+                            <tr>
+                                <th style='position:sticky; top:0; z-index:2; background:#f8f9fa;'>Código</th>
+                                <th style='position:sticky; top:0; z-index:2; background:#f8f9fa;'>Descripción</th>
+                                <th class='text-end' style='position:sticky; top:0; z-index:2; background:#f8f9fa;'>Necesaria</th>
+                                <th class='text-end' style='position:sticky; top:0; z-index:2; background:#f8f9fa;'>Entregada</th>
+                                <th class='text-end' style='position:sticky; top:0; z-index:2; background:#f8f9fa;'>Rendida</th>
+                                <th class='text-end' style='position:sticky; top:0; z-index:2; background:#f8f9fa;'>Exceso</th>
+                                <th style='position:sticky; top:0; z-index:2; background:#f8f9fa;'>Ítems afectados</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {filas}
+                        </tbody>
+                    </table>
+                </div>
+                <p class='mb-0 text-muted'><small>Debe ajustar las cantidades de la O.C. para que no queden entregas superiores a la necesidad requerida.</small></p>
+            </div>";
+
+        await sweetAlertService.FireAsync(new SweetAlertOptions
+        {
+            Title = "Modificación bloqueada",
+            Html = html,
+            Icon = SweetAlertIcon.Warning,
+            Width = "95vw",
+            ConfirmButtonText = "Entendido"
+        });
+
+        return false;
+    }
+
+    private static List<short> ParseItemsAfectados(string? itemsAfectados)
+    {
+        var resultado = new List<short>();
+        if (string.IsNullOrWhiteSpace(itemsAfectados))
+        {
+            return resultado;
+        }
+
+        var partes = itemsAfectados.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        foreach (var parte in partes)
+        {
+            if (short.TryParse(parte, out var item))
+            {
+                resultado.Add(item);
+            }
+        }
+
+        return resultado;
+    }
+
+    private async Task SincronizarConsignacionesEdicion(int numeroOrden)
+    {
+        var itemsValidacion = detalleItems?
+            .Where(x => (x.CodInte ?? 0) > 0 && (x.CantOcom ?? 0m) > 0.0001m)
+            .Select(x => new ValidarEdicionConsignacionItemRequestDto
+            {
+                NumeroItem = x.NuOrdItem ?? 0,
+                CodIntePadre = x.CodInte ?? 0,
+                CodExtePadre = x.CodExte ?? string.Empty,
+                DescripcionPadre = x.Descritem ?? x.Delibre ?? string.Empty,
+                Cantidad = x.CantOcom ?? 0m
+            })
+            .ToList() ?? new List<ValidarEdicionConsignacionItemRequestDto>();
+
+        var request = new ValidarEdicionConsignacionRequestDto
+        {
+            NumeroOrden = numeroOrden,
+            Items = itemsValidacion
+        };
+
+        var response = await repository.Post<ValidarEdicionConsignacionRequestDto, SincronizarEdicionConsignacionResponseDto>("api/maconsig/sincronizar-edicion-orden", request);
+        if (response.Error)
+        {
+            var errorMessage = await response.GetErrorMessageAsync();
+            throw new Exception($"Error al sincronizar consignaciones de la edición: {errorMessage}");
         }
     }
 
@@ -2696,8 +3111,384 @@ OnClose="TerminarCicloSeleccionProductos" />
         }
     }
 
+    private async Task AbrirModalRemisionConsignacionesAsync()
+    {
+        if (ordenCompra.StatOcom != 0)
+        {
+            await sweetAlertService.FireAsync("Atención", "Solo se puede remitir desde una O.C. activa.", SweetAlertIcon.Warning);
+            return;
+        }
+
+        if (!ordenCompra.NproOcom.HasValue || ordenCompra.NproOcom <= 0 || !ordenCompra.NumeOcom.HasValue || ordenCompra.NumeOcom <= 0)
+        {
+            await sweetAlertService.FireAsync("Atención", "La orden no tiene datos válidos de proveedor o número de O.C.", SweetAlertIcon.Warning);
+            return;
+        }
+
+        numeroProveedorRemisionModal = ordenCompra.NproOcom.Value;
+        razonSocialProveedorRemisionModal = ordenCompra.RaSoProv ?? string.Empty;
+        numeroOrdenFormateadoRemisionModal = $"OC.{ordenCompra.NumeOcom.Value:000000}";
+        numeroOrdenFiltroConsignacionRemisionModal = $"OC-{ordenCompra.NumeOcom.Value:000000}-";
+
+        if (depositoRemisionModalSeleccionado <= 0 && depositosRemision != null && depositosRemision.Any())
+        {
+            depositoRemisionModalSeleccionado = depositosRemision.First().CodigoDepo;
+        }
+
+        await CargarPendientesRemisionModalAsync();
+
+        if (!pendientesRemisionModal.Any())
+        {
+            await sweetAlertService.FireAsync("Sin pendientes", "No se encontraron componentes pendientes para remitir con el depósito seleccionado.", SweetAlertIcon.Info);
+            return;
+        }
+
+        mostrarModalRemisionConsignaciones = true;
+        StateHasChanged();
+    }
+
+    private async Task CargarPendientesRemisionModalAsync()
+    {
+        if (depositoRemisionModalSeleccionado <= 0 || numeroProveedorRemisionModal <= 0)
+        {
+            pendientesRemisionModal.Clear();
+            return;
+        }
+
+        cargandoPendientesRemision = true;
+        StateHasChanged();
+
+        try
+        {
+            var pendientesRequest = new PendientesRemisionRequestDto
+            {
+                NumeroProveedor = numeroProveedorRemisionModal,
+                NumeroOrdenCompra = numeroOrdenFiltroConsignacionRemisionModal,
+                Deposito = depositoRemisionModalSeleccionado
+            };
+
+            var pendientesResponse = await repository.Post<PendientesRemisionRequestDto, List<ConsignacionPendienteRemisionDto>>("api/maconsig/pendientes-remitir", pendientesRequest);
+            if (pendientesResponse.Error || pendientesResponse.Response == null)
+            {
+                pendientesRemisionModal.Clear();
+                return;
+            }
+
+            pendientesRemisionModal.Clear();
+            foreach (var item in pendientesResponse.Response)
+            {
+                item.MaxRemitir = Math.Round(Math.Max(0m, Math.Min(item.StockDeposito, item.FaltaEntregar)), 4);
+                item.CantidadEntregar = item.MaxRemitir;
+                pendientesRemisionModal.Add(item);
+            }
+        }
+        finally
+        {
+            cargandoPendientesRemision = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task OnDepositoRemisionModalChanged(ChangeEventArgs e)
+    {
+        if (e.Value != null && int.TryParse(e.Value.ToString(), out int deposito) && deposito > 0)
+        {
+            depositoRemisionModalSeleccionado = deposito;
+            await CargarPendientesRemisionModalAsync();
+        }
+        else
+        {
+            depositoRemisionModalSeleccionado = 0;
+            pendientesRemisionModal.Clear();
+            StateHasChanged();
+        }
+    }
+
+    private void NormalizarCantidadRemitir(ConsignacionPendienteRemisionDto item)
+    {
+        if (item.CantidadEntregar < 0)
+        {
+            item.CantidadEntregar = 0;
+        }
+
+        if (item.CantidadEntregar > item.MaxRemitir)
+        {
+            item.CantidadEntregar = item.MaxRemitir;
+        }
+    }
+
+    private async Task ConfirmarRemisionDesdeModalAsync()
+    {
+        if (depositoRemisionModalSeleccionado <= 0)
+        {
+            await sweetAlertService.FireAsync("Atención", "Debe seleccionar un depósito de salida.", SweetAlertIcon.Warning);
+            return;
+        }
+
+        foreach (var item in pendientesRemisionModal)
+        {
+            NormalizarCantidadRemitir(item);
+        }
+
+        var itemsARemitir = pendientesRemisionModal
+            .Where(x => x.CantidadEntregar > 0.005m)
+            .ToList();
+
+        if (!itemsARemitir.Any())
+        {
+            await sweetAlertService.FireAsync("Atención", "No hay cantidades a remitir.", SweetAlertIcon.Warning);
+            return;
+        }
+
+        remitiendoConsignaciones = true;
+        StateHasChanged();
+
+        try
+        {
+            var proximoComprobanteResponse = await repository.Get<int>("api/maconsig/proximo-comprobante-rc");
+            if (proximoComprobanteResponse.Error || proximoComprobanteResponse.Response <= 0)
+            {
+                await sweetAlertService.FireAsync("Atención", "No se pudo obtener el próximo comprobante RC.", SweetAlertIcon.Warning);
+                return;
+            }
+
+            var remitirRequest = new RemitirConsignacionesRequestDto
+            {
+                NumeroProveedor = numeroProveedorRemisionModal,
+                RazonSocialProveedor = razonSocialProveedorRemisionModal,
+                NumeroOrdenCompra = numeroOrdenFiltroConsignacionRemisionModal,
+                Deposito = depositoRemisionModalSeleccionado,
+                FechaRemito = DateTime.Now,
+                CodigoMovimiento = "RC",
+                NumeroComprobante = proximoComprobanteResponse.Response,
+                Items = itemsARemitir.Select(item => new RemitirConsignacionItemRequestDto
+                {
+                    IdMaconsig = item.IdMaconsig,
+                    CodInte = item.CodInte,
+                    CodExte = item.CodExte,
+                    Descripcion = item.Descripcion,
+                    Unidad = item.Unidad,
+                    NroOcom = item.OCompra,
+                    NuOrdItem = null,
+                    Lote = item.Lote,
+                    CantidadEntregar = item.CantidadEntregar
+                }).ToList()
+            };
+
+            var remitirResponse = await repository.Post<RemitirConsignacionesRequestDto, RemitirConsignacionesResponseDto>("api/maconsig/remitir", remitirRequest);
+            if (remitirResponse.Error || remitirResponse.Response == null || !remitirResponse.Response.Success)
+            {
+                var mensajeError = remitirResponse.Error ? await remitirResponse.GetErrorMessageAsync() : "Respuesta inválida del servicio de remisión.";
+                await sweetAlertService.FireAsync("Atención", $"Falló la remisión de consignaciones: {mensajeError}", SweetAlertIcon.Warning);
+                return;
+            }
+
+            await sweetAlertService.FireAsync("Remisión realizada",
+                $"Se remitieron {remitirResponse.Response.ItemsProcesados} item(s) con comprobante {remitirResponse.Response.DoPriCor}.",
+                SweetAlertIcon.Success);
+
+            await ImprimirRemitoConsignacionPorPlantillaAsync(remitirResponse.Response.DoPriCor);
+
+            CerrarModalRemision();
+            await CargarOrdenParaEdicion();
+        }
+        finally
+        {
+            remitiendoConsignaciones = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task ImprimirRemitoConsignacionPorPlantillaAsync(string? doPriCor)
+    {
+        if (string.IsNullOrWhiteSpace(doPriCor))
+        {
+            return;
+        }
+
+        var plantillaId = await GetPlantillaRemitoConsignacionIdAsync();
+        if (!plantillaId.HasValue)
+        {
+            return;
+        }
+
+        var doprilar = Uri.EscapeDataString(doPriCor.Trim());
+        var endpoint = $"api/impresiones/remito-plantillas/{plantillaId.Value}/pdf?Doprilar={doprilar}";
+        var responsePdf = await Http.GetAsync(endpoint);
+        if (!responsePdf.IsSuccessStatusCode)
+        {
+            var message = await responsePdf.Content.ReadAsStringAsync();
+            await sweetAlertService.FireAsync("Atención", $"Se generó la remisión, pero no se pudo abrir la impresión del remito: {message}", SweetAlertIcon.Warning);
+            return;
+        }
+
+        var pdfBytes = await responsePdf.Content.ReadAsByteArrayAsync();
+        if (pdfBytes.Length == 0)
+        {
+            await sweetAlertService.FireAsync("Atención", "Se generó la remisión, pero el PDF del remito llegó vacío.", SweetAlertIcon.Warning);
+            return;
+        }
+
+        var base64 = Convert.ToBase64String(pdfBytes);
+        var opened = await JS.InvokeAsync<bool>("openPdfInNewTab", base64);
+        if (!opened)
+        {
+            await sweetAlertService.FireAsync("Atención", "No se pudo abrir el PDF del remito en una nueva pestaña. Verificá el bloqueador de pop-ups.", SweetAlertIcon.Warning);
+        }
+    }
+
+    private async Task<int?> GetPlantillaRemitoConsignacionIdAsync()
+    {
+        if (plantillaRemitoConsignacionId.HasValue)
+        {
+            return plantillaRemitoConsignacionId;
+        }
+
+        var response = await repository.Get<List<RemitoPlantillaItemDto>>("api/impresiones/remito-plantillas");
+        if (response.Error || response.Response == null)
+        {
+            var message = await response.GetErrorMessageAsync();
+            await sweetAlertService.FireAsync("Error", $"No se pudo obtener el listado de plantillas de remito: {message}", SweetAlertIcon.Error);
+            return null;
+        }
+
+        var plantilla = response.Response
+            .FirstOrDefault(x => string.Equals(x.Nombre?.Trim(), NombrePlantillaRemitoConsignacion, StringComparison.OrdinalIgnoreCase));
+        if (plantilla == null)
+        {
+            await sweetAlertService.FireAsync("Atención", $"No se encontró la plantilla '{NombrePlantillaRemitoConsignacion}'.", SweetAlertIcon.Warning);
+            return null;
+        }
+
+        plantillaRemitoConsignacionId = plantilla.Id;
+        return plantillaRemitoConsignacionId;
+    }
+
+    private void CerrarModalRemision()
+    {
+        mostrarModalRemisionConsignaciones = false;
+        pendientesRemisionModal.Clear();
+    }
+
+    private class PendientesRemisionRequestDto
+    {
+        public int NumeroProveedor { get; set; }
+        public string? NumeroOrdenCompra { get; set; }
+        public int Deposito { get; set; }
+    }
+
+    private class ValidarEdicionConsignacionRequestDto
+    {
+        public int NumeroOrden { get; set; }
+        public List<ValidarEdicionConsignacionItemRequestDto> Items { get; set; } = new();
+    }
+
+    private class ValidarEdicionConsignacionItemRequestDto
+    {
+        public short NumeroItem { get; set; }
+        public int CodIntePadre { get; set; }
+        public string CodExtePadre { get; set; } = string.Empty;
+        public string DescripcionPadre { get; set; } = string.Empty;
+        public decimal Cantidad { get; set; }
+    }
+
+    private class ValidacionEdicionConsignacionResponseDto
+    {
+        public bool PuedeContinuar { get; set; }
+        public string Mensaje { get; set; } = string.Empty;
+        public List<ConflictoEdicionConsignacionItemDto> Conflictos { get; set; } = new();
+    }
+
+    private class ConflictoEdicionConsignacionItemDto
+    {
+        public int CodInte { get; set; }
+        public string CodExte { get; set; } = string.Empty;
+        public string Descripcion { get; set; } = string.Empty;
+        public decimal CantidadNecesaria { get; set; }
+        public decimal CantidadEntregada { get; set; }
+        public decimal CantidadRendida { get; set; }
+        public decimal ExcesoEntregado { get; set; }
+        public string ItemsAfectados { get; set; } = string.Empty;
+        public List<short> ItemsAfectadosNumeros { get; set; } = new();
+    }
+
+    private class SincronizarEdicionConsignacionResponseDto
+    {
+        public bool Success { get; set; }
+        public string Mensaje { get; set; } = string.Empty;
+        public int RegistrosAjustadosRendidos { get; set; }
+        public int RegistrosActualizadosIndice { get; set; }
+    }
+
+    private class ConsignacionPendienteRemisionDto
+    {
+        public int IdMaconsig { get; set; }
+        public int CodInte { get; set; }
+        public string CodExte { get; set; } = string.Empty;
+        public string Descripcion { get; set; } = string.Empty;
+        public string Unidad { get; set; } = string.Empty;
+        public decimal CantAsig { get; set; }
+        public decimal CantEntreg { get; set; }
+        public decimal CantRendid { get; set; }
+        public decimal FaltaEntregar { get; set; }
+        public decimal StockDeposito { get; set; }
+        public decimal MaxRemitir { get; set; }
+        public decimal CantidadEntregar { get; set; }
+        public string OCompra { get; set; } = string.Empty;
+        public string Lote { get; set; } = string.Empty;
+    }
+
+    private class RemitirConsignacionesRequestDto
+    {
+        public int NumeroProveedor { get; set; }
+        public string? RazonSocialProveedor { get; set; }
+        public string? NumeroOrdenCompra { get; set; }
+        public int Deposito { get; set; }
+        public DateTime? FechaRemito { get; set; }
+        public string CodigoMovimiento { get; set; } = "RC";
+        public int? NumeroComprobante { get; set; }
+        public List<RemitirConsignacionItemRequestDto> Items { get; set; } = new();
+    }
+
+    private class RemitirConsignacionItemRequestDto
+    {
+        public int IdMaconsig { get; set; }
+        public int CodInte { get; set; }
+        public string? CodExte { get; set; }
+        public string? Descripcion { get; set; }
+        public string? Unidad { get; set; }
+        public string? NroOcom { get; set; }
+        public short? NuOrdItem { get; set; }
+        public string? Lote { get; set; }
+        public decimal CantidadEntregar { get; set; }
+    }
+
+    private class RemitirConsignacionesResponseDto
+    {
+        public bool Success { get; set; }
+        public string CodigoMovimiento { get; set; } = string.Empty;
+        public int NumeroComprobante { get; set; }
+        public string DoPriCor { get; set; } = string.Empty;
+        public int Deposito { get; set; }
+        public int ItemsProcesados { get; set; }
+        public decimal CantidadTotalRemitida { get; set; }
+    }
+
     private async Task Cancelar()
     {
         await OnCancel.InvokeAsync();
     }
 }
+
+<style>
+    .input-number-sin-flechas::-webkit-outer-spin-button,
+    .input-number-sin-flechas::-webkit-inner-spin-button {
+        -webkit-appearance: none;
+        margin: 0;
+    }
+
+    .input-number-sin-flechas {
+        -moz-appearance: textfield;
+        appearance: textfield;
+    }
+</style>

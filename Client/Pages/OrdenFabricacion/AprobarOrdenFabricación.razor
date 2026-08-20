@@ -1,18 +1,45 @@
 @page "/AprobarOrdenfabricacion"
+@using IMPLANPROD.Client.Services
 @using IMPLANPROD.Shared.Entities
 @using IMPLANPROD.Shared.DTOs
 @using IMPLANPROD.Client.Repositories
 @using IMPLANPROD.Client.Shared.Components
 @using CurrieTechnologies.Razor.SweetAlert2
+@using Microsoft.AspNetCore.Components.Authorization
 @inject IRepository repository
 @inject SweetAlertService sweetAlertService
 @inject NavigationManager navigationManager
 @inject HttpClient Http
+@inject PageAccessService PageAccess
+@inject AuthenticationStateProvider AuthProvider
 
+<PageTitle>Aprobación de Órdenes de Fabricación</PageTitle>
 
+@if (validando)
+{
+    <p>Validando acceso...</p>
+}
+else
+{
 <div class="bg-primary bg-opacity-10 p-3 rounded-3 mb-3 d-flex justify-content-between align-items-center">
     <h3 class="m-0 text-primary">Aprobación de Órdenes de Fabricación</h3>
 </div>
+
+<div class="d-flex align-items-center justify-content-between mb-3">
+    <div class="d-flex align-items-center">
+        <input style="width: 400px;" type="text" class="form-control me-2" placeholder="Buscar..." @bind-value="Filter" />
+        <button type="button" class="btn btn-outline-primary me-2" @onclick="ApplyFilterAsync">Filtrar</button>
+        <button type="button" class="btn btn-outline-danger" @onclick="CleanFilterAsync">Limpiar</button>
+    </div>
+</div>
+
+<div class="text-muted" style="font-size: 0.85rem; margin-top: -0.5rem;">
+    Podés combinar términos con <b>+</b> para exigir coincidencia de ambos (AND). Ej: <code>motor + 450</code>
+</div>
+
+<Pagination CurrentPage="currentPage"
+            TotalPages="totalPages"
+            SelectedPage="SelectedPageAsync" />
 
 @if (registros.Count == 0)
 { 
@@ -65,6 +92,7 @@ else
         </table>
     </div>
 }
+}
 
 <!-- Componente modal para seleccionar depósito de entrada -->
 <DepositoSelectorModal IsVisible="mostrarModalDeposito"
@@ -89,6 +117,8 @@ else
     private List<Orfapen> registros = new List<Orfapen>();
     private Dictionary<int, string> descripciones = new Dictionary<int, string>();
     private Dictionary<int, string> descripDepos = new Dictionary<int, string>();
+    private bool validando = true;
+    private bool esSuperAdmin = false;
     
     // Variables para el proceso de aprobación
     private string ordenFabricacionSeleccionada = string.Empty;
@@ -108,14 +138,38 @@ else
     {
         public string? Descripcion { get; set; }
     }
+
+    [Parameter]
+    [SupplyParameterFromQuery]
+    public string Filter { get; set; } = string.Empty;
+
+    private int currentPage = 1;
+    private int totalPages = 1;
+
     protected override async Task OnInitializedAsync()
     {
-        await ApruebaOrdenesFabricacion();
+        // Validar que el usuario tenga permiso para acceder a esta página antes de mostrar el contenido
+        await PageAccess.RequiereAccesoAsync("/AprobarOrdenfabricacion");
+        validando = false;
+
+        // Verificar si el usuario es SUPERADMIN
+        var authState = await AuthProvider.GetAuthenticationStateAsync();
+        esSuperAdmin = authState.User.IsInRole("SUPERADMIN");
+
+        await InicializarContextoAsync();
+        await LoadAsync();
     }
-    private async Task ApruebaOrdenesFabricacion()
+
+    private async Task InicializarContextoAsync()
     {
         try
         {
+            // Si es SUPERADMIN, no filtrar por usuario ni depósito
+            if (esSuperAdmin)
+            {
+                return;
+            }
+
             // 1. Obtener el idFlexoft del usuario logueado
             var responseUsuario = await repository.Get<int?>("api/Usuarios/InterObtenerIdFlexoft");
             if (responseUsuario.Error || responseUsuario.Response == null || !responseUsuario.Response.HasValue)
@@ -155,34 +209,70 @@ else
             }
 
             depositos = responseDepositos.Response;
-
-            // 4. Crear el objeto de parámetros y llamar al endpoint de órdenes pendientes
-            var parametros = new OFabricacionRequestDTO
-            {
-                IdFlexoftUsuario = idFlexoftUsuario,
-                Depositos = depositos
-            };
-
-            // Llamar al endpoint para obtener las órdenes pendientes de aprobación
-            var responseOrdenes = await repository.Post<OFabricacionRequestDTO, List<Orfapen>>($"api/AprobacionOrdenFabricacion/pendientesAprobacion", parametros);
-
-            if (responseOrdenes.Error || responseOrdenes.Response == null)
-            {
-                await sweetAlertService.FireAsync("Error", "No se pudieron obtener las órdenes pendientes de aprobación", SweetAlertIcon.Error);
-                return;
-            }
-
-            registros = responseOrdenes.Response;
-
-            // Cargar descripciones
-            await CargarDescripciones();
-            await CargarDepositos();
-
         }
         catch (Exception ex)
         {
             await sweetAlertService.FireAsync("Error", $"Error al obtener datos del usuario: {ex.Message}", SweetAlertIcon.Error);
         }
+    }
+
+    private async Task LoadAsync(int page = 1)
+    {
+        // Si no es SUPERADMIN y no tiene contexto de usuario, no cargar
+        if (!esSuperAdmin && (idFlexoftUsuario <= 0 || depositos == null || !depositos.Any()))
+        {
+            return;
+        }
+
+        currentPage = page;
+
+        var parametros = new OFabricacionRequestDTO
+        {
+            IdFlexoftUsuario = esSuperAdmin ? null : idFlexoftUsuario,
+            Depositos = esSuperAdmin ? null : depositos,
+            Page = page,
+            RecordsNumber = 10,
+            Filter = string.IsNullOrWhiteSpace(Filter) ? null : Filter
+        };
+
+        var responseOrdenes = await repository.Post<OFabricacionRequestDTO, List<Orfapen>>(
+            "api/AprobacionOrdenFabricacion/pendientesAprobacion", parametros);
+
+        if (responseOrdenes.Error || responseOrdenes.Response == null)
+        {
+            await sweetAlertService.FireAsync("Error", "No se pudieron obtener las órdenes pendientes de aprobación", SweetAlertIcon.Error);
+            return;
+        }
+
+        var responsePages = await repository.Post<OFabricacionRequestDTO, int>(
+            "api/AprobacionOrdenFabricacion/totalPages", parametros);
+
+        if (!responsePages.Error)
+        {
+            totalPages = responsePages.Response;
+        }
+
+        registros = responseOrdenes.Response;
+
+        // Cargar descripciones
+        await CargarDescripciones();
+        await CargarDepositos();
+    }
+
+    private async Task CleanFilterAsync()
+    {
+        Filter = string.Empty;
+        await ApplyFilterAsync();
+    }
+
+    private async Task ApplyFilterAsync()
+    {
+        await LoadAsync(1);
+    }
+
+    private async Task SelectedPageAsync(int page)
+    {
+        await LoadAsync(page);
     }
 
 
@@ -649,7 +739,7 @@ else
             await sweetAlertService.FireAsync("Éxito", "Aprobación procesada correctamente", SweetAlertIcon.Success);
             
             // 6. Recargar la lista
-            await ApruebaOrdenesFabricacion();
+            await LoadAsync(currentPage);
         }
         catch (Exception ex)
         {

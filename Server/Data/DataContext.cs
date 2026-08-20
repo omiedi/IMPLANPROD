@@ -20,9 +20,19 @@ namespace IMPLANPROD.Server.Data
 
         #region DbSets
         /// <summary>
-        /// Tabla de EmailConfiguration
+        /// Tabla de tokens temporales para recuperación de contraseña por email
+        /// </summary>
+        public required DbSet<PasswordResetToken> PasswordResetTokens { get; set; }
+
+        /// <summary>
+        /// Tabla de EmailConfiguration (Gmail)
         /// </summary>
         public required DbSet<EmailConfiguration> EmailConfiguration { get; set; }
+
+        /// <summary>
+        /// Tabla de configuración SMTP corporativo (MailKit)
+        /// </summary>
+        public required DbSet<EmailConfigEmpresa> EmailConfigEmpresa { get; set; }
 
         /// <summary>
         /// Tabla de Estados
@@ -67,6 +77,26 @@ namespace IMPLANPROD.Server.Data
         /// Tabla de Usuarios
         /// </summary>
         public required DbSet<Usuario> Usuarios { get; set; }
+
+        /// <summary>
+        /// Tabla de módulos de seguridad por ruta
+        /// </summary>
+        public required DbSet<SegModulo> SegModulos { get; set; }
+
+        /// <summary>
+        /// Tabla de páginas/rutas de seguridad
+        /// </summary>
+        public required DbSet<SegPagina> SegPaginas { get; set; }
+
+        /// <summary>
+        /// Tabla de asignación de páginas permitidas por usuario
+        /// </summary>
+        public required DbSet<SegUsuarioPagina> SegUsuarioPaginas { get; set; }
+
+        /// <summary>
+        /// Auditoría de cambios de perfil
+        /// </summary>
+        public required DbSet<SegAuditoriaPerfil> SegAuditoriaPerfiles { get; set; }
 
         /// <summary>
         /// Tabla de relaciones Usuario-Sector Productivo
@@ -181,6 +211,17 @@ namespace IMPLANPROD.Server.Data
         /// Tabla Reserva
         /// </summary>
         public DbSet<Reserva> Reservas { get; set; }
+
+        /// <summary>
+        /// Tabla CONTROSERIE
+        /// </summary>
+        public DbSet<Controserie> Controseries { get; set; }
+
+        /// <summary>
+        /// Tabla SQL_QUERIES - Consultas SQL parametrizables
+        /// </summary>
+        public DbSet<SQL_QUERIES> SqlQueries { get; set; }
+
         /// <summary>
         /// Tabla OPERFAB
         /// </summary>
@@ -190,6 +231,11 @@ namespace IMPLANPROD.Server.Data
         /// Tabla FLEXCRL
         /// </summary>
         public DbSet<FLEXCRL> Flexcrls { get; set; }
+
+        /// <summary>
+        /// Tabla REPLACO - Códigos equivalentes de proveedor
+        /// </summary>
+        public DbSet<Replaco> Replacos { get; set; }
 
         /// <summary>
         /// Tabla MOVITRANSTO
@@ -242,6 +288,16 @@ namespace IMPLANPROD.Server.Data
         public required DbSet<Ocomdeta> Ocomdetas { get; set; }
 
         /// <summary>
+        /// Tabla OCOMDETACosto - Costos de items de órdenes de compra (control de acceso separado)
+        /// </summary>
+        public required DbSet<OCOMDETACosto> OCOMDETACostos { get; set; }
+
+        /// <summary>
+        /// Tabla NOVEDADES - Historial de cambios de precios de productos
+        /// </summary>
+        public required DbSet<Novedades> Novedades { get; set; }
+
+        /// <summary>
         /// Tabla DETAIVA - Detalle de IVA de órdenes de compra
         /// </summary>
         public required DbSet<Detaiva> Detaivas { get; set; }
@@ -257,9 +313,34 @@ namespace IMPLANPROD.Server.Data
         public DbSet<Maconsig> Maconsigs { get; set; }
 
         /// <summary>
+        /// Tabla OC_SUCURSAL - Órdenes de compra de sucursal
+        /// </summary>
+        public DbSet<Oc_Sucursal> O_Sucursals { get; set; }
+
+        /// <summary>
+        /// Tabla MENSA_SUCURSAL - Mensajes de sucursal para órdenes de compra
+        /// </summary>
+        public DbSet<MensaSucursal> MensaSucursals { get; set; }
+
+        /// <summary>
+        /// Tabla DetaOVenta - Detalle de órdenes de venta
+        /// </summary>
+        public DbSet<DetaOVenta> DetaOventas { get; set; }
+
+        /// <summary>
+        /// Tabla UBICASQL - Ubicaciones por producto
+        /// </summary>
+        public DbSet<Ubicasql> Ubicasqls { get; set; } = default!;
+
+        /// <summary>
         /// Tabla de Boletas de Recepción
         /// </summary>
         public DbSet<Bolrecep> Bolreceps { get; set; }
+
+        /// <summary>
+        /// Tabla BRECEPEN - Recepciones pendientes de aprobación (origen VB6)
+        /// </summary>
+        public DbSet<Brecepen> Brecepens { get; set; }
 
         /// <summary>
         /// Tabla de DestinoRechazoRecepcion  DESTINOS DE LOS RECHAZOS DE RECEPCION VINCULADOS CON UN DEPOSITO
@@ -310,6 +391,35 @@ namespace IMPLANPROD.Server.Data
         /// Tabla DESCREP - Descripción de Reparaciones
         /// </summary>
         public DbSet<Descrep> Descreps { get; set; }
+
+        /// <summary>
+        /// Tabla CODIPROC - Códigos de Proceso de Inspección
+        /// Migrado desde archivo plano VB6: CODIPROC.DAT (512 bytes por registro)
+        /// </summary>
+        public DbSet<Codiproc> Codiprocs { get; set; }
+
+        /// <summary>
+        /// Tabla PLAINSP - Dimensiones Según Plano para Inspección
+        /// Migrado desde archivo plano VB6: PLAINSP.DAT (128 bytes por registro)
+        /// Relacionada con CODIPROC mediante Cod_Inte
+        /// </summary>
+        public DbSet<Plainsp> Plainsps { get; set; }
+
+        /// <summary>
+        /// Tabla INSTRUCI - Instrucciones de Proceso de Inspección
+        /// Migrado desde archivo plano VB6: INSTRUCI.DAT (128 bytes por registro)
+        /// </summary>
+        public DbSet<Instruci> Instrucis { get; set; }
+
+        /// <summary>
+        /// Tabla HOJACTU - Hojas de Actualización / Control de Cambios de Instrucciones
+        /// </summary>
+        public DbSet<Hojactu> Hojactus { get; set; }
+
+        /// <summary>
+        /// Tabla INSTRU_CODINT - Relación entre instrucciones (INSTRUCI) y artículos (MASTER)
+        /// </summary>
+        public DbSet<Instru_Codint> Instru_Codints { get; set; }
 
         /// <summary>
         /// Tabla REPARA - Recepción de Bombas para Evaluar Reparación
@@ -381,6 +491,52 @@ namespace IMPLANPROD.Server.Data
         /// </summary>
         public DbSet<SyncConfig> SyncConfigs { get; set; }
 
+        /// <summary>
+        /// Tabla Notificaciones - Notificaciones persistentes
+        /// </summary>
+        public required DbSet<Notificacion> Notificaciones { get; set; }
+
+        /// <summary>
+        /// Tabla NotificacionDestinatarios - Destinatarios por usuario
+        /// </summary>
+        public required DbSet<NotificacionDestinatario> NotificacionDestinatarios { get; set; }
+
+        /// <summary>
+        /// Tabla NotificacionLeidas - Tracking de lecturas por usuario
+        /// </summary>
+        public required DbSet<NotificacionLeida> NotificacionLeidas { get; set; }
+
+        /// <summary>
+        /// Tabla NotificacionOcultas - Ocultar notificaciones por usuario
+        /// </summary>
+        public required DbSet<NotificacionOculta> NotificacionOcultas { get; set; }
+
+        /// <summary>
+        /// Tabla NotificacionReglasSql - Reglas SQL que generan notificaciones
+        /// </summary>
+        public required DbSet<NotificacionReglaSql> NotificacionReglasSql { get; set; }
+
+        /// <summary>
+        /// Tabla INSTRUME - Instrumentos de medición y calibración
+        /// </summary>
+        public required DbSet<Instrume> Instrumes { get; set; }
+
+        /// <summary>
+        /// Tabla RECALIB - Registros de calibración de instrumentos
+        /// Migrado desde archivo plano VB6: recalib.dat (80 bytes por registro)
+        /// </summary>
+        public required DbSet<Recalib> Recalibs { get; set; }
+
+        /// <summary>
+        /// Tabla DECALIB - Detalle de calibración asociado a registros de RECALIB
+        /// </summary>
+        public required DbSet<Decalib> Decalibs { get; set; }
+
+        /// <summary>
+        /// Tabla TRAZAREC - Trazabilidad de Recepciones
+        /// </summary>
+        public required DbSet<Trazarec> Trazarecs { get; set; }
+
         #endregion
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
@@ -389,6 +545,9 @@ namespace IMPLANPROD.Server.Data
             modelBuilder.Entity<Country>().HasIndex(x => x.Name).IsUnique();
             modelBuilder.Entity<State>().HasIndex("CountryId", "Name").IsUnique();
             modelBuilder.Entity<City>().HasIndex("StateId", "Name").IsUnique();
+            modelBuilder.Entity<FLEXCRL>()
+                .HasIndex(f => new { f.CLABUS, f.PROBUS })
+                .HasDatabaseName("IX_FLEXCRL_CLABUS_PROBUS");
 
                 modelBuilder.Entity<Dependencia>().HasIndex("EmpresaId", "dependencia").IsUnique();
                 //para que  no se repita si es el mismo  (crea un doble indice)
@@ -440,6 +599,75 @@ namespace IMPLANPROD.Server.Data
                     .HasOne<Perfil>()
                     .WithMany()
                     .HasForeignKey(u => u.PerfilId)
+                    .OnDelete(DeleteBehavior.NoAction);
+
+                modelBuilder.Entity<SegModulo>()
+                    .HasIndex(x => x.Codigo)
+                    .IsUnique()
+                    .HasDatabaseName("UX_SEG_MODULO_Codigo");
+
+                modelBuilder.Entity<SegModulo>()
+                    .HasIndex(x => x.Orden)
+                    .HasDatabaseName("IX_SEG_MODULO_Orden");
+
+                modelBuilder.Entity<SegPagina>()
+                    .HasIndex(x => x.Ruta)
+                    .IsUnique()
+                    .HasDatabaseName("UX_SEG_PAGINA_Ruta");
+
+                modelBuilder.Entity<SegPagina>()
+                    .HasIndex(x => new { x.ModuloId, x.Orden })
+                    .HasDatabaseName("IX_SEG_PAGINA_Modulo_Orden");
+
+                modelBuilder.Entity<SegPagina>()
+                    .HasOne(x => x.Modulo)
+                    .WithMany(x => x.Paginas)
+                    .HasForeignKey(x => x.ModuloId)
+                    .OnDelete(DeleteBehavior.NoAction);
+
+                modelBuilder.Entity<SegUsuarioPagina>()
+                    .HasIndex(x => new { x.UsuarioId, x.PaginaId })
+                    .IsUnique()
+                    .HasDatabaseName("UX_SEG_USUARIO_PAGINA_Usuario_Pagina");
+
+                modelBuilder.Entity<SegUsuarioPagina>()
+                    .HasOne(x => x.Usuario)
+                    .WithMany()
+                    .HasForeignKey(x => x.UsuarioId)
+                    .OnDelete(DeleteBehavior.NoAction);
+
+                modelBuilder.Entity<SegUsuarioPagina>()
+                    .HasOne(x => x.Pagina)
+                    .WithMany(x => x.UsuariosPermitidos)
+                    .HasForeignKey(x => x.PaginaId)
+                    .OnDelete(DeleteBehavior.NoAction);
+
+                modelBuilder.Entity<SegAuditoriaPerfil>()
+                    .HasIndex(x => new { x.UsuarioObjetivoId, x.FechaAccion })
+                    .HasDatabaseName("IX_SEG_AUDITORIA_PERFIL_Usuario_Fecha");
+
+                modelBuilder.Entity<SegAuditoriaPerfil>()
+                    .HasOne(x => x.UsuarioObjetivo)
+                    .WithMany()
+                    .HasForeignKey(x => x.UsuarioObjetivoId)
+                    .OnDelete(DeleteBehavior.NoAction);
+
+                modelBuilder.Entity<SegAuditoriaPerfil>()
+                    .HasOne(x => x.ModificadoPorUsuario)
+                    .WithMany()
+                    .HasForeignKey(x => x.ModificadoPorUsuarioId)
+                    .OnDelete(DeleteBehavior.NoAction);
+
+                modelBuilder.Entity<SegAuditoriaPerfil>()
+                    .HasOne(x => x.PerfilAnterior)
+                    .WithMany()
+                    .HasForeignKey(x => x.PerfilAnteriorId)
+                    .OnDelete(DeleteBehavior.NoAction);
+
+                modelBuilder.Entity<SegAuditoriaPerfil>()
+                    .HasOne(x => x.PerfilNuevo)
+                    .WithMany()
+                    .HasForeignKey(x => x.PerfilNuevoId)
                     .OnDelete(DeleteBehavior.NoAction);
 
                 modelBuilder.Entity<Tamoned>().ToTable("Tamoned");
@@ -502,6 +730,9 @@ namespace IMPLANPROD.Server.Data
 
                 // Mapeo explícito: el DbSet Proveedores apunta a la tabla física Proved12
                 modelBuilder.Entity<Proved12>().ToTable("Proved12");
+
+                // Mapeo explícito para reportes personalizados (tabla singular en SQL)
+                modelBuilder.Entity<ReportePersonalizado>().ToTable("ReportePersonalizado");
 
                 // Mapeo explícito: Transportes -> TRANSPORTES
                 modelBuilder.Entity<Transporte>().ToTable("TRANSPORTES");
@@ -600,6 +831,117 @@ namespace IMPLANPROD.Server.Data
                     .HasForeignKey(d => d.CodApli)
                     .HasPrincipalKey(i => i.CodApli)
                     .OnDelete(DeleteBehavior.NoAction);
+
+                modelBuilder.Entity<Notificacion>(entity =>
+                {
+                    entity.HasIndex(x => x.AddRecord);
+                    entity.HasIndex(x => x.CreadorUsuarioId);
+                    entity.HasIndex(x => x.ReglaSqlId);
+
+                    entity.HasOne<Usuario>()
+                        .WithMany()
+                        .HasForeignKey(x => x.CreadorUsuarioId)
+                        .OnDelete(DeleteBehavior.NoAction);
+                });
+
+                modelBuilder.Entity<NotificacionDestinatario>(entity =>
+                {
+                    entity.HasIndex(x => new { x.NotificacionId, x.UsuarioId })
+                        .IsUnique();
+
+                    entity.HasIndex(x => x.UsuarioId);
+
+                    entity.HasOne(x => x.Notificacion)
+                        .WithMany()
+                        .HasForeignKey(x => x.NotificacionId)
+                        .OnDelete(DeleteBehavior.Cascade);
+
+                    entity.HasOne(x => x.Usuario)
+                        .WithMany()
+                        .HasForeignKey(x => x.UsuarioId)
+                        .OnDelete(DeleteBehavior.NoAction);
+                });
+
+                modelBuilder.Entity<NotificacionOculta>(entity =>
+                {
+                    entity.HasIndex(x => new { x.NotificacionId, x.UsuarioId })
+                        .IsUnique();
+
+                    entity.HasIndex(x => new { x.UsuarioId, x.FechaOculta });
+
+                    entity.HasOne(x => x.Notificacion)
+                        .WithMany()
+                        .HasForeignKey(x => x.NotificacionId)
+                        .OnDelete(DeleteBehavior.Cascade);
+
+                    entity.HasOne(x => x.Usuario)
+                        .WithMany()
+                        .HasForeignKey(x => x.UsuarioId)
+                        .OnDelete(DeleteBehavior.NoAction);
+                });
+
+                modelBuilder.Entity<NotificacionLeida>(entity =>
+                {
+                    entity.HasIndex(x => new { x.NotificacionId, x.UsuarioId })
+                        .IsUnique();
+
+                    entity.HasIndex(x => new { x.UsuarioId, x.FechaLeida });
+
+                    entity.HasOne(x => x.Notificacion)
+                        .WithMany()
+                        .HasForeignKey(x => x.NotificacionId)
+                        .OnDelete(DeleteBehavior.Cascade);
+
+                    entity.HasOne(x => x.Usuario)
+                        .WithMany()
+                        .HasForeignKey(x => x.UsuarioId)
+                        .OnDelete(DeleteBehavior.NoAction);
+                });
+
+                modelBuilder.Entity<NotificacionReglaSql>(entity =>
+                {
+                    entity.HasIndex(x => x.Activa);
+                    entity.HasIndex(x => x.UltimaEjecucion);
+
+                    entity.HasOne<Usuario>()
+                        .WithMany()
+                        .HasForeignKey(x => x.CreadorUsuarioId)
+                        .OnDelete(DeleteBehavior.NoAction);
+                });
+
+                // Configuración de TRAZAREC - Trazabilidad de Recepciones
+                modelBuilder.Entity<Trazarec>(entity =>
+                {
+                    entity.ToTable("TRAZAREC");
+
+                    // Índice en NROREMI (Número de Remito)
+                    entity.HasIndex(x => x.NroRemi)
+                        .HasDatabaseName("IX_TRAZAREC_NROREMI");
+
+                    // Índice en Cod_Inte (Código Interno del Producto)
+                    entity.HasIndex(x => x.CodInte)
+                        .HasDatabaseName("IX_TRAZAREC_Cod_Inte");
+
+                    // Índice en Nume_Ocom (Número de Orden de Compra)
+                    entity.HasIndex(x => x.NumeOcom)
+                        .HasDatabaseName("IX_TRAZAREC_Nume_Ocom");
+
+                    // Índice en NroPed (Número de Pedido)
+                    entity.HasIndex(x => x.NroPed)
+                        .HasDatabaseName("IX_TRAZAREC_NroPed");
+
+                    // Índice compuesto en NROREMI + Cod_Inte
+                    entity.HasIndex(x => new { x.NroRemi, x.CodInte })
+                        .HasDatabaseName("IX_TRAZAREC_NROREMI_Cod_Inte");
+
+                    // Índice en Fech_Recep (Fecha de Recepción)
+                    entity.HasIndex(x => x.FechRecep)
+                        .HasDatabaseName("IX_TRAZAREC_Fech_Recep");
+
+                    // Índice en CodiEmpr (Código de Empresa)
+                    entity.HasIndex(x => x.CodiEmpr)
+                        .HasDatabaseName("IX_TRAZAREC_CodiEmpr");
+                });
         }
     }
 }

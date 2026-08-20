@@ -1,0 +1,493 @@
+@*
+    PlanInspeccionModal.razor
+    ──────────────────────────────────────────────────────────────────────────
+    Modal "Plan de Inspección y Ensayo" accesible desde /ingenieria/documentos.
+
+    ESTRUCTURA DEL MODAL
+    ┌─ modal-header  : bg-success, título + botón cerrar
+    ├─ modal-body
+    │   ├─ Encabezado del producto (tabla Código/Descripción/Medida/Interno)
+    │   ├─ Campos readonly : AQL | Nivel (%) | Frecuencia | Puntos Detención
+    │   ├─ Campos editables: Preparó | Fecha Prep. | Aprobó | Fecha Aprob.
+    │   ├─ Tabla PLAINSP   : Dim.Según Plano | Instrumento | Observaciones
+    │   │                    con botones ↑ ↓ 🗑 por fila
+    │   ├─ Fila de agregar : inputs + botón Agregar
+    │   └─ Textarea        : Observaciones (Codiproc.Observaciones)
+    └─ modal-footer : Cancelar | Guardar
+
+    FLUJO DE DATOS
+    - Al abrir : GET api/plainsp/by-codinte/{CodInte}
+                 GET api/codiproc/by-codinte/{CodInte}
+    - Al guardar: POST api/plainsp/guardar/{CodInte}  (DELETE + INSERT)
+                  PUT  api/codiproc/observaciones/{CodInte}
+
+    BUG DE REORDEN RESUELTO
+    Los <tr> usan @key="fila.Key" (Guid único por ítem, no por posición).
+    Esto obliga a Blazor a rastrear cada fila por identidad en lugar de
+    por índice DOM, evitando que los botones ↑/↓ apunten a la fila
+    incorrecta después de un intercambio.
+*@
+@inject IRepository Repository
+@inject SweetAlertService SweetAlertService
+@using IMPLANPROD.Shared.Entities
+@using System.Globalization
+
+@if (IsVisible)
+{
+    <div class="modal fade show d-block" tabindex="-1" style="background-color:rgba(0,0,0,0.55);" role="dialog">
+        <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable" role="document">
+            <div class="modal-content shadow-lg">
+
+                <!-- ══ HEADER (igual a NuevaInstruciModal) ══════════════════ -->
+                <div class="modal-header bg-success text-white py-2">
+                    <h5 class="modal-title mb-0">
+                        <i class="fas fa-clipboard-check me-2"></i>Plan de Inspección y Ensayo
+                    </h5>
+                    <button type="button" class="btn-close btn-close-white" @onclick="Cerrar" aria-label="Cerrar"></button>
+                </div>
+
+                <!-- ══ BODY ═════════════════════════════════════════════════ -->
+                <div class="modal-body p-3">
+
+                    @if (isLoading)
+                    {
+                        <div class="text-center py-4">
+                            <div class="spinner-border text-success" role="status"></div>
+                            <div class="mt-2 text-muted small">Cargando...</div>
+                        </div>
+                    }
+                    else
+                    {
+                        <!-- ── Encabezado producto (igual al de la página) ── -->
+                        @if (Producto != null)
+                        {
+                            <div class="border rounded-3 bg-light p-2 shadow-sm mb-3">
+                                <table class="table table-bordered table-sm mb-2 bg-white rounded overflow-hidden">
+                                    <colgroup>
+                                        <col style="width:130px" />
+                                        <col />
+                                        <col style="width:90px" />
+                                        <col style="width:80px" />
+                                    </colgroup>
+                                    <thead class="table-primary">
+                                        <tr>
+                                            <th class="text-center py-1 small">Código</th>
+                                            <th class="py-1 small">Descripción</th>
+                                            <th class="text-center py-1 small">U. Medida</th>
+                                            <th class="text-center py-1 small">Interno</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr>
+                                            <td class="fw-semibold text-center align-middle small">@Producto.Codigo</td>
+                                            <td class="align-middle small">@Producto.Descripcion</td>
+                                            <td class="text-center align-middle">
+                                                <span class="badge bg-secondary">@(Producto.Umedida ?? "-")</span>
+                                            </td>
+                                            <td class="fw-bold text-primary text-center align-middle small">@Producto.Codint</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                                <div class="row g-2">
+                                    <div class="col-md-1">
+                                        <label class="form-label text-muted small fw-bold mb-0">AQL</label>
+                                        <input type="number" class="form-control form-control-sm"
+                                               @bind="editAQL" />
+                                    </div>
+                                    <div class="col-md-1">
+                                        <label class="form-label text-muted small fw-bold mb-0">Nivel (%)</label>
+                                        <input type="number" class="form-control form-control-sm"
+                                               @bind="editNivelPct" />
+                                    </div>
+                                    <div class="col-md-4">
+                                        <label class="form-label text-muted small fw-bold mb-0">Frecuencia de Inspección</label>
+                                        <input type="text" class="form-control form-control-sm"
+                                               maxlength="32"
+                                               @bind="editFrecInspeccion" />
+                                    </div>
+                                    <div class="col">
+                                        <label class="form-label text-muted small fw-bold mb-0">Puntos de Detención Obligatoria</label>
+                                        <input type="text" class="form-control form-control-sm"
+                                               maxlength="48"
+                                               @bind="editPuntoDetencion" />
+                                    </div>
+                                </div>
+                                <hr class="my-2" />
+                                <div class="row g-2">
+                                    <div class="col-md-4">
+                                        <label class="form-label text-muted small fw-bold mb-0">
+                                            <i class="fas fa-user-edit me-1 text-secondary"></i>Preparó
+                                        </label>
+                                        <input type="text" class="form-control form-control-sm"
+                                               @bind="editNombrePreparo" maxlength="24" />
+                                    </div>
+                                    <div class="col-md-2">
+                                        <label class="form-label text-muted small fw-bold mb-0">
+                                            <i class="fas fa-calendar-alt me-1 text-secondary"></i>Fecha Prep.
+                                        </label>
+                                        <input type="date" class="form-control form-control-sm"
+                                               @bind="editFechaPreparo" />
+                                    </div>
+                                    <div class="col-md-4">
+                                        <label class="form-label text-muted small fw-bold mb-0">
+                                            <i class="fas fa-user-check me-1 text-success"></i>Aprobó
+                                        </label>
+                                        <input type="text" class="form-control form-control-sm"
+                                               @bind="editNombreAprobo" maxlength="24" />
+                                    </div>
+                                    <div class="col-md-2">
+                                        <label class="form-label text-muted small fw-bold mb-0">
+                                            <i class="fas fa-calendar-check me-1 text-success"></i>Fecha Aprob.
+                                        </label>
+                                        <input type="date" class="form-control form-control-sm"
+                                               @bind="editFechaAprobo" />
+                                    </div>
+                                </div>
+                            </div>
+                        }
+
+                        <!-- ── Tabla PLAINSP (scroll) ────────────────────────
+                             max-height limita la altura para dejar espacio
+                             al encabezado de producto y al área de observaciones.
+                             @key en cada <tr> = clave de identidad Guid que
+                             viaja con el ítem al reordenar (ver FilaWrapper). -->
+                        <div class="table-responsive" style="max-height:280px;overflow-y:auto;">
+                            <table class="table table-sm table-bordered align-middle mb-0">
+                                <thead class="table-success">
+                                    <tr>
+                                        <th style="width:36px" class="text-center">#</th>
+                                        <th>Dimensiones Según Plano</th>
+                                        <th style="width:22%">Instrumento</th>
+                                        <th style="width:28%">Observaciones</th>
+                                        <th style="width:90px" class="text-center">Orden</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @for (int i = 0; i < filas.Count; i++)
+                                    {
+                                        var idx   = i;
+                                        var fila  = filas[i];
+                                        <tr @key="fila.Key" class="align-top">
+                                            <td class="text-center text-muted small fw-bold pt-2">@(idx + 1)</td>
+                                            <td>
+                                                <textarea class="form-control form-control-sm border-0 plainsp-auto"
+                                                          rows="1" maxlength="64"
+                                                          @bind="fila.Item.DimSegunPlano"
+                                                          @bind:event="oninput"></textarea>
+                                            </td>
+                                            <td>
+                                                <textarea class="form-control form-control-sm border-0 plainsp-auto"
+                                                          rows="1" maxlength="64"
+                                                          @bind="fila.Item.Instrumento"
+                                                          @bind:event="oninput"></textarea>
+                                            </td>
+                                            <td>
+                                                <textarea class="form-control form-control-sm border-0 plainsp-auto"
+                                                          rows="1" maxlength="128"
+                                                          @bind="fila.Item.Observaciones"
+                                                          @bind:event="oninput"></textarea>
+                                            </td>
+                                            <td class="text-center">
+                                                <button class="btn btn-sm btn-outline-secondary py-0 px-1 me-1"
+                                                        title="Subir" disabled="@(idx == 0)"
+                                                        @onclick="() => Subir(idx)">
+                                                    <i class="fas fa-arrow-up fa-xs"></i>
+                                                </button>
+                                                <button class="btn btn-sm btn-outline-secondary py-0 px-1 me-1"
+                                                        title="Bajar" disabled="@(idx == filas.Count - 1)"
+                                                        @onclick="() => Bajar(idx)">
+                                                    <i class="fas fa-arrow-down fa-xs"></i>
+                                                </button>
+                                                <button class="btn btn-sm btn-outline-danger py-0 px-1"
+                                                        title="Eliminar"
+                                                        @onclick="() => Eliminar(idx)">
+                                                    <i class="fas fa-trash fa-xs"></i>
+                                                </button>
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <!-- ── Fila nueva ────────────────────────────────── -->
+                        <div class="border border-primary rounded-3 bg-primary bg-opacity-10 px-3 pt-2 pb-3 mt-3">
+                            <div class="mb-2">
+                                <span class="badge bg-primary me-1">
+                                    <i class="fas fa-plus me-1"></i>Nueva fila
+                                </span>
+                                <span class="text-muted small">Complete al menos un campo y presione Agregar</span>
+                            </div>
+                            <div class="row g-2 align-items-end">
+                            <div class="col-md-4">
+                                <label class="form-label small text-uppercase fw-bold mb-1">Dimensión según plano</label>
+                                <input type="text" class="form-control form-control-sm"
+                                       placeholder="Dimensión según plano"
+                                       maxlength="64"
+                                       @bind="nuevaDim" />
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label small text-uppercase fw-bold mb-1">Instrumento</label>
+                                <input type="text" class="form-control form-control-sm"
+                                       placeholder="Instrumento"
+                                       maxlength="64"
+                                       @bind="nuevoInst" />
+                            </div>
+                            <div class="col">
+                                <label class="form-label small text-uppercase fw-bold mb-1">Observaciones</label>
+                                <input type="text" class="form-control form-control-sm"
+                                       placeholder="Observaciones"
+                                       maxlength="128"
+                                       @bind="nuevoObs" />
+                            </div>
+                            <div class="col-auto">
+                                <button class="btn btn-primary btn-sm" @onclick="AgregarFila"
+                                        title="Agregar fila">
+                                    <i class="fas fa-plus me-1"></i>Agregar
+                                </button>
+                            </div>
+                        </div>
+                        </div>
+
+                        <!-- ── Observaciones Codiproc ────────────────────── -->
+                        <div class="mt-4">
+                            <label class="form-label text-muted small text-uppercase fw-bold mb-1">
+                                <i class="fas fa-comment-alt me-1"></i>Observaciones
+                            </label>
+                            <textarea class="form-control" rows="3"
+                                      @bind="observacionesCodiproc"></textarea>
+                        </div>
+                    }
+
+                </div>
+
+                <!-- ══ FOOTER ════════════════════════════════════════════════ -->
+                <div class="modal-footer py-2">
+                    <button type="button" class="btn btn-secondary btn-sm" @onclick="Cerrar">
+                        <i class="fas fa-times me-1"></i>Cancelar
+                    </button>
+                    <button type="button" class="btn btn-success btn-sm"
+                            @onclick="Guardar" disabled="@isGuardando">
+                        @if (isGuardando)
+                        { <span class="spinner-border spinner-border-sm me-1"></span> }
+                        else
+                        { <i class="fas fa-save me-1"></i> }
+                        Guardar
+                    </button>
+                </div>
+
+            </div>
+        </div>
+    </div>
+}
+
+<style>
+    /*
+     * plainsp-auto: textarea que crece con el contenido.
+     * field-sizing:content es soportado en Chrome/Edge >= 123 y Firefox >= 129.
+     * Para navegadores más antiguos se usa la clase sin ese efecto visual,
+     * pero el maxlength y el resize:none siguen funcionando.
+     */
+    .plainsp-auto {
+        field-sizing: content;  /* auto-altura según contenido */
+        min-height: 1.75rem;    /* altura mínima equivalente a 1 línea */
+        max-height: 6rem;       /* máximo 4 líneas antes de hacer scroll interno */
+        resize: none;           /* sin manija de redimensión manual */
+        overflow-y: auto;       /* scroll interno si supera max-height */
+        line-height: 1.4;
+    }
+</style>
+
+@code {
+    // ── Parámetros recibidos desde DocumentosIngenieria.razor ────────────────
+    [Parameter] public bool     IsVisible         { get; set; }  // controla visibilidad
+    [Parameter] public int?     CodInte           { get; set; }  // Cod_Inte del producto seleccionado
+    [Parameter] public Master?  Producto          { get; set; }  // datos completos del producto (para encabezado)
+    [Parameter] public EventCallback OnCloseRequested { get; set; } // callback al cerrar el modal
+
+    // ── Estado interno ────────────────────────────────────────────────────────
+    private List<FilaWrapper> filas         = new();   // filas de la grilla PLAINSP (envueltas con Guid)
+    private Codiproc?     planCodiproc;                // datos originales del plan (referencia para carga inicial)
+    private bool          isLoading         = false;   // spinner de carga inicial
+    private bool          isGuardando       = false;   // spinner del botón Guardar
+
+    // ── Campos para agregar una nueva fila ────────────────────────────────────
+    private string        nuevaDim          = string.Empty;
+    private string        nuevoInst         = string.Empty;
+    private string        nuevoObs          = string.Empty;
+
+    // ── Campos editables del encabezado Codiproc ──────────────────────────────
+    private int?          editAQL;                 // Codiproc.AQL
+    private int?          editNivelPct;            // Codiproc.NivelPct
+    private string?       editFrecInspeccion;      // Codiproc.FrecInspeccion (máx 32)
+    private string?       editPuntoDetencion;      // Codiproc.PuntoDetencion (máx 48)
+    private string?       observacionesCodiproc;   // Codiproc.Observaciones
+    private string?       editNombrePreparo;        // Codiproc.NombrePreparo
+    private DateTime?     editFechaPreparo;         // Codiproc.FechaPreparo
+    private string?       editNombreAprobo;         // Codiproc.NombreAprobo
+    private DateTime?     editFechaAprobo;          // Codiproc.FechaAprobo
+
+    // _lastCodInte evita recargar si el producto no cambió (Blazor re-renderiza
+    // el componente en cada ciclo aunque los parámetros sean los mismos)
+    private int?          _lastCodInte;
+
+    // Se ejecuta cada vez que cambian los parámetros del componente
+    protected override async Task OnParametersSetAsync()
+    {
+        if (IsVisible && CodInte != _lastCodInte)
+        {
+            // Nuevo producto seleccionado → recargar datos
+            _lastCodInte = CodInte;
+            await Cargar();
+        }
+        if (!IsVisible)
+        {
+            // Modal cerrado → resetear estado para la próxima apertura
+            _lastCodInte = null;
+            filas.Clear();
+            nuevaDim = nuevoInst = nuevoObs = string.Empty;
+        }
+    }
+
+    /// <summary>
+    /// Carga las filas PLAINSP y los datos del encabezado Codiproc
+    /// desde la API para el producto actualmente seleccionado.
+    /// </summary>
+    private async Task Cargar()
+    {
+        if (CodInte == null) return;
+        isLoading = true;
+        StateHasChanged(); // muestra spinner antes de las llamadas async
+        try
+        {
+            // Filas de la grilla: dimensiones según plano
+            var rp = await Repository.Get<List<Plainsp>>($"api/plainsp/by-codinte/{CodInte}");
+            filas = rp.Error || rp.Response == null
+                ? new()
+                : rp.Response.Select(x => new FilaWrapper(x)).ToList(); // envolver con Guid único
+
+            // Datos del encabezado (AQL, Nivel, Frecuencia, Puntos, Preparó, Aprobó, Observaciones)
+            var rc = await Repository.Get<Codiproc>($"api/codiproc/by-codinte/{CodInte}");
+            planCodiproc          = rc.Error ? null : rc.Response;
+            editAQL               = planCodiproc?.AQL;
+            editNivelPct          = planCodiproc?.NivelPct;
+            editFrecInspeccion    = planCodiproc?.FrecInspeccion;
+            editPuntoDetencion    = planCodiproc?.PuntoDetencion;
+            observacionesCodiproc = planCodiproc?.Observaciones;
+            editNombrePreparo     = planCodiproc?.NombrePreparo;
+            editFechaPreparo      = planCodiproc?.FechaPreparo;
+            editNombreAprobo      = planCodiproc?.NombreAprobo;
+            editFechaAprobo       = planCodiproc?.FechaAprobo;
+        }
+        catch { }
+        finally { isLoading = false; }
+    }
+
+    /// <summary>
+    /// Agrega una nueva fila al final de la grilla usando los inputs de "Nueva fila".
+    /// Requiere al menos Dimensión o Instrumento; no agrega filas completamente vacías.
+    /// </summary>
+    private void AgregarFila()
+    {
+        if (string.IsNullOrWhiteSpace(nuevaDim) && string.IsNullOrWhiteSpace(nuevoInst)) return;
+        filas.Add(new FilaWrapper(new Plainsp
+        {
+            DimSegunPlano = nuevaDim.Trim(),
+            Instrumento   = nuevoInst.Trim(),
+            Observaciones = string.IsNullOrWhiteSpace(nuevoObs) ? null : nuevoObs.Trim()
+        }));
+        nuevaDim = nuevoInst = nuevoObs = string.Empty; // limpiar inputs
+    }
+
+    /// <summary>Intercambia la fila en idx con la anterior (sube una posición).</summary>
+    private void Subir(int idx)
+    {
+        if (idx <= 0) return;
+        (filas[idx], filas[idx - 1]) = (filas[idx - 1], filas[idx]);
+    }
+
+    /// <summary>Intercambia la fila en idx con la siguiente (baja una posición).</summary>
+    private void Bajar(int idx)
+    {
+        if (idx >= filas.Count - 1) return;
+        (filas[idx], filas[idx + 1]) = (filas[idx + 1], filas[idx]);
+    }
+
+    /// <summary>Elimina la fila en la posición indicada.</summary>
+    private void Eliminar(int idx) => filas.RemoveAt(idx);
+
+    /// <summary>
+    /// Persiste todos los cambios del modal en dos operaciones:
+    ///   1. Grilla PLAINSP : POST api/plainsp/guardar (DELETE + INSERT en servidor)
+    ///   2. Encabezado CODIPROC: PUT api/codiproc/observaciones (Preparó, Aprobó, Obs.)
+    /// Las dos llamadas son secuenciales; si la primera falla se aborta la segunda.
+    /// </summary>
+    private async Task Guardar()
+    {
+        if (CodInte == null) return;
+        isGuardando = true;
+        StateHasChanged(); // actualiza UI para mostrar spinner en el botón
+        try
+        {
+            // Paso 1: guardar filas PLAINSP
+            // Extraer los Plainsp desde los wrappers (descarta el Guid auxiliar)
+            var items = filas.Select(f => f.Item).ToList();
+            var rp = await Repository.Post<List<Plainsp>, object>(
+                $"api/plainsp/guardar/{CodInte}", items);
+
+            if (rp.Error)
+            {
+                await SweetAlertService.FireAsync("Error", await rp.GetErrorMessageAsync(), SweetAlertIcon.Error);
+                return; // abortar sin actualizar Codiproc
+            }
+
+            // Paso 2: actualizar todos los campos editables del encabezado Codiproc
+            var dto = new
+            {
+                AQL            = editAQL,
+                NivelPct       = editNivelPct,
+                FrecInspeccion = editFrecInspeccion,
+                PuntoDetencion = editPuntoDetencion,
+                NombrePreparo  = editNombrePreparo,
+                FechaPreparo   = editFechaPreparo,
+                NombreAprobo   = editNombreAprobo,
+                FechaAprobo    = editFechaAprobo,
+                Observaciones  = observacionesCodiproc
+            };
+            await Repository.Put<object>($"api/codiproc/observaciones/{CodInte}", dto);
+
+            await SweetAlertService.FireAsync("Guardado", "Plan de Inspección guardado correctamente.", SweetAlertIcon.Success);
+        }
+        catch (Exception ex)
+        {
+            await SweetAlertService.FireAsync("Error", ex.Message, SweetAlertIcon.Error);
+        }
+        finally { isGuardando = false; }
+    }
+
+    private async Task Cerrar() => await OnCloseRequested.InvokeAsync();
+
+    /// <summary>
+    /// Envuelve un Plainsp con un identificador Guid inmutable.
+    ///
+    /// PROPÓSITO: resolver el bug de reorden en Blazor.
+    /// Cuando se usa @for y los ítems cambian de posición, el algoritmo
+    /// de diff de Blazor actualiza los nodos DOM existentes en lugar de
+    /// moverlos, provocando que los event handlers apunten al índice
+    /// incorrecto después del primer intercambio.
+    ///
+    /// Al agregar @key="fila.Key" en el <tr>, Blazor rastrea cada fila
+    /// por su Guid (que es único y no cambia con el reorden) y mueve
+    /// el nodo DOM completo, manteniendo el binding correcto.
+    /// </summary>
+    private class FilaWrapper
+    {
+        /// <summary>Identificador único inmutable; generado al crear/cargar la fila.</summary>
+        public Guid    Key  { get; } = Guid.NewGuid();
+
+        /// <summary>Datos reales de la fila; mutable para edición en la grilla.</summary>
+        public Plainsp Item { get; set; }
+
+        public FilaWrapper(Plainsp item) { Item = item; }
+    }
+}

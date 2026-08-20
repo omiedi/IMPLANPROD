@@ -1,4 +1,6 @@
 @page "/reportes/generador"
+@using Microsoft.AspNetCore.Authorization
+@attribute [Authorize(Roles = "SUPERADMIN")]
 @using System.Reflection
 @using System.Text.Json
 @using IMPLANPROD.Shared

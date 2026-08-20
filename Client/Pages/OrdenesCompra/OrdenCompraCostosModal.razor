@@ -1,0 +1,535 @@
+@using IMPLANPROD.Shared.DTOs
+@using IMPLANPROD.Shared.Entities
+@using IMPLANPROD.Client.Repositories
+@using IMPLANPROD.Client.Pages.Reportes
+@inject IRepository repository
+@inject SweetAlertService sweetAlertService
+
+@if (MostrarModal)
+{
+    <div class="modal fade show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5);">
+        <div class="modal-dialog modal-xl">
+            <div class="modal-content">
+                <!-- Header del Modal -->
+                <div class="modal-header bg-success text-white">
+                    <h5 class="modal-title">
+                        <i class="fas fa-dollar-sign"></i>
+                        Costos de Orden de Compra N° @NumeroOrden
+                    </h5>
+                    <button type="button" class="btn-close btn-close-white" @onclick="CerrarModal"></button>
+                </div>
+
+                <!-- Body del Modal -->
+                <div class="modal-body">
+                    @if (cargando)
+                    {
+                        <div class="text-center p-4">
+                            <div class="spinner-border text-success" role="status">
+                                <span class="visually-hidden">Cargando costos...</span>
+                            </div>
+                            <p class="mt-2">Cargando costos de la orden...</p>
+                        </div>
+                    }
+                    else if (costos != null && costos.Any())
+                    {
+                        <!-- Información de la moneda -->
+                        <div class="alert alert-info mb-3">
+                            <i class="fas fa-info-circle"></i>
+                            <strong>Moneda:</strong> @(costos.FirstOrDefault()?.DescripcionMoneda ?? "N/D")
+                        </div>
+
+                        <!-- Tabla de costos editable -->
+                        <div class="table-responsive">
+                            <table class="table table-sm table-striped table-hover">
+                                <thead class="table-success">
+                                    <tr>
+                                        <th style="width: 5%;">Item</th>
+                                        <th style="width: 15%;">Código</th>
+                                        <th style="width: 30%;">Descripción</th>
+                                        <th style="width: 8%;" class="text-center">UM</th>
+                                        <th style="width: 10%;" class="text-end">Cantidad</th>
+                                        <th style="width: 12%;" class="text-end">Costo</th>
+                                        <th style="width: 12%;" class="text-end">Importe</th>
+                                        <th style="width: 8%;" class="text-center">F. Entrega</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var item in costos)
+                                    {
+                                        <tr>
+                                            <td>@item.NuOrdItem</td>
+                                            <td>@item.CodExte</td>
+                                            <td>@item.Descritem</td>
+                                            <td class="text-center">@item.UniCom</td>
+                                            <td class="text-end">@item.CantOcom?.ToString("N2")</td>
+                                            <td class="text-end">
+                                                <!-- Campo editable de costo -->
+                                                <input type="number" 
+                                                       class="form-control form-control-sm text-end input-number-sin-flechas"
+                                                       step="0.0001" 
+                                                       min="0"
+                                                       @bind="item.PrUnNeto"
+                                                       @bind:event="oninput"
+                                                       placeholder="0.0000"
+                                                       style="font-weight: bold; background-color: #ffffcc;" />
+                                            </td>
+                                            <td class="text-end">
+                                                <strong>@item.Importe?.ToString("C2")</strong>
+                                            </td>
+                                            <td class="text-center">@item.FentreSol?.ToString("dd/MM/yy")</td>
+                                        </tr>
+                                    }
+                                </tbody>
+                                <tfoot class="table-light">
+                                    <tr>
+                                        <td colspan="6" class="text-end"><strong>TOTAL:</strong></td>
+                                        <td class="text-end">
+                                            <strong style="font-size: 1.1em; color: #198754;">
+                                                @TotalGeneral.ToString("C2")
+                                            </strong>
+                                        </td>
+                                        <td></td>
+                                    </tr>
+                                </tfoot>
+                            </table>
+                        </div>
+
+                        <!-- Campo de Observaciones para impresión de O.C. con costos -->
+                        <div class="card mt-3">
+                            <div class="card-header bg-info text-white">
+                                <h6 class="mb-0">
+                                    <i class="fas fa-file-alt me-2"></i>
+                                    Observaciones que se presentan en la impresión de la orden de compra con costos
+                                </h6>
+                            </div>
+                            <div class="card-body">
+                                <textarea class="form-control"
+                                          rows="3"
+                                          maxlength="1024"
+                                          @bind="observacionesImpresion"
+                                          placeholder="Ingrese observaciones para impresión (opcional, máximo 1024 caracteres)..."></textarea>
+                                <small class="text-muted">
+                                    <i class="fas fa-info-circle"></i>
+                                    Se guarda en OCOMDETACosto.Observaciones.
+                                </small>
+                            </div>
+                        </div>
+
+                        <!-- Campo de Observación del cambio de precio (se mantiene igual) -->
+                        @if (mostrarObservacion)
+                        {
+                            <div class="card mt-3">
+                                <div class="card-header bg-warning text-dark">
+                                    <h6 class="mb-0">
+                                        <i class="fas fa-comment-alt me-2"></i>
+                                        Observación del Cambio de Precio
+                                    </h6>
+                                </div>
+                                <div class="card-body">
+                                    <textarea class="form-control" 
+                                              rows="3" 
+                                              maxlength="512"
+                                              @bind="observacion"
+                                              placeholder="Ingrese una observación sobre el cambio de precio (opcional, máximo 512 caracteres)..."></textarea>
+                                    <small class="text-muted">
+                                        <i class="fas fa-info-circle"></i>
+                                        Esta observación se registrará en el historial de cambios de precios (NOVEDADES).
+                                    </small>
+                                </div>
+                            </div>
+                        }
+
+                        <!-- Ayuda -->
+                        <div class="alert alert-warning mt-3">
+                            <i class="fas fa-lightbulb"></i>
+                            <strong>Ayuda:</strong> Los campos de costo (fondo amarillo) son editables. 
+                            El importe se calcula automáticamente como Cantidad × Costo.
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="alert alert-warning">
+                            <i class="fas fa-exclamation-triangle"></i>
+                            No se encontraron items activos en esta orden de compra.
+                        </div>
+                    }
+                </div>
+
+                <!-- Footer del Modal -->
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" @onclick="CerrarModal">
+                        <i class="fas fa-times"></i> Cancelar
+                    </button>
+                    <button type="button" 
+                            class="btn btn-info" 
+                            @onclick="ImprimirOrden"
+                            disabled="@(costos == null || !costos.Any())">
+                        <i class="fas fa-print me-2"></i>
+                        Imprimir
+                    </button>
+                    <button type="button" 
+                            class="btn btn-success" 
+                            @onclick="GuardarCostos"
+                            disabled="@(guardando || costos == null || !costos.Any())">
+                        @if (guardando)
+                        {
+                            <span class="spinner-border spinner-border-sm me-2"></span>
+                        }
+                        else
+                        {
+                            <i class="fas fa-save me-2"></i>
+                        }
+                        Guardar Costos
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] public bool MostrarModal { get; set; }
+    [Parameter] public int NumeroOrden { get; set; }
+    [Parameter] public EventCallback OnCerrar { get; set; }
+    [Parameter] public EventCallback OnCostosGuardados { get; set; }
+
+    private List<OCOMDETACostoDto>? costos;
+    private bool cargando = false;
+    private bool guardando = false;
+    
+    // Variables para el modal de impresión
+    private bool mostrarModalImpresion = false;
+    private Ocomenca? ordenParaImprimir;
+    private List<Ocomdeta>? detalleParaImprimir;
+
+    // Variables para observación y configuración
+    private string observacionesImpresion = string.Empty;
+    private string observacion = string.Empty;
+    private bool mostrarObservacion = false;
+    private string configuracionACOSREP = "NUNCA";
+
+    /// <summary>
+    /// Total general calculado sumando todos los importes
+    /// </summary>
+    private decimal TotalGeneral => costos?.Sum(c => c.Importe ?? 0) ?? 0;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (MostrarModal && NumeroOrden > 0 && costos == null)
+        {
+            // Limpiar observación al cargar nueva orden
+            observacionesImpresion = string.Empty;
+            observacion = string.Empty;
+            await CargarCostosAsync();
+        }
+    }
+
+    /// <summary>
+    /// Carga los costos de la orden desde el servidor
+    /// Combina datos de OCOMDETA con OCOMDETACosto
+    /// También carga la configuración ACOSREP para determinar si se muestra el campo de observación
+    /// </summary>
+    private async Task CargarCostosAsync()
+    {
+        cargando = true;
+        StateHasChanged();
+
+        try
+        {
+            // Cargar costos de la orden
+            var url = $"api/OCOMDETACosto/orden/{NumeroOrden}";
+            var response = await repository.Get<List<OCOMDETACostoDto>>(url);
+
+            if (!response.Error)
+            {
+                costos = response.Response;
+                observacionesImpresion = costos?
+                    .Select(c => c.Observaciones)
+                    .FirstOrDefault(x => !string.IsNullOrWhiteSpace(x))
+                    ?? string.Empty;
+                Console.WriteLine($"Costos cargados: {costos?.Count ?? 0} items");
+            }
+            else
+            {
+                var mensaje = await response.GetErrorMessageAsync();
+                await sweetAlertService.FireAsync("Error", $"Error al cargar costos: {mensaje}", SweetAlertIcon.Error);
+                costos = new List<OCOMDETACostoDto>();
+            }
+
+            // Cargar configuración ACOSREP para determinar si se muestra observación
+            await CargarConfiguracionACOSREP();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error al cargar costos: {ex.Message}");
+            await sweetAlertService.FireAsync("Error", $"Error inesperado: {ex.Message}", SweetAlertIcon.Error);
+            costos = new List<OCOMDETACostoDto>();
+        }
+        finally
+        {
+            cargando = false;
+            StateHasChanged();
+        }
+    }
+
+    /// <summary>
+    /// Carga la configuración ACOSREP desde CONTROL
+    /// Si es diferente de "NUNCA", se muestra el campo de observación
+    /// </summary>
+    private async Task CargarConfiguracionACOSREP()
+    {
+        try
+        {
+            var urlConfig = "api/Control/OCOMPRA/ACOSREP";
+            var responseConfig = await repository.Get<string>(urlConfig);
+
+            if (!responseConfig.Error && !string.IsNullOrEmpty(responseConfig.Response))
+            {
+                configuracionACOSREP = responseConfig.Response.ToUpper();
+                // Mostrar observación si NO es "NUNCA"
+                mostrarObservacion = configuracionACOSREP != "NUNCA";
+                Console.WriteLine($"Configuración ACOSREP: {configuracionACOSREP}, Mostrar observación: {mostrarObservacion}");
+            }
+            else
+            {
+                // Por defecto, si no se puede cargar, asumimos "SIEMPRE"
+                configuracionACOSREP = "SIEMPRE";
+                mostrarObservacion = true;
+                Console.WriteLine("No se pudo cargar ACOSREP, usando valor por defecto: SIEMPRE");
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error al cargar configuración ACOSREP: {ex.Message}");
+            // Por defecto, mostrar observación
+            configuracionACOSREP = "SIEMPRE";
+            mostrarObservacion = true;
+        }
+    }
+
+    /// <summary>
+    /// Guarda todos los costos editados en el servidor
+    /// Si la configuración ACOSREP es diferente de "NUNCA", también registra en NOVEDADES
+    /// </summary>
+    private async Task GuardarCostos()
+    {
+        if (costos == null || !costos.Any())
+        {
+            return;
+        }
+
+        guardando = true;
+        StateHasChanged();
+
+        try
+        {
+            var observacionNormalizada = string.IsNullOrWhiteSpace(observacionesImpresion)
+                ? null
+                : observacionesImpresion.Trim();
+
+            foreach (var costo in costos)
+            {
+                costo.Observaciones = observacionNormalizada;
+            }
+
+            // Determinar qué endpoint usar según la configuración ACOSREP
+            string url;
+            object datosAEnviar;
+
+            if (mostrarObservacion && configuracionACOSREP != "NUNCA")
+            {
+                // Usar endpoint que registra en NOVEDADES
+                url = "api/OCOMDETACosto/batch-con-novedades";
+                datosAEnviar = new GuardarCostosConNovedadesDto
+                {
+                    Costos = costos,
+                    Observacion = observacion,
+                    ConfiguracionACOSREP = configuracionACOSREP
+                };
+            }
+            else
+            {
+                // Usar endpoint normal sin NOVEDADES
+                url = "api/OCOMDETACosto/batch";
+                datosAEnviar = costos;
+            }
+
+            // Guardar costos
+            var response = await repository.Post<object, List<OCOMDETACostoDto>>(url, datosAEnviar);
+
+            if (!response.Error)
+            {
+                var mensaje = mostrarObservacion && configuracionACOSREP != "NUNCA"
+                    ? $"Se guardaron {costos.Count} costos y se registraron los cambios en el historial de precios"
+                    : $"Se guardaron {costos.Count} costos correctamente";
+
+                await sweetAlertService.FireAsync("Éxito", mensaje, SweetAlertIcon.Success);
+
+                // Notificar que se guardaron los costos
+                await OnCostosGuardados.InvokeAsync();
+
+                // Cerrar el modal
+                await CerrarModal();
+            }
+            else
+            {
+                var mensajeError = await response.GetErrorMessageAsync();
+                await sweetAlertService.FireAsync("Error", $"Error al guardar costos: {mensajeError}", SweetAlertIcon.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error al guardar costos: {ex.Message}");
+            await sweetAlertService.FireAsync("Error", $"Error inesperado: {ex.Message}", SweetAlertIcon.Error);
+        }
+        finally
+        {
+            guardando = false;
+            StateHasChanged();
+        }
+    }
+
+    /// <summary>
+    /// Cierra el modal y limpia los datos
+    /// </summary>
+    private async Task CerrarModal()
+    {
+        costos = null;
+        observacionesImpresion = string.Empty;
+        observacion = string.Empty;
+        mostrarObservacion = false;
+        configuracionACOSREP = "NUNCA";
+        await OnCerrar.InvokeAsync();
+    }
+
+    /// <summary>
+    /// Abre el modal de impresión de la orden de compra
+    /// Primero pregunta si desea guardar los cambios antes de imprimir
+    /// </summary>
+    private async Task ImprimirOrden()
+    {
+        try
+        {
+            // Preguntar si desea guardar los cambios antes de imprimir
+            var result = await sweetAlertService.FireAsync(new SweetAlertOptions
+            {
+                Title = "¿Desea Guardar los Cambios realizados?",
+                Icon = SweetAlertIcon.Question,
+                ShowCancelButton = true,
+                ShowDenyButton = true,
+                ConfirmButtonText = "Sí, Guardar e Imprimir",
+                DenyButtonText = "No, Solo Imprimir",
+                CancelButtonText = "Cancelar"
+            });
+
+            // Si cancela, no hacer nada
+            if (result.Dismiss == DismissReason.Cancel)
+            {
+                return;
+            }
+
+            // Si eligió guardar, guardar primero
+            if (result.IsConfirmed)
+            {
+                await GuardarCostos();
+                // Si hubo error al guardar, no continuar con la impresión
+                if (costos == null || !costos.Any())
+                {
+                    return;
+                }
+            }
+
+            // Cargar encabezado de la orden por número de orden
+            var urlEncabezado = $"api/ocomenca/por-numero/{NumeroOrden}";
+            var responseEncabezado = await repository.Get<Ocomenca>(urlEncabezado);
+
+            if (responseEncabezado.Error)
+            {
+                var mensaje = await responseEncabezado.GetErrorMessageAsync();
+                await sweetAlertService.FireAsync("Error", $"Error al cargar orden: {mensaje}", SweetAlertIcon.Error);
+                return;
+            }
+
+            ordenParaImprimir = responseEncabezado.Response;
+
+            // Cargar detalle de la orden por número de orden
+            var urlDetalle = $"api/ocomdeta/por-orden/{NumeroOrden}";
+            var responseDetalle = await repository.Get<List<Ocomdeta>>(urlDetalle);
+
+            if (responseDetalle.Error)
+            {
+                var mensaje = await responseDetalle.GetErrorMessageAsync();
+                await sweetAlertService.FireAsync("Error", $"Error al cargar detalle: {mensaje}", SweetAlertIcon.Error);
+                return;
+            }
+
+            detalleParaImprimir = responseDetalle.Response;
+
+            // Actualizar los precios del detalle con los costos actuales de OCOMDETACosto
+            if (detalleParaImprimir != null && costos != null && costos.Any())
+            {
+                foreach (var item in detalleParaImprimir)
+                {
+                    // Buscar el costo correspondiente por CodInte y NuOrdItem
+                    var costo = costos.FirstOrDefault(c => 
+                        c.CodInte == item.CodInte && 
+                        c.NuOrdItem == item.NuOrdItem);
+                    
+                    if (costo != null && costo.PrUnNeto.HasValue)
+                    {
+                        // Actualizar el precio unitario neto con el valor de OCOMDETACosto
+                        item.PrUnNeto = costo.PrUnNeto.Value;
+                        
+                        // Recalcular el importe total del item
+                        if (item.CantOcom.HasValue)
+                        {
+                            item.INetItem = item.CantOcom.Value * costo.PrUnNeto.Value;
+                        }
+                    }
+                }
+            }
+
+            // Abrir modal de impresión
+            mostrarModalImpresion = true;
+            StateHasChanged();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error al preparar impresión: {ex.Message}");
+            await sweetAlertService.FireAsync("Error", $"Error inesperado: {ex.Message}", SweetAlertIcon.Error);
+        }
+    }
+
+    /// <summary>
+    /// Cierra el modal de impresión
+    /// </summary>
+    private void CerrarModalImpresion()
+    {
+        mostrarModalImpresion = false;
+        ordenParaImprimir = null;
+        detalleParaImprimir = null;
+        StateHasChanged();
+    }
+}
+
+@* Modal de impresión de orden de compra *@
+<ImpresionOrdenCompra MostrarModal="@mostrarModalImpresion"
+                     OrdenCompra="@ordenParaImprimir"
+                     DetalleItems="@detalleParaImprimir"
+                     ObservacionesCostos="@observacionesImpresion"
+                     TotalPersonalizado="@TotalGeneral"
+                     OnCerrar="@CerrarModalImpresion" />
+
+<style>
+    .input-number-sin-flechas::-webkit-outer-spin-button,
+    .input-number-sin-flechas::-webkit-inner-spin-button {
+        -webkit-appearance: none;
+        margin: 0;
+    }
+
+    .input-number-sin-flechas {
+        -moz-appearance: textfield;
+        appearance: textfield;
+    }
+</style>
+

@@ -1,0 +1,60 @@
+@page "/seg-paginas/editar/{Id:int}"
+@using Microsoft.AspNetCore.Authorization
+@attribute [Authorize(Roles = "SUPERADMIN")]
+@inject IRepository repository
+@inject NavigationManager navigationManager
+@inject SweetAlertService sweetAlertService
+
+<PageTitle>Editar Página</PageTitle>
+<h4><i class="fas fa-file-alt me-2"></i>Editar Página de Seguridad</h4>
+<hr />
+
+@if (pagina is null)
+{
+    <div class="spinner" />
+}
+else
+{
+    <SegPaginaForm @ref="form" Pagina="pagina" OnValidSubmit="EditAsync" ReturnAction="Return" />
+}
+
+@code {
+    [Parameter] public int Id { get; set; }
+
+    private SegPagina? pagina;
+    private SegPaginaForm? form;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var resp = await repository.Get<SegPagina>($"api/SegPaginas/{Id}");
+        if (resp.Error)
+        {
+            if (resp.HttpResponseMessage.StatusCode == System.Net.HttpStatusCode.NotFound)
+            {
+                navigationManager.NavigateTo("/seg-paginas");
+                return;
+            }
+            await sweetAlertService.FireAsync("Error", await resp.GetErrorMessageAsync(), SweetAlertIcon.Error);
+            return;
+        }
+        pagina = resp.Response;
+        if (pagina != null) pagina.Modulo = null;
+    }
+
+    private async Task EditAsync()
+    {
+        var resp = await repository.Put($"api/SegPaginas/{Id}", pagina);
+        if (resp.Error)
+        {
+            await sweetAlertService.FireAsync("Error", await resp.GetErrorMessageAsync(), SweetAlertIcon.Error);
+            return;
+        }
+        Return();
+    }
+
+    private void Return()
+    {
+        form!.FormPostedSuccessfully = true;
+        navigationManager.NavigateTo("/seg-paginas");
+    }
+}

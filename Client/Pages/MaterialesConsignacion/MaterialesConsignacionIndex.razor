@@ -2,14 +2,24 @@
 @using IMPLANPROD.Shared.Entities
 @using IMPLANPROD.Client.Repositories
 @using IMPLANPROD.Client.Services
+@using IMPLANPROD.Client.Pages.Remitos
+@using IMPLANPROD.Client.Helpers
+@using IMPLANPROD.Shared.DTOs.Impresiones
 @inject IRepository repository
 @inject NavigationManager navigationManager
 @inject SweetAlertService sweetAlertService
 @inject IJSRuntime JS
 @inject HttpClient Http
+@inject PageAccessService PageAccess
 
 <PageTitle>Materiales en Consignación</PageTitle>
 
+@if (validando)
+{
+    <p>Validando acceso...</p>
+}
+else
+{
 <div class="container-fluid">
     <div class="row mb-3">
         <div class="col">
@@ -45,7 +55,7 @@
             </div>
             <div class="row mt-3">
                 <div class="col-12 text-end">
-                    <button class="btn btn-primary" @onclick="CargarDatosAsync">
+                    <button class="btn btn-primary" @onclick="async () => await AplicarFiltrosAsync()">
                         <i class="fas fa-search"></i> Buscar
                     </button>
                     <button class="btn btn-outline-secondary ms-2" @onclick="LimpiarFiltrosAsync">
@@ -55,6 +65,10 @@
             </div>
         </div>
     </div>
+
+    <Pagination CurrentPage="currentPage"
+                TotalPages="totalPages"
+                SelectedPage="SelectedPageAsync" />
 
     <!-- Tabla de materiales en consignación -->
     <div class="card">
@@ -67,7 +81,7 @@
                     </div>
                 </div>
             }
-            else if (!MaterialesFiltrados.Any())
+            else if (!materiales.Any())
             {
                 <div class="alert alert-info text-center">
                     <i class="fas fa-info-circle"></i> No se encontraron materiales en consignación con saldo pendiente.
@@ -77,23 +91,27 @@
             {
                 <!-- Botones de acción -->
                 <div class="d-flex justify-content-between mb-3">
-                    <div>
-                        <span class="badge bg-primary fs-6">
-                            Total: @MaterialesFiltrados.Count() registros
-                        </span>
-                        <span class="badge bg-success fs-6 ms-2">
-                            Saldo Total: @MaterialesFiltrados.Sum(m => m.SaldoPend ?? 0).ToString("N2")
-                        </span>
+                    <!-- Grupo izquierdo: acciones de remitos de consignación -->
+                    <div class="d-flex align-items-stretch gap-2">
+                        <!-- Abre el modal para generar un nuevo remito RC -->
+                        <button class="btn btn-warning d-flex align-items-center justify-content-center text-center" style="min-height: 56px;" @onclick="AbrirModalConfigRemitoAsync">
+                            <span><i class="fas fa-truck-loading me-1"></i>Remito en Consignación<br />Proveedores de Servicios</span>
+                        </button>
+                        <!-- Abre el modal para consultar remitos RC ya generados -->
+                        <button class="btn btn-primary d-flex align-items-center justify-content-center text-center" style="min-height: 56px;" @onclick="AbrirModalVerRemitosRcAsync">
+                            <span><i class="fas fa-list me-1"></i>Ver Remitos en<br />Consignación</span>
+                        </button>
                     </div>
-                    <div>
-                        <button class="btn btn-outline-success" @onclick="ImprimirReporteAsync" disabled="@imprimiendo">
+                    <!-- Grupo derecho: acciones de impresión/exportación del listado principal -->
+                    <div class="d-flex align-items-stretch gap-2">
+                        <button class="btn btn-outline-success d-flex align-items-center justify-content-center" style="min-height: 56px;" @onclick="ImprimirReporteAsync" disabled="@imprimiendo">
                             @if (imprimiendo)
                             {
                                 <span class="spinner-border spinner-border-sm me-1"></span>
                             }
                             <i class="fas fa-print"></i> Imprimir
                         </button>
-                        <button class="btn btn-success ms-2" @onclick="ExportarExcelAsync" disabled="@exportando">
+                        <button class="btn btn-success d-flex align-items-center justify-content-center" style="min-height: 56px;" @onclick="ExportarExcelAsync" disabled="@exportando">
                             @if (exportando)
                             {
                                 <span class="spinner-border spinner-border-sm me-1"></span>
@@ -124,7 +142,7 @@
                             </tr>
                         </thead>
                         <tbody>
-                            @foreach (var material in MaterialesFiltrados)
+                            @foreach (var material in materiales)
                             {
                                 <tr>
                                     <td>@material.FemiOcom?.ToString("dd/MM/yyyy")</td>
@@ -147,11 +165,11 @@
                         <tfoot class="table-secondary">
                             <tr>
                                 <th colspan="9" class="text-end">TOTALES:</th>
-                                <th class="text-end">@MaterialesFiltrados.Sum(m => m.CantAsig ?? 0).ToString("N2")</th>
-                                <th class="text-end">@MaterialesFiltrados.Sum(m => m.CantEntreg ?? 0).ToString("N2")</th>
+                                <th class="text-end">@materiales.Sum(m => m.CantAsig ?? 0).ToString("N2")</th>
+                                <th class="text-end">@materiales.Sum(m => m.CantEntreg ?? 0).ToString("N2")</th>
                                 <th></th>
-                                <th class="text-end">@MaterialesFiltrados.Sum(m => m.CantRendid ?? 0).ToString("N2")</th>
-                                <th class="text-end"><strong>@MaterialesFiltrados.Sum(m => m.SaldoPend ?? 0).ToString("N2")</strong></th>
+                                <th class="text-end">@materiales.Sum(m => m.CantRendid ?? 0).ToString("N2")</th>
+                                <th class="text-end"><strong>@materiales.Sum(m => m.SaldoPend ?? 0).ToString("N2")</strong></th>
                             </tr>
                         </tfoot>
                     </table>
@@ -159,7 +177,354 @@
             }
         </div>
     </div>
+
+    <Pagination CurrentPage="currentPage"
+                TotalPages="totalPages"
+                SelectedPage="SelectedPageAsync" />
 </div>
+    }
+}
+
+@if (mostrarModalRemito)
+{
+    <div class="modal fade show d-block" tabindex="-1" style="background-color: rgba(0,0,0,.4)">
+        <div class="modal-dialog modal-xl modal-dialog-scrollable">
+            <div class="modal-content">
+                <div class="modal-header bg-primary text-white">
+                    <h5 class="modal-title">
+                        <i class="fas fa-truck-loading"></i> Remito en Consignación - Proveedores de Servicios
+                    </h5>
+                    <button type="button" class="btn-close btn-close-white" @onclick="CerrarModalRemito"></button>
+                </div>
+                <div class="modal-body">
+                    @if (cargandoConfigRemito)
+                    {
+                        <div class="text-center py-4">
+                            <div class="spinner-border" role="status"></div>
+                            <p class="mt-2 mb-0">Cargando configuración de remisión...</p>
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="row g-3">
+                            <div class="col-12">
+                                <div class="d-flex flex-wrap gap-4">
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="radio" name="modoFiltroRemito" id="modoProv" checked="@(modoFiltroRemito == 1)" @onchange="async () => await CambiarModoFiltroRemitoAsync(1)" />
+                                        <label class="form-check-label" for="modoProv">Filtrar por proveedor</label>
+                                    </div>
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="radio" name="modoFiltroRemito" id="modoProvOc" checked="@(modoFiltroRemito == 2)" @onchange="async () => await CambiarModoFiltroRemitoAsync(2)" />
+                                        <label class="form-check-label" for="modoProvOc">Filtrar por proveedor y O.Compra</label>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="col-md-4">
+                                <label class="form-label">Proveedor</label>
+                                <select class="form-select" @bind="numeroProveedorRemito" @bind:after="OnProveedorSeleccionadoChangedAsync">
+                                    <option value="0">-- Seleccionar proveedor --</option>
+                                    @foreach (var p in proveedoresRemito)
+                                    {
+                                        <option value="@p.NumeroProveedor">@p.NumeroProveedor - @p.RazonSocial (@p.CantidadOrdenesPendientes OCs)</option>
+                                    }
+                                </select>
+                            </div>
+
+                            <div class="col-md-8">
+                                <label class="form-label">Transporte</label>
+                                <select class="form-select" @bind="transporteRemitoId" @bind:after="OnTransporteRemitoChangedAsync">
+                                    <option value="0">-- Seleccionar transporte --</option>
+                                    @foreach (var transporte in transportesRemito)
+                                    {
+                                        <option value="@transporte.Id">@($"{transporte.Codi_Tra} - {transporte.Raso_Tra} - {transporte.Domi_Tra} - {transporte.Loca_Tra}")</option>
+                                    }
+                                </select>
+                            </div>
+
+                            @if (modoFiltroRemito == 2)
+                            {
+                                <div class="col-md-4">
+                                    <label class="form-label">Órdenes de Compra pendientes (múltiple)</label>
+                                    <div class="border rounded p-2" style="max-height: 180px; overflow-y: auto;">
+                                        @if (!ordenesCompraPendientesRemito.Any())
+                                        {
+                                            <div class="text-muted small">No hay O.C. pendientes para el proveedor seleccionado.</div>
+                                        }
+                                        else
+                                        {
+                                            @foreach (var oc in ordenesCompraPendientesRemito)
+                                            {
+                                                <div class="form-check">
+                                                    <input class="form-check-input"
+                                                           type="checkbox"
+                                                           checked="@ordenesCompraSeleccionadas.Contains(oc.NroOcom)"
+                                                           @onchange="async (ChangeEventArgs e) => await OnOrdenCompraSeleccionChangedAsync(oc.NroOcom, e)" />
+                                                    <label class="form-check-label">
+                                                        @oc.NroOcom @(oc.FechaEmision.HasValue ? $"({oc.FechaEmision.Value:dd/MM/yyyy})" : string.Empty)
+                                                    </label>
+                                                </div>
+                                            }
+                                        }
+                                    </div>
+                                    <small class="text-muted">Seleccionadas: @ordenesCompraSeleccionadas.Count</small>
+                                </div>
+                            }
+
+                            <div class="col-md-4">
+                                <label class="form-label">Depósito</label>
+                                <select class="form-select" @bind="depositoRemito" @bind:after="OnDepositoRemitoChangedAsync">
+                                    <option value="0">-- Seleccionar depósito --</option>
+                                    @foreach (var d in depositosRemito)
+                                    {
+                                        <option value="@d.CodigoDepo">@d.CodigoDepo - @d.Descripcion</option>
+                                    }
+                                </select>
+                            </div>
+
+                            <div class="col-md-3">
+                                <label class="form-label">Código Mov.</label>
+                                <input type="text" class="form-control" value="RC" disabled />
+                            </div>
+
+                            <div class="col-md-3">
+                                <label class="form-label">Próx. Comprobante</label>
+                                <input type="text" class="form-control" value="@ProximoComprobanteFormateado" disabled />
+                            </div>
+
+                            <div class="col-md-3">
+                                <label class="form-label">Fecha Remito</label>
+                                <input type="date" class="form-control" @bind="fechaRemito" />
+                            </div>
+
+                            <div class="col-md-3 d-flex align-items-end">
+                                <button class="btn btn-primary w-100" @onclick="CargarPendientesRemitoAsync" disabled="@cargandoPendientesRemito">
+                                    @if (cargandoPendientesRemito)
+                                    {
+                                        <span class="spinner-border spinner-border-sm me-1"></span>
+                                    }
+                                    Cargar Pendientes
+                                </button>
+                            </div>
+
+                            <div class="col-12">
+                                @if (!pendientesRemision.Any())
+                                {
+                                    <div class="alert alert-info mb-0">No hay ítems pendientes cargados para remitir.</div>
+                                }
+                                else
+                                {
+                                    <div class="table-responsive">
+                                        <table class="table table-sm table-striped table-hover">
+                                            <thead class="table-dark">
+                                                <tr>
+                                                    <th>O.Compra</th>
+                                                    <th>Cód.</th>
+                                                    <th>Descripción</th>
+                                                    <th class="text-end">Falta Entregar</th>
+                                                    <th class="text-end">Stock Depósito</th>
+                                                    <th class="text-end">Cant. a Entregar</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                @foreach (var item in pendientesRemision)
+                                                {
+                                                    <tr>
+                                                        <td>@item.OCompra</td>
+                                                        <td>@item.CodExte</td>
+                                                        <td>@item.Descripcion</td>
+                                                        <td class="text-end">@item.FaltaEntregar.ToString("N2")</td>
+                                                        <td class="text-end">@item.StockDeposito.ToString("N2")</td>
+                                                        <td style="max-width:140px;">
+                                                            <input type="number" class="form-control form-control-sm text-end"
+                                                                   min="0" step="0.01"
+                                                                   @bind="item.CantidadEntregar" />
+                                                        </td>
+                                                    </tr>
+                                                }
+                                            </tbody>
+                                            <tfoot>
+                                                <tr class="table-secondary">
+                                                    <th colspan="5" class="text-end">Total a remitir:</th>
+                                                    <th class="text-end">@pendientesRemision.Sum(x => x.CantidadEntregar).ToString("N2")</th>
+                                                </tr>
+                                            </tfoot>
+                                        </table>
+                                    </div>
+                                }
+                            </div>
+
+                            <div class="col-12">
+                                <div class="table-responsive">
+                                    <table class="table table-sm table-bordered align-middle mb-0">
+                                        <thead class="table-light">
+                                            <tr>
+                                                <th>Deno_Tra</th>
+                                                <th>RASO_TRA</th>
+                                                <th>Domi_Tra</th>
+                                                <th>Loca_Tra</th>
+                                                <th>Cuit_Tra</th>
+                                                <th>PIVA_TRA</th>
+                                                <th>CodPostal_Tra</th>
+                                                <th>Codi_Tra</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            @if (transporteRemitoSeleccionado is not null)
+                                            {
+                                                <tr>
+                                                    <td>@transporteRemitoSeleccionado.Deno_Tra</td>
+                                                    <td>@transporteRemitoSeleccionado.Raso_Tra</td>
+                                                    <td>@transporteRemitoSeleccionado.Domi_Tra</td>
+                                                    <td>@transporteRemitoSeleccionado.Loca_Tra</td>
+                                                    <td>@transporteRemitoSeleccionado.Cuit_Tra</td>
+                                                    <td>@transporteRemitoSeleccionado.Piva_Tra</td>
+                                                    <td>@transporteRemitoSeleccionado.CodPostal_Tra</td>
+                                                    <td>@transporteRemitoSeleccionado.Codi_Tra</td>
+                                                </tr>
+                                            }
+                                            else
+                                            {
+                                                <tr>
+                                                    <td colspan="8" class="text-center text-muted">Seleccione un transporte para ver sus datos.</td>
+                                                </tr>
+                                            }
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    }
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-outline-secondary" @onclick="CerrarModalRemito">Cerrar</button>
+                    <button type="button" class="btn btn-warning" @onclick="RemitirConsignacionesAsync" disabled="@procesandoRemito">
+                        @if (procesandoRemito)
+                        {
+                            <span class="spinner-border spinner-border-sm me-1"></span>
+                        }
+                        Confirmar Remito RC
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@if (mostrarModalVerRemitosRc)
+{
+    <!-- Modal para consultar remitos RC por mes y año -->
+    <div class="modal fade show d-block" tabindex="-1" style="background-color: rgba(0,0,0,.4)">
+        <div class="modal-dialog modal-xl modal-dialog-scrollable">
+            <div class="modal-content">
+                <div class="modal-header bg-primary text-white">
+                    <h5 class="modal-title">
+                        <i class="fas fa-list"></i> Ver Remitos en Consignación (RC)
+                    </h5>
+                    <button type="button" class="btn-close btn-close-white" @onclick="CerrarModalVerRemitosRc"></button>
+                </div>
+                <div class="modal-body">
+                    <!-- Filtros del período a consultar -->
+                    <div class="row g-3 align-items-end mb-3">
+                        <div class="col-md-3">
+                            <label class="form-label">Mes</label>
+                            <select class="form-select" @bind="mesRemitosRc" @bind:after="OnPeriodoRemitosRcChanged">
+                                <option value="1">Enero</option>
+                                <option value="2">Febrero</option>
+                                <option value="3">Marzo</option>
+                                <option value="4">Abril</option>
+                                <option value="5">Mayo</option>
+                                <option value="6">Junio</option>
+                                <option value="7">Julio</option>
+                                <option value="8">Agosto</option>
+                                <option value="9">Septiembre</option>
+                                <option value="10">Octubre</option>
+                                <option value="11">Noviembre</option>
+                                <option value="12">Diciembre</option>
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">Año</label>
+                            <input type="number" class="form-control" @bind="anioRemitosRc" @bind:after="OnPeriodoRemitosRcChanged" min="2000" max="2100" />
+                        </div>
+                        <div class="col-md-3">
+                            <!-- Consulta los remitos RC del período seleccionado -->
+                            <button class="btn btn-primary w-100" @onclick="CargarRemitosRcAsync" disabled="@cargandoRemitosRc">
+                                @if (cargandoRemitosRc)
+                                {
+                                    <span class="spinner-border spinner-border-sm me-1"></span>
+                                }
+                                Ver
+                            </button>
+                        </div>
+                    </div>
+
+                    @if (remitosConsignacionRc.Any())
+                    {
+                        <!-- Lista de remitos RC encontrados -->
+                        <div class="table-responsive">
+                            <table class="table table-striped table-hover table-sm">
+                                <thead class="table-dark">
+                                    <tr>
+                                        <th>Remito</th>
+                                        <th>Fecha</th>
+                                        <th>N° Proveedor</th>
+                                        <th>Razón Social</th>
+                                        <th style="width: 90px;">Acciones</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var remito in remitosConsignacionRc)
+                                    {
+                                        <tr>
+                                            <td><strong>@remito.DoPriCor</strong></td>
+                                            <td>@remito.Fecha.ToString("dd/MM/yyyy")</td>
+                                            <td>@remito.NumeroProveedor</td>
+                                            <td>@remito.RazonSocialProveedor</td>
+                                            <td>
+                                                <!-- Imprime el remito seleccionado con el mismo formato de /remitos -->
+                                                <button class="btn btn-sm btn-outline-primary"
+                                                        @onclick="() => ImprimirRemitoRcAsync(remito)"
+                                                        title="Imprimir Remito"
+                                                        disabled="@imprimiendoRemitoRc">
+                                                    <i class="fas fa-print"></i>
+                                                </button>
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    }
+                    else if (!cargandoRemitosRc)
+                    {
+                        <!-- Mensaje cuando no hay resultados para el período -->
+                        <div class="alert alert-info mb-0">No se encontraron remitos RC para el período seleccionado.</div>
+                    }
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-outline-secondary" @onclick="CerrarModalVerRemitosRc">Cerrar</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+<ImpresionRemito @ref="impresionRemito"
+                 NCI="@nciImpresion"
+                 NumeroRemito="@numeroRemitoImpresion"
+                 Fecha="@fechaImpresion"
+                 RazonSocial="@razonSocialImpresion"
+                 Domicilio="@domicilioImpresion"
+                 CUIT="@cuitImpresion"
+                 CondicionIVA="@condicionIVAImpresion"
+                 Localidad="@localidadImpresion"
+                 OrdenCompra="@ordenCompraImpresion"
+                 OrdenVenta="@ordenVentaImpresion"
+                 Items="@itemsImpresion"
+                 Observaciones="@observacionesImpresion"
+                 ValorDeclarado="@valorDeclaradoImpresion"
+                 Bultos="@bultosImpresion" />
 
 <!-- Área de impresión (oculta en pantalla) -->
 <div id="areaImpresion" style="display: none;">
@@ -170,7 +535,7 @@
             <p>Fecha: @DateTime.Now.ToString("dd/MM/yyyy HH:mm")</p>
         </div>
 
-        @if (materiales != null && MaterialesFiltrados.Any())
+        @if (materiales != null && materiales.Any())
         {
             <table style="width: 100%; border-collapse: collapse; font-size: 10px;">
                 <thead>
@@ -191,7 +556,7 @@
                     </tr>
                 </thead>
                 <tbody>
-                    @foreach (var material in MaterialesFiltrados)
+                    @foreach (var material in materiales)
                     {
                         <tr>
                             <td style="border: 1px solid #000; padding: 3px;">@material.FemiOcom?.ToString("dd/MM/yyyy")</td>
@@ -213,11 +578,11 @@
                 <tfoot>
                     <tr style="background-color: #f0f0f0; font-weight: bold;">
                         <td colspan="8" style="border: 1px solid #000; padding: 5px; text-align: right;">TOTALES:</td>
-                        <td style="border: 1px solid #000; padding: 5px; text-align: right;">@MaterialesFiltrados.Sum(m => m.CantAsig ?? 0).ToString("N2")</td>
-                        <td style="border: 1px solid #000; padding: 5px; text-align: right;">@MaterialesFiltrados.Sum(m => m.CantEntreg ?? 0).ToString("N2")</td>
+                        <td style="border: 1px solid #000; padding: 5px; text-align: right;">@materiales.Sum(m => m.CantAsig ?? 0).ToString("N2")</td>
+                        <td style="border: 1px solid #000; padding: 5px; text-align: right;">@materiales.Sum(m => m.CantEntreg ?? 0).ToString("N2")</td>
                         <td style="border: 1px solid #000; padding: 5px;"></td>
-                        <td style="border: 1px solid #000; padding: 5px; text-align: right;">@MaterialesFiltrados.Sum(m => m.CantRendid ?? 0).ToString("N2")</td>
-                        <td style="border: 1px solid #000; padding: 5px; text-align: right;"><strong>@MaterialesFiltrados.Sum(m => m.SaldoPend ?? 0).ToString("N2")</strong></td>
+                        <td style="border: 1px solid #000; padding: 5px; text-align: right;">@materiales.Sum(m => m.CantRendid ?? 0).ToString("N2")</td>
+                        <td style="border: 1px solid #000; padding: 5px; text-align: right;"><strong>@materiales.Sum(m => m.SaldoPend ?? 0).ToString("N2")</strong></td>
                     </tr>
                 </tfoot>
             </table>
@@ -226,6 +591,7 @@
 </div>
 
 @code {
+    private const int RecordsPerPage = 10;
     private List<Maconsig>? materiales;
     private string filtroProveedor = string.Empty;
     private string filtroOrdenCompra = string.Empty;
@@ -233,57 +599,94 @@
     private string filtroOrdenFab = string.Empty;
     private bool imprimiendo = false;
     private bool exportando = false;
+    private bool validando = true;
+    private int currentPage = 1;
+    private int totalPages = 1;
 
-    private IEnumerable<Maconsig> MaterialesFiltrados
+    private bool mostrarModalRemito = false;
+    private bool mostrarModalVerRemitosRc = false;
+    private bool cargandoConfigRemito = false;
+    private bool cargandoPendientesRemito = false;
+    private bool procesandoRemito = false;
+    private bool cargandoRemitosRc = false;
+    private bool imprimiendoRemitoRc = false;
+    private int modoFiltroRemito = 1;
+    private int numeroProveedorRemito = 0;
+    private int depositoRemito = 0;
+    private int transporteRemitoId = 0;
+    private List<string> ordenesCompraSeleccionadas = new();
+    private DateTime fechaRemito = DateTime.Today;
+    private int? proximoComprobanteRc;
+    private List<ProveedorPendienteRemisionDto> proveedoresRemito = new();
+    private List<DepositoRemisionDto> depositosRemito = new();
+    private List<Transporte> transportesRemito = new();
+    private Transporte? transporteRemitoSeleccionado;
+    private List<OrdenCompraPendienteRemisionDto> ordenesCompraPendientesRemito = new();
+    private List<ConsignacionPendienteRemisionDto> pendientesRemision = new();
+    private string ProximoComprobanteFormateado => proximoComprobanteRc.HasValue ? $"RC-{proximoComprobanteRc.Value}" : string.Empty;
+    private ImpresionRemito impresionRemito = null!;
+    private string nciImpresion = string.Empty;
+    private string numeroRemitoImpresion = string.Empty;
+    private string fechaImpresion = string.Empty;
+    private string razonSocialImpresion = string.Empty;
+    private string domicilioImpresion = string.Empty;
+    private string cuitImpresion = string.Empty;
+    private string condicionIVAImpresion = string.Empty;
+    private string localidadImpresion = string.Empty;
+    private string ordenCompraImpresion = string.Empty;
+    private string ordenVentaImpresion = string.Empty;
+    private List<ImpresionRemito.ItemRemito> itemsImpresion = new();
+    private string observacionesImpresion = string.Empty;
+    private string valorDeclaradoImpresion = string.Empty;
+    private int bultosImpresion = 1;
+    private int mesRemitosRc = DateTime.Today.Month;
+    private int anioRemitosRc = DateTime.Today.Year;
+    // Lista que alimenta la grilla del modal de "Ver Remitos en Consignación"
+    private List<RemitoConsignacionListadoDto> remitosConsignacionRc = new();
+    private const string NombrePlantillaRemitoConsignacion = "REMITO CONSIGNACION";
+    private int? plantillaRemitoConsignacionId;
+
+    // Validar que el usuario tenga permiso para acceder a esta página antes de mostrar el contenido
+    protected override async Task OnInitializedAsync()
     {
-        get
-        {
-            if (materiales == null) return Enumerable.Empty<Maconsig>();
+        await PageAccess.RequiereAccesoAsync("/materiales-consignacion");
+        validando = false;
+        
+        await CargarDatosAsync(currentPage);
+    }
 
-            var resultado = materiales.AsEnumerable();
+    private async Task CargarDatosAsync(int page = 1)
+    {
+        try
+        {
+            var url = $"api/maconsig/materiales-consignacion?page={page}&recordsNumber={RecordsPerPage}";
 
             if (!string.IsNullOrWhiteSpace(filtroProveedor))
             {
-                resultado = resultado.Where(m => 
-                    m.RaSoProv?.Contains(filtroProveedor, StringComparison.OrdinalIgnoreCase) == true);
+                url += $"&filtroProveedor={Uri.EscapeDataString(filtroProveedor)}";
             }
 
             if (!string.IsNullOrWhiteSpace(filtroOrdenCompra))
             {
-                resultado = resultado.Where(m => 
-                    m.NroOcom?.Contains(filtroOrdenCompra, StringComparison.OrdinalIgnoreCase) == true);
+                url += $"&filtroOrdenCompra={Uri.EscapeDataString(filtroOrdenCompra)}";
             }
 
             if (!string.IsNullOrWhiteSpace(filtroArticulo))
             {
-                resultado = resultado.Where(m => 
-                    m.CodExte?.Contains(filtroArticulo, StringComparison.OrdinalIgnoreCase) == true ||
-                    m.Descritem?.Contains(filtroArticulo, StringComparison.OrdinalIgnoreCase) == true);
+                url += $"&filtroArticulo={Uri.EscapeDataString(filtroArticulo)}";
             }
 
             if (!string.IsNullOrWhiteSpace(filtroOrdenFab))
             {
-                resultado = resultado.Where(m => 
-                    m.NroOrfa?.Contains(filtroOrdenFab, StringComparison.OrdinalIgnoreCase) == true);
+                url += $"&filtroOrdenFab={Uri.EscapeDataString(filtroOrdenFab)}";
             }
 
-            return resultado;
-        }
-    }
-
-    protected override async Task OnInitializedAsync()
-    {
-        await CargarDatosAsync();
-    }
-
-    private async Task CargarDatosAsync()
-    {
-        try
-        {
-            var response = await repository.Get<List<Maconsig>>("api/maconsig/materiales-consignacion");
+            var response = await repository.Get<List<Maconsig>>(url);
             if (!response.Error)
             {
-                materiales = response.Response;
+                materiales = response.Response ?? new List<Maconsig>();
+                currentPage = page;
+                await LoadTotalPagesAsync();
             }
             else
             {
@@ -296,13 +699,599 @@
         }
     }
 
+    private async Task ImprimirRemitoRcAsync(RemitoConsignacionListadoDto remito)
+    {
+        try
+        {
+            imprimiendoRemitoRc = true;
+
+            if (string.IsNullOrWhiteSpace(remito.DoPriCor))
+            {
+                await sweetAlertService.FireAsync("Atención", "El remito no tiene número para imprimir.", SweetAlertIcon.Warning);
+                return;
+            }
+
+            var plantillaId = await GetPlantillaRemitoConsignacionIdAsync();
+            if (!plantillaId.HasValue)
+            {
+                return;
+            }
+
+            var doprilar = Uri.EscapeDataString(remito.DoPriCor.Trim());
+            var endpoint = $"api/impresiones/remito-plantillas/{plantillaId.Value}/pdf?Doprilar={doprilar}";
+            var responsePdf = await Http.GetAsync(endpoint);
+
+            if (!responsePdf.IsSuccessStatusCode)
+            {
+                var message = await responsePdf.Content.ReadAsStringAsync();
+                await sweetAlertService.FireAsync("Error", $"No se pudo generar el PDF del remito: {message}", SweetAlertIcon.Error);
+                return;
+            }
+
+            var pdfBytes = await responsePdf.Content.ReadAsByteArrayAsync();
+            if (pdfBytes.Length == 0)
+            {
+                await sweetAlertService.FireAsync("Error", "El PDF generado está vacío.", SweetAlertIcon.Error);
+                return;
+            }
+
+            var base64 = Convert.ToBase64String(pdfBytes);
+            var opened = await JS.InvokeAsync<bool>("openPdfInNewTab", base64);
+            if (!opened)
+            {
+                await sweetAlertService.FireAsync("Atención", "No se pudo abrir el PDF en una nueva pestaña. Verificá el bloqueador de pop-ups.", SweetAlertIcon.Warning);
+            }
+        }
+        catch (Exception ex)
+        {
+            await sweetAlertService.FireAsync("Error", $"No se pudo imprimir el remito: {ex.Message}", SweetAlertIcon.Error);
+        }
+        finally
+        {
+            imprimiendoRemitoRc = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task<int?> GetPlantillaRemitoConsignacionIdAsync()
+    {
+        if (plantillaRemitoConsignacionId.HasValue)
+        {
+            return plantillaRemitoConsignacionId;
+        }
+
+        var response = await repository.Get<List<RemitoPlantillaItemDto>>("api/impresiones/remito-plantillas");
+        if (response.Error || response.Response == null)
+        {
+            var message = await response.GetErrorMessageAsync();
+            await sweetAlertService.FireAsync("Error", $"No se pudo obtener el listado de plantillas de remito: {message}", SweetAlertIcon.Error);
+            return null;
+        }
+
+        var plantilla = response.Response
+            .FirstOrDefault(x => string.Equals(x.Nombre?.Trim(), NombrePlantillaRemitoConsignacion, StringComparison.OrdinalIgnoreCase));
+
+        if (plantilla == null)
+        {
+            await sweetAlertService.FireAsync("Atención", $"No se encontró la plantilla '{NombrePlantillaRemitoConsignacion}'.", SweetAlertIcon.Warning);
+            return null;
+        }
+
+        plantillaRemitoConsignacionId = plantilla.Id;
+        return plantillaRemitoConsignacionId;
+    }
+
+    private async Task PrepararImpresionRemitoConsignacionAsync(RemitirConsignacionesRequestDto request, RemitirConsignacionesResponseDto response)
+    {
+        try
+        {
+            LimpiarVariablesImpresionRemito();
+
+            numeroRemitoImpresion = response.DoPriCor ?? string.Empty;
+            fechaImpresion = (request.FechaRemito ?? DateTime.Today).ToString("dd/MM/yy");
+            razonSocialImpresion = request.RazonSocialProveedor ?? string.Empty;
+
+            if (request.NumeroProveedor > 0)
+            {
+                var responseProveedor = await repository.Get<ProveedorImpresionDto>($"api/Proved12/numero/{request.NumeroProveedor}");
+                if (!responseProveedor.Error && responseProveedor.Response != null)
+                {
+                    var proveedor = responseProveedor.Response;
+                    domicilioImpresion = proveedor.Domi_Cli ?? string.Empty;
+                    localidadImpresion = proveedor.Loca_Cli ?? string.Empty;
+                    cuitImpresion = FormatearCUIT(proveedor.Cuit_Cli ?? string.Empty);
+                    condicionIVAImpresion = TipoIvaHelper.ObtenerDescripcionIvaPorCodigo(proveedor.Piva_Cli);
+                }
+            }
+
+            ordenCompraImpresion = request.NumeroOrdenCompra ?? string.Empty;
+            ordenVentaImpresion = string.Empty;
+            observacionesImpresion = "REMITO CONSIGNACION";
+            valorDeclaradoImpresion = string.Empty;
+            bultosImpresion = 1;
+            nciImpresion = string.Empty;
+
+            itemsImpresion = request.Items
+                .Where(x => x.CantidadEntregar > 0.005m)
+                .Select(x => new ImpresionRemito.ItemRemito
+                {
+                    Cantidad = x.CantidadEntregar,
+                    Codigo = x.CodExte ?? string.Empty,
+                    Descripcion = x.Descripcion ?? string.Empty
+                })
+                .ToList();
+
+            if (!itemsImpresion.Any())
+            {
+                return;
+            }
+
+            StateHasChanged();
+            await Task.Delay(100);
+            await impresionRemito.Imprimir();
+        }
+        catch
+        {
+        }
+    }
+
+    private void LimpiarVariablesImpresionRemito()
+    {
+        nciImpresion = string.Empty;
+        numeroRemitoImpresion = string.Empty;
+        fechaImpresion = string.Empty;
+        razonSocialImpresion = string.Empty;
+        domicilioImpresion = string.Empty;
+        cuitImpresion = string.Empty;
+        condicionIVAImpresion = string.Empty;
+        localidadImpresion = string.Empty;
+        ordenCompraImpresion = string.Empty;
+        ordenVentaImpresion = string.Empty;
+        itemsImpresion = new List<ImpresionRemito.ItemRemito>();
+        observacionesImpresion = string.Empty;
+        valorDeclaradoImpresion = string.Empty;
+        bultosImpresion = 1;
+    }
+
+    private string FormatearCUIT(string cuit)
+    {
+        if (string.IsNullOrWhiteSpace(cuit))
+            return string.Empty;
+
+        var cuitLimpio = cuit.Replace("-", string.Empty).Replace(" ", string.Empty).Trim();
+        if (cuitLimpio.Length != 11 || !cuitLimpio.All(char.IsDigit))
+            return cuit;
+
+        return $"{cuitLimpio.Substring(0, 2)}-{cuitLimpio.Substring(2, 8)}-{cuitLimpio.Substring(10, 1)}";
+    }
+
     private async Task LimpiarFiltrosAsync()
     {
         filtroProveedor = string.Empty;
         filtroOrdenCompra = string.Empty;
         filtroArticulo = string.Empty;
         filtroOrdenFab = string.Empty;
-        await CargarDatosAsync();
+        currentPage = 1;
+        await CargarDatosAsync(currentPage);
+    }
+
+    private async Task LoadTotalPagesAsync()
+    {
+        try
+        {
+            var url = $"api/maconsig/materiales-consignacion/totalPages?recordsNumber={RecordsPerPage}";
+
+            if (!string.IsNullOrWhiteSpace(filtroProveedor))
+            {
+                url += $"&filtroProveedor={Uri.EscapeDataString(filtroProveedor)}";
+            }
+
+            if (!string.IsNullOrWhiteSpace(filtroOrdenCompra))
+            {
+                url += $"&filtroOrdenCompra={Uri.EscapeDataString(filtroOrdenCompra)}";
+            }
+
+            if (!string.IsNullOrWhiteSpace(filtroArticulo))
+            {
+                url += $"&filtroArticulo={Uri.EscapeDataString(filtroArticulo)}";
+            }
+
+            if (!string.IsNullOrWhiteSpace(filtroOrdenFab))
+            {
+                url += $"&filtroOrdenFab={Uri.EscapeDataString(filtroOrdenFab)}";
+            }
+
+            var response = await repository.Get<int>(url);
+            totalPages = response.Error ? 1 : (response.Response <= 0 ? 1 : response.Response);
+        }
+        catch
+        {
+            totalPages = 1;
+        }
+    }
+
+    private async Task SelectedPageAsync(int page)
+    {
+        currentPage = page;
+        await CargarDatosAsync(page);
+    }
+
+    private async Task AplicarFiltrosAsync()
+    {
+        currentPage = 1;
+        await CargarDatosAsync(currentPage);
+    }
+
+    private async Task AbrirModalConfigRemitoAsync()
+    {
+        try
+        {
+            cargandoConfigRemito = true;
+            mostrarModalRemito = true;
+            pendientesRemision = new List<ConsignacionPendienteRemisionDto>();
+
+            var responseConfig = await repository.Get<ConfigRemisionInicialDto>("api/maconsig/config-remision-inicial");
+            if (responseConfig.Error || responseConfig.Response == null)
+            {
+                var message = await responseConfig.GetErrorMessageAsync();
+                await sweetAlertService.FireAsync("Error", $"No se pudo cargar la configuración de remisión: {message}", SweetAlertIcon.Error);
+                return;
+            }
+
+            proveedoresRemito = responseConfig.Response.Proveedores ?? new List<ProveedorPendienteRemisionDto>();
+            depositosRemito = responseConfig.Response.Depositos ?? new List<DepositoRemisionDto>();
+            await CargarTransportesRemitoAsync();
+
+            var responseComprobante = await repository.Get<int>("api/maconsig/proximo-comprobante-rc");
+            proximoComprobanteRc = responseComprobante.Error ? null : responseComprobante.Response;
+
+            numeroProveedorRemito = 0;
+            ordenesCompraSeleccionadas = new List<string>();
+            ordenesCompraPendientesRemito = new List<OrdenCompraPendienteRemisionDto>();
+            depositoRemito = depositosRemito.Any() ? depositosRemito.First().CodigoDepo : 0;
+            transporteRemitoId = 0;
+            transporteRemitoSeleccionado = null;
+            fechaRemito = DateTime.Today;
+        }
+        catch (Exception ex)
+        {
+            await sweetAlertService.FireAsync("Error", $"No se pudo abrir la configuración de remisión: {ex.Message}", SweetAlertIcon.Error);
+        }
+        finally
+        {
+            cargandoConfigRemito = false;
+            StateHasChanged();
+        }
+    }
+
+    private void CerrarModalRemito()
+    {
+        mostrarModalRemito = false;
+        transporteRemitoId = 0;
+        transporteRemitoSeleccionado = null;
+    }
+
+    private async Task CargarTransportesRemitoAsync()
+    {
+        var response = await repository.Get<List<Transporte>>("api/transportes/combo");
+        if (response.Error)
+        {
+            var message = await response.GetErrorMessageAsync();
+            await sweetAlertService.FireAsync("Error", $"No se pudieron cargar los transportes: {message}", SweetAlertIcon.Error);
+            transportesRemito = new List<Transporte>();
+            return;
+        }
+
+        transportesRemito = response.Response ?? new List<Transporte>();
+    }
+
+    private Task OnTransporteRemitoChangedAsync()
+    {
+        transporteRemitoSeleccionado = transportesRemito.FirstOrDefault(x => x.Id == transporteRemitoId);
+        return Task.CompletedTask;
+    }
+
+    private async Task AbrirModalVerRemitosRcAsync()
+    {
+        // Abre el modal y limpia resultados anteriores
+        mostrarModalVerRemitosRc = true;
+        remitosConsignacionRc = new List<RemitoConsignacionListadoDto>();
+
+        // Carga inicial del período actual
+        await CargarRemitosRcAsync();
+    }
+
+    private void CerrarModalVerRemitosRc()
+    {
+        mostrarModalVerRemitosRc = false;
+    }
+
+    private async Task CargarRemitosRcAsync()
+    {
+        try
+        {
+            // Muestra estado de carga mientras se consulta al backend
+            cargandoRemitosRc = true;
+            var response = await repository.Get<List<RemitoConsignacionListadoDto>>($"api/maconsig/remitos-rc/{anioRemitosRc}/{mesRemitosRc}");
+
+            if (response.Error)
+            {
+                var message = await response.GetErrorMessageAsync();
+                await sweetAlertService.FireAsync("Error", $"No se pudieron cargar los remitos RC: {message}", SweetAlertIcon.Error);
+                remitosConsignacionRc = new List<RemitoConsignacionListadoDto>();
+                return;
+            }
+
+            // Guarda la lista para mostrarla en la grilla del modal
+            remitosConsignacionRc = response.Response ?? new List<RemitoConsignacionListadoDto>();
+        }
+        catch (Exception ex)
+        {
+            await sweetAlertService.FireAsync("Error", $"No se pudieron cargar los remitos RC: {ex.Message}", SweetAlertIcon.Error);
+            remitosConsignacionRc = new List<RemitoConsignacionListadoDto>();
+        }
+        finally
+        {
+            cargandoRemitosRc = false;
+            StateHasChanged();
+        }
+    }
+
+    private void OnPeriodoRemitosRcChanged()
+    {
+        // Si cambia mes/año, se limpia la grilla para evitar datos de un período anterior
+        remitosConsignacionRc = new List<RemitoConsignacionListadoDto>();
+    }
+
+    private async Task CambiarModoFiltroRemitoAsync(int modo)
+    {
+        modoFiltroRemito = modo;
+        ordenesCompraSeleccionadas = new List<string>();
+        LimpiarDetalleRemito();
+
+        if (modoFiltroRemito == 2 && numeroProveedorRemito > 0)
+        {
+            await CargarOrdenesCompraPendientesAsync();
+        }
+        else
+        {
+            ordenesCompraPendientesRemito = new List<OrdenCompraPendienteRemisionDto>();
+        }
+    }
+
+    private async Task OnDepositoRemitoChangedAsync()
+    {
+        LimpiarDetalleRemito();
+
+        if (numeroProveedorRemito <= 0 || depositoRemito <= 0)
+        {
+            return;
+        }
+
+        if (modoFiltroRemito == 2 && !ordenesCompraSeleccionadas.Any())
+        {
+            return;
+        }
+
+        await CargarPendientesRemitoAsync();
+    }
+
+    private async Task OnOrdenCompraSeleccionChangedAsync(string nroOcom, ChangeEventArgs e)
+    {
+        var checkedValue = e?.Value?.ToString();
+        var isChecked = string.Equals(checkedValue, "true", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(checkedValue, "on", StringComparison.OrdinalIgnoreCase);
+
+        if (isChecked)
+        {
+            if (!ordenesCompraSeleccionadas.Contains(nroOcom))
+            {
+                ordenesCompraSeleccionadas.Add(nroOcom);
+            }
+        }
+        else
+        {
+            ordenesCompraSeleccionadas.RemoveAll(x => x == nroOcom);
+        }
+
+        LimpiarDetalleRemito();
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private void LimpiarDetalleRemito()
+    {
+        pendientesRemision = new List<ConsignacionPendienteRemisionDto>();
+    }
+
+    private async Task OnProveedorSeleccionadoChangedAsync()
+    {
+        ordenesCompraSeleccionadas = new List<string>();
+        LimpiarDetalleRemito();
+
+        if (modoFiltroRemito == 2 && numeroProveedorRemito > 0)
+        {
+            await CargarOrdenesCompraPendientesAsync();
+        }
+        else
+        {
+            ordenesCompraPendientesRemito = new List<OrdenCompraPendienteRemisionDto>();
+        }
+    }
+
+    private async Task CargarOrdenesCompraPendientesAsync()
+    {
+        if (numeroProveedorRemito <= 0)
+        {
+            ordenesCompraPendientesRemito = new List<OrdenCompraPendienteRemisionDto>();
+            return;
+        }
+
+        try
+        {
+            var response = await repository.Get<List<OrdenCompraPendienteRemisionDto>>($"api/maconsig/ordenes-compra-pendientes-remision/{numeroProveedorRemito}");
+            if (response.Error)
+            {
+                var message = await response.GetErrorMessageAsync();
+                await sweetAlertService.FireAsync("Error", $"No se pudieron cargar las órdenes pendientes: {message}", SweetAlertIcon.Error);
+                ordenesCompraPendientesRemito = new List<OrdenCompraPendienteRemisionDto>();
+                return;
+            }
+
+            ordenesCompraPendientesRemito = response.Response ?? new List<OrdenCompraPendienteRemisionDto>();
+        }
+        catch (Exception ex)
+        {
+            await sweetAlertService.FireAsync("Error", $"No se pudieron cargar las órdenes pendientes: {ex.Message}", SweetAlertIcon.Error);
+            ordenesCompraPendientesRemito = new List<OrdenCompraPendienteRemisionDto>();
+        }
+    }
+
+    private async Task CargarPendientesRemitoAsync()
+    {
+        if (numeroProveedorRemito <= 0)
+        {
+            await sweetAlertService.FireAsync("Atención", "Debe seleccionar un proveedor.", SweetAlertIcon.Warning);
+            return;
+        }
+
+        if (depositoRemito <= 0)
+        {
+            await sweetAlertService.FireAsync("Atención", "Debe seleccionar un depósito.", SweetAlertIcon.Warning);
+            return;
+        }
+
+        if (modoFiltroRemito == 2 && !ordenesCompraSeleccionadas.Any())
+        {
+            await sweetAlertService.FireAsync("Atención", "Debe seleccionar al menos una orden de compra pendiente.", SweetAlertIcon.Warning);
+            return;
+        }
+
+        try
+        {
+            cargandoPendientesRemito = true;
+
+            var request = new PendientesRemisionRequestDto
+            {
+                NumeroProveedor = numeroProveedorRemito,
+                NumerosOrdenCompra = modoFiltroRemito == 2 ? ordenesCompraSeleccionadas.ToList() : null,
+                Deposito = depositoRemito
+            };
+
+            var response = await repository.Post<PendientesRemisionRequestDto, List<ConsignacionPendienteRemisionDto>>("api/maconsig/pendientes-remitir", request);
+            if (response.Error)
+            {
+                var message = await response.GetErrorMessageAsync();
+                await sweetAlertService.FireAsync("Error", $"No se pudieron cargar los pendientes de remisión: {message}", SweetAlertIcon.Error);
+                return;
+            }
+
+            pendientesRemision = response.Response ?? new List<ConsignacionPendienteRemisionDto>();
+        }
+        catch (Exception ex)
+        {
+            await sweetAlertService.FireAsync("Error", $"No se pudieron cargar los pendientes de remisión: {ex.Message}", SweetAlertIcon.Error);
+        }
+        finally
+        {
+            cargandoPendientesRemito = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task RemitirConsignacionesAsync()
+    {
+        if (numeroProveedorRemito <= 0 || depositoRemito <= 0)
+        {
+            await sweetAlertService.FireAsync("Atención", "Debe completar proveedor y depósito.", SweetAlertIcon.Warning);
+            return;
+        }
+
+        var itemsRemito = pendientesRemision
+            .Where(x => x.CantidadEntregar > 0.005m)
+            .Select(x => new RemitirConsignacionItemRequestDto
+            {
+                IdMaconsig = x.IdMaconsig,
+                CodInte = x.CodInte,
+                CodExte = x.CodExte,
+                Descripcion = x.Descripcion,
+                Unidad = x.Unidad,
+                NroOcom = x.OCompra,
+                Lote = x.Lote,
+                CantidadEntregar = Math.Round(x.CantidadEntregar, 4)
+            })
+            .ToList();
+
+        if (!itemsRemito.Any())
+        {
+            await sweetAlertService.FireAsync("Atención", "No hay ítems con cantidad a remitir.", SweetAlertIcon.Warning);
+            return;
+        }
+
+        if (!transporteRemitoSeleccionado?.Codi_Tra.HasValue ?? true)
+        {
+            var confirmSinTransporte = await sweetAlertService.FireAsync(new SweetAlertOptions
+            {
+                Title = "Atención",
+                Text = "No se seleccionó transporte. Puede volver atrás para cargarlo o continuar sin transporte.",
+                Icon = SweetAlertIcon.Warning,
+                ShowCancelButton = true,
+                ConfirmButtonText = "Continuar sin transporte",
+                CancelButtonText = "Volver y seleccionar transporte"
+            });
+
+            var continuarSinTransporte = !string.IsNullOrEmpty(confirmSinTransporte.Value);
+            if (!continuarSinTransporte)
+            {
+                return;
+            }
+        }
+
+        try
+        {
+            procesandoRemito = true;
+
+            var proveedor = proveedoresRemito.FirstOrDefault(x => x.NumeroProveedor == numeroProveedorRemito);
+
+            var request = new RemitirConsignacionesRequestDto
+            {
+                NumeroProveedor = numeroProveedorRemito,
+                RazonSocialProveedor = proveedor?.RazonSocial,
+                NumeroOrdenCompra = modoFiltroRemito == 2 && ordenesCompraSeleccionadas.Any() ? ordenesCompraSeleccionadas.First() : null,
+                Deposito = depositoRemito,
+                FechaRemito = fechaRemito,
+                CodigoMovimiento = "RC",
+                NumeroComprobante = proximoComprobanteRc,
+                // Se envía el Codi_Tra del transporte elegido para persistirlo en MOVISTO.TipoTran.
+                CodiTra = transporteRemitoSeleccionado?.Codi_Tra,
+                Items = itemsRemito
+            };
+
+            var response = await repository.Post<RemitirConsignacionesRequestDto, RemitirConsignacionesResponseDto>("api/maconsig/remitir", request);
+            if (response.Error || response.Response == null)
+            {
+                var message = await response.GetErrorMessageAsync();
+                await sweetAlertService.FireAsync("Error", $"No se pudo generar el remito: {message}", SweetAlertIcon.Error);
+                return;
+            }
+
+            await sweetAlertService.FireAsync("Éxito",
+                $"Remito generado: {response.Response.DoPriCor}. Ítems procesados: {response.Response.ItemsProcesados}.",
+                SweetAlertIcon.Success);
+
+            await PrepararImpresionRemitoConsignacionAsync(request, response.Response);
+
+            await CargarDatosAsync(currentPage);
+            await AbrirModalConfigRemitoAsync();
+        }
+        catch (Exception ex)
+        {
+            await sweetAlertService.FireAsync("Error", $"No se pudo generar el remito: {ex.Message}", SweetAlertIcon.Error);
+        }
+        finally
+        {
+            procesandoRemito = false;
+            StateHasChanged();
+        }
     }
 
     private async Task ImprimirReporteAsync()
@@ -334,9 +1323,9 @@
             exportando = true;
             StateHasChanged();
 
-            Console.WriteLine($"[ExportarExcel] Iniciando exportación de {MaterialesFiltrados.Count()} registros");
+            Console.WriteLine($"[ExportarExcel] Iniciando exportación de {materiales?.Count ?? 0} registros");
 
-            var response = await Http.PostAsJsonAsync("api/excel/exportar-materiales-consignacion", MaterialesFiltrados.ToList());
+            var response = await Http.PostAsJsonAsync("api/excel/exportar-materiales-consignacion", materiales?.ToList() ?? new List<Maconsig>());
 
             if (!response.IsSuccessStatusCode)
             {
@@ -365,5 +1354,122 @@
             exportando = false;
             StateHasChanged();
         }
+    }
+
+    private class ConfigRemisionInicialDto
+    {
+        public List<ProveedorPendienteRemisionDto>? Proveedores { get; set; }
+        public List<DepositoRemisionDto>? Depositos { get; set; }
+    }
+
+    private class ProveedorPendienteRemisionDto
+    {
+        public int NumeroProveedor { get; set; }
+        public string RazonSocial { get; set; } = string.Empty;
+        public int CantidadOrdenesPendientes { get; set; }
+    }
+
+    private class DepositoRemisionDto
+    {
+        public int CodigoDepo { get; set; }
+        public string Descripcion { get; set; } = string.Empty;
+    }
+
+    private class OrdenCompraPendienteRemisionDto
+    {
+        public int NumeroOrden { get; set; }
+        public string NroOcom { get; set; } = string.Empty;
+        public DateTime? FechaEmision { get; set; }
+    }
+
+    private class PendientesRemisionRequestDto
+    {
+        public int NumeroProveedor { get; set; }
+        public List<string>? NumerosOrdenCompra { get; set; }
+        public int Deposito { get; set; }
+    }
+
+    private class ConsignacionPendienteRemisionDto
+    {
+        public int IdMaconsig { get; set; }
+        public int CodInte { get; set; }
+        public string CodExte { get; set; } = string.Empty;
+        public string Descripcion { get; set; } = string.Empty;
+        public string Unidad { get; set; } = string.Empty;
+        public decimal FaltaEntregar { get; set; }
+        public decimal StockDeposito { get; set; }
+        public decimal CantidadEntregar { get; set; }
+        public string OCompra { get; set; } = string.Empty;
+        public string Lote { get; set; } = string.Empty;
+    }
+
+    private class RemitirConsignacionesRequestDto
+    {
+        public int NumeroProveedor { get; set; }
+        public string? RazonSocialProveedor { get; set; }
+        public string? NumeroOrdenCompra { get; set; }
+        public int Deposito { get; set; }
+        public DateTime? FechaRemito { get; set; }
+        public string CodigoMovimiento { get; set; } = "RC";
+        public int? NumeroComprobante { get; set; }
+        // Código de transporte (TRANSPORTES.Codi_Tra) que el backend mapea a MOVISTO.TipoTran.
+        public int? CodiTra { get; set; }
+        public List<RemitirConsignacionItemRequestDto> Items { get; set; } = new();
+    }
+
+    private class RemitirConsignacionItemRequestDto
+    {
+        public int IdMaconsig { get; set; }
+        public int CodInte { get; set; }
+        public string? CodExte { get; set; }
+        public string? Descripcion { get; set; }
+        public string? Unidad { get; set; }
+        public string? NroOcom { get; set; }
+        public string? Lote { get; set; }
+        public decimal CantidadEntregar { get; set; }
+    }
+
+    private class RemitirConsignacionesResponseDto
+    {
+        public bool Success { get; set; }
+        public string DoPriCor { get; set; } = string.Empty;
+        public int ItemsProcesados { get; set; }
+    }
+
+    private class ProveedorImpresionDto
+    {
+        public string? Domi_Cli { get; set; }
+        public string? Loca_Cli { get; set; }
+        public string? Cuit_Cli { get; set; }
+        public short? Piva_Cli { get; set; }
+    }
+
+    private class RemitoConsignacionListadoDto
+    {
+        public string DoPriCor { get; set; } = string.Empty;
+        public DateTime Fecha { get; set; }
+        public int NumeroProveedor { get; set; }
+        public string RazonSocialProveedor { get; set; } = string.Empty;
+    }
+
+    private class RemitoConsignacionDetalleDto
+    {
+        public string DoPriCor { get; set; } = string.Empty;
+        public DateTime? Fecha { get; set; }
+        public int NumeroProveedor { get; set; }
+        public string RazonSocialProveedor { get; set; } = string.Empty;
+        public string DomicilioProveedor { get; set; } = string.Empty;
+        public string LocalidadProveedor { get; set; } = string.Empty;
+        public string CuitProveedor { get; set; } = string.Empty;
+        public short? PivaProveedor { get; set; }
+        public string OrdenCompra { get; set; } = string.Empty;
+        public List<RemitoConsignacionDetalleItemDto>? Items { get; set; }
+    }
+
+    private class RemitoConsignacionDetalleItemDto
+    {
+        public decimal Cantidad { get; set; }
+        public string Codigo { get; set; } = string.Empty;
+        public string Descripcion { get; set; } = string.Empty;
     }
 }

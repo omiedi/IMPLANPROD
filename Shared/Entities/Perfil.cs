@@ -48,3 +48,39 @@ namespace IMPLANPROD.Shared.Entities
         public int? NumUsuar { get; set; }
     }
 }
+/*
+    IF NOT EXISTS (SELECT 1 FROM dbo.Perfiles WHERE UPPER(LTRIM(RTRIM(Nombre))) = 'SUPERADMIN')
+    BEGIN
+        INSERT INTO dbo.Perfiles
+        (
+            Nombre,
+            Descripcion,
+            AddRecord,
+            LastUpdate,
+            CodiEmprNet,
+            NumUsuar
+        )
+        VALUES
+        (
+            'SUPERADMIN',
+            'Acceso total. Unico perfil que puede asignar/revocar SUPERADMIN.',
+            SYSDATETIME(),
+            SYSDATETIME(),
+            0,
+            0
+        );
+    END;
+
+ IF NOT EXISTS (SELECT 1 FROM dbo.Perfiles WHERE UPPER(LTRIM(RTRIM(Nombre))) = 'ADMINISTRADOR')
+    BEGIN
+        INSERT INTO dbo.Perfiles (Nombre, Descripcion, AddRecord, LastUpdate, CodiEmprNet, NumUsuar)
+        VALUES ('ADMINISTRADOR', 'Acceso a todo menos configuracion de seguridad.', SYSDATETIME(), SYSDATETIME(), 0, 0);
+    END;
+
+    IF NOT EXISTS (SELECT 1 FROM dbo.Perfiles WHERE UPPER(LTRIM(RTRIM(Nombre))) = 'USUARIO')
+    BEGIN
+        INSERT INTO dbo.Perfiles (Nombre, Descripcion, AddRecord, LastUpdate, CodiEmprNet, NumUsuar)
+        VALUES ('USUARIO', 'Acceso a rutas explicitamente asignadas.', SYSDATETIME(), SYSDATETIME(), 0, 0);
+    END;
+
+ */

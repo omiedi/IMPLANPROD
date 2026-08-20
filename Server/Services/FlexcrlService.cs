@@ -108,6 +108,7 @@ namespace IMPLANPROD.Server.Services
             try
             {
                 var registro = await _context.Set<FLEXCRL>()
+                    .AsNoTracking()
                     .FirstOrDefaultAsync(f => f.CLABUS == clabus && f.PROBUS == probus);
 
                 return registro;

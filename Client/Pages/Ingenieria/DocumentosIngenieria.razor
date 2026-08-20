@@ -1,0 +1,513 @@
+@page "/ingenieria/documentos"
+@using IMPLANPROD.Client.Services
+@inject IRepository Repository
+@inject SweetAlertService SweetAlertService
+@inject PageAccessService PageAccess
+@using IMPLANPROD.Client.Shared.Components
+@using IMPLANPROD.Shared.Entities
+@using System.Globalization
+
+<PageTitle>Documentos de Ingeniería</PageTitle>
+
+@if (validando)
+{
+    <p>Validando acceso...</p>
+}
+else
+{
+    <div class="bg-primary bg-opacity-10 p-3 rounded-3 mb-3">
+        <h3 class="m-0 text-primary">Documentos de Ingeniería</h3>
+    </div>
+
+    <!-- ===================================================== -->
+    <!-- BUSCADOR DE PRODUCTO                                   -->
+    <!-- ===================================================== -->
+    <div class="card shadow mb-4">
+    <div class="card-header bg-light">
+        <h5 class="mb-0">Selección de Producto</h5>
+    </div>
+    <div class="card-body">
+        <div class="d-flex align-items-center gap-2 mb-3">
+            <MasterSearchModal
+                IsVisible="@showModal"
+                OnRepuestoSelected="HandleSelection"
+                OnCloseRequested="@(() => showModal = false)" />
+
+            <button class="btn btn-info text-white" type="button" @onclick="() => showModal = true">
+                <i class="oi oi-magnifying-glass me-1"></i> Buscar Producto
+            </button>
+
+            @if (selectedMaster != null)
+            {
+                <button class="btn btn-outline-secondary btn-sm" type="button" @onclick="LimpiarSeleccion">
+                    <i class="oi oi-x me-1"></i> Limpiar
+                </button>
+            }
+        </div>
+
+        @if (selectedMaster != null)
+        {
+            <!-- ENCABEZADO DEL PRODUCTO SELECCIONADO -->
+            <table class="table table-bordered table-sm mb-0 bg-light shadow-sm rounded-3 overflow-hidden">
+                <colgroup>
+                    <col style="width:140px" />
+                    <col />
+                    <col style="width:100px" />
+                    <col style="width:90px" />
+                </colgroup>
+                <thead class="table-primary">
+                    <tr>
+                        <th class="text-center">Código</th>
+                        <th>Descripción</th>
+                        <th class="text-center">U. Medida</th>
+                        <th class="text-center">Interno</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td class="fw-semibold text-center align-middle">@selectedMaster.Codigo</td>
+                        <td class="align-middle">@selectedMaster.Descripcion</td>
+                        <td class="text-center align-middle">
+                            <span class="badge bg-secondary">@(selectedMaster.Umedida ?? "-")</span>
+                        </td>
+                        <td class="fw-bold text-primary text-center align-middle">@selectedMaster.Codint</td>
+                    </tr>
+                </tbody>
+            </table>
+        }
+        else
+        {
+            <div class="alert alert-info mb-0">
+                <i class="oi oi-info me-2"></i>
+                Seleccione un producto para ver sus documentos de ingeniería.
+            </div>
+        }
+    </div>
+</div>
+
+@if (selectedMaster != null)
+{
+    <!-- ===================================================== -->
+    <!-- FRAME: DOCUMENTOS ANEXOS - INSTRUCCIONES              -->
+    <!-- ===================================================== -->
+    <div class="card shadow mb-4">
+        <div class="card-header bg-primary text-white d-flex align-items-center justify-content-between">
+            <div class="d-flex align-items-center">
+                <i class="fas fa-file-alt me-2"></i>
+                <h5 class="mb-0">Documentos Anexos - Instrucciones</h5>
+            </div>
+            <button class="btn btn-light btn-sm" type="button" @onclick="() => showModalNuevaInstruci = true">
+                <i class="fas fa-plus me-1"></i> Nueva Instrucción
+            </button>
+        </div>
+        <div class="card-body p-0">
+            <table class="table table-bordered table-hover mb-0">
+                <colgroup>
+                    <col style="width:220px" />
+                    <col />
+                    <col style="width:90px" />
+                    <col style="width:120px" />
+                    <col style="width:56px" />
+                </colgroup>
+                <thead class="table-light">
+                    <tr>
+                        <th>Sector</th>
+                        <th>Instrucción seleccionada</th>
+                        <th class="text-center">Revisión</th>
+                        <th class="text-center">Fecha Aprobación</th>
+                        <th class="text-center"></th>
+                    </tr>
+                </thead>
+                <tbody>
+
+                    @* --- Fila 1: Almacenamiento --- *@
+                    <tr>
+                        <td class="align-middle fw-semibold text-nowrap">
+                            <button class="btn btn-sm btn-outline-primary me-2"
+                                    type="button"
+                                    @onclick="() => showModalAlmacenamiento = true">
+                                <i class="fas fa-search"></i>
+                            </button>
+                            Almacenamiento
+                        </td>
+                        <td class="align-middle">
+                            @if (selAlmacenamiento != null)
+                            {
+                                <span class="badge bg-secondary me-1">@selAlmacenamiento.Cod_Inte</span>
+                                <strong class="me-2">@selAlmacenamiento.Codigo</strong>
+                                <span>@selAlmacenamiento.Descripcion</span>
+                            }
+                        </td>
+                        <td class="align-middle text-center">@selAlmacenamiento?.Revision</td>
+                        <td class="align-middle text-center">@FormatFecha(selAlmacenamiento?.FechaPro)</td>
+                        <td class="align-middle text-center">
+                            @if (selAlmacenamiento != null)
+                            {
+                                <button class="btn btn-sm btn-outline-info" type="button"
+                                        title="Ver detalle"
+                                        @onclick="VerDetalleAlmacenamiento">
+                                    <i class="fas fa-eye"></i>
+                                </button>
+                            }
+                        </td>
+                    </tr>
+
+                    @* --- Fila 2: Compras y Abastecimientos --- *@
+                    <tr>
+                        <td class="align-middle fw-semibold text-nowrap">
+                            <button class="btn btn-sm btn-outline-primary me-2"
+                                    type="button"
+                                    @onclick="() => showModalCompras = true">
+                                <i class="fas fa-search"></i>
+                            </button>
+                            Compras y Abastec.
+                        </td>
+                        <td class="align-middle">
+                            @if (selCompras != null)
+                            {
+                                <span class="badge bg-secondary me-1">@selCompras.Cod_Inte</span>
+                                <strong class="me-2">@selCompras.Codigo</strong>
+                                <span>@selCompras.Descripcion</span>
+                            }
+                        </td>
+                        <td class="align-middle text-center">@selCompras?.Revision</td>
+                        <td class="align-middle text-center">@FormatFecha(selCompras?.FechaPro)</td>
+                        <td class="align-middle text-center">
+                            @if (selCompras != null)
+                            {
+                                <button class="btn btn-sm btn-outline-info" type="button"
+                                        title="Ver detalle"
+                                        @onclick="VerDetalleCompras">
+                                    <i class="fas fa-eye"></i>
+                                </button>
+                            }
+                        </td>
+                    </tr>
+
+                    @* --- Fila 3: Control de Reposición --- *@
+                    <tr>
+                        <td class="align-middle fw-semibold text-nowrap">
+                            <button class="btn btn-sm btn-outline-primary me-2"
+                                    type="button"
+                                    @onclick="() => showModalReposicion = true">
+                                <i class="fas fa-search"></i>
+                            </button>
+                            Control Reposición
+                        </td>
+                        <td class="align-middle">
+                            @if (selReposicion != null)
+                            {
+                                <span class="badge bg-secondary me-1">@selReposicion.Cod_Inte</span>
+                                <strong class="me-2">@selReposicion.Codigo</strong>
+                                <span>@selReposicion.Descripcion</span>
+                            }
+                        </td>
+                        <td class="align-middle text-center">@selReposicion?.Revision</td>
+                        <td class="align-middle text-center">@FormatFecha(selReposicion?.FechaPro)</td>
+                        <td class="align-middle text-center">
+                            @if (selReposicion != null)
+                            {
+                                <button class="btn btn-sm btn-outline-info" type="button"
+                                        title="Ver detalle"
+                                        @onclick="VerDetalleReposicion">
+                                    <i class="fas fa-eye"></i>
+                                </button>
+                            }
+                        </td>
+                    </tr>
+
+                    @* --- Fila 4: Instrucciones de Ensayos --- *@
+                    <tr>
+                        <td class="align-middle fw-semibold text-nowrap">
+                            <button class="btn btn-sm btn-outline-primary me-2"
+                                    type="button"
+                                    @onclick="() => showModalEnsayos = true">
+                                <i class="fas fa-search"></i>
+                            </button>
+                            Instruc. Ensayos
+                        </td>
+                        <td class="align-middle">
+                            @if (selEnsayos != null)
+                            {
+                                <span class="badge bg-secondary me-1">@selEnsayos.Cod_Inte</span>
+                                <strong class="me-2">@selEnsayos.Codigo</strong>
+                                <span>@selEnsayos.Descripcion</span>
+                            }
+                        </td>
+                        <td class="align-middle text-center">@selEnsayos?.Revision</td>
+                        <td class="align-middle text-center">@FormatFecha(selEnsayos?.FechaPro)</td>
+                        <td class="align-middle text-center">
+                            @if (selEnsayos != null)
+                            {
+                                <button class="btn btn-sm btn-outline-info" type="button"
+                                        title="Ver detalle"
+                                        @onclick="VerDetalleEnsayos">
+                                    <i class="fas fa-eye"></i>
+                                </button>
+                            }
+                        </td>
+                    </tr>
+
+                </tbody>
+            </table>
+        </div>
+        <div class="card-footer text-end py-2">
+            <button class="btn btn-success btn-sm"
+                    type="button"
+                    disabled="@isGuardando"
+                    @onclick="GuardarInstrucciones">
+                @if (isGuardando)
+                { <span class="spinner-border spinner-border-sm me-1"></span> }
+                else
+                { <i class="fas fa-save me-1"></i> }
+                Guardar Instrucciones
+            </button>
+        </div>
+    </div>
+
+    <!-- Modales de búsqueda por sector -->
+    <InstruciSearchModal IsVisible="@showModalAlmacenamiento"
+                         Titulo="Almacenamiento"
+                         OnInstruciSelected="@(i => { selAlmacenamiento = i; showModalAlmacenamiento = false; })"
+                         OnCloseRequested="@(() => showModalAlmacenamiento = false)" />
+
+    <InstruciSearchModal IsVisible="@showModalCompras"
+                         Titulo="Compras y Abastecimientos"
+                         OnInstruciSelected="@(i => { selCompras = i; showModalCompras = false; })"
+                         OnCloseRequested="@(() => showModalCompras = false)" />
+
+    <InstruciSearchModal IsVisible="@showModalReposicion"
+                         Titulo="Control de Reposición"
+                         OnInstruciSelected="@(i => { selReposicion = i; showModalReposicion = false; })"
+                         OnCloseRequested="@(() => showModalReposicion = false)" />
+
+    <InstruciSearchModal IsVisible="@showModalEnsayos"
+                         Titulo="Instrucciones de Ensayos"
+                         OnInstruciSelected="@(i => { selEnsayos = i; showModalEnsayos = false; })"
+                         OnCloseRequested="@(() => showModalEnsayos = false)" />
+
+    <!-- Modal de detalle (compartido entre los 4 sectores) -->
+    <InstruciDetalleModal IsVisible="@showDetalle"
+                          Titulo="@detalleTitulo"
+                          Instruci="@detalleActual"
+                          OnCloseRequested="@(() => showDetalle = false)" />
+
+    <!-- Modal nueva instrucción -->
+    <NuevaInstruciModal IsVisible="@showModalNuevaInstruci"
+                        OnCloseRequested="@(() => showModalNuevaInstruci = false)"
+                        OnCreated="@OnInstruciCreada" />
+
+    <!-- Modal Plan de Inspección y Ensayo -->
+    <PlanInspeccionModal IsVisible="@showModalPlanInspeccion"
+                         CodInte="@selectedMaster?.Codint"
+                         Producto="@selectedMaster"
+                         OnCloseRequested="@(() => showModalPlanInspeccion = false)" />
+
+    <!-- ===================================================== -->
+    <!-- FRAME: PLAN DE INSPECCIÓN                             -->
+    <!-- ===================================================== -->
+    <div class="card shadow mb-4">
+        <div class="card-header bg-success text-white d-flex align-items-center">
+            <i class="oi oi-task me-2"></i>
+            <h5 class="mb-0">Plan de Inspección</h5>
+        </div>
+        <div class="card-body p-3">
+            @if (loadingPlan)
+            {
+                <div class="text-center py-3">
+                    <div class="spinner-border spinner-border-sm text-success" role="status"></div>
+                    <span class="ms-2 text-muted small">Cargando...</span>
+                </div>
+            }
+            else
+            {
+                <div class="border rounded-3 bg-light p-3 shadow-sm">
+                    <div class="row g-3 align-items-end">
+                        <div class="col-md-1">
+                            <label class="form-label text-muted small text-uppercase fw-bold mb-1">AQL</label>
+                            <input type="text" class="form-control form-control-sm" readonly
+                                   value="@(planInspeccion?.AQL?.ToString() ?? string.Empty)" />
+                        </div>
+                        <div class="col-md-1">
+                            <label class="form-label text-muted small text-uppercase fw-bold mb-1">Nivel (%)</label>
+                            <input type="text" class="form-control form-control-sm" readonly
+                                   value="@(planInspeccion?.NivelPct?.ToString() ?? string.Empty)" />
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label text-muted small text-uppercase fw-bold mb-1">Frecuencia de Inspección</label>
+                            <input type="text" class="form-control form-control-sm" readonly
+                                   value="@(planInspeccion?.FrecInspeccion ?? string.Empty)" />
+                        </div>
+                        <div class="col">
+                            <label class="form-label text-muted small text-uppercase fw-bold mb-1">Puntos de Detención Obligatoria</label>
+                            <input type="text" class="form-control form-control-sm" readonly
+                                   value="@(planInspeccion?.PuntoDetencion ?? string.Empty)" />
+                        </div>
+                        <div class="col-auto">
+                            <button class="btn btn-outline-success btn-sm"
+                                    title="Ver Plan de Inspección y Ensayo"
+                                    disabled="@(selectedMaster == null)"
+                                    @onclick="() => showModalPlanInspeccion = true">
+                                <i class="fas fa-eye"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            }
+        </div>
+    </div>
+    }
+}
+
+@code {
+    // ── Producto seleccionado ──────────────────────────────────────────────
+    private Master? selectedMaster;
+    private bool showModal = false;
+    private bool validando = true;
+
+    // Validar que el usuario tenga permiso para acceder a esta página antes de mostrar el contenido
+    protected override async Task OnInitializedAsync()
+    {
+        await PageAccess.RequiereAccesoAsync("/ingenieria/documentos");
+        validando = false;
+    }
+
+    // ── Plan de Inspección ────────────────────────────────────────────────
+    private Codiproc? planInspeccion;
+    private bool loadingPlan = false;
+
+    // ── Instrucciones seleccionadas por sector ────────────────────────────
+    private Instruci? selAlmacenamiento;
+    private Instruci? selCompras;
+    private Instruci? selReposicion;
+    private Instruci? selEnsayos;
+
+    // ── Visibilidad de modales por sector ─────────────────────────────────
+    private bool showModalAlmacenamiento = false;
+    private bool showModalCompras        = false;
+    private bool showModalReposicion     = false;
+    private bool showModalEnsayos        = false;
+
+    // ── Modal de detalle (compartido) ────────────────────────────────────
+    private bool showDetalle       = false;
+    private string detalleTitulo   = string.Empty;
+    private Instruci? detalleActual;
+
+    // ── Guardar instrucciones ──────────────────────────────────────────
+    private bool isGuardando = false;
+
+    // ── Modal Plan de Inspección y Ensayo ─────────────────────────────
+    private bool showModalPlanInspeccion = false;
+
+    // ── Modal nueva instrucción ────────────────────────────────────────
+    private bool showModalNuevaInstruci = false;
+
+    private void OnInstruciCreada(Instruci nueva)
+    {
+        showModalNuevaInstruci = false;
+    }
+
+    // ── Handlers ──────────────────────────────────────────────────────────
+    private async Task HandleSelection(Master master)
+    {
+        selectedMaster = master;
+        showModal = false;
+        await Task.WhenAll(CargarPlanInspeccion(), CargarInstruccionesSalvadas());
+    }
+
+    private async Task CargarPlanInspeccion()
+    {
+        if (selectedMaster?.Codint == null) return;
+        loadingPlan = true;
+        StateHasChanged();
+        try
+        {
+            var resp = await Repository.Get<Codiproc>($"api/codiproc/by-codinte/{selectedMaster.Codint}");
+            planInspeccion = resp.Error ? null : resp.Response;
+        }
+        catch { planInspeccion = null; }
+        finally { loadingPlan = false; }
+    }
+
+    private void LimpiarSeleccion()
+    {
+        selectedMaster         = null;
+        planInspeccion         = null;
+        selAlmacenamiento      = null;
+        selCompras             = null;
+        selReposicion          = null;
+        selEnsayos             = null;
+    }
+
+    private async Task CargarInstruccionesSalvadas()
+    {
+        if (selectedMaster?.Codint == null) return;
+        try
+        {
+            var resp = await Repository.Get<List<Instru_Codint>>($"api/instru-codint/by-master/{selectedMaster.Codint}");
+            if (resp.Error || resp.Response == null) return;
+
+            foreach (var item in resp.Response)
+            {
+                var ri = await Repository.Get<Instruci>($"api/instruci/{item.Instruci_Cod_Inte}");
+                if (ri.Error || ri.Response == null) continue;
+                switch (item.Para)
+                {
+                    case "Almacenamiento": selAlmacenamiento = ri.Response; break;
+                    case "Compras":        selCompras        = ri.Response; break;
+                    case "Reposicion":     selReposicion     = ri.Response; break;
+                    case "Ensayos":        selEnsayos        = ri.Response; break;
+                }
+            }
+        }
+        catch { }
+    }
+
+    private async Task GuardarInstrucciones()
+    {
+        if (selectedMaster?.Codint == null) return;
+        isGuardando = true;
+        StateHasChanged();
+        try
+        {
+            var items = new List<Instru_Codint>();
+
+            if (selAlmacenamiento != null)
+                items.Add(new Instru_Codint { Instruci_Cod_Inte = selAlmacenamiento.Id, Para = "Almacenamiento" });
+            if (selCompras != null)
+                items.Add(new Instru_Codint { Instruci_Cod_Inte = selCompras.Id,        Para = "Compras" });
+            if (selReposicion != null)
+                items.Add(new Instru_Codint { Instruci_Cod_Inte = selReposicion.Id,     Para = "Reposicion" });
+            if (selEnsayos != null)
+                items.Add(new Instru_Codint { Instruci_Cod_Inte = selEnsayos.Id,        Para = "Ensayos" });
+
+            var resp = await Repository.Post<List<Instru_Codint>, object>(
+                $"api/instru-codint/guardar/{selectedMaster.Codint}", items);
+
+            if (resp.Error)
+            {
+                var msg = await resp.GetErrorMessageAsync();
+                await SweetAlertService.FireAsync("Error", msg, SweetAlertIcon.Error);
+            }
+            else
+            {
+                await SweetAlertService.FireAsync("Guardado", "Instrucciones guardadas correctamente.", SweetAlertIcon.Success);
+            }
+        }
+        catch (Exception ex)
+        {
+            await SweetAlertService.FireAsync("Error", ex.Message, SweetAlertIcon.Error);
+        }
+        finally { isGuardando = false; }
+    }
+
+    // ── Abrir modal de detalle por sector ────────────────────────────────
+    private void VerDetalleAlmacenamiento() { detalleActual = selAlmacenamiento; detalleTitulo = "Almacenamiento"; showDetalle = true; }
+    private void VerDetalleCompras()        { detalleActual = selCompras;        detalleTitulo = "Compras y Abastecimientos"; showDetalle = true; }
+    private void VerDetalleReposicion()     { detalleActual = selReposicion;     detalleTitulo = "Control de Reposición"; showDetalle = true; }
+    private void VerDetalleEnsayos()        { detalleActual = selEnsayos;        detalleTitulo = "Instrucciones de Ensayos"; showDetalle = true; }
+
+    // ── Helper de formato de fecha ────────────────────────────────────────
+    private string FormatFecha(DateTime? fecha) =>
+        fecha.HasValue ? fecha.Value.ToString("dd/MM/yyyy", CultureInfo.InvariantCulture) : string.Empty;
+}

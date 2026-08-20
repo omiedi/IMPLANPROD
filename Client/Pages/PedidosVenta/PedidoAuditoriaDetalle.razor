@@ -2,11 +2,19 @@
 @using IMPLANPROD.Client.Components
 @using IMPLANPROD.Shared.Entities
 @using IMPLANPROD.Client.Repositories
+@using IMPLANPROD.Client.Services
 @inject NavigationManager NavigationManager
 @inject IRepository repository
+@inject PageAccessService PageAccess
 
 <PageTitle>Auditoría de Pedido #@NroPedido</PageTitle>
 
+@if (validando)
+{
+    <p>Validando acceso...</p>
+}
+else
+{
 <div class="container-fluid">
     <div class="row mb-3">
         <div class="col-md-12">
@@ -119,6 +127,7 @@
     </div>
 
 </div>
+}
 
 @code {
     [Parameter] public int NroPedido { get; set; }
@@ -126,9 +135,14 @@
     private PeddetaAuditoria? componenteAuditoria;
     private SeguimientoPedido? componenteSeguimiento;
     private List<Peddeta>? detallePedido;
+    private bool validando = true;
 
     protected override async Task OnInitializedAsync()
     {
+        // Validar que el usuario tenga permiso para acceder a esta página antes de mostrar el contenido
+        await PageAccess.RequiereAccesoAsync("/pedidos/auditoria/{NroPedido}");
+        validando = false;
+        
         await CargarDetallePedido();
     }
 

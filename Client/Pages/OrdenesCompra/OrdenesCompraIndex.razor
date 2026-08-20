@@ -4,13 +4,22 @@
 @using IMPLANPROD.Client.Shared.Components
 @using IMPLANPROD.Client.Services
 @using IMPLANPROD.Client.Pages.Reportes
+@using System.Text.Json
 @inject IRepository repository
 @inject NavigationManager navigationManager
 @inject SweetAlertService sweetAlertService
 @inject IJSRuntime JS
+@inject DerechosUsuarioClientService derechosService
+@inject PageAccessService PageAccess
 
 <PageTitle>Órdenes de Compra</PageTitle>
 
+@if (validando)
+{
+    <p>Validando acceso...</p>
+}
+else
+{
 <div class="container-fluid">
     <!-- Título de la página -->
     <div class="mb-4">
@@ -21,33 +30,45 @@
         <hr class="border-primary border-2 opacity-50" />
     </div>
 
-    <div class="row mb-3">
-        <div class="col-auto d-flex gap-2">
-            <button class="btn btn-primary" @onclick="CrearNuevaOrden">
-                <i class="fas fa-plus"></i> Nueva Orden
-            </button>
-            <button class="btn btn-info" @onclick="IrAGraficos" title="Ver gráficos de compras">
-                <i class="fas fa-chart-bar"></i> Gráficos
-            </button>
-            <div class="dropdown">
-                <button class="btn btn-sm btn-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown">
-                    <i class="fas fa-cogs"></i> Opciones
+    @if (verificandoPermisos)
+    {
+        <div class="text-center my-5">
+            <div class="spinner-border text-primary" role="status">
+                <span class="visually-hidden">Verificando permisos...</span>
+            </div>
+            <p class="mt-3 text-muted">Verificando permisos de acceso...</p>
+        </div>
+    }
+    else
+    {
+        <div class="row mb-3">
+            <div class="col-auto d-flex gap-2">
+                <button class="btn btn-primary" @onclick="CrearNuevaOrden" disabled="@(!tieneAccesoEscritura)">
+                    <i class="fas fa-plus"></i> Nueva Orden
                 </button>
-                <ul class="dropdown-menu dropdown-menu-end">
-                    <li>
-                        <button class="dropdown-item" type="button" @onclick="AbrirModalConfiguracion">
-                            <i class="fas fa-cogs me-2"></i>Configuración
-                        </button>
-                    </li>
-                    <li>
-                        <button class="dropdown-item" type="button" @onclick="IrAGraficos">
-                            <i class="fas fa-chart-bar me-2"></i>Gráficos de Compras
-                        </button>
-                    </li>
-                </ul>
+                <button class="btn btn-info" @onclick="IrAGraficos" title="Ver gráficos de compras">
+                    <i class="fas fa-chart-bar"></i> Gráficos
+                </button>
+                <div class="dropdown">
+                    <button class="btn btn-sm btn-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown">
+                        <i class="fas fa-cogs"></i> Opciones
+                    </button>
+                    <ul class="dropdown-menu dropdown-menu-end">
+                        <li>
+                            <button class="dropdown-item" type="button" @onclick="AbrirModalConfiguracion" disabled="@(!tieneAccesoEscritura)">
+                                <i class="fas fa-cogs me-2"></i>Configuración
+                            </button>
+                        </li>
+                        <li>
+                            <button class="dropdown-item" type="button" @onclick="IrAGraficos">
+                                <i class="fas fa-chart-bar me-2"></i>Gráficos de Compras
+                            </button>
+                        </li>
+                    </ul>
+                </div>
             </div>
         </div>
-    </div>
+    }
 
     <!-- Filtros de búsqueda -->
     <div class="card mb-3">
@@ -189,7 +210,7 @@
                                     <td>@orden.TotalOcom?.ToString("C2")</td>
                                     <td>
                                         <div class="btn-group" role="group">
-                                            <button class="btn btn-sm btn-outline-primary" @onclick="(() => EditarOrden(orden.OCOMENCA_ID))" title="Editar">
+                                            <button class="btn btn-sm btn-outline-primary" @onclick="(() => EditarOrden(orden.OCOMENCA_ID))" title="Editar" disabled="@(!tieneAccesoEscritura)">
                                                 <i class="fas fa-edit"></i>
                                             </button>
                                             <button class="btn btn-sm btn-outline-info" @onclick="(() => VerDetalle(orden.OCOMENCA_ID))" title="Ver Detalle">
@@ -198,15 +219,24 @@
                                             <button class="btn btn-sm btn-outline-success" @onclick="(() => ImprimirOrden(orden.NumeOcom ?? 0))" title="Imprimir">
                                                 <i class="fas fa-print"></i>
                                             </button>
+                                            <button class="btn btn-sm btn-outline-dark" @onclick="(() => VerTrazabilidadConsignacionesAsync(orden.NumeOcom ?? 0))" title="Trazabilidad Consignaciones" disabled="@(cargandoTrazabilidadConsignaciones || !(orden.NumeOcom.HasValue && orden.NumeOcom.Value > 0))">
+                                                <i class="fas fa-project-diagram"></i>
+                                            </button>
+                                            @if (puedeEditarCostos)
+                                            {
+                                                <button class="btn btn-sm btn-outline-warning" @onclick="(() => AbrirModalCostos(orden.NumeOcom ?? 0))" title="Editar Costos">
+                                                    <i class="fas fa-dollar-sign"></i>
+                                                </button>
+                                            }
                                             @if (orden.StatOcom == 9)
                                             {
-                                                <button class="btn btn-sm btn-outline-warning" @onclick="(() => RevertirAnulacionOrden(orden))" title="Revertir Anulación">
+                                                <button class="btn btn-sm btn-outline-warning" @onclick="(() => RevertirAnulacionOrden(orden))" title="Revertir Anulación" disabled="@(!tieneAccesoEscritura)">
                                                     <i class="fas fa-undo"></i>
                                                 </button>
                                             }
                                             else
                                             {
-                                                <button class="btn btn-sm btn-outline-danger" @onclick="(() => AnularOrden(orden))" title="Anular">
+                                                <button class="btn btn-sm btn-outline-danger" @onclick="(() => AnularOrden(orden))" title="Anular" disabled="@(!tieneAccesoEscritura)">
                                                     <i class="fas fa-ban"></i>
                                                 </button>
                                             }
@@ -226,6 +256,8 @@
                 TotalPages="totalPages"
                 SelectedPage="SelectedPageAsync" />
 </div>
+    }
+}
 
 <!-- Componente de impresión -->
 @if (ordenesCompra != null && ordenesCompra.Any())
@@ -259,10 +291,168 @@
                      DetalleItems="@detalleParaImprimir"
                      OnCerrar="@CerrarModalImpresionOrden" />
 
+@* Modal de edición de costos *@
+<OrdenCompraCostosModal MostrarModal="@mostrarModalCostos"
+                       NumeroOrden="@numeroOrdenCostos"
+                       OnCerrar="@CerrarModalCostos"
+                       OnCostosGuardados="@OnCostosGuardados" />
+
+@if (mostrarModalTrazabilidadConsignaciones)
+{
+    <div class="modal fade show d-block" tabindex="-1" style="background-color: rgba(0, 0, 0, 0.5);">
+        <div class="modal-dialog modal-xl modal-dialog-scrollable">
+            <div class="modal-content">
+                <div class="modal-header bg-dark text-white">
+                    <h5 class="modal-title">
+                        <i class="fas fa-project-diagram me-2"></i>
+                        Trazabilidad de Consignaciones - O.C. @numeroOrdenTrazabilidadConsignaciones
+                    </h5>
+                    <button type="button" class="btn-close btn-close-white" @onclick="CerrarModalTrazabilidadConsignaciones"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="alert alert-info" role="alert">
+                        <strong>Importante:</strong> En esta trazabilidad, el consumo de material consignado se toma en cuenta cuando la recepción está aprobada. Además, para evitar sobreconsumos, la cantidad rendida considerada nunca supera la cantidad entregada.
+                    </div>
+
+                    @if (trazabilidadConsignaciones == null || !trazabilidadConsignaciones.Any())
+                    {
+                        <div class="alert alert-info mb-0">
+                            No hay consignaciones para mostrar.
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="d-flex justify-content-end mb-3">
+                            <div class="form-check form-switch">
+                                <input class="form-check-input" type="checkbox" id="chkSoloSaldoPendiente" @bind="mostrarSoloSaldoPendiente" />
+                                <label class="form-check-label" for="chkSoloSaldoPendiente">
+                                    Solo saldo pendiente
+                                </label>
+                            </div>
+                        </div>
+
+                        @foreach (var grupo in trazabilidadConsignaciones)
+                        {
+                            var detalleMostrar = mostrarSoloSaldoPendiente
+                                ? grupo.Detalle.Where(x => x.Saldo > 0.0001m).ToList()
+                                : grupo.Detalle;
+
+                            if (!detalleMostrar.Any())
+                            {
+                                continue;
+                            }
+
+                            <div class="card mb-3">
+                                <div class="card-header bg-light">
+                                    <div class="row g-2 align-items-center">
+                                        <div class="col-md-8">
+                                            <strong>Padre:</strong> @grupo.CodigoPadre - @grupo.DescripcionPadre
+                                        </div>
+                                        <div class="col-md-4 text-md-end">
+                                            <span class="badge bg-secondary me-1">Item @grupo.NumeroItem</span>
+                                            <span class="badge bg-primary">@grupo.NroOcom</span>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="card-body">
+                                    <div class="mb-3">
+                                        <div class="table-responsive">
+                                            <table class="table table-sm table-bordered mb-0">
+                                                <thead class="table-light">
+                                                    <tr>
+                                                        <th>N° BR</th>
+                                                        <th>Fecha BR</th>
+                                                        <th class="text-end">Cantidad Aprobada</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    @if (grupo.Brs != null && grupo.Brs.Any())
+                                                    {
+                                                        @foreach (var br in grupo.Brs)
+                                                        {
+                                                            <tr>
+                                                                <td>@br.NroBr</td>
+                                                                <td>@(br.FechaBr?.ToString("dd/MM/yyyy") ?? string.Empty)</td>
+                                                                <td class="text-end">@br.CantidadAprobada.ToString("N4")</td>
+                                                            </tr>
+                                                        }
+                                                    }
+                                                    else
+                                                    {
+                                                        <tr>
+                                                            <td colspan="3" class="text-center text-muted">Sin BR asociados</td>
+                                                        </tr>
+                                                    }
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    </div>
+
+                                    <div class="table-responsive">
+                                        <table class="table table-sm table-striped table-hover mb-0">
+                                            <thead class="table-dark">
+                                                <tr>
+                                                    <th>Código</th>
+                                                    <th>Descripción</th>
+                                                    <th>Unidad</th>
+                                                    <th class="text-end">Cant Asig</th>
+                                                    <th class="text-end">Cant Entreg</th>
+                                                    <th class="text-end">Cant Rendid</th>
+                                                    <th class="text-end">Saldo</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                @foreach (var item in detalleMostrar)
+                                                {
+                                                    <tr>
+                                                        <td>@item.CodExte</td>
+                                                        <td>@item.Descripcion</td>
+                                                        <td>@item.Unidad</td>
+                                                        <td class="text-end">@item.CantAsig.ToString("N4")</td>
+                                                        <td class="text-end">@item.CantEntreg.ToString("N4")</td>
+                                                        <td class="text-end">@item.CantRendid.ToString("N4")</td>
+                                                        <td class="text-end">@item.Saldo.ToString("N4")</td>
+                                                    </tr>
+                                                }
+                                            </tbody>
+                                            <tfoot class="table-light">
+                                                <tr>
+                                                    <th colspan="3" class="text-end">Totales</th>
+                                                    <th class="text-end">@detalleMostrar.Sum(x => x.CantAsig).ToString("N4")</th>
+                                                    <th class="text-end">@detalleMostrar.Sum(x => x.CantEntreg).ToString("N4")</th>
+                                                    <th class="text-end">@detalleMostrar.Sum(x => x.CantRendid).ToString("N4")</th>
+                                                    <th class="text-end">@detalleMostrar.Sum(x => x.Saldo).ToString("N4")</th>
+                                                </tr>
+                                            </tfoot>
+                                        </table>
+                                    </div>
+                                </div>
+                            </div>
+                        }
+                    }
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-secondary" @onclick="CerrarModalTrazabilidadConsignaciones">Cerrar</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
 @code {
+    // Constantes para control de acceso
+    private const string COD_APLI = "InCompra";
+    private const string DES_APLI = "Ingreso de Orden de Compras";
+    private const string COD_APLI_COSTOS = "VerCostos";
+    private const string DES_APLI_COSTOS = "Visualizar Precios y Costos";
+    private const string COD_APLI_COSTOS_OC = "VerCostosOC";
+    private const string DES_APLI_COSTOS_OC = "Ver y Editar Costos de Órdenes de Compra";
+
+    // Datos
     private List<Ocomenca>? ordenesCompra;
     private int currentPage = 1;
-    private int totalPages;
+    private int totalPages = 1;
+    private int totalRecords = 0;
 
     // Filtros
     private string Filter = string.Empty;
@@ -292,13 +482,225 @@
     private Ocomenca? ordenParaImprimir;
     private List<Ocomdeta>? detalleParaImprimir;
 
+    // Variables de control de acceso
+    private bool verificandoPermisos = true;
+    private bool tieneAccesoEscritura = false;
+    private bool puedeVerCostos = false;
+    private bool puedeEditarCostos = false;
+    private bool validando = true;
+
+    // Variables para modal de costos
+    private bool mostrarModalCostos = false;
+    private int numeroOrdenCostos = 0;
+
+    // Variables para trazabilidad de consignaciones
+    private bool mostrarModalTrazabilidadConsignaciones = false;
+    private bool cargandoTrazabilidadConsignaciones = false;
+    private int numeroOrdenTrazabilidadConsignaciones = 0;
+    private bool mostrarSoloSaldoPendiente = false;
+    private List<ConsignacionTrazabilidadPadreDto> trazabilidadConsignaciones = new();
+
     protected override async Task OnInitializedAsync()
     {
-        // Establecer rango de fechas por defecto: últimos 30 días
-        fechaHasta = DateTime.Today;
-        fechaDesde = DateTime.Today.AddDays(-30);
-        
-        await LoadAsync();
+        try
+        {
+            // Validar que el usuario tenga permiso para acceder a esta página antes de mostrar el contenido
+            await PageAccess.RequiereAccesoAsync("/ordenes-compra");
+            validando = false;
+            
+            // Verificar derechos de acceso del usuario
+            verificandoPermisos = true;
+            
+            // Verificar si el usuario tiene acceso de lectura mínimo
+            int nivelAcceso = await derechosService.VerificarDerechoAsync(
+                COD_APLI,
+                DES_APLI,
+                mostrarMensaje: true // Mostrar mensaje si no tiene acceso
+            );
+
+            // Si no tiene acceso (nivel 0), redirigir al inicio
+            if (nivelAcceso == 0)
+            {
+                Console.WriteLine($"Usuario sin acceso a {COD_APLI}. Redirigiendo...");
+                await Task.Delay(2000); // Esperar 2 segundos para que vea el mensaje
+                navigationManager.NavigateTo("/");
+                return;
+            }
+
+            // Determinar si tiene permisos de escritura (nivel 2)
+            tieneAccesoEscritura = nivelAcceso >= 2;
+            
+            Console.WriteLine($"Acceso a {COD_APLI}: Nivel {nivelAcceso} - Escritura: {tieneAccesoEscritura}");
+            
+            // Verificar si puede ver costos/precios
+            var nivelAccesoCostos = await derechosService.VerificarDerechoAsync(
+                COD_APLI_COSTOS,
+                DES_APLI_COSTOS,
+                mostrarMensaje: false
+            );
+            puedeVerCostos = nivelAccesoCostos >= 1;
+            
+            Console.WriteLine($"Acceso a {COD_APLI_COSTOS}: Nivel {nivelAccesoCostos} - Puede ver costos: {puedeVerCostos}");
+            
+            // Verificar si puede editar costos de órdenes de compra (botón $)
+            var nivelAccesoCostosOC = await derechosService.VerificarDerechoAsync(
+                COD_APLI_COSTOS_OC,
+                DES_APLI_COSTOS_OC,
+                mostrarMensaje: false
+            );
+            puedeEditarCostos = nivelAccesoCostosOC >= 2; // Requiere lectura Y escritura
+            
+            Console.WriteLine($"Acceso a {COD_APLI_COSTOS_OC}: Nivel {nivelAccesoCostosOC} - Puede editar costos: {puedeEditarCostos}");
+            
+            verificandoPermisos = false;
+
+            // Restaurar filtros guardados o establecer valores por defecto
+            await RestaurarFiltros();
+            
+            // Cargar datos solo si tiene acceso
+            await LoadAsync(currentPage);
+        }
+        catch (Exception ex)
+        {
+            throw;
+        }
+    }
+
+    /// <summary>
+    /// Guarda los filtros actuales en sessionStorage para mantenerlos al volver de edición
+    /// </summary>
+    private async Task GuardarFiltros()
+    {
+        try
+        {
+            var filtros = new
+            {
+                Filter,
+                filtroEstado,
+                fechaDesde = fechaDesde?.ToString("yyyy-MM-dd"),
+                fechaHasta = fechaHasta?.ToString("yyyy-MM-dd"),
+                proveedorSeleccionado,
+                numeroProveedorSeleccionado,
+                currentPage
+            };
+            
+            var filtrosJson = JsonSerializer.Serialize(filtros);
+            await JS.InvokeVoidAsync("sessionStorage.setItem", "ordenesCompra_filtros", filtrosJson);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error al guardar filtros: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// Restaura los filtros guardados en sessionStorage o establece valores por defecto
+    /// </summary>
+    private async Task RestaurarFiltros()
+    {
+        try
+        {
+            fechaHasta ??= DateTime.Today;
+            fechaDesde ??= DateTime.Today.AddDays(-30);
+            if (currentPage <= 0)
+            {
+                currentPage = 1;
+            }
+
+            var filtrosJson = await JS.InvokeAsync<string>("sessionStorage.getItem", "ordenesCompra_filtros");
+            
+            if (!string.IsNullOrEmpty(filtrosJson))
+            {
+                var filtrosGuardados = JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(filtrosJson);
+                
+                if (filtrosGuardados != null)
+                {
+                    if (filtrosGuardados.ContainsKey("Filter") && filtrosGuardados["Filter"].ValueKind == JsonValueKind.String)
+                        Filter = filtrosGuardados["Filter"].GetString() ?? string.Empty;
+                    
+                    if (filtrosGuardados.ContainsKey("filtroEstado") && filtrosGuardados["filtroEstado"].ValueKind == JsonValueKind.String)
+                        filtroEstado = filtrosGuardados["filtroEstado"].GetString() ?? string.Empty;
+                    
+                    if (filtrosGuardados.ContainsKey("proveedorSeleccionado") && filtrosGuardados["proveedorSeleccionado"].ValueKind == JsonValueKind.String)
+                        proveedorSeleccionado = filtrosGuardados["proveedorSeleccionado"].GetString() ?? string.Empty;
+                    
+                    // Restaurar fechas
+                    if (filtrosGuardados.ContainsKey("fechaDesde") && filtrosGuardados["fechaDesde"].ValueKind == JsonValueKind.String)
+                    {
+                        var fechaStr = filtrosGuardados["fechaDesde"].GetString();
+                        if (!string.IsNullOrEmpty(fechaStr))
+                            fechaDesde = DateTime.Parse(fechaStr);
+                    }
+                    else
+                    {
+                        fechaDesde = DateTime.Today.AddDays(-30);
+                    }
+                    
+                    if (filtrosGuardados.ContainsKey("fechaHasta") && filtrosGuardados["fechaHasta"].ValueKind == JsonValueKind.String)
+                    {
+                        var fechaStr = filtrosGuardados["fechaHasta"].GetString();
+                        if (!string.IsNullOrEmpty(fechaStr))
+                            fechaHasta = DateTime.Parse(fechaStr);
+                    }
+                    else
+                    {
+                        fechaHasta = DateTime.Today;
+                    }
+                    
+                    // Restaurar proveedor
+                    if (filtrosGuardados.ContainsKey("numeroProveedorSeleccionado") && filtrosGuardados["numeroProveedorSeleccionado"].ValueKind == JsonValueKind.Number)
+                    {
+                        numeroProveedorSeleccionado = filtrosGuardados["numeroProveedorSeleccionado"].GetInt32();
+                    }
+                    
+                    // Restaurar página actual
+                    if (filtrosGuardados.ContainsKey("currentPage") && filtrosGuardados["currentPage"].ValueKind == JsonValueKind.Number)
+                    {
+                        currentPage = filtrosGuardados["currentPage"].GetInt32();
+                    }
+                    
+                    Console.WriteLine("Filtros restaurados desde sessionStorage");
+                }
+            }
+            else
+            {
+                // Establecer valores por defecto si no hay filtros guardados
+                fechaHasta = DateTime.Today;
+                fechaDesde = DateTime.Today.AddDays(-30);
+                currentPage = 1;
+                Console.WriteLine("Filtros por defecto establecidos");
+            }
+
+            if (!fechaDesde.HasValue)
+            {
+                fechaDesde = DateTime.Today.AddDays(-30);
+            }
+
+            if (!fechaHasta.HasValue)
+            {
+                fechaHasta = DateTime.Today;
+            }
+
+            if (fechaDesde > fechaHasta)
+            {
+                var hasta = fechaHasta.Value;
+                fechaHasta = fechaDesde;
+                fechaDesde = hasta;
+            }
+
+            if (currentPage <= 0)
+            {
+                currentPage = 1;
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error al restaurar filtros: {ex.Message}");
+            // Establecer valores por defecto en caso de error
+            fechaHasta = DateTime.Today;
+            fechaDesde = DateTime.Today.AddDays(-30);
+            currentPage = 1;
+        }
     }
 
     private async Task LoadAsync(int page = 1)
@@ -442,12 +844,14 @@
     private async Task SelectedPageAsync(int page)
     {
         currentPage = page;
+        await GuardarFiltros();
         await LoadAsync(page);
     }
 
     private async Task ApplyFilterAsync()
     {
         currentPage = 1;
+        await GuardarFiltros();
         await LoadAsync();
     }
 
@@ -469,8 +873,9 @@
         navigationManager.NavigateTo("/ordenes-compra/crear");
     }
 
-    private void EditarOrden(int id)
+    private async Task EditarOrden(int id)
     {
+        await GuardarFiltros();
         navigationManager.NavigateTo($"/ordenes-compra/editar/{id}");
     }
 
@@ -480,34 +885,94 @@
         mostrarModalDetalle = true;
     }
 
+    private async Task VerTrazabilidadConsignacionesAsync(int numeroOrden)
+    {
+        if (numeroOrden <= 0)
+        {
+            await sweetAlertService.FireAsync("Atención", "Número de orden inválido.", SweetAlertIcon.Warning);
+            return;
+        }
+
+        cargandoTrazabilidadConsignaciones = true;
+        numeroOrdenTrazabilidadConsignaciones = numeroOrden;
+        StateHasChanged();
+
+        try
+        {
+            var response = await repository.Get<List<ConsignacionTrazabilidadPadreDto>>($"api/maconsig/trazabilidad-oc/{numeroOrden}");
+            if (response.Error)
+            {
+                var message = await response.GetErrorMessageAsync();
+                await sweetAlertService.FireAsync("Error", $"No se pudo obtener la trazabilidad: {message}", SweetAlertIcon.Error);
+                return;
+            }
+
+            trazabilidadConsignaciones = response.Response ?? new List<ConsignacionTrazabilidadPadreDto>();
+            if (!trazabilidadConsignaciones.Any())
+            {
+                await sweetAlertService.FireAsync("Sin consignaciones", $"La O.C. {numeroOrden:000000} no tiene consignaciones para trazar.", SweetAlertIcon.Info);
+                return;
+            }
+
+            mostrarModalTrazabilidadConsignaciones = true;
+        }
+        finally
+        {
+            cargandoTrazabilidadConsignaciones = false;
+            StateHasChanged();
+        }
+    }
+
+    private void CerrarModalTrazabilidadConsignaciones()
+    {
+        mostrarModalTrazabilidadConsignaciones = false;
+        numeroOrdenTrazabilidadConsignaciones = 0;
+        mostrarSoloSaldoPendiente = false;
+        trazabilidadConsignaciones.Clear();
+        StateHasChanged();
+    }
+
     private async Task ImprimirOrden(int numeroOrden)
     {
         try
         {
+            Console.WriteLine($"🖨️ Iniciando impresión de orden: {numeroOrden}");
+            
             // Buscar la orden en la lista actual
             ordenParaImprimir = ordenesCompra?.FirstOrDefault(o => o.NumeOcom == numeroOrden);
             
             if (ordenParaImprimir == null)
             {
+                Console.WriteLine($"❌ No se encontró la orden {numeroOrden} en la lista");
                 await sweetAlertService.FireAsync("Error", "No se encontró la orden de compra.", SweetAlertIcon.Error);
                 return;
             }
 
-            // Cargar el detalle de la orden
-            var responseDetalle = await repository.Get<List<Ocomdeta>>($"api/ocomdeta/orden/{ordenParaImprimir.OCOMENCA_ID}");
+            Console.WriteLine($"✅ Orden encontrada: ID={ordenParaImprimir.OCOMENCA_ID}, Num={ordenParaImprimir.NumeOcom}");
+
+            // Cargar el detalle de la orden por número de orden
+            var responseDetalle = await repository.Get<List<Ocomdeta>>($"api/ocomdeta/por-orden/{numeroOrden}");
             if (responseDetalle.Error)
             {
                 var message = await responseDetalle.GetErrorMessageAsync();
+                Console.WriteLine($"❌ Error al cargar detalle: {message}");
                 await sweetAlertService.FireAsync("Error", $"Error al cargar detalle de la orden: {message}", SweetAlertIcon.Error);
                 return;
             }
 
             detalleParaImprimir = responseDetalle.Response ?? new List<Ocomdeta>();
+            Console.WriteLine($"✅ Detalle cargado: {detalleParaImprimir.Count} items");
+            
             mostrarModalImpresionOrden = true;
+            Console.WriteLine($"✅ Modal activado: mostrarModalImpresionOrden = {mostrarModalImpresionOrden}");
+            
+            StateHasChanged();
+            Console.WriteLine($"✅ StateHasChanged ejecutado");
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"Error al preparar impresión: {ex.Message}");
+            Console.WriteLine($"❌ Error al preparar impresión: {ex.Message}");
+            Console.WriteLine($"❌ Stack: {ex.StackTrace}");
             await sweetAlertService.FireAsync("Error", "Error al preparar la impresión.", SweetAlertIcon.Error);
         }
     }
@@ -769,5 +1234,74 @@
         ordenParaImprimir = null;
         detalleParaImprimir = null;
         StateHasChanged();
+    }
+
+    /// <summary>
+    /// Abre el modal de edición de costos para una orden específica
+    /// </summary>
+    private void AbrirModalCostos(int numeroOrden)
+    {
+        numeroOrdenCostos = numeroOrden;
+        mostrarModalCostos = true;
+        StateHasChanged();
+    }
+
+    /// <summary>
+    /// Cierra el modal de edición de costos
+    /// </summary>
+    private void CerrarModalCostos()
+    {
+        mostrarModalCostos = false;
+        numeroOrdenCostos = 0;
+        StateHasChanged();
+    }
+
+    /// <summary>
+    /// Callback que se ejecuta cuando se guardan los costos
+    /// Puede usarse para recargar datos si es necesario
+    /// </summary>
+    private async Task OnCostosGuardados()
+    {
+        Console.WriteLine("Costos guardados exitosamente");
+        // Opcional: recargar la lista de órdenes si es necesario
+        // await LoadAsync();
+    }
+
+    private class ConsignacionTrazabilidadPadreDto
+    {
+        public int NumeroOrden { get; set; }
+        public short NumeroItem { get; set; }
+        public string NroOcom { get; set; } = string.Empty;
+        public int CodIntePadre { get; set; }
+        public string CodigoPadre { get; set; } = string.Empty;
+        public string DescripcionPadre { get; set; } = string.Empty;
+        public decimal CantidadPadreOrden { get; set; }
+        public decimal TotalCantAsig { get; set; }
+        public decimal TotalCantEntreg { get; set; }
+        public decimal TotalCantRendid { get; set; }
+        public decimal TotalSaldo { get; set; }
+        public List<ConsignacionTrazabilidadBrDto> Brs { get; set; } = new();
+        public List<ConsignacionTrazabilidadDetalleDto> Detalle { get; set; } = new();
+    }
+
+    private class ConsignacionTrazabilidadDetalleDto
+    {
+        public int IdMaconsig { get; set; }
+        public string NroOcom { get; set; } = string.Empty;
+        public int CodInte { get; set; }
+        public string CodExte { get; set; } = string.Empty;
+        public string Descripcion { get; set; } = string.Empty;
+        public string Unidad { get; set; } = string.Empty;
+        public decimal CantAsig { get; set; }
+        public decimal CantEntreg { get; set; }
+        public decimal CantRendid { get; set; }
+        public decimal Saldo { get; set; }
+    }
+
+    private class ConsignacionTrazabilidadBrDto
+    {
+        public string NroBr { get; set; } = string.Empty;
+        public DateTime? FechaBr { get; set; }
+        public decimal CantidadAprobada { get; set; }
     }
 }

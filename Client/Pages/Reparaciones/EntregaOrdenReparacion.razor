@@ -5,7 +5,16 @@
 @inject NavigationManager navigationManager
 @inject SweetAlertService sweetAlertService
 @inject RemitosConfigService remitosConfigService
+@inject PageAccessService PageAccess
 
+<PageTitle>Entrega de Orden de Reparación</PageTitle>
+
+@if (validando)
+{
+    <p>Validando acceso...</p>
+}
+else
+{
 <div class="container-fluid mt-4">
     <div class="card shadow-sm">
         <div class="card-header bg-success text-white">
@@ -257,6 +266,7 @@ Call MOVISTOK(FF%, Ci%, LOTE$, CMO$, DOSEC$, REMI$, DOSEC$, REMI$, "", 0, 0, 0, 
         </div>
     </div>
 </div>
+}
 
 <!-- Modal de Despacho de Materiales -->
 @if (mostrarModal && ordenSeleccionada != null)
@@ -429,6 +439,7 @@ Call MOVISTOK(FF%, Ci%, LOTE$, CMO$, DOSEC$, REMI$, DOSEC$, REMI$, "", 0, 0, 0, 
     private bool cargando = true;
     private bool cargandoDatos = false;
     private bool mostrarModal = false;
+    private bool validando = true;
     
     // Variables para controlar la visibilidad de los instructivos
     private bool mostrarInstructivoUsuario = false;
@@ -441,6 +452,10 @@ Call MOVISTOK(FF%, Ci%, LOTE$, CMO$, DOSEC$, REMI$, DOSEC$, REMI$, "", 0, 0, 0, 
 
     protected override async Task OnInitializedAsync()
     {
+        // Validar que el usuario tenga permiso para acceder a esta página antes de mostrar el contenido
+        await PageAccess.RequiereAccesoAsync("/entrega-orden-reparacion");
+        validando = false;
+        
         await CargarDepositos();
         await CargarPrefijoDefecto();
         await CargarCodigoMovimientoDefecto();

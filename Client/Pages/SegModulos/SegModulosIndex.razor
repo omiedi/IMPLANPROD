@@ -1,0 +1,243 @@
+@page "/seg-modulos"
+@using Microsoft.AspNetCore.Authorization
+@attribute [Authorize(Roles = "SUPERADMIN")]
+@inject IRepository repository
+@inject NavigationManager navigationManager
+@inject SweetAlertService sweetAlertService
+
+<PageTitle>Módulos de Seguridad</PageTitle>
+
+<div class="card mb-3">
+    <div class="card-header bg-warning text-dark p-2">
+        <button class="btn btn-link text-dark text-decoration-none w-100 text-start p-0"
+                type="button"
+                @onclick="() => mostrarInstructivo = !mostrarInstructivo">
+            <i class="fas @(mostrarInstructivo ? "fa-chevron-down" : "fa-chevron-right") me-2"></i>
+            <strong><i class="fas fa-user-shield me-1"></i> Instructivo (SuperAdmin) — Sistema de Permisos de Páginas</strong>
+        </button>
+    </div>
+    @if (mostrarInstructivo)
+    {
+        <div class="card-body small">
+
+            <h6 class="text-warning"><i class="fas fa-layer-group me-1"></i> ¿Qué es un Módulo?</h6>
+            <p>
+                Un <strong>Módulo</strong> es un agrupador lógico de páginas. Por ejemplo: <em>Gestión de Clientes</em>,
+                <em>Producción</em>, <em>Configuración</em>. Sirve para organizar las páginas en la pantalla
+                de asignación de permisos por usuario.
+            </p>
+
+            <h6 class="text-warning mt-3"><i class="fas fa-file-alt me-1"></i> ¿Qué es una Página?</h6>
+            <p>
+                Una <strong>Página</strong> representa una ruta de la aplicación que se quiere proteger.
+                Cada página se asocia a un módulo y tiene una <strong>Ruta</strong> que debe coincidir
+                con el <code>&#64;page</code> del componente Blazor correspondiente.
+            </p>
+
+            <h6 class="text-warning mt-3"><i class="fas fa-shield-alt me-1"></i> Roles y acceso</h6>
+            <ul>
+                <li><strong>SUPERADMIN:</strong> acceso total a todas las páginas sin verificar permisos.</li>
+                <li><strong>ADMINISTRADOR / ADMIN:</strong> acceso a todo excepto páginas marcadas como <em>Es Configuración</em>.</li>
+                <li><strong>USUARIO:</strong> acceso solo a las páginas asignadas explícitamente en su perfil.</li>
+            </ul>
+
+            <h6 class="text-warning mt-3"><i class="fas fa-plus-circle me-1"></i> Cómo cargar un Módulo</h6>
+            <ol>
+                <li>Hacer clic en <strong>Nuevo Módulo</strong>.</li>
+                <li>Completar:
+                    <ul>
+                        <li><strong>Código:</strong> identificador único sin espacios, en mayúsculas. Ej: <code>CLIENTES</code></li>
+                        <li><strong>Nombre:</strong> descripción legible. Ej: <em>Gestión de Clientes</em></li>
+                        <li><strong>Orden:</strong> número que define la posición en el listado. Usar múltiplos de 10 (10, 20, 30…).</li>
+                        <li><strong>Activo:</strong> debe estar tildado para que aparezca en la asignación de permisos.</li>
+                    </ul>
+                </li>
+            </ol>
+
+            <h6 class="text-warning mt-3"><i class="fas fa-plus-circle me-1"></i> Cómo cargar una Página (ir a Configuración → Páginas)</h6>
+            <ol>
+                <li>Seleccionar el <strong>Módulo</strong> al que pertenece.</li>
+                <li>Completar:
+                    <ul>
+                        <li><strong>Nombre:</strong> descripción legible. Ej: <em>Lista de Clientes</em></li>
+                        <li>
+                            <strong>Ruta:</strong> debe coincidir con el <code>&#64;page</code> del componente Blazor,
+                            <strong>sin parámetros</strong>. Ejemplos:
+                            <ul>
+                                <li><code>/ficha-cliente-index</code> → para <code>&#64;page &quot;/ficha-cliente-index&quot;</code></li>
+                                <li><code>/ficha-cliente-edit</code> → para <code>&#64;page &quot;/ficha-cliente-edit/{Id:int}&quot;</code></li>
+                            </ul>
+                            El sistema usa <em>prefix-match</em>: <code>/ficha-cliente-edit/15</code> coincide
+                            automáticamente con la ruta registrada <code>/ficha-cliente-edit</code>.
+                        </li>
+                        <li><strong>Orden:</strong> posición dentro del módulo en la pantalla de permisos.</li>
+                        <li>
+                            <strong>Es Configuración:</strong> tildar solo para páginas administrativas
+                            (<code>/seg-modulos</code>, <code>/seg-paginas</code>, <code>/usuarios</code>, etc.).
+                            Estas páginas son inaccesibles para ADMINISTRADOR y USUARIO aunque se las asignen.
+                        </li>
+                        <li><strong>Componente:</strong> campo opcional/informativo. Se puede dejar vacío.</li>
+                    </ul>
+                </li>
+            </ol>
+
+            <h6 class="text-warning mt-3"><i class="fas fa-user-check me-1"></i> Cómo asignar permisos a un Usuario</h6>
+            <ol>
+                <li>Ir a <strong>Configuración → Usuarios</strong> → seleccionar usuario → <strong>Editar</strong>.</li>
+                <li>En la sección <em>Permisos de Páginas</em>, tildar las páginas a las que debe tener acceso.</li>
+                <li>Guardar. Los permisos previos son reemplazados completamente.</li>
+                <li>
+                    Para copiar permisos de un usuario a otro: botón <strong>Copiar Permisos de Páginas</strong>
+                    en la lista de usuarios. Solo disponible para SUPERADMIN y ADMINISTRADOR.
+                </li>
+            </ol>
+
+            <h6 class="text-warning mt-3"><i class="fas fa-code me-1"></i> Cómo proteger una página Blazor</h6>
+            <p>Agregar dos líneas en cada componente <code>.razor</code> que se quiera controlar:</p>
+            <pre class="bg-light p-2 rounded small">&#64;inject PageAccessService PageAccess
+
+protected override async Task OnInitializedAsync()
+{
+    await PageAccess.RequiereAccesoAsync("/mi-ruta");   // &#x2190; validaci&#xF3;n
+    await CargarDatos();
+}</pre>
+            <p class="text-muted mb-0">
+                SUPERADMIN y ADMIN pasan sin consulta. USUARIO es verificado contra SEG_USUARIO_PAGINA.
+                Las rutas permitidas se cachean en memoria por toda la sesión del navegador.
+                Sin permiso → redirige a <code>/acceso-denegado</code>.
+            </p>
+
+        </div>
+    }
+</div>
+
+@if (modulos is null)
+{
+    <div class="spinner" />
+}
+else
+{
+    <div class="card">
+        <div class="card-header d-flex justify-content-between align-items-center">
+            <span><i class="fas fa-cubes me-2"></i>Módulos de Seguridad (SEG_MODULO)</span>
+            <a class="btn btn-sm btn-primary" href="/seg-modulos/crear">
+                <i class="fas fa-plus me-1"></i>Nuevo Módulo
+            </a>
+        </div>
+        <div class="card-body">
+            <div class="mb-3 d-flex gap-2">
+                <input type="text" class="form-control" style="max-width:360px;"
+                       placeholder="Buscar por nombre o código..."
+                       @bind="filtro" @bind:event="oninput" />
+            </div>
+
+            @if (!ModulosFiltrados.Any())
+            {
+                <div class="alert alert-info">No hay módulos que coincidan con la búsqueda.</div>
+            }
+            else
+            {
+                <table class="table table-striped table-hover">
+                    <thead class="table-dark">
+                        <tr>
+                            <th style="width:60px">Id</th>
+                            <th>Código</th>
+                            <th>Nombre</th>
+                            <th>Descripción</th>
+                            <th style="width:70px">Orden</th>
+                            <th style="width:80px">Activo</th>
+                            <th style="width:200px"></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var m in ModulosFiltrados)
+                        {
+                            <tr>
+                                <td>@m.Id</td>
+                                <td><code>@m.Codigo</code></td>
+                                <td>@m.Nombre</td>
+                                <td><small class="text-muted">@m.Descripcion</small></td>
+                                <td class="text-center">@m.Orden</td>
+                                <td class="text-center">
+                                    @if (m.Activo)
+                                    {
+                                        <span class="badge bg-success">Sí</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="badge bg-secondary">No</span>
+                                    }
+                                </td>
+                                <td>
+                                    <a href="/seg-modulos/editar/@m.Id" class="btn btn-warning btn-sm me-1">
+                                        <i class="fas fa-pencil-alt"></i> Editar
+                                    </a>
+                                    <button class="btn btn-danger btn-sm" @onclick="() => DeleteAsync(m.Id)">
+                                        <i class="fas fa-trash"></i> Borrar
+                                    </button>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            }
+        </div>
+    </div>
+}
+
+@code {
+    private List<SegModulo>? modulos;
+    private string filtro = string.Empty;
+    private bool mostrarInstructivo = false;
+
+    private IEnumerable<SegModulo> ModulosFiltrados =>
+        string.IsNullOrWhiteSpace(filtro)
+            ? modulos!
+            : modulos!.Where(m =>
+                m.Nombre.Contains(filtro, StringComparison.OrdinalIgnoreCase) ||
+                m.Codigo.Contains(filtro, StringComparison.OrdinalIgnoreCase));
+
+    protected override async Task OnInitializedAsync() => await LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        var resp = await repository.Get<List<SegModulo>>("api/SegModulos");
+        if (resp.Error)
+        {
+            await sweetAlertService.FireAsync("Error", await resp.GetErrorMessageAsync(), SweetAlertIcon.Error);
+            return;
+        }
+        modulos = resp.Response ?? new();
+    }
+
+    private async Task DeleteAsync(int id)
+    {
+        var result = await sweetAlertService.FireAsync(new SweetAlertOptions
+        {
+            Title = "Confirmar eliminación",
+            Text = "¿Eliminar este módulo? Si tiene páginas asociadas no se podrá borrar.",
+            Icon = SweetAlertIcon.Warning,
+            ShowCancelButton = true,
+            ConfirmButtonText = "Sí, eliminar",
+            CancelButtonText = "Cancelar"
+        });
+
+        if (string.IsNullOrEmpty(result.Value)) return;
+
+        var resp = await repository.Delete($"api/SegModulos/{id}");
+        if (resp.Error)
+        {
+            await sweetAlertService.FireAsync("Error", await resp.GetErrorMessageAsync(), SweetAlertIcon.Error);
+            return;
+        }
+
+        await sweetAlertService.FireAsync(new SweetAlertOptions
+        {
+            Icon = SweetAlertIcon.Success,
+            Title = "Eliminado",
+            Timer = 1200,
+            ShowConfirmButton = false
+        });
+        await LoadAsync();
+    }
+}

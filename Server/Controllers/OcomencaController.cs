@@ -3,7 +3,6 @@ using IMPLANPROD.Shared.Entities;
 using IMPLANPROD.Shared.DTOs;
 using IMPLANPROD.Server.Data;
 using Microsoft.EntityFrameworkCore;
-using IMPLANPROD.Server.Helpers;
 using IMPLANPROD.Server.Services;
 using Microsoft.Data.SqlClient;
 using iTextSharp.text;
@@ -51,55 +50,20 @@ namespace IMPLANPROD.Server.Controllers
                 Console.WriteLine($"  - FechaDesde: {fechaDesde}");
                 Console.WriteLine($"  - FechaHasta: {fechaHasta}");
 
-                var queryable = _context.Ocomencas.AsQueryable();
+                var page = pagination.Page <= 0 ? 1 : pagination.Page;
+                var recordsNumber = pagination.RecordsNumber <= 0 ? 10 : pagination.RecordsNumber;
 
-                // Filtro por texto general (número de orden, referencia, razón social proveedor)
-                if (!string.IsNullOrWhiteSpace(pagination.Filter))
+                var resultado = await EjecutarConReintentoConexionAsync(async () =>
                 {
-                    queryable = queryable.Where(x => 
-                        x.NumeOcom.ToString().Contains(pagination.Filter) ||
-                        (x.RefeOcom != null && x.RefeOcom.Contains(pagination.Filter)) ||
-                        (x.RaSoProv != null && x.RaSoProv.Contains(pagination.Filter)));
-                }
+                    var queryable = ConstruirQueryOrdenesCompraFiltrada(pagination.Filter, numeroProveedor, filtroEstado, fechaDesde, fechaHasta);
 
-                // Filtro por proveedor
-                if (numeroProveedor.HasValue && numeroProveedor > 0)
-                {
-                    queryable = queryable.Where(x => x.NproOcom == numeroProveedor);
-                }
-
-                // Filtro por estado
-                if (!string.IsNullOrWhiteSpace(filtroEstado))
-                {
-                    if (short.TryParse(filtroEstado, out short estado))
-                    {
-                        if (estado >= 0)
-                        {
-                            queryable = queryable.Where(x => x.StatOcom >= estado);
-                        }
-                        else
-                        {
-                            queryable = queryable.Where(x => x.StatOcom == estado);
-                        }
-                    }
-                }
-
-                // Filtro por rango de fechas
-                if (fechaDesde.HasValue)
-                {
-                    queryable = queryable.Where(x => x.FemiOcom >= fechaDesde.Value);
-                }
-
-                if (fechaHasta.HasValue)
-                {
-                    queryable = queryable.Where(x => x.FemiOcom <= fechaHasta.Value.AddDays(1));
-                }
-
-                var resultado = await queryable
-                    .OrderByDescending(x => x.FemiOcom)
-                    .ThenByDescending(x => x.NumeOcom)
-                    .Paginate(pagination)
-                    .ToListAsync();
+                    return await queryable
+                        .OrderByDescending(x => x.FemiOcom)
+                        .ThenByDescending(x => x.NumeOcom)
+                        .Skip((page - 1) * recordsNumber)
+                        .Take(recordsNumber)
+                        .ToListAsync();
+                }, "GetAsync");
 
                 Console.WriteLine($"[OcomencaController] GetAsync - Se encontraron {resultado.Count} registros");
 
@@ -123,15 +87,44 @@ namespace IMPLANPROD.Server.Controllers
             DateTime? fechaDesde = null,
             DateTime? fechaHasta = null)
         {
-            var queryable = _context.Ocomencas.AsQueryable();
+            var recordsNumber = pagination.RecordsNumber <= 0 ? 10 : pagination.RecordsNumber;
 
-            // Aplicar los mismos filtros que en GetAsync
-            if (!string.IsNullOrWhiteSpace(pagination.Filter))
+            var count = await EjecutarConReintentoConexionAsync(async () =>
             {
-                queryable = queryable.Where(x =>
-                    x.NumeOcom.ToString().Contains(pagination.Filter) ||
-                    (x.RefeOcom != null && x.RefeOcom.Contains(pagination.Filter)) ||
-                    (x.RaSoProv != null && x.RaSoProv.Contains(pagination.Filter)));
+                var queryable = ConstruirQueryOrdenesCompraFiltrada(pagination.Filter, numeroProveedor, filtroEstado, fechaDesde, fechaHasta);
+                return await queryable.CountAsync();
+            }, "GetPages");
+
+            double totalPages = Math.Ceiling((double)count / recordsNumber);
+            return Ok(totalPages);
+        }
+
+        private IQueryable<Ocomenca> ConstruirQueryOrdenesCompraFiltrada(
+            string? filtro,
+            int? numeroProveedor,
+            string? filtroEstado,
+            DateTime? fechaDesde,
+            DateTime? fechaHasta)
+        {
+            var queryable = _context.Ocomencas.AsNoTracking().AsQueryable();
+
+            if (!string.IsNullOrWhiteSpace(filtro))
+            {
+                var filtroNormalizado = filtro.Trim();
+
+                if (int.TryParse(filtroNormalizado, out int numero))
+                {
+                    queryable = queryable.Where(x =>
+                        x.NumeOcom == numero ||
+                        (x.RefeOcom != null && x.RefeOcom.Contains(filtroNormalizado)) ||
+                        (x.RaSoProv != null && x.RaSoProv.Contains(filtroNormalizado)));
+                }
+                else
+                {
+                    queryable = queryable.Where(x =>
+                        (x.RefeOcom != null && x.RefeOcom.Contains(filtroNormalizado)) ||
+                        (x.RaSoProv != null && x.RaSoProv.Contains(filtroNormalizado)));
+                }
             }
 
             if (numeroProveedor.HasValue && numeroProveedor > 0)
@@ -139,34 +132,65 @@ namespace IMPLANPROD.Server.Controllers
                 queryable = queryable.Where(x => x.NproOcom == numeroProveedor);
             }
 
-            if (!string.IsNullOrWhiteSpace(filtroEstado))
+            if (!string.IsNullOrWhiteSpace(filtroEstado) && short.TryParse(filtroEstado, out short estado))
             {
-                if (short.TryParse(filtroEstado, out short estado))
-                {
-                    if (estado >= 0)
-                    {
-                        queryable = queryable.Where(x => x.StatOcom >= estado);
-                    }
-                    else
-                    {
-                        queryable = queryable.Where(x => x.StatOcom == estado);
-                    }
-                }
+                queryable = estado >= 0
+                    ? queryable.Where(x => x.StatOcom >= estado)
+                    : queryable.Where(x => x.StatOcom == estado);
             }
 
             if (fechaDesde.HasValue)
             {
-                queryable = queryable.Where(x => x.FemiOcom >= fechaDesde.Value);
+                var desde = fechaDesde.Value.Date;
+                queryable = queryable.Where(x => x.FemiOcom >= desde);
             }
 
             if (fechaHasta.HasValue)
             {
-                queryable = queryable.Where(x => x.FemiOcom <= fechaHasta.Value.AddDays(1));
+                var hastaExclusivo = fechaHasta.Value.Date.AddDays(1);
+                queryable = queryable.Where(x => x.FemiOcom < hastaExclusivo);
             }
 
-            double count = await queryable.CountAsync();
-            double totalPages = Math.Ceiling(count / pagination.RecordsNumber);
-            return Ok(totalPages);
+            return queryable;
+        }
+
+        private static bool EsErrorConexionCerrada(Exception ex)
+        {
+            if (ex is InvalidOperationException invalidOp &&
+                (invalidOp.Message?.Contains("connection is closed", StringComparison.OrdinalIgnoreCase) ?? false))
+            {
+                return true;
+            }
+
+            if (ex.InnerException != null)
+            {
+                return EsErrorConexionCerrada(ex.InnerException);
+            }
+
+            return false;
+        }
+
+        private async Task<T> EjecutarConReintentoConexionAsync<T>(Func<Task<T>> operacion, string origen)
+        {
+            try
+            {
+                return await operacion();
+            }
+            catch (Exception ex) when (EsErrorConexionCerrada(ex))
+            {
+                Console.WriteLine($"[OcomencaController] {origen} - Conexión cerrada detectada. Reintentando consulta...");
+
+                try
+                {
+                    await _context.Database.CloseConnectionAsync();
+                }
+                catch
+                {
+                    // No propagar error al cerrar; el objetivo es forzar reconexión en el reintento.
+                }
+
+                return await operacion();
+            }
         }
 
         /// <summary>
@@ -528,6 +552,23 @@ namespace IMPLANPROD.Server.Controllers
                 
                 // Condición de pago
                 ordenExistente.CpagOcom = ordenCompra.CpagOcom;
+
+                // Versión / revisión (OcomRevis)
+                // Regla: guardar la versión enviada (pantalla). Si ya hay una versión igual o mayor en BD,
+                // entonces incrementar en 1 sobre la versión actual para evitar duplicados.
+                {
+                    var versionActual = (short)(ordenExistente.OcomRevis ?? 0);
+                    var versionEnviada = (short)(ordenCompra.OcomRevis ?? 0);
+
+                    if (versionEnviada <= versionActual)
+                    {
+                        ordenExistente.OcomRevis = (short)(versionActual + 1);
+                    }
+                    else
+                    {
+                        ordenExistente.OcomRevis = versionEnviada;
+                    }
+                }
                 
                 // Campos calculados/automáticos
                 ordenExistente.LastUpdate = DateTime.Now;
@@ -662,6 +703,7 @@ namespace IMPLANPROD.Server.Controllers
         public async Task<ActionResult<string>> GetModoAprobacionAsync()
         {
             var configuracion = await _context.Flexcrls
+                .AsNoTracking()
                 .FirstOrDefaultAsync(f => f.CLABUS == "OCOMPRA" && f.PROBUS == "MODOAPRO");
 
             if (configuracion == null)
@@ -671,6 +713,38 @@ namespace IMPLANPROD.Server.Controllers
             }
 
             return Ok(configuracion.VALCONTROL ?? "DIRECTA");
+        }
+
+        /// <summary>
+        /// Verifica si existe una orden de compra de materiales asociada a una orden de fabricación
+        /// Replica la validación VB6: CONDI$ = "ANEX_OCOM='" & NORFA$ & "' AND STAT_OCOM < 9"
+        /// </summary>
+        /// <param name="numeroOrdenFabricacion">Número de orden de fabricación (NORFA$)</param>
+        /// <returns>
+        /// true si existe orden de compra de materiales en curso (STAT_OCOM < 9)
+        /// false si no existe orden de compra asociada
+        /// </returns>
+        [HttpGet("verificar-orden-compra-asociada/{numeroOrdenFabricacion}")]
+        public async Task<ActionResult<bool>> VerificarOrdenCompraAsociadaAsync(string numeroOrdenFabricacion)
+        {
+            try
+            {
+                Console.WriteLine($"[OcomencaController] Verificando orden de compra asociada a O.F. {numeroOrdenFabricacion}");
+
+                // Buscar en OCOMENCA donde ANEX_OCOM = NORFA$ y STAT_OCOM < 9
+                var existeOrdenCompra = await _context.Ocomencas
+                    .AsNoTracking()
+                    .AnyAsync(o => o.AnexOcom == numeroOrdenFabricacion && (o.StatOcom ?? 0) < 9);
+
+                Console.WriteLine($"[OcomencaController] Resultado: {(existeOrdenCompra ? "EXISTE" : "NO EXISTE")} orden de compra asociada");
+
+                return Ok(existeOrdenCompra);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[OcomencaController] Error al verificar orden de compra asociada: {ex.Message}");
+                return StatusCode(500, $"Error al verificar orden de compra asociada: {ex.Message}");
+            }
         }
 
         /// <summary>

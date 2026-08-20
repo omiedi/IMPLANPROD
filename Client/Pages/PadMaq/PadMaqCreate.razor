@@ -1,18 +1,37 @@
-@page "/padmaq/create"
+﻿@page "/padmaq/create"
+@using IMPLANPROD.Client.Services
 @inject IRepository repository
 @inject NavigationManager navigationManager
 @inject SweetAlertService sweetAlertService
 @inject IModalService Modal
+@inject PageAccessService PageAccess
 
-<h3>Nueva M�quina Productiva</h3>
+<PageTitle>Nueva Máquina Productiva</PageTitle>
+
+@if (validando)
+{
+    <p>Validando acceso...</p>
+}
+else
+{
+<h3>Nueva Máquina Productiva</h3>
 
 <PadMaqForm @ref="secprodForm" PADMAQ="padmaq" OnValidSubmit="Create" ReturnAction="Return" IsEdit="false" />
+}
 
 @code {
     private PADMAQ padmaq = new();
     private PadMaqForm? secprodForm;
+    private bool validando = true;
     [CascadingParameter]
     BlazoredModalInstance BlazoredModal { get; set; } = default!;
+
+    protected override async Task OnInitializedAsync()
+    {
+        // Validar que el usuario tenga permiso para acceder a esta página antes de mostrar el contenido
+        await PageAccess.RequiereAccesoAsync("/padmaq/create");
+        validando = false;
+    }
 
     private async Task Create()
     {

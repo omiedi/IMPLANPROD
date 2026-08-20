@@ -51,6 +51,20 @@ namespace IMPLANPROD.Server.Data.Interceptors
             short? currentCompanyCode = null;
             bool hasValidSession = false;
 
+            static bool IsNotificationEntity(string typeName)
+            {
+                return typeName == "Notificacion" ||
+                       typeName == "NotificacionDestinatario" ||
+                       typeName == "NotificacionLeida" ||
+                       typeName == "NotificacionReglaSql";
+            }
+
+            static bool IsAnonymousAllowedEntity(string typeName)
+            {
+                return IsNotificationEntity(typeName) ||
+                       typeName == "PasswordResetToken";
+            }
+
             // Obtener información del usuario actual usando los servicios inyectados
             try
             {
@@ -108,10 +122,14 @@ namespace IMPLANPROD.Server.Data.Interceptors
                 .Where(e => e.Entity.GetType().Name != "Usuario")
                 .ToList();
 
-            // Si hay entidades (excepto Usuario) que requieren auditoría pero no hay sesión válida, lanzar excepción
-            if (entriesRequiringValidation.Any() && !hasValidSession)
+            var entriesStrictWithoutSession = entriesRequiringValidation
+                .Where(e => !IsAnonymousAllowedEntity(e.Entity.GetType().Name))
+                .ToList();
+
+            // Si hay entidades (excepto Usuario y Notificaciones) que requieren auditoría pero no hay sesión válida, lanzar excepción
+            if (entriesStrictWithoutSession.Any() && !hasValidSession)
             {
-                var entityNames = entriesRequiringValidation
+                var entityNames = entriesStrictWithoutSession
                     .Select(e => e.Entity.GetType().Name)
                     .Distinct()
                     .ToList();
@@ -133,6 +151,9 @@ namespace IMPLANPROD.Server.Data.Interceptors
             {
                 var auditableEntity = (IAuditableEntity)entry.Entity;
                 var isUsuarioEntity = entry.Entity.GetType().Name == "Usuario";
+                var isAnonymousAllowedEntity = IsAnonymousAllowedEntity(entry.Entity.GetType().Name);
+
+                var shouldUseSystemAudit = !hasValidSession && isAnonymousAllowedEntity;
 
                 if (entry.State == EntityState.Added)
                 {
@@ -140,8 +161,13 @@ namespace IMPLANPROD.Server.Data.Interceptors
                     auditableEntity.AddRecord = now;
                     auditableEntity.LastUpdate = now;
                     
+                    if (shouldUseSystemAudit)
+                    {
+                        auditableEntity.NumUsuar = 0;
+                        auditableEntity.CodiEmprNet = 0;
+                    }
                     // Solo asignar usuario/empresa si hay sesión válida O si no es la entidad Usuario
-                    if (hasValidSession || !isUsuarioEntity)
+                    else if (hasValidSession || !isUsuarioEntity)
                     {
                         auditableEntity.NumUsuar = currentUserId;
                         auditableEntity.CodiEmprNet = currentCompanyCode;
@@ -152,8 +178,13 @@ namespace IMPLANPROD.Server.Data.Interceptors
                     // Registro modificado: solo actualizar LastUpdate y información actual
                     auditableEntity.LastUpdate = now;
                     
+                    if (shouldUseSystemAudit)
+                    {
+                        auditableEntity.NumUsuar = 0;
+                        auditableEntity.CodiEmprNet = 0;
+                    }
                     // Solo asignar usuario/empresa si hay sesión válida O si no es la entidad Usuario
-                    if (hasValidSession || !isUsuarioEntity)
+                    else if (hasValidSession || !isUsuarioEntity)
                     {
                         auditableEntity.NumUsuar = currentUserId;
                         auditableEntity.CodiEmprNet = currentCompanyCode;

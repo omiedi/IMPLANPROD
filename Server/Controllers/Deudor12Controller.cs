@@ -26,13 +26,36 @@ namespace IMPLANPROD.Server.Controllers
         /// Obtiene una lista paginada de clientes (Deudor12) con filtro por razón social y status (Stat_Cli)
         /// </summary>
         [HttpGet]
-        public async Task<IActionResult> GetAsync([FromQuery] PaginationDTO pagination, short stat_Cli = 0)
+        public async Task<IActionResult> GetAsync([FromQuery] int page = 1, [FromQuery] int recordsNumber = 10, [FromQuery] string? filter = null, short stat_Cli = 0)
         {
+            // Asegurar que page sea al menos 1 para evitar Skip negativo
+            if (page < 1) page = 1;
+
+            var pagination = new PaginationDTO
+            {
+                Page = page,
+                RecordsNumber = recordsNumber,
+                Filter = filter
+            };
+
             var queryable = _context.Clientes.AsQueryable();
 
             if (!string.IsNullOrWhiteSpace(pagination.Filter))
             {
-                queryable = queryable.Where(x => x.Raso_Cli != null && x.Raso_Cli.ToLower().Contains(pagination.Filter.ToLower()));
+                var terms = pagination.Filter
+                    .Split('+', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries)
+                    .Select(t => t.Trim().ToLower())
+                    .Where(t => !string.IsNullOrWhiteSpace(t))
+                    .ToList();
+
+                foreach (var term in terms)
+                {
+                    var like = $"%{term}%";
+                    queryable = queryable.Where(x =>
+                        (x.Raso_Cli != null && EF.Functions.Like(x.Raso_Cli.ToLower(), like)) ||
+                        EF.Functions.Like(x.Nume_Cli.ToString(), like)
+                    );
+                }
             }
             if (stat_Cli >= 0 )
             {
@@ -52,13 +75,33 @@ namespace IMPLANPROD.Server.Controllers
         /// Devuelve el total de páginas para la paginación de clientes, considerando el filtro y el status
         /// </summary>
         [HttpGet("totalPages")]
-        public async Task<ActionResult> GetPages([FromQuery] PaginationDTO pagination, short stat_Cli = 0)
+        public async Task<ActionResult> GetPages([FromQuery] int page = 1, [FromQuery] int recordsNumber = 10, [FromQuery] string? filter = null, short stat_Cli = 0)
         {
+            var pagination = new PaginationDTO
+            {
+                Page = page,
+                RecordsNumber = recordsNumber,
+                Filter = filter
+            };
+
             var queryable = _context.Clientes.AsQueryable();
 
             if (!string.IsNullOrWhiteSpace(pagination.Filter))
             {
-                queryable = queryable.Where(x => x.Raso_Cli != null && x.Raso_Cli.ToLower().Contains(pagination.Filter.ToLower()));
+                var terms = pagination.Filter
+                    .Split('+', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries)
+                    .Select(t => t.Trim().ToLower())
+                    .Where(t => !string.IsNullOrWhiteSpace(t))
+                    .ToList();
+
+                foreach (var term in terms)
+                {
+                    var like = $"%{term}%";
+                    queryable = queryable.Where(x =>
+                        (x.Raso_Cli != null && EF.Functions.Like(x.Raso_Cli.ToLower(), like)) ||
+                        EF.Functions.Like(x.Nume_Cli.ToString(), like)
+                    );
+                }
             }
             if (stat_Cli >= 0 )
             {

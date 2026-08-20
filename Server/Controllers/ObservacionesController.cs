@@ -57,7 +57,7 @@ namespace IMPLANPROD.Server.Controllers
                 // Usar Entity Framework para obtener las observaciones
                 var observaciones = await _context.BadamodeNotas
                     .Where(n => n.Cod_Mod == valor)
-                    .OrderByDescending(n => n.AddRecord)
+                    .OrderBy(n => n.AddRecord)
                     .Select(n => new ObservacionDTO
                     {
                         Id = n.Id,

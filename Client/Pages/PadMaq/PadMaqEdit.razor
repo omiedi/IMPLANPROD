@@ -1,12 +1,18 @@
-@page "/padmaq/edit/{Id:int}"
+﻿@page "/padmaq/edit/{Id:int}"
+@using IMPLANPROD.Client.Services
 @inject IRepository repository
 @inject NavigationManager navigationManager
 @inject SweetAlertService sweetAlertService
 @inject IModalService Modal
+@inject PageAccessService PageAccess
 
-<h3>Editar m�quinas productivas</h3>
+<PageTitle>Editar Máquinas Productivas</PageTitle>
 
-@if (padmaq is null)
+@if (validando)
+{
+    <p>Validando acceso...</p>
+}
+else if (padmaq is null)
 {
     <div class="align-items-center">
         <img src="https://media0.giphy.com/media/3oEjI6SIIHBdRxXI40/giphy.gif?cid=ecf05e47q4b7z67j4s1jr2t1uymf1mh3kq8sxpgmj89wf4xg&rid=giphy.gif&ct=g" />
@@ -14,12 +20,15 @@
 }
 else
 {
+<h3>Editar Máquinas Productivas</h3>
+
     <PadMaqForm @ref="padMaqForm"  PADMAQ="padmaq" OnValidSubmit="Edit" ReturnAction="Return" IsEdit="true" />
 }
 
 @code {
     private PADMAQ? padmaq;
     private PadMaqForm? padMaqForm;
+    private bool validando = true;
 
     [Parameter]
     public int Id { get; set; }
@@ -29,6 +38,10 @@ else
 
     protected override async Task OnInitializedAsync()
     {
+        // Validar que el usuario tenga permiso para acceder a esta página antes de mostrar el contenido
+        await PageAccess.RequiereAccesoAsync("/padmaq/edit/{Id}");
+        validando = false;
+        
         var responseHttp = await repository.Get<PADMAQ>($"/api/padmaq/{Id}");
         if (responseHttp.Error)
         {

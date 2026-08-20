@@ -1,15 +1,25 @@
 ﻿@page "/countries/details/{Id:int}"
+@using IMPLANPROD.Client.Services
 @inject IRepository repository
 @inject NavigationManager navigationManager
 @inject SweetAlertService sweetAlertService
+@inject PageAccessService PageAccess
 
-@if (country is null)
+<PageTitle>Detalles del País</PageTitle>
+
+@if (validando)
 {
-    <div class="spinner" />
+    <p>Validando acceso...</p>
 }
 else
 {
-    <div class="card">
+    @if (country is null)
+    {
+        <div class="spinner" />
+    }
+    else
+    {
+        <div class="card">
         <div class="card-header">
             <span>
                 <i class="oi oi-globe"></i> @country.Name
@@ -69,6 +79,7 @@ else
             </GenericList>
         </div>
     </div>
+    }
 }
 
 @code {
@@ -89,8 +100,13 @@ else
     [SupplyParameterFromQuery]
     public string Filter { get; set; } = "";
 
+    private bool validando = true;
+
+    // Validar que el usuario tenga permiso para acceder a esta página antes de mostrar el contenido
     protected override async Task OnInitializedAsync()
     {
+        await PageAccess.RequiereAccesoAsync("/countries/details");
+        validando = false;
         await LoadAsync();
     }
 

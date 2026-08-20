@@ -1,0 +1,88 @@
+@inject IRepository repository
+@inject SweetAlertService sweetAlertService
+
+@using CurrieTechnologies.Razor.SweetAlert2
+@using IMPLANPROD.Shared.Entities
+@using Blazored.Modal
+@using Blazored.Modal.Services
+
+<div class="modal-body">
+    <h3>Eliminar Código Equivalente</h3>
+
+    @if (cargando)
+    {
+        <div class="d-flex justify-content-center my-4">
+            <div class="spinner-border text-primary" role="status"></div>
+        </div>
+    }
+    else
+    {
+        <div class="alert alert-warning">
+            ¿Realmente deseas eliminar el registro <strong>@Id</strong>?
+        </div>
+
+        <div class="d-flex justify-content-end gap-2">
+            <button class="btn btn-secondary" @onclick="Cancelar">Cancelar</button>
+            <button class="btn btn-danger" @onclick="Eliminar" disabled="@(eliminando)">
+                @(eliminando ? "Eliminando..." : "Eliminar")
+            </button>
+        </div>
+    }
+</div>
+
+@code {
+    [CascadingParameter]
+    private BlazoredModalInstance BlazoredModal { get; set; } = default!;
+
+    [Parameter]
+    public int Id { get; set; }
+
+    private bool cargando;
+    private bool eliminando;
+
+    protected override async Task OnInitializedAsync()
+    {
+        cargando = true;
+        try
+        {
+            var response = await repository.Get<Replaco>($"/api/replacoprov/{Id}");
+            if (response.Error)
+            {
+                var msg = await response.GetErrorMessageAsync();
+                await sweetAlertService.FireAsync("Error", msg, SweetAlertIcon.Error);
+                await BlazoredModal.CancelAsync();
+                return;
+            }
+        }
+        finally
+        {
+            cargando = false;
+        }
+    }
+
+    private async Task Eliminar()
+    {
+        eliminando = true;
+        try
+        {
+            var response = await repository.Delete($"/api/replacoprov/{Id}");
+            if (response.Error)
+            {
+                var msg = await response.GetErrorMessageAsync();
+                await sweetAlertService.FireAsync("Error", msg, SweetAlertIcon.Error);
+                return;
+            }
+
+            await BlazoredModal.CloseAsync(ModalResult.Ok());
+        }
+        finally
+        {
+            eliminando = false;
+        }
+    }
+
+    private async Task Cancelar()
+    {
+        await BlazoredModal.CancelAsync();
+    }
+}

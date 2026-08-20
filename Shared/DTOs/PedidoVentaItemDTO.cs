@@ -83,5 +83,12 @@ namespace IMPLANPROD.Shared.DTOs
         /// Fecha solicitada de entrega del item
         /// </summary>
         public DateTime? FeSolEnt { get; set; }
+
+        /// <summary>
+        /// TPEDITEM: Identificador del item (formato: NRO_PEDIDO-NRO_ITEM)
+        /// Ejemplo: "12345-1", "12345-2", etc.
+        /// </summary>
+        [StringLength(32)]
+        public string? TPEDITEM { get; set; }
     }
 }

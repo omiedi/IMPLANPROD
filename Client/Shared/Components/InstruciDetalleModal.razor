@@ -1,0 +1,377 @@
+@inject IRepository Repository
+@inject SweetAlertService SweetAlertService
+@using IMPLANPROD.Shared.Entities
+@using System.Globalization
+
+@if (IsVisible && Instruci != null)
+{
+    <div class="modal fade show d-block" tabindex="-1" style="background-color:rgba(0,0,0,0.55);" role="dialog">
+        <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable" role="document">
+            <div class="modal-content shadow-lg">
+
+                <!-- ══ HEADER ══════════════════════════════════════════════════ -->
+                <div class="modal-header bg-primary text-white py-2">
+                    <div>
+                        <h5 class="modal-title mb-0">
+                            <i class="fas fa-file-alt me-2"></i>Instrucciones de Ingeniería para @Titulo
+                        </h5>
+                        <small class="opacity-75">Código interno: @(Instruci.Cod_Inte)</small>
+                    </div>
+                    <button type="button" class="btn-close btn-close-white" @onclick="Cerrar" aria-label="Cerrar"></button>
+                </div>
+
+                <!-- ══ BODY ═════════════════════════════════════════════════════ -->
+                <div class="modal-body p-4">
+
+                    <!-- ── Ficha datos principales ─────────────────────────── -->
+                    <div class="border rounded-3 bg-light p-3 shadow-sm mb-4">
+
+                        <!-- Fila 1: Código | Cód. Interno | Revisión -->
+                        <div class="row g-3 mb-3">
+                            <div class="col-md-5">
+                                <label class="form-label text-muted small text-uppercase fw-bold mb-1">Código</label>
+                                <div class="border rounded px-3 py-2 bg-white fw-semibold">@(Instruci.Codigo ?? "—")</div>
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label text-muted small text-uppercase fw-bold mb-1">Cód. Interno</label>
+                                <div class="border rounded px-3 py-2 bg-white fw-bold text-primary text-center">@(Instruci.Cod_Inte?.ToString() ?? "—")</div>
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label text-muted small text-uppercase fw-bold mb-1">Revisión</label>
+                                <input type="text" class="form-control text-center"
+                                       @bind="editRevision" maxlength="4" />
+                            </div>
+                        </div>
+
+                        <!-- Fila 2: Descripción -->
+                        <div class="row g-3 mb-3">
+                            <div class="col-12">
+                                <label class="form-label text-muted small text-uppercase fw-bold mb-1">Descripción</label>
+                                <div class="border rounded px-3 py-2 bg-white">@(Instruci.Descripcion ?? "—")</div>
+                            </div>
+                        </div>
+
+                        <hr class="my-2" />
+
+                        <!-- Fila 3: Preparó/Fecha + Aprobó/Fecha en misma fila (editables) -->
+                        <div class="row g-3 align-items-end">
+                            <div class="col-md-4">
+                                <label class="form-label text-muted small text-uppercase fw-bold mb-1">
+                                    <i class="fas fa-user-edit me-1 text-secondary"></i>Preparó
+                                </label>
+                                <input type="text" class="form-control"
+                                       @bind="editPreparo" />
+                            </div>
+                            <div class="col-md-2">
+                                <label class="form-label text-muted small text-uppercase fw-bold mb-1">
+                                    <i class="fas fa-calendar-alt me-1 text-secondary"></i>Fecha Prep.
+                                </label>
+                                <input type="date" class="form-control"
+                                       @bind="editFechaPrep" />
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label text-muted small text-uppercase fw-bold mb-1">
+                                    <i class="fas fa-user-check me-1 text-success"></i>Aprobó
+                                </label>
+                                <input type="text" class="form-control"
+                                       @bind="editAprobo" />
+                            </div>
+                            <div class="col-md-2">
+                                <label class="form-label text-muted small text-uppercase fw-bold mb-1">
+                                    <i class="fas fa-calendar-check me-1 text-success"></i>Fecha Aprob.
+                                </label>
+                                <input type="date" class="form-control"
+                                       @bind="editFechaPro" />
+                            </div>
+                            <div class="col-md-1 d-flex align-items-end">
+                                <button class="btn btn-primary btn-sm w-100"
+                                        type="button"
+                                        disabled="@isSaving"
+                                        @onclick="GuardarCambios"
+                                        title="Guardar cambios">
+                                    @if (isSaving)
+                                    { <span class="spinner-border spinner-border-sm"></span> }
+                                    else
+                                    { <i class="fas fa-save"></i> }
+                                </button>
+                            </div>
+                        </div>
+
+                    </div>
+                    <!-- ── fin ficha ─────────────────────────────────────────── -->
+
+                    <!-- ══ HOJA DE ACTUALIZACIÓN ════════════════════════════════ -->
+                    <div class="border rounded-3 shadow-sm mb-4 overflow-hidden">
+                        <div class="bg-secondary bg-opacity-10 px-3 py-2 border-bottom d-flex align-items-center">
+                            <i class="fas fa-list-alt me-2 text-secondary"></i>
+                            <span class="fw-bold text-secondary small text-uppercase">Hoja de Actualización</span>
+                        </div>
+
+                        @if (loadingHojas)
+                        {
+                            <div class="text-center py-3">
+                                <div class="spinner-border spinner-border-sm text-secondary" role="status"></div>
+                                <span class="ms-2 text-muted small">Cargando...</span>
+                            </div>
+                        }
+                        else
+                        {
+                            <table class="table table-sm table-bordered table-hover mb-0">
+                                <colgroup>
+                                    <col style="width:105px" />
+                                    <col style="width:70px" />
+                                    <col style="width:180px" />
+                                    <col />
+                                </colgroup>
+                                <thead class="table-light">
+                                    <tr>
+                                        <th class="text-center">Fecha</th>
+                                        <th class="text-center">Hoja</th>
+                                        <th>Modificación</th>
+                                        <th>Descripción</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @if (hojas.Any())
+                                    {
+                                        @foreach (var h in hojas)
+                                        {
+                                            <tr>
+                                                <td class="text-center">@FormatFecha(h.Fecha)</td>
+                                                <td class="text-center">@h.Hoja</td>
+                                                <td>@h.Modificacion</td>
+                                                <td>@h.Descripcion</td>
+                                            </tr>
+                                        }
+                                    }
+                                    else
+                                    {
+                                        <tr>
+                                            <td colspan="4" class="text-center text-muted fst-italic py-2">Sin registros</td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        }
+
+                        <!-- ── Formulario alta nueva hoja ───────────────────── -->
+                        <div class="border-top bg-light p-3">
+                            <div class="row g-2 align-items-end">
+                                <div class="col-md-2">
+                                    <label class="form-label small fw-semibold mb-1">Fecha</label>
+                                    <input type="date" class="form-control form-control-sm"
+                                           @bind="nuevaFecha" />
+                                </div>
+                                <div class="col-md-1">
+                                    <label class="form-label small fw-semibold mb-1">Hoja</label>
+                                    <input type="number" class="form-control form-control-sm" min="0"
+                                           @bind="nuevaHoja" placeholder="0" />
+                                </div>
+                                <div class="col-md-3">
+                                    <label class="form-label small fw-semibold mb-1">N° Modificación</label>
+                                    <input type="text" class="form-control form-control-sm"
+                                           @bind="nuevaModificacion" maxlength="255" />
+                                </div>
+                                <div class="col-md-5">
+                                    <label class="form-label small fw-semibold mb-1">Descripción</label>
+                                    <textarea class="form-control form-control-sm" rows="2"
+                                              @bind="nuevaDescripcion" placeholder="Descripción extendida" maxlength="1028"></textarea>
+                                </div>
+                                <div class="col-md-1 d-flex align-items-end">
+                                    <button class="btn btn-success btn-sm w-100"
+                                            type="button"
+                                            disabled="@isAgregando"
+                                            @onclick="AgregarHoja">
+                                        @if (isAgregando)
+                                        { <span class="spinner-border spinner-border-sm"></span> }
+                                        else
+                                        { <span><i class="fas fa-plus me-1"></i>Agregar</span> }
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <!-- ══ fin Hoja de Actualización ════════════════════════════ -->
+
+                    <!-- ── Observaciones ──────────────────────────────────── -->
+                    <div>
+                        <label class="form-label text-muted small text-uppercase fw-bold mb-1">
+                            <i class="fas fa-align-left me-1 text-secondary"></i>Observaciones
+                        </label>
+                        <textarea class="form-control" rows="5"
+                                  placeholder="Sin observaciones registradas"
+                                  @bind="editObservaciones"></textarea>
+                    </div>
+
+                </div>
+                <!-- ══ fin BODY ══════════════════════════════════════════════════ -->
+
+                <!-- ══ FOOTER ════════════════════════════════════════════════════ -->
+                <div class="modal-footer py-2">
+                    <button type="button" class="btn btn-secondary btn-sm" @onclick="Cerrar">
+                        <i class="fas fa-times me-1"></i> Cerrar
+                    </button>
+                </div>
+
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] public bool IsVisible  { get; set; }
+    [Parameter] public string? Titulo  { get; set; }
+    [Parameter] public Instruci? Instruci { get; set; }
+    [Parameter] public EventCallback OnCloseRequested { get; set; }
+
+    // ── Tabla Hoja de Actualización ───────────────────────────────────────
+    private List<Hojactu> hojas     = new();
+    private bool loadingHojas       = false;
+    private int? lastLoadedCodInte  = null;
+
+    // ── Campos editables de Instruci ──────────────────────────────────────
+    private string?  editRevision      = null;
+    private string?  editPreparo       = null;
+    private DateTime? editFechaPrep    = null;
+    private string?  editAprobo        = null;
+    private DateTime? editFechaPro     = null;
+    private string?  editObservaciones = null;
+    private bool     isSaving          = false;
+
+    // ── Formulario nueva hoja ─────────────────────────────────────────────
+    private DateTime nuevaFecha        = DateTime.Today;
+    private int      nuevaHoja         = 0;
+    private string   nuevaModificacion = string.Empty;
+    private string   nuevaDescripcion  = string.Empty;
+    private bool     isAgregando       = false;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (IsVisible && Instruci?.Cod_Inte != null && Instruci.Cod_Inte != lastLoadedCodInte)
+        {
+            lastLoadedCodInte = Instruci.Cod_Inte;
+            editRevision      = Instruci.Revision;
+            editPreparo       = Instruci.Preparo;
+            editFechaPrep     = Instruci.FechaPrep;
+            editAprobo        = Instruci.Aprobo;
+            editFechaPro      = Instruci.FechaPro;
+            editObservaciones = Instruci.Observaciones;
+            await CargarHojas();
+        }
+        if (!IsVisible)
+        {
+            lastLoadedCodInte = null;
+            hojas.Clear();
+        }
+    }
+
+    private async Task CargarHojas()
+    {
+        loadingHojas = true;
+        StateHasChanged();
+        try
+        {
+            var resp = await Repository.Get<List<Hojactu>>($"api/instruci/{Instruci!.Cod_Inte}/hojactu");
+            hojas = resp.Error ? new() : (resp.Response ?? new());
+        }
+        catch { hojas = new(); }
+        finally { loadingHojas = false; }
+    }
+
+    private async Task AgregarHoja()
+    {
+        if (string.IsNullOrWhiteSpace(nuevaModificacion))
+        {
+            await SweetAlertService.FireAsync("Atención", "El campo Modificación es obligatorio.", SweetAlertIcon.Warning);
+            return;
+        }
+
+        isAgregando = true;
+        StateHasChanged();
+        try
+        {
+            var item = new Hojactu
+            {
+                Fecha         = nuevaFecha,
+                Hoja          = nuevaHoja,
+                Modificacion  = nuevaModificacion,
+                Descripcion   = string.IsNullOrWhiteSpace(nuevaDescripcion) ? null : nuevaDescripcion,
+                Cod_Inte      = Instruci!.Cod_Inte ?? 0,
+                Orden         = hojas.Count + 1,
+                Status        = 0,
+                CodiEmpr      = 0
+            };
+
+            var resp = await Repository.Post<Hojactu, Hojactu>("api/instruci/hojactu", item);
+            if (resp.Error)
+            {
+                var msg = await resp.GetErrorMessageAsync();
+                await SweetAlertService.FireAsync("Error", msg, SweetAlertIcon.Error);
+            }
+            else
+            {
+                hojas.Add(resp.Response ?? item);
+                nuevaFecha        = DateTime.Today;
+                nuevaHoja         = 0;
+                nuevaModificacion = string.Empty;
+                nuevaDescripcion  = string.Empty;
+            }
+        }
+        catch (Exception ex)
+        {
+            await SweetAlertService.FireAsync("Error", ex.Message, SweetAlertIcon.Error);
+        }
+        finally { isAgregando = false; }
+    }
+
+    private async Task GuardarCambios()
+    {
+        if (Instruci == null) return;
+        isSaving = true;
+        StateHasChanged();
+        try
+        {
+            var dto = new Instruci
+            {
+                Id           = Instruci.Id,
+                Revision     = editRevision,
+                Preparo      = editPreparo,
+                FechaPrep    = editFechaPrep,
+                Aprobo       = editAprobo,
+                FechaPro     = editFechaPro,
+                Observaciones = editObservaciones
+            };
+            var resp = await Repository.Put<Instruci>($"api/instruci/{Instruci.Id}", dto);
+            if (resp.Error)
+            {
+                var msg = await resp.GetErrorMessageAsync();
+                await SweetAlertService.FireAsync("Error", msg, SweetAlertIcon.Error);
+            }
+            else
+            {
+                Instruci.Revision      = editRevision;
+                Instruci.Preparo       = editPreparo;
+                Instruci.FechaPrep     = editFechaPrep;
+                Instruci.Aprobo        = editAprobo;
+                Instruci.FechaPro      = editFechaPro;
+                Instruci.Observaciones = editObservaciones;
+                await SweetAlertService.FireAsync("Guardado", "Cambios guardados correctamente.", SweetAlertIcon.Success);
+            }
+        }
+        catch (Exception ex)
+        {
+            await SweetAlertService.FireAsync("Error", ex.Message, SweetAlertIcon.Error);
+        }
+        finally { isSaving = false; }
+    }
+
+    private async Task Cerrar()
+    {
+        lastLoadedCodInte = null;
+        hojas.Clear();
+        await OnCloseRequested.InvokeAsync();
+    }
+
+    private string FormatFecha(DateTime? fecha) =>
+        fecha.HasValue ? fecha.Value.ToString("dd/MM/yyyy", CultureInfo.InvariantCulture) : "—";
+}

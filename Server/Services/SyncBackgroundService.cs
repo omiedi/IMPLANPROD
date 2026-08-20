@@ -4,7 +4,7 @@ namespace IMPLANPROD.Server.Services
 {
     /// <summary>
     /// Servicio en segundo plano que procesa automáticamente archivos de sincronización
-    /// Solo se ejecuta en instalaciones que NO son Central (Sucursales)
+    /// Solo se ejecuta en instalaciones que procesan archivos de productos (Sucursales)
     /// </summary>
     public class SyncBackgroundService : BackgroundService
     {
@@ -38,14 +38,14 @@ namespace IMPLANPROD.Server.Services
                         // Obtener configuración
                         var config = syncService.ObtenerConfiguracion();
 
-                        // Solo procesar si NO es Central y la sincronización está habilitada
-                        if (!config.EsCentral && config.GeneraScriptSync)
+                        // Procesar archivos de productos (Sucursales)
+                        if (config.ProcesaProductos && config.GeneraScriptSync)
                         {
                             var rutaIntercambio = config.RutaIntercambio;
 
                             if (!string.IsNullOrEmpty(rutaIntercambio) && Directory.Exists(rutaIntercambio))
                             {
-                                _logger.LogInformation("Iniciando procesamiento automático de sincronización...");
+                                _logger.LogInformation("Iniciando procesamiento automático de sincronización de productos...");
                                 
                                 var resultado = await syncService.ProcesarArchivosSyncAsync(rutaIntercambio);
 
@@ -54,7 +54,7 @@ namespace IMPLANPROD.Server.Services
                                     if (resultado.ArchivosProcessados > 0)
                                     {
                                         _logger.LogInformation(
-                                            "Sincronización completada: {Archivos} archivos, {Registros} registros sincronizados",
+                                            "Sincronización de productos completada: {Archivos} archivos, {Registros} registros sincronizados",
                                             resultado.ArchivosProcessados,
                                             resultado.RegistrosSincronizados);
                                     }
@@ -62,7 +62,7 @@ namespace IMPLANPROD.Server.Services
                                 else
                                 {
                                     _logger.LogWarning(
-                                        "Sincronización completada con errores: {Mensaje}. Errores: {Errores}",
+                                        "Sincronización de productos completada con errores: {Mensaje}. Errores: {Errores}",
                                         resultado.Mensaje,
                                         resultado.Errores);
                                     
@@ -74,13 +74,70 @@ namespace IMPLANPROD.Server.Services
                             }
                             else
                             {
-                                _logger.LogWarning("Ruta de intercambio no válida o no existe: {Ruta}", rutaIntercambio);
+                                _logger.LogWarning("Ruta de intercambio de productos no válida o no existe: {Ruta}", rutaIntercambio);
                             }
                         }
-                        else if (config.EsCentral)
+                        else if (config.GeneraProductos)
                         {
-                            // Si es Central, no hacer nada (solo log en la primera ejecución)
-                            _logger.LogDebug("Esta instalación es Central, no se procesan archivos de sincronización");
+                            // Si genera archivos de productos (Central), no hacer nada (solo log en la primera ejecución)
+                            _logger.LogDebug("Esta instalación genera archivos de productos (Central), no se procesan archivos de sincronización de productos");
+                        }
+
+                        // Procesar archivos de remitos (Central)
+                        if (config.ProcesaRemitos && config.GeneraScriptSync)
+                        {
+                            var rutaIntercambioRemitos = config.RutaIntercambioRemitos;
+
+                            if (!string.IsNullOrEmpty(rutaIntercambioRemitos) && Directory.Exists(rutaIntercambioRemitos))
+                            {
+                                _logger.LogInformation("Iniciando procesamiento automático de sincronización de remitos...");
+                                
+                                // Obtener número de usuario activo (debe implementarse según el sistema de autenticación)
+                                var numUsuar = 0; // Valor por defecto, debe obtenerse del usuario autenticado
+                                
+                                // PRIMERO: Procesar archivos TXT y convertirlos a JSON
+                                var archivosTxt = Directory.GetFiles(rutaIntercambioRemitos, "*.txt");
+                                foreach (var archivoTxt in archivosTxt)
+                                {
+                                    _logger.LogInformation("Procesando archivo TXT de remito: {Archivo}", Path.GetFileName(archivoTxt));
+                                    await syncService.GenerarArchivoSyncRemitoDesdeTxtAsync(archivoTxt, numUsuar);
+                                }
+                                
+                                // SEGUNDO: Procesar archivos JSON de remitos
+                                var resultado = await syncService.ProcesarArchivosRemitosAsync(rutaIntercambioRemitos, numUsuar);
+
+                                if (resultado.Exitoso)
+                                {
+                                    if (resultado.ArchivosProcessados > 0)
+                                    {
+                                        _logger.LogInformation(
+                                            "Sincronización de remitos completada: {Archivos} archivos, {Registros} movimientos sincronizados",
+                                            resultado.ArchivosProcessados,
+                                            resultado.RegistrosSincronizados);
+                                    }
+                                }
+                                else
+                                {
+                                    _logger.LogWarning(
+                                        "Sincronización de remitos completada con errores: {Mensaje}. Errores: {Errores}",
+                                        resultado.Mensaje,
+                                        resultado.Errores);
+                                    
+                                    foreach (var error in resultado.DetalleErrores)
+                                    {
+                                        _logger.LogError("Error de sincronización de remitos: {Error}", error);
+                                    }
+                                }
+                            }
+                            else
+                            {
+                                _logger.LogWarning("Ruta de intercambio de remitos no válida o no existe: {Ruta}", rutaIntercambioRemitos);
+                            }
+                        }
+                        else if (config.GeneraRemitos)
+                        {
+                            // Si genera archivos de remitos (Sucursal Neuquén), no hacer nada (solo log en la primera ejecución)
+                            _logger.LogDebug("Esta instalación genera archivos de remitos (Sucursal Neuquén), no se procesan archivos de sincronización de remitos");
                         }
                     }
                 }

@@ -331,5 +331,81 @@ namespace IMPLANPROD.Server.Controllers
                 return StatusCode(500, $"Error interno del servidor: {ex.Message}");
             }
         }
+
+        /// <summary>
+        /// Obtiene las fabricaciones pendientes de aprobación para un producto (Cod_Inte).
+        /// Replica la consulta VB6 sobre ORFAPEN donde CodiMovi = 'OF',
+        /// agrupando por documento y filtrando SUM(CantIngre) > SUM(CantSalid).
+        /// </summary>
+        /// <param name="codint">Código interno del producto (Cod_Inte)</param>
+        /// <returns>Lista de fabricaciones pendientes de aprobación</returns>
+        [HttpGet("pendientes-aprobacion-por-producto/{codint:int}")]
+        public async Task<ActionResult<List<StockFabricacionPendienteAprobacionDTO>>> GetPendientesAprobacionPorProducto(int codint)
+        {
+            try
+            {
+                if (codint <= 0)
+                {
+                    return Ok(new List<StockFabricacionPendienteAprobacionDTO>());
+                }
+
+                // Agrupar por Cod_Exte, DoPriCor, FechMov, Cod_Inte, IDTEXT
+                // y quedarse con los grupos donde SUM(CantIngre) > SUM(CantSalid)
+                var grupos = await _context.Orfapens
+                    .AsNoTracking()
+                    .Where(o => o.CodiMovi == "OF" && o.Cod_Inte == codint)
+                    .GroupBy(o => new { o.Cod_Exte, o.DoPriCor, o.FechMov, o.Cod_Inte, o.IDTEXT })
+                    .Select(g => new
+                    {
+                        g.Key.DoPriCor,
+                        g.Key.FechMov,
+                        g.Key.IDTEXT,
+                        CanIn = g.Sum(x => x.CantIngre ?? 0m),
+                        CanApro = g.Sum(x => x.CantSalid ?? 0m)
+                    })
+                    .Where(g => g.CanIn > g.CanApro)
+                    .OrderBy(g => g.DoPriCor)
+                    .ToListAsync();
+
+                // Obtener la ReferCor para cada DoPriCor (como VALOBADA en VB6)
+                var dopricors = grupos
+                    .Select(g => g.DoPriCor)
+                    .Where(d => !string.IsNullOrEmpty(d))
+                    .Distinct()
+                    .ToList();
+
+                var referencias = await _context.Orfapens
+                    .AsNoTracking()
+                    .Where(o => o.CodiMovi == "OF" && dopricors.Contains(o.DoPriCor))
+                    .GroupBy(o => o.DoPriCor)
+                    .Select(g => new
+                    {
+                        DoPriCor = g.Key,
+                        ReferCor = g.Select(x => x.ReferCor).FirstOrDefault()
+                    })
+                    .ToListAsync();
+
+                var referenciasDict = referencias
+                    .ToDictionary(r => r.DoPriCor ?? string.Empty, r => r.ReferCor ?? string.Empty);
+
+                var resultado = grupos.Select(g => new StockFabricacionPendienteAprobacionDTO
+                {
+                    DoPriCor = g.DoPriCor ?? string.Empty,
+                    Referencia = referenciasDict.TryGetValue(g.DoPriCor ?? string.Empty, out var refe)
+                        ? refe.Trim()
+                        : string.Empty,
+                    CantPendiente = g.CanIn - g.CanApro,
+                    FechMov = g.FechMov,
+                    IdText = g.IDTEXT ?? string.Empty
+                }).ToList();
+
+                return Ok(resultado);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error al obtener fabricaciones pendientes de aprobación para producto {Codint}", codint);
+                return StatusCode(500, $"Error interno del servidor: {ex.Message}");
+            }
+        }
     }
 }

@@ -1,16 +1,29 @@
 @page "/ordenfabricacion"
 @page "/ordenfabricacion/{Page:int?}"
+@using IMPLANPROD.Client.Services
 @using IMPLANPROD.Shared.DTOs
 @using IMPLANPROD.Shared.Entities
 @using System.Globalization
 @using System.Web
 @using IMPLANPROD.Client.Pages.Reportes
+@using IMPLANPROD.Client.Shared.Components
+@using Microsoft.AspNetCore.Components.Authorization
 @inject IRepository repository
 @inject SweetAlertService sweetAlertService
 @inject NavigationManager navigationManager
+@inject PageAccessService PageAccess
+@inject AuthenticationStateProvider AuthenticationStateProvider
+@inject IJSRuntime JS
+@inject DerechosUsuarioClientService derechosService
 
 <PageTitle>Órdenes de Fabricación</PageTitle>
 
+@if (validando)
+{
+    <p>Validando acceso...</p>
+}
+else
+{
 <div class="container-fluid">
     <!-- Título de la página -->
     <div class="mb-4">
@@ -19,6 +32,87 @@
             ÓRDENES DE FABRICACIÓN
         </h2>
         <hr class="border-primary border-2 opacity-50" />
+    </div>
+
+    <div class="row mb-3">
+        <div class="col-12">
+            <div class="card mb-2">
+                <div class="card-header bg-info text-white p-2">
+                    <button class="btn btn-link text-white text-decoration-none w-100 text-start p-0"
+                            type="button"
+                            @onclick="() => mostrarInstructivoUsuario = !mostrarInstructivoUsuario">
+                        <i class="fas @(mostrarInstructivoUsuario ? "fa-chevron-down" : "fa-chevron-right") me-2"></i>
+                        <strong>Instructivo para el Usuario</strong>
+                    </button>
+                </div>
+                @if (mostrarInstructivoUsuario)
+                {
+                    <div class="card-body">
+                        <h6 class="text-primary"><i class="fas fa-info-circle"></i> Descripción</h6>
+                        <p>
+                            Esta pantalla permite consultar y gestionar Órdenes de Fabricación.
+                            Podés filtrar por estado, fechas o texto, crear nuevas órdenes, editar órdenes existentes e imprimir/exportar la lista.
+                        </p>
+
+                        <h6 class="text-primary"><i class="fas fa-list-check"></i> Secciones de la Pantalla</h6>
+
+                        <h6 class="text-secondary mt-3">1. Acciones</h6>
+                        <ul>
+                            <li><strong>Nueva Orden:</strong> crea una orden de fabricación.</li>
+                            <li><strong>Imprimir/Excel:</strong> permite exportar o imprimir el listado con los filtros aplicados.</li>
+                            <li><strong>Informes &gt; Configuración:</strong> abre la configuración de la pantalla.</li>
+                        </ul>
+
+                        <h6 class="text-secondary mt-3">2. Filtros</h6>
+                        <ul>
+                            <li><strong>Estado:</strong> Todas, Abiertas, Cerradas o Anuladas.</li>
+                            <li><strong>Fecha desde / hasta:</strong> acota por fecha de generación.</li>
+                            <li><strong>Filtro:</strong> busca por texto (por ejemplo ID, descripción o código).</li>
+                            <li><strong>Consultar:</strong> ejecuta la búsqueda.</li>
+                        </ul>
+
+                        <h6 class="text-secondary mt-3">3. Tabla</h6>
+                        <ul>
+                            <li><strong>Editar:</strong> abre la orden para modificación.</li>
+                            <li><strong>Ver Anotaciones:</strong> muestra anotaciones asociadas.</li>
+                            <li><strong>Cerrar Orden:</strong> disponible solo para órdenes abiertas.</li>
+                            <li><strong>Anulación x Cierre:</strong> permite anular cierres parciales de la orden. Si no tiene el permiso ANUCIEOF, al hacer clic se mostrará un mensaje con el código y descripción del derecho requerido.</li>
+                        </ul>
+                    </div>
+                }
+            </div>
+
+            <InstructivoDesarrollador>
+                <h6 class="text-info"><i class="fas fa-code"></i> Arquitectura</h6>
+                <p>
+                    Página Blazor de listado y gestión de órdenes de fabricación.
+                    Consume endpoints de <code>OrdeFabrController</code> y usa paginación + filtros.
+                </p>
+
+                <h6 class="text-info mt-3"><i class="fas fa-server"></i> Rutas UI</h6>
+                <ul>
+                    <li><code>/ordenfabricacion</code> - listado</li>
+                    <li><code>/orden-fabricacion-create</code> - alta</li>
+                    <li><code>/orden-fabricacion-edit/{id:int}</code> - edición</li>
+                </ul>
+
+                <h6 class="text-info mt-3"><i class="fas fa-network-wired"></i> Endpoints API (principales)</h6>
+                <ul>
+                    <li><code>GET /api/ordefabr</code> - listado paginado (filtros por estado, fechas y texto)</li>
+                    <li><code>GET /api/ordefabr/totalPages</code> - total de páginas</li>
+                    <li><code>GET /api/ordefabr/{id:int}</code> - obtener una orden</li>
+                    <li><code>POST /api/ordefabr/crearOrdenFabricacion</code> - crear orden</li>
+                    <li><code>PUT /api/ordefabr/{id:int}</code> - editar orden</li>
+                    <li><code>PUT /api/ordefabr/cerrar/{id:int}</code> - cierre</li>
+                </ul>
+
+                <h6 class="text-info mt-3"><i class="fas fa-print"></i> Impresión/Excel</h6>
+                <ul>
+                    <li>Usa el componente <code>ImpresionLista</code> con <code>UrlExportarExcel</code>.</li>
+                    <li>Para exportación: <code>POST /api/excel/exportar-ordenes-fabricacion</code></li>
+                </ul>
+            </InstructivoDesarrollador>
+        </div>
     </div>
 
 <div class="bg-primary bg-opacity-10 p-3 rounded-3 mb-3 d-flex justify-content-end align-items-center">
@@ -50,9 +144,7 @@
         <button class="btn btn-primary" @onclick="NuevoOrdenFabricacion">
             <i class="oi oi-plus"></i> Nueva Orden
         </button>
-        <button class="btn btn-secondary" @onclick="NuevoOrdenFabricacion">
-            <i class="oi oi-trash"></i> Productos dados de baja
-        </button>
+
         <button class="btn btn-success ms-2" @onclick="MostrarImpresion" disabled="@(ordenesFabricacion == null || !ordenesFabricacion.Any())">
             <i class="fas fa-print"></i> Imprimir/Excel
         </button>
@@ -82,6 +174,7 @@
                     <option value="0">Todas</option>
                     <option value="1">Abiertas</option>
                     <option value="3">Cerradas</option>
+                    <option value="9">Anuladas</option>
                 </select>
             </div>
         </div>
@@ -145,7 +238,10 @@ else
                 <th>Código</th>
                 <th>Descripción</th>
                 <th>Cant.Proy.</th>
-                <th>ID</th>
+                <th class="text-end">Cant.Cerrada</th>
+                <th class="text-end">Cant.Aprobada</th>
+                <th class="text-end">Pendiente Aprob.</th>
+                <th>Estado</th>
                 <th>Acciones</th>
             </tr>
         </thead>
@@ -159,23 +255,52 @@ else
                     <td>@orden.Cod_Exte</td>
                     <td>@orden.Descrip</td>
                     <td>@FormatDecimal(orden.CanProy)</td>
-                    <td>@orden.Id_Orfa</td>
+                    <td class="text-end">@FormatDecimal(orden.CantidadCerrada)</td>
+                    <td class="text-end">@FormatDecimal(orden.CantidadAprobadaOrfapen)</td>
+                    <td class="text-end @(orden.PendienteAprobacion > 0 ? "text-danger fw-bold" : "text-success")">@FormatDecimal(orden.PendienteAprobacion)</td>
+                    <td>@GetEstadoDescripcion(orden.StatuOrf)</td>
                     <td>
-                        <a class="btn btn-warning btn-sm" href="/orden-fabricacion-edit/@orden.Id">
-                            <i class="oi oi-pencil"></i>
-                        </a>
-                        <button class="btn btn-info btn-sm" @onclick="() => VerAnotaciones(orden.Id)">
-                            <i class="oi oi-eye"></i>
-                        </button>
-                        @* Botón de cierre solo para órdenes abiertas (statuorf < 3) *@
-                        @if (orden.StatuOrf.HasValue && orden.StatuOrf.Value < 3)
-                        {
-                            <button class="btn btn-success btn-sm ms-1"
-                                    @onclick="() => CerrarOrdenFabricacion(orden.Id, orden.IdSubOr)"
-                                    title="Cerrar Orden de Fabricación">
-                                <i class="oi oi-check"></i>
-                            </button>
-                        }
+                        <div class="d-flex flex-column gap-1">
+                            @* Fila superior: Editar y Ver Anotaciones *@
+                            <div class="d-flex">
+                                <a class="btn btn-warning btn-sm" href="/orden-fabricacion-edit/@orden.Id">
+                                    <i class="oi oi-pencil"></i>
+                                </a>
+                                <button class="btn btn-info btn-sm ms-1" @onclick="() => VerAnotaciones(orden.Id)">
+                                    <i class="oi oi-eye"></i>
+                                </button>
+                            </div>
+                            @* Fila inferior: Cerrar, Anular y Anulación x Cierre *@
+                            <div class="d-flex">
+                                @* Botón de cierre solo para órdenes abiertas (statuorf < 3) *@
+                                @if (orden.StatuOrf.HasValue && orden.StatuOrf.Value < 3)
+                                {
+                                    <button class="btn btn-success btn-sm"
+                                            @onclick="() => CerrarOrdenFabricacion(orden.Id, orden.IdSubOr)"
+                                            title="Cerrar Orden de Fabricación">
+                                        <i class="oi oi-check"></i>
+                                    </button>
+                                }
+                                @* Botón de anulación de orden de fabricación *@
+                                @* NOTA: Según el nuevo patrón de permisos, el botón siempre está habilitado.
+                                     La verificación de permisos se hace al hacer clic en el método AnularOrdenFabricacion.
+                                     Si el usuario no tiene el derecho ANULAROF, se muestra un SweetAlert con COD_APLI y DES_APLI. *@
+                                <button class="btn btn-danger btn-sm ms-1"
+                                        @onclick="() => AnularOrdenFabricacion(orden.Id, orden.IdSubOr)"
+                                        title="Anular Orden de Fabricación">
+                                    <i class="fas fa-ban"></i>
+                                </button>
+                                @* Botón de anulación x cierre *@
+                                @* NOTA: Según el nuevo patrón de permisos, el botón siempre está habilitado.
+                                     La verificación de permisos se hace al hacer clic en el método AbrirModalAnulacionCierre.
+                                     Si el usuario no tiene el derecho ANUCIEOF, se muestra un SweetAlert con COD_APLI y DES_APLI. *@
+                                <button class="btn btn-warning btn-sm ms-1"
+                                        @onclick="() => AbrirModalAnulacionCierre(orden.Cod_Inte ?? 0, orden.IdSubOr)"
+                                        title="Anulación x Cierre">
+                                    <i class="fas fa-list-check"></i>
+                                </button>
+                            </div>
+                        </div>
                     </td>
                 </tr>
             }
@@ -253,18 +378,30 @@ else
                                         </div>
                                     </div>
                                 </div>
-                                @* Segunda fila: Cantidades aprobadas y pendientes *@
+                                @* Segunda fila: Cantidades según tabla HTML *@
                                 <div class="row">
-                                    <div class="col-md-6">
-                                        @* Cantidad ya aprobada en cierres anteriores (campo CanApro) *@
+                                    <div class="col-md-3">
+                                        @* Cantidad proyectada (campo CanProy) *@
                                         <div class="mb-2">
-                                            <strong>Cant.Aprobadas:</strong> @FormatDecimal(ordenParaCierre.CanApro)
+                                            <strong>Cant.Proy.:</strong> @FormatDecimal(ordenParaCierre.CanProy)
                                         </div>
                                     </div>
-                                    <div class="col-md-6">
-                                        @* Cantidad pendiente calculada: CanProy - CanApro *@
+                                    <div class="col-md-3">
+                                        @* Cantidad cerrada desde ORFAPEN (campo CantidadCerrada) *@
                                         <div class="mb-2">
-                                            <strong>Cant. Pendiente:</strong> @FormatDecimal((ordenParaCierre.CanProy ?? 0) - (ordenParaCierre.CanApro ?? 0))
+                                            <strong>Cant.Cerrada:</strong> @FormatDecimal(ordenParaCierre.CantidadCerrada)
+                                        </div>
+                                    </div>
+                                    <div class="col-md-3">
+                                        @* Cantidad aprobada desde ORFAPEN (campo CantidadAprobadaOrfapen) *@
+                                        <div class="mb-2">
+                                            <strong>Cant.Aprobada:</strong> @FormatDecimal(ordenParaCierre.CantidadAprobadaOrfapen)
+                                        </div>
+                                    </div>
+                                    <div class="col-md-3">
+                                        @* Pendiente de aprobación desde ORFAPEN (campo PendienteAprobacion) *@
+                                        <div class="mb-2 @(ordenParaCierre.PendienteAprobacion > 0 ? "text-danger fw-bold" : "text-success")">
+                                            <strong>Pendiente Aprob.:</strong> @FormatDecimal(ordenParaCierre.PendienteAprobacion)
                                         </div>
                                     </div>
                                 </div>
@@ -348,7 +485,7 @@ else
                                 <div class="row">
                                     <div class="col-md-6">
                                         @* Cantidad aprobada en este cierre - no puede ser negativa *@
-                                        <label for="cantidadAprobada" class="form-label"><strong>Cant.Aprobada:</strong></label>
+                                        <label for="cantidadAprobada" class="form-label"><strong>Cant. a Cerrar:</strong></label>
                                         @* InputNumber con step decimal para permitir valores con decimales *@
                                         <InputNumber id="cantidadAprobada" class="form-control" @bind-Value="cantidadAprobada" step="0.01" />
                                     </div>
@@ -562,6 +699,151 @@ else
     <div class="modal-backdrop fade show"></div>
 }
 
+@* Modal de vista previa del Vale Interno *@
+@if (mostrarModalVistaPrevia)
+{
+    <div class="modal fade show" style="display: block" tabindex="-1">
+        <div class="modal-dialog modal-xl">
+            <div class="modal-content">
+                <div class="modal-header bg-primary text-white">
+                    <h5 class="modal-title">
+                        <i class="oi oi-file me-2"></i>Vale Interno - Cierre de Orden de Fabricación
+                    </h5>
+                    <button type="button" class="btn-close btn-close-white" @onclick="CancelarVistaPrevia"></button>
+                </div>
+                <div class="modal-body">
+                    @if (ordenParaCierre != null)
+                    {
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="card">
+                                    <div class="card-header bg-light">
+                                        <strong>Observaciones</strong>
+                                    </div>
+                                    <div class="card-body">
+                                        <textarea class="form-control" rows="4" placeholder="Ingrese observaciones para el vale interno..." @bind="observacionesVale"></textarea>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="card">
+                                    <div class="card-header bg-light">
+                                        <strong>Vista Previa</strong>
+                                    </div>
+                                    <div class="card-body">
+                                        <div style="font-family: 'Courier New', monospace; font-size: 12px; border: 1px solid #ccc; padding: 20px; background: white;">
+                                            <div class="d-flex justify-content-between align-items-start mb-2">
+                                                <div>
+                                                    <strong>VALE INTERNO</strong>
+                                                </div>
+                                                <div class="text-end">
+                                                    <div>FECHA DE CIERRE: @DateTime.Now.ToString("dd/MM/yyyy")</div>
+                                                    <div>Origen: @(ordenParaCierre.IdSubOr)</div>
+                                                </div>
+                                            </div>
+
+                                            <div style="border-top: 1px solid black; margin: 10px 0;"></div>
+
+                                            <div class="row mb-2" style="font-weight: bold;">
+                                                <div class="col-3">Código</div>
+                                                <div class="col-6">Descripción</div>
+                                                <div class="col-3 text-end">Cantidad</div>
+                                            </div>
+
+                                            <div class="row mb-2">
+                                                <div class="col-3">@(ordenParaCierre.Cod_Exte)</div>
+                                                <div class="col-6">@(ordenParaCierre.Descrip)</div>
+                                                <div class="col-3 text-end">@FormatDecimal(cantidadAprobada)</div>
+                                            </div>
+
+                                            <div style="border-top: 1px solid black; margin: 10px 0;"></div>
+                                            <div style="border-top: 1px solid black; margin: 10px 0;"></div>
+                                            <div style="border-top: 1px solid black; margin: 10px 0;"></div>
+
+                                            @if (!string.IsNullOrWhiteSpace(observacionesVale))
+                                            {
+                                                <div class="mt-3">
+                                                    <strong>Observaciones:</strong>
+                                                    <div style="white-space: pre-wrap;">@observacionesVale</div>
+                                                </div>
+                                                <div style="border-top: 1px solid black; margin: 10px 0;"></div>
+                                            }
+
+                                            <div class="text-end mt-3">
+                                                <strong>Cerró: @nombreUsuarioActual</strong>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    }
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-info" @onclick="ImprimirVale">
+                        <i class="oi oi-print me-1"></i>Imprimir
+                    </button>
+                    <button type="button" class="btn btn-secondary" @onclick="CancelarVistaPrevia">
+                        <i class="oi oi-check me-1"></i>Cerrar
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="modal-backdrop fade show"></div>
+}
+
+<!-- Área de impresión del Vale Interno -->
+<div id="areaImpresionVale" style="display: none;">
+    @if (ordenParaCierre != null)
+    {
+        <div style="padding: 20px; font-family: 'Courier New', monospace; font-size: 12px;">
+            <div style="margin-bottom: 20px;">
+                <div style="text-align: center; margin-bottom: 15px;">
+                    <h2 style="font-size: 24px; font-weight: bold; margin: 0;">VALE INTERNO</h2>
+                </div>
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <div style="font-size: 16px; font-weight: bold;">
+                        Origen: @(ordenParaCierre.IdSubOr)
+                    </div>
+                    <div style="font-size: 16px; font-weight: bold;">
+                        Fecha de Cierre: @DateTime.Now.ToString("dd/MM/yyyy")
+                    </div>
+                </div>
+            </div>
+
+            <table style="width: 100%; border-collapse: collapse; margin-top: 20px;">
+                <thead>
+                    <tr style="background-color: #212529; color: white; font-weight: bold;">
+                        <th style="border: 1px solid #000; padding: 8px; text-align: left;">Código</th>
+                        <th style="border: 1px solid #000; padding: 8px; text-align: left;">Descripción</th>
+                        <th style="border: 1px solid #000; padding: 8px; text-align: right;">Cantidad</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td style="border: 1px solid #000; padding: 8px;">@(ordenParaCierre.Cod_Exte)</td>
+                        <td style="border: 1px solid #000; padding: 8px;">@(ordenParaCierre.Descrip)</td>
+                        <td style="border: 1px solid #000; padding: 8px; text-align: right;">@FormatDecimal(cantidadAprobada)</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            @if (!string.IsNullOrWhiteSpace(observacionesVale))
+            {
+                <div style="margin-top: 20px;">
+                    <strong>Observaciones:</strong>
+                    <div style="white-space: pre-wrap; margin-top: 10px;">@observacionesVale</div>
+                </div>
+            }
+
+            <div style="margin-top: 30px; text-align: right;">
+                <strong>Cerró: @nombreUsuarioActual</strong>
+            </div>
+        </div>
+    }
+</div>
+
 @* Componente de impresión *@
 @if (ordenesFabricacion != null && ordenesFabricacion.Any())
 {
@@ -575,6 +857,7 @@ else
                     OnCerrar="ResetearImpresion" />
 }
 </div>
+}
 
 @code {
 
@@ -590,9 +873,72 @@ else
     private DateTime? fechaDesde;
     private DateTime? fechaHasta;
     private bool isLoading = true;
+    private bool mostrarInstructivoUsuario = false;
+    private bool validando = true;
+
+    // Variables de control de permisos para ANULAROF (anulación completa de orden de fabricación)
+    // Estas variables controlan si el usuario puede ver y usar el botón de anulación completa
+    private bool tieneAccesoEscritura = false;
+    
+    // Variables de control de permisos para ANUCIEOF (anulación de cierres parciales)
+    // Estas variables indican si el usuario tiene el derecho configurado en DER_ACCE
+    // El código de aplicación ANUCIEOF debe estar configurado en la tabla DER_ACCE
+    // 
+    // NOTA: El nuevo patrón de permisos es:
+    // - Los botones siempre están habilitados
+    // - Al hacer clic, se verifica si el usuario tiene el derecho
+    // - Si no tiene derecho, se muestra un SweetAlert con COD_APLI y DES_APLI
+    // - Si tiene derecho, se ejecuta la acción normalmente
+    private bool tieneAccesoAnulacionCierre = false;
+    private bool verificandoPermisos = true;
+    
+    // Códigos de aplicación para validación de derechos en DER_ACCE
+    // COD_APLI: Código para anulación completa de orden de fabricación
+    // COD_APLI_ANUCIEOF: Código para anulación de cierres parciales (nueva funcionalidad)
+    private const string COD_APLI = "ANULAROF";
+    private const string DES_APLI = "Anulación de Orden de Fabricación";
+    private const string COD_APLI_ANUCIEOF = "ANUCIEOF";
+    private const string DES_APLI_ANUCIEOF = "Anulación Cierre Parcial de O/F";
 
     protected override async Task OnInitializedAsync()
     {
+        // Paso 1: Validar que el usuario tenga permiso para acceder a esta página
+        // Si no tiene permiso, el servicio PageAccess redirigirá a la página de acceso denegado
+        await PageAccess.RequiereAccesoAsync("/ordenfabricacion");
+        validando = false;
+
+        // Paso 2: Verificar derechos de acceso para ANULAROF (anulación completa de orden)
+        // Esto controla si el usuario puede ver y usar el botón de anulación completa (botón rojo)
+        verificandoPermisos = true;
+
+        var nivelAcceso = await derechosService.VerificarDerechoAsync(
+            COD_APLI,
+            DES_APLI,
+            mostrarMensaje: false // No mostrar mensaje si no tiene acceso, solo deshabilitar botón
+        );
+
+        // Nivel de acceso: 0 = sin acceso, 1 = solo lectura, 2 = escritura
+        // Solo permitimos anulación si el usuario tiene nivel 2 (escritura)
+        tieneAccesoEscritura = nivelAcceso >= 2;
+
+        Console.WriteLine($"Acceso a {COD_APLI}: Nivel {nivelAcceso} - Escritura: {tieneAccesoEscritura}");
+
+        // Paso 3: Verificar derechos de acceso para ANUCIEOF (anulación de cierres parciales)
+        // Esto controla si el usuario puede ver y usar el botón de anulación x cierre (botón amarillo)
+        // El código ANUCIEOF debe estar configurado en la tabla DER_ACCE con los usuarios que tienen permiso
+        var nivelAccesoAnulacionCierre = await derechosService.VerificarDerechoAsync(
+            COD_APLI_ANUCIEOF,
+            DES_APLI_ANUCIEOF,
+            mostrarMensaje: false
+        );
+
+        // Solo permitimos anulación de cierre si el usuario tiene nivel 2 (escritura)
+        tieneAccesoAnulacionCierre = nivelAccesoAnulacionCierre >= 2;
+
+        Console.WriteLine($"Acceso a {COD_APLI_ANUCIEOF}: Nivel {nivelAccesoAnulacionCierre} - Escritura: {tieneAccesoAnulacionCierre}");
+
+        verificandoPermisos = false;
+
         // Leer parámetros de la URL
         var uri = new Uri(navigationManager.Uri);
         var queryParams = System.Web.HttpUtility.ParseQueryString(uri.Query);
@@ -665,6 +1011,24 @@ else
             return "";
 
         return value.Value.ToString("N2", CultureInfo.CurrentCulture);
+    }
+
+    /// <summary>
+    /// Obtiene la descripción del estado de la orden de fabricación
+    /// </summary>
+    private string GetEstadoDescripcion(short? statuOrf)
+    {
+        if (!statuOrf.HasValue)
+            return "Desconocido";
+
+        return statuOrf.Value switch
+        {
+            0 => "Abierta",
+            1 => "En Proceso",
+            3 => "Cerrada",
+            9 => "Anulada",
+            _ => $"Estado {statuOrf.Value}"
+        };
     }
 
     /// <summary>
@@ -748,6 +1112,139 @@ else
     {
         navigationManager.NavigateTo("/orden-fabricacion-create");
     }
+
+    /// <summary>
+    /// Anula una orden de fabricación
+    /// Valida primero si existe nota de pedido de materiales asociada (OCOMENCA)
+    /// Valida si hay materiales transferidos (MOVISTO)
+    /// Replica las validaciones VB6:
+    /// - CONDI$ = "ANEX_OCOM='" & NORFA$ & "' AND STAT_OCOM < 9"
+    /// - WHERE DOSECCOR = NORFA$ AND CODIMOVI = 'TR' AND (CANTINGRE - CANTSALID) > 0.5
+    /// 
+    /// Flujo:
+    /// 1. Verifica si el usuario tiene el derecho ANULAROF configurado en DER_ACCE
+    /// 2. Si no tiene derecho, muestra SweetAlert con COD_APLI y DES_APLI y retorna
+    /// 3. Si tiene derecho, verifica el estado de la orden
+    /// 4. Si ya está anulada, muestra mensaje informativo y retorna
+    /// 5. Verifica si hay orden de compra asociada
+    /// 6. Si hay orden de compra, muestra advertencia y solicita confirmación
+    /// 7. Si confirma, llama al endpoint de anulación
+    /// </summary>
+    /// <param name="id">ID de la orden de fabricación</param>
+    /// <param name="idSubOr">ID de la suborden para mostrar en la confirmación</param>
+    private async Task AnularOrdenFabricacion(int id, string? idSubOr)
+    {
+        // Paso 1: Verificar si el usuario tiene el derecho ANULAROF
+        // Según el nuevo patrón de permisos, los botones siempre están habilitados
+        // y la verificación de permisos se hace al hacer clic
+        if (!tieneAccesoEscritura)
+        {
+            // Mostrar SweetAlert informativo con COD_APLI y DES_APLI
+            // Usamos HTML con <br> para respetar los saltos de línea
+            await sweetAlertService.FireAsync(new SweetAlertOptions
+            {
+                Title = "Acceso Denegado",
+                Html = $"No tiene el derecho configurado para esta acción.<br><br>Código: {COD_APLI}<br>Descripción: {DES_APLI}<br><br>Contacte al administrador del sistema.",
+                Icon = SweetAlertIcon.Warning,
+                ConfirmButtonText = "Entendido"
+            });
+            return;
+        }
+
+        try
+        {
+            // Paso 2: Buscar la orden para verificar su estado actual
+            var orden = ordenesFabricacion.FirstOrDefault(o => o.Id == id);
+            
+            if (orden?.StatuOrf == 9)
+            {
+                await sweetAlertService.FireAsync(
+                    "Orden Ya Anulada",
+                    "La orden de fabricación ya se encuentra anulada",
+                    SweetAlertIcon.Warning
+                );
+                return;
+            }
+
+            // Validar primero si existe orden de compra de materiales asociada
+            var responseOrdenCompra = await repository.Get<bool>($"api/ocomenca/verificar-orden-compra-asociada/{idSubOr}");
+
+            if (responseOrdenCompra.Error)
+            {
+                await sweetAlertService.FireAsync("Error", "Error al verificar orden de compra asociada", SweetAlertIcon.Error);
+                return;
+            }
+
+            var existeOrdenCompra = responseOrdenCompra.Response;
+
+            if (existeOrdenCompra)
+            {
+                // Si existe orden de compra en curso, impedir la anulación
+                await sweetAlertService.FireAsync(
+                    "Imposible Anular O.F.",
+                    "Imposible Anular S/F, Posee Nota de Pedido de Materiales En Curso\n\nAnule la Nota de Pedido y Vuelva a Intentarlo",
+                    SweetAlertIcon.Error
+                );
+                return;
+            }
+
+            // Validar si hay materiales transferidos pendientes
+            var responseMateriales = await repository.Get<bool>($"api/movisto/verificar-materiales-transferidos/{idSubOr}");
+
+            if (responseMateriales.Error)
+            {
+                await sweetAlertService.FireAsync("Error", "Error al verificar materiales transferidos", SweetAlertIcon.Error);
+                return;
+            }
+
+            var tieneMaterialesTransferidos = responseMateriales.Response;
+
+            if (tieneMaterialesTransferidos)
+            {
+                // Si hay materiales transferidos pendientes, impedir la anulación
+                await sweetAlertService.FireAsync(
+                    "Imposible Anular O.F.",
+                    "La O/F No puede ser Anulada porque tiene Materiales Transferidos",
+                    SweetAlertIcon.Error
+                );
+                return;
+            }
+
+            // Si no hay impedimentos, confirmar anulación
+            var resultado = await sweetAlertService.FireAsync(new SweetAlertOptions
+            {
+                Title = "¿Anular Orden de Fabricación?",
+                Text = $"¿Está seguro que desea anular la orden de fabricación {idSubOr}?",
+                Icon = SweetAlertIcon.Warning,
+                ShowCancelButton = true,
+                ConfirmButtonText = "Sí, Anular",
+                CancelButtonText = "Cancelar",
+                ConfirmButtonColor = "#d33",
+                CancelButtonColor = "#3085d6"
+            });
+
+            if (resultado.IsConfirmed)
+            {
+                // Ejecutar anulación en el servidor
+                var responseAnulacion = await repository.Put<object>($"api/ordefabr/anular/{idSubOr}", null);
+
+                if (responseAnulacion.Error)
+                {
+                    await sweetAlertService.FireAsync("Error", "Error al anular la orden de fabricación", SweetAlertIcon.Error);
+                    return;
+                }
+
+                await sweetAlertService.FireAsync("Éxito", "Orden de fabricación anulada exitosamente", SweetAlertIcon.Success);
+                
+                // Recargar la tabla para mostrar el estado actualizado
+                await LoadAsync();
+            }
+        }
+        catch (Exception ex)
+        {
+            await sweetAlertService.FireAsync("Error", $"Error al intentar anular la orden: {ex.Message}", SweetAlertIcon.Error);
+        }
+    }
     // El método GetPagesAsync ya no es necesario porque se obtiene el total de páginas en LoadAsync
 
     /// <summary>
@@ -799,6 +1296,7 @@ else
     private bool mostrarModalCierre = false;
     private bool cargandoDatosCierre = false;
     private bool procesandoCierre = false;
+    private bool imprimiendo = false;
     private OrdefabrIndexDTO? ordenParaCierre = null;
     private int idOrdenParaCierre = 0;
 
@@ -824,6 +1322,27 @@ else
     private bool cargandoComponentes = false;
     private List<FormulaComponenteDTO>? componentesFormula;
 
+    // Variables para el modal de vista previa del vale interno
+    private bool mostrarModalVistaPrevia = false;
+    private string? nombreUsuarioActual;
+    private string observacionesVale = string.Empty;
+
+    // Variables para el modal de anulación de cierre
+    // Este modal permite al usuario seleccionar un cierre parcial para anularlo
+    // mostrarModalAnulacionCierre: controla si el modal está visible o no
+    // cargandoCierres: indica si se están cargando los cierres desde el servidor
+    // cierresReversibles: lista de cierres que pueden ser anulados (viene del backend)
+    // cierreSeleccionado: el cierre que el usuario seleccionó para anular
+    // codInteParaAnulacion: código interno del producto (se usa para consultar cierres)
+    // idSubOrParaAnulacion: ID de la suborden de fabricación (se usa para identificar la orden)
+    private bool mostrarModalAnulacionCierre = false;
+    private bool cargandoCierres = false;
+    private List<CierreReversibleDTO>? cierresReversibles;
+    private CierreReversibleDTO? cierreSeleccionado;
+    private int codInteParaAnulacion = 0;
+    private string idSubOrParaAnulacion = string.Empty;
+    private bool mostrarModalConfirmacionReservas = false;
+
     /// <summary>
     /// Abre el modal de configuración de orden de fabricación
     /// </summary>
@@ -838,6 +1357,214 @@ else
     private void CerrarModalConfiguracion()
     {
         mostrarModalConfiguracion = false;
+    }
+
+    /// <summary>
+    /// Abre el modal de anulación de cierre
+    /// 
+    /// Este método se ejecuta cuando el usuario hace clic en el botón "Anulación x Cierre" (botón amarillo)
+    /// en la tabla de órdenes de fabricación.
+    /// 
+    /// Flujo:
+    /// 1. Verifica si el usuario tiene el derecho ANUCIEOF configurado en DER_ACCE
+    /// 2. Si no tiene derecho, muestra SweetAlert con COD_APLI y DES_APLI y retorna
+    /// 3. Si tiene derecho, guarda el código interno y el ID de la suborden
+    /// 4. Muestra el modal y activa el indicador de carga
+    /// 5. Llama al endpoint GET api/ordefabr/cierres-reversibles/{codInte} para obtener los cierres
+    /// 6. Si hay error, muestra mensaje de error y cierra el modal
+    /// 7. Si no hay cierres reversibles, muestra mensaje informativo y cierra el modal
+    /// 8. Si hay cierres, los muestra en la grilla del modal para que el usuario seleccione uno
+    /// </summary>
+    /// <param name="codInte">Código interno del producto (OrdeFabr.Cod_Inte)</param>
+    /// <param name="idSubOr">ID de la suborden de fabricación (OrdeFabr.IdSubOr)</param>
+    private async Task AbrirModalAnulacionCierre(int codInte, string idSubOr)
+    {
+        // Paso 1: Verificar si el usuario tiene el derecho ANUCIEOF
+        // Según el nuevo patrón de permisos, los botones siempre están habilitados
+        // y la verificación de permisos se hace al hacer clic
+        if (!tieneAccesoAnulacionCierre)
+        {
+            // Mostrar SweetAlert informativo con COD_APLI y DES_APLI
+            // Usamos HTML con <br> para respetar los saltos de línea
+            await sweetAlertService.FireAsync(new SweetAlertOptions
+            {
+                Title = "Acceso Denegado",
+                Html = $"No tiene el derecho configurado para esta acción.<br><br>Código: {COD_APLI_ANUCIEOF}<br>Descripción: {DES_APLI_ANUCIEOF}<br><br>Contacte al administrador del sistema.",
+                Icon = SweetAlertIcon.Warning,
+                ConfirmButtonText = "Entendido"
+            });
+            return;
+        }
+
+        try
+        {
+            // Paso 2: Guardar los parámetros para usarlos en las consultas al backend
+            codInteParaAnulacion = codInte;
+            idSubOrParaAnulacion = idSubOr;
+            
+            // Paso 3: Mostrar el modal y activar el indicador de carga
+            // StateHasChanged() fuerza a Blazor a repintar la UI para mostrar el modal y el spinner
+            mostrarModalAnulacionCierre = true;
+            cargandoCierres = true;
+            cierreSeleccionado = null; // Limpiar selección anterior
+            StateHasChanged();
+
+            // Paso 4: Obtener los cierres reversibles del backend
+            // El endpoint retorna los movimientos OF con CantIngre > 0 para este producto Y esta orden específica
+            // Consulta equivalente: SELECT * FROM MOVISTO WHERE CODIMOVI = 'OF' AND COD_INTE = ORDEFABR.COD_INTE AND CANTINGRE > 0 AND DOPRICOR = IdSubOr
+            var response = await repository.Get<List<CierreReversibleDTO>>($"api/ordefabr/cierres-reversibles/{codInte}/{idSubOr}");
+
+            // Paso 5: Manejar errores de la llamada al backend
+            if (response.Error)
+            {
+                await sweetAlertService.FireAsync("Error", "Error al obtener cierres reversibles", SweetAlertIcon.Error);
+                mostrarModalAnulacionCierre = false; // Cerrar el modal si hubo error
+                return;
+            }
+
+            // Paso 6: Guardar la lista de cierres retornada por el backend
+            cierresReversibles = response.Response;
+
+            // Paso 7: Validar si hay cierres reversibles
+            // Si no hay cierres, informar al usuario y cerrar el modal
+            if (cierresReversibles == null || !cierresReversibles.Any())
+            {
+                await sweetAlertService.FireAsync("Información", "No hay cierres reversibles para esta orden de fabricación", SweetAlertIcon.Info);
+                mostrarModalAnulacionCierre = false;
+            }
+            // Si hay cierres, el modal se queda abierto mostrando la grilla con los cierres
+        }
+        catch (Exception ex)
+        {
+            // Manejar cualquier excepción no controlada
+            await sweetAlertService.FireAsync("Error", $"Error al abrir modal de anulación: {ex.Message}", SweetAlertIcon.Error);
+            mostrarModalAnulacionCierre = false;
+        }
+        finally
+        {
+            // Paso 8: Siempre desactivar el indicador de carga, haya éxito o error
+            cargandoCierres = false;
+            StateHasChanged();
+        }
+    }
+
+    /// <summary>
+    /// Cierra el modal de anulación de cierre
+    /// 
+    /// Este método se ejecuta cuando el usuario hace clic en el botón "X" del modal
+    /// o en el botón "Cancelar" del footer.
+    /// 
+    /// Limpia todas las variables relacionadas con el modal para dejar el estado limpio.
+    /// </summary>
+    private void CerrarModalAnulacionCierre()
+    {
+        // Ocultar el modal
+        mostrarModalAnulacionCierre = false;
+        
+        // Limpiar la lista de cierres para liberar memoria
+        cierresReversibles = null;
+        
+        // Limpiar la selección del cierre
+        cierreSeleccionado = null;
+    }
+
+    /// <summary>
+    /// Anula el cierre seleccionado por el usuario
+    /// 
+    /// Este método se ejecuta cuando el usuario hace clic en el botón "Anular Cierre"
+    /// del modal después de seleccionar un cierre de la grilla.
+    /// 
+    /// Flujo:
+    /// 1. Valida que haya un cierre seleccionado
+    /// 2. Muestra confirmación al usuario (SweetAlert)
+    /// 3. Si el usuario confirma, llama al endpoint PUT api/ordefabr/anular-cierre/{id}
+    /// 4. Si hay error, muestra mensaje de error
+    /// 5. Si tiene éxito, muestra mensaje de éxito, cierra el modal y recarga la tabla
+    /// 
+    /// El endpoint del backend realiza:
+    /// - Anulación del movimiento OF (cantidades a 0, referencia "Anul.")
+    /// - Anulación de movimientos CF/SC asociados por IdenMovi
+    /// - Actualización de OrdeFabr (resta cantidad, cambia estado a 1)
+    /// - Generación de anotación en OrdeFabr.AnotaOrf
+    /// - Opcional: Regeneración de reservas según elección del usuario
+    /// </summary>
+    private async Task AnularCierreSeleccionado()
+    {
+        // Paso 1: Validar que el usuario haya seleccionado un cierre
+        if (cierreSeleccionado == null)
+        {
+            await sweetAlertService.FireAsync("Advertencia", "Debe seleccionar un cierre para anular", SweetAlertIcon.Warning);
+            return;
+        }
+
+        // Paso 2: Mostrar modal de confirmación con 3 opciones
+        // El modal permite al usuario elegir:
+        // - Cancelar anulación: salir sin hacer nada
+        // - Actualizar reservas: regenerar reservas según cantidad pendiente
+        // - Mantener reservas: mantener reservas actuales (podrá editarlas manualmente)
+        mostrarModalConfirmacionReservas = true;
+    }
+
+    /// <summary>
+    /// Cancela la anulación de cierre y cierra el modal de confirmación
+    /// No se realiza ninguna transacción
+    /// </summary>
+    private void CancelarAnulacionCierre()
+    {
+        mostrarModalConfirmacionReservas = false;
+    }
+
+    /// <summary>
+    /// Ejecuta la anulación de cierre regenerando las reservas
+    /// Llama al backend con regenerarReservas=true
+    /// </summary>
+    private async Task AnularCierreConRegeneracionReservas()
+    {
+        mostrarModalConfirmacionReservas = false;
+        await EjecutarAnulacionCierre(regenerarReservas: true);
+    }
+
+    /// <summary>
+    /// Ejecuta la anulación de cierre manteniendo las reservas actuales
+    /// Llama al backend con regenerarReservas=false
+    /// </summary>
+    private async Task AnularCierreManteniendoReservas()
+    {
+        mostrarModalConfirmacionReservas = false;
+        await EjecutarAnulacionCierre(regenerarReservas: false);
+    }
+
+    /// <summary>
+    /// Ejecuta la anulación de cierre llamando al endpoint del backend
+    /// </summary>
+    /// <param name="regenerarReservas">Indica si se deben regenerar las reservas (true) o mantenerlas (false)</param>
+    private async Task EjecutarAnulacionCierre(bool regenerarReservas)
+    {
+        try
+        {
+            // PUT api/ordefabr/anular-cierre/{id}?idSubOr={idSubOr}&regenerarReservas={regenerarReservas}
+            // El backend ejecuta la anulación en una transacción (todo o nada)
+            var response = await repository.Put<object>($"api/ordefabr/anular-cierre/{cierreSeleccionado.Id}?idSubOr={idSubOrParaAnulacion}&regenerarReservas={regenerarReservas}", null);
+
+            // Paso 5: Manejar errores del backend
+            if (response.Error)
+            {
+                await sweetAlertService.FireAsync("Error", "Error al anular el cierre", SweetAlertIcon.Error);
+                return;
+            }
+
+            // Paso 6: Si tuvo éxito, mostrar mensaje de éxito
+            await sweetAlertService.FireAsync("Éxito", "Cierre anulado exitosamente", SweetAlertIcon.Success);
+            
+            // Paso 7: Cerrar el modal y recargar la tabla para mostrar los datos actualizados
+            CerrarModalAnulacionCierre();
+            await LoadAsync();
+        }
+        catch (Exception ex)
+        {
+            // Manejar cualquier excepción no controlada
+            await sweetAlertService.FireAsync("Error", $"Error al anular cierre: {ex.Message}", SweetAlertIcon.Error);
+        }
     }
 
     /// <summary>
@@ -936,7 +1663,10 @@ else
             if (cantidadPendiente < 0) cantidadPendiente = 0;
         }
 
-        cantidadAprobada = cantidadPendiente; // Inicializar con cantidad pendiente
+        // Calcular cantidad propuesta como Cant.Proy. - Cant.Cerrada
+        cantidadAprobada = (ordenParaCierre.CanProy ?? 0) - (ordenParaCierre.CantidadCerrada ?? 0);
+        // Asegurar que no sea negativa
+        if (cantidadAprobada < 0) cantidadAprobada = 0;
         cantidadRechazada = 0;
         depositoScrapSeleccionado = depositoScrapConfiguracion; // Usar configuración por defecto
 
@@ -1045,8 +1775,8 @@ else
             mostrarModalComponentes = true;
             StateHasChanged();
 
-            // Obtener los componentes de la fórmula con stock
-            var responseComponentes = await repository.Get<List<FormulaComponenteDTO>>($"api/formulas/componentes/{ordenParaCierre.Cod_Inte}");
+            // Obtener los componentes a consumir desde RESERVA (cantidades ajustadas en la O/F)
+            var responseComponentes = await repository.Get<List<FormulaComponenteDTO>>($"api/reservas/componentes-cierre/{ordenParaCierre.IdSubOr}");
 
             if (responseComponentes.Error)
             {
@@ -1145,6 +1875,11 @@ else
 
         // Restablecer el estado del modal principal de cierre para que el usuario pueda modificar datos si lo desea
         procesandoCierre = false;
+        
+        // Limpiar las cantidades para evitar acumulación cuando el usuario modifica valores y vuelve a intentar
+        cantidadAprobada = 0;
+        cantidadRechazada = 0;
+        
         StateHasChanged();
 
         // No se cierra el modal principal de cierre, permitiendo al usuario hacer modificaciones
@@ -1153,7 +1888,7 @@ else
 
     /// <summary>
     /// Continúa con el proceso de cierre después de revisar los componentes
-    /// Procesa la persistencia de datos en las tablas correspondientes
+    /// Solicita confirmación y, si se confirma, guarda el cierre
     /// </summary>
     private async Task ContinuarConCierre()
     {
@@ -1161,6 +1896,45 @@ else
         {
             // Cerrar el modal de componentes
             mostrarModalComponentes = false;
+            StateHasChanged();
+
+            // Solicitar confirmación antes de guardar
+            var confirmacion = await sweetAlertService.FireAsync(new SweetAlertOptions
+            {
+                Title = "Confirmar Cierre",
+                Text = "¿Desea guardar el cierre de la orden de fabricación?",
+                Icon = SweetAlertIcon.Question,
+                ShowCancelButton = true,
+                ConfirmButtonText = "Sí, guardar",
+                CancelButtonText = "Cancelar"
+            });
+
+            if (!confirmacion.IsConfirmed)
+            {
+                // El usuario canceló, restablecer estado sin guardar
+                procesandoCierre = false;
+                StateHasChanged();
+                return;
+            }
+
+            // El usuario confirmó, proceder a guardar el cierre
+            await GuardarCierre();
+        }
+        catch (Exception ex)
+        {
+            await sweetAlertService.FireAsync("Error", $"Error al procesar el cierre: {ex.Message}", SweetAlertIcon.Error);
+            procesandoCierre = false;
+        }
+    }
+
+    /// <summary>
+    /// Guarda el cierre de la orden de fabricación.
+    /// Si el guardado es exitoso, muestra la vista previa del vale interno para imprimir o generar PDF.
+    /// </summary>
+    private async Task GuardarCierre()
+    {
+        try
+        {
             procesandoCierre = true;
             StateHasChanged();
 
@@ -1196,6 +1970,8 @@ else
                 await sweetAlertService.FireAsync("Error",
                     await response.GetErrorMessageAsync(),
                     SweetAlertIcon.Error);
+                procesandoCierre = false;
+                StateHasChanged();
                 return;
             }
 
@@ -1205,21 +1981,63 @@ else
                 $"Cierre procesado exitosamente. {mensajeCierre}. Se han actualizado las cantidades y generado las anotaciones correspondientes.",
                 SweetAlertIcon.Success);
 
-            // Cerrar el modal principal de cierre
-            CerrarModalCierre();
+            // Obtener el nombre del usuario actual para la vista previa
+            var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+            var user = authState.User;
+            nombreUsuarioActual = user.Identity?.Name ?? "Usuario";
 
-            // Recargar la lista de órdenes para reflejar los cambios
-            await LoadAsync();
+            // Mostrar la vista previa del vale interno (después del guardado exitoso)
+            mostrarModalVistaPrevia = true;
+            procesandoCierre = false;
+            StateHasChanged();
         }
         catch (Exception ex)
         {
             await sweetAlertService.FireAsync("Error",
                 $"Error al procesar el cierre: {ex.Message}",
                 SweetAlertIcon.Error);
+            procesandoCierre = false;
+            StateHasChanged();
+        }
+    }
+
+    /// <summary>
+    /// Cierra la vista previa del vale interno y finaliza el proceso de cierre.
+    /// El cierre ya fue guardado, por lo que se cierra el modal principal y se recarga la lista.
+    /// </summary>
+    private async Task CancelarVistaPrevia()
+    {
+        mostrarModalVistaPrevia = false;
+        observacionesVale = string.Empty;
+        StateHasChanged();
+
+        // Cerrar el modal principal de cierre
+        CerrarModalCierre();
+
+        // Recargar la lista de órdenes para reflejar los cambios
+        await LoadAsync();
+    }
+
+    /// <summary>
+    /// Imprime el vale interno
+    /// </summary>
+    private async Task ImprimirVale()
+    {
+        try
+        {
+            imprimiendo = true;
+            StateHasChanged();
+
+            await Task.Delay(100);
+            await JS.InvokeVoidAsync("imprimirElemento", "areaImpresionVale");
+        }
+        catch (Exception ex)
+        {
+            await sweetAlertService.FireAsync("Error", $"Error al imprimir: {ex.Message}", SweetAlertIcon.Error);
         }
         finally
         {
-            procesandoCierre = false;
+            imprimiendo = false;
             StateHasChanged();
         }
     }
@@ -1410,7 +2228,9 @@ else
         { "Cod_Exte", "Código" },
         { "Descrip", "Descripción" },
         { "CanProy", "Cant.Proy." },
-        { "CanApro", "Cant.Apro." },
+        { "CantidadCerrada", "Cant.Cerrada" },
+        { "CantidadAprobadaOrfapen", "Cant.Aprobada" },
+        { "PendienteAprobacion", "Pendiente Aprob." },
         { "Id_Orfa", "ID" },
         { "StatuOrf", "Estado" }
     };
@@ -1522,10 +2342,171 @@ else
     private async void ResetearImpresion()
     {
         mostrarModalImpresion = false;
-        
+
         // Restaurar la vista paginada original después de cerrar el modal de impresión
         await LoadAsync(currentPage);
-        
+
         StateHasChanged();
     }
+}
+
+@* Modal de anulación de cierre
+     Este modal se muestra cuando el usuario hace clic en el botón "Anulación x Cierre" (botón amarillo)
+     en la tabla de órdenes de fabricación.
+     
+     Estructura del modal:
+     - Header: título con icono de deshacer y botón X para cerrar
+     - Body: muestra una grilla con los cierres reversibles o un mensaje si no hay cierres
+     - Footer: botones de Cancelar y Anular Cierre (solo se muestra si hay un cierre seleccionado)
+     
+     Estados del modal:
+     1. Cargando: muestra un spinner mientras se obtienen los cierres del backend
+     2. Con datos: muestra la grilla de cierres para que el usuario seleccione uno
+     3. Sin datos: muestra mensaje informativo indicando que no hay cierres reversibles
+*@ 
+@if (mostrarModalAnulacionCierre)
+{
+    <div class="modal fade show" style="display: block" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                @* Header del modal con color de advertencia (amarillo) *@
+                <div class="modal-header bg-warning">
+                    <h5 class="modal-title">
+                        <i class="fas fa-undo me-2"></i>Anulación x Cierre - @idSubOrParaAnulacion
+                    </h5>
+                    @* Botón X para cerrar el modal *@
+                    <button type="button" class="btn-close" @onclick="CerrarModalAnulacionCierre"></button>
+                </div>
+                <div class="modal-body">
+                    @* Estado 1: Cargando - muestra spinner mientras se obtienen los cierres *@
+                    @if (cargandoCierres)
+                    {
+                        <div class="d-flex justify-content-center align-items-center" style="min-height: 200px;">
+                            <div class="spinner-border text-primary" role="status">
+                                <span class="visually-hidden">Cargando cierres...</span>
+                            </div>
+                        </div>
+                    }
+                    @* Estado 2: Con datos - muestra la grilla de cierres reversibles *@
+                    else if (cierresReversibles != null && cierresReversibles.Any())
+                    {
+                        @* Mensaje informativo para el usuario *@
+                        <div class="alert alert-info">
+                            <i class="fas fa-info-circle me-2"></i>
+                            Seleccione un cierre para anular. Los movimientos CF asociados también se anularán.
+                        </div>
+
+                        @* Grilla de cierres reversibles *@
+                        <table class="table table-striped table-hover">
+                            <thead>
+                                <tr>
+                                    <th>Orden Fab</th>
+                                    <th>Fecha</th>
+                                    <th>Cantidad</th>
+                                    <th>Lote</th>
+                                    <th>Fecha/Hora</th>
+                                    <th>Seleccionar</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var cierre in cierresReversibles)
+                                {
+                                    @* Fila del cierre: se resalta en amarillo si está seleccionado *@
+                                    <tr class="@(cierreSeleccionado?.Id == cierre.Id ? "table-warning" : "")"
+                                        style="cursor: pointer;"
+                                        @onclick="() => cierreSeleccionado = cierre">
+                                        <td>@cierre.DoPriCor</td>
+                                        <td>@(cierre.FechMov?.ToString("dd/MM/yyyy") ?? "")</td>
+                                        <td class="text-end">@cierre.CantIngre:F1</td>
+                                        <td>@cierre.IdenLote</td>
+                                        <td>@(cierre.FeReMovi?.ToString("dd/MM/yyyy HH:mm") ?? "")</td>
+                                        <td>
+                                            @* Botón de selección: se muestra en azul si está seleccionado, en borde azul si no *@
+                                            <button class="btn btn-sm @(cierreSeleccionado?.Id == cierre.Id ? "btn-primary" : "btn-outline-primary")"
+                                                    @onclick="() => cierreSeleccionado = cierre">
+                                                <i class="fas fa-check"></i>
+                                            </button>
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    }
+                    @* Estado 3: Sin datos - muestra mensaje de que no hay cierres reversibles *@
+                    else
+                    {
+                        <div class="alert alert-warning">
+                            <i class="fas fa-exclamation-triangle me-2"></i>
+                            No hay cierres reversibles para esta orden de fabricación.
+                        </div>
+                    }
+                </div>
+                @* Footer del modal: solo se muestra si hay un cierre seleccionado *@
+                @if (cierreSeleccionado != null)
+                {
+                    <div class="modal-footer">
+                        @* Botón Cancelar: cierra el modal sin hacer cambios *@
+                        <button type="button" class="btn btn-secondary" @onclick="CerrarModalAnulacionCierre">
+                            Cancelar
+                        </button>
+                        @* Botón Anular Cierre: ejecuta la anulación del cierre seleccionado *@
+                        <button type="button" class="btn btn-danger" @onclick="AnularCierreSeleccionado">
+                            <i class="fas fa-undo me-2"></i>Anular Cierre
+                        </button>
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
+    @* Fondo oscuro del modal: permite cerrar el modal haciendo clic fuera del contenido *@
+    <div class="modal-backdrop show" @onclick="CerrarModalAnulacionCierre"></div>
+}
+
+@* Modal de confirmación de regeneración de reservas *@
+@if (mostrarModalConfirmacionReservas)
+{
+    <div class="modal fade show" style="display: block" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                @* Header del modal con color de información *@
+                <div class="modal-header bg-info text-white">
+                    <h5 class="modal-title">
+                        <i class="fas fa-question-circle me-2"></i>
+                        Actualización de Reservas
+                    </h5>
+                    <button type="button" class="btn-close btn-close-white" @onclick="CancelarAnulacionCierre"></button>
+                </div>
+                @* Body del modal con mensaje explicativo *@
+                <div class="modal-body">
+                    <p class="mb-3">
+                        <strong>Al anular este cierre, las reservas de componentes se actualizarán considerando la cantidad pendiente a fabricar sobre la base de los componentes originales.</strong>
+                    </p>
+                    <p class="text-muted mb-4">
+                        ¿Desea actualizar las reservas automáticamente o mantener las reservas actuales?
+                    </p>
+                    <div class="alert alert-info">
+                        <i class="fas fa-info-circle me-2"></i>
+                        Si elige mantener las reservas, podrá editarlas manualmente desde la edición de la orden de fabricación.
+                    </div>
+                </div>
+                @* Footer del modal con 3 botones *@
+                <div class="modal-footer">
+                    @* Botón 1: Cancelar anulación - salir sin hacer nada *@
+                    <button type="button" class="btn btn-secondary" @onclick="CancelarAnulacionCierre">
+                        <i class="fas fa-times me-2"></i>Cancelar Anulación
+                    </button>
+                    @* Botón 2: Mantener reservas - no regenerar *@
+                    <button type="button" class="btn btn-warning" @onclick="AnularCierreManteniendoReservas">
+                        <i class="fas fa-keep me-2"></i>Mantener Reservas
+                    </button>
+                    @* Botón 3: Actualizar reservas - regenerar *@
+                    <button type="button" class="btn btn-success" @onclick="AnularCierreConRegeneracionReservas">
+                        <i class="fas fa-sync-alt me-2"></i>Actualizar Reservas
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+    @* Fondo oscuro del modal *@
+    <div class="modal-backdrop show" @onclick="CancelarAnulacionCierre"></div>
 }

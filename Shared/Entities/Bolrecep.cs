@@ -20,7 +20,7 @@ namespace IMPLANPROD.Shared.Entities
         /// <summary>
         /// Número de Boleta de Recepción
         /// </summary>
-        [Column(TypeName = "decimal(18,4)")]
+        [Column(TypeName = "decimal(18,0)")]
         public decimal? NumeBoRe { get; set; }
         /// <summary>
         /// Código de Empresa

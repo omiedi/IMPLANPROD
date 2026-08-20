@@ -1,5 +1,7 @@
 @page "/ficha-proveedor-create"
+@using IMPLANPROD.Client.Services
 @using IMPLANPROD.Shared.Entities
+@inject PageAccessService PageAccess
 
 <!--
     Componente: FichaProveedorCreate.razor
@@ -9,8 +11,25 @@
     Sigue el estándar ABM del proyecto.
 -->
 
-<div class="bg-primary bg-opacity-10 p-3 rounded-3 mb-3">
-    <h3 class="m-0 text-primary">Nuevo Proveedor</h3>
-</div>
 
-<FichaProveedorForm />
+@if (validando)
+{
+    <p>Validando acceso...</p>
+}
+else
+{
+    <div class="bg-primary bg-opacity-10 p-3 rounded-3 mb-3">
+        <h3 class="m-0 text-primary">Nuevo Proveedor</h3>
+    </div>
+
+    <FichaProveedorForm />
+}
+@code{
+    private bool validando = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await PageAccess.RequiereAccesoAsync("/ficha-proveedor-create");   // ? validación
+        validando = false;
+    }
+}

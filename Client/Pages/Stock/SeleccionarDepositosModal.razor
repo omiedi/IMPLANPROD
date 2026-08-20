@@ -1,4 +1,5 @@
 @using IMPLANPROD.Shared.Entities
+@using IMPLANPROD.Shared.DTOs
 @using Blazored.Modal
 @using Blazored.Modal.Services
 @inject IRepository repository
@@ -83,16 +84,25 @@
     {
         try
         {
-            // Obtener los IDs de los depósitos seleccionados
-            var depositosIds = depositosSeleccionados
+            // Obtener los IDs de los depósitos seleccionados con sus descripciones
+            var depositosSeleccionadosConDesc = depositosSeleccionados
                 .Where(kvp => kvp.Value)
-                .Select(kvp => kvp.Key.ToString())
+                .Select(kvp => 
+                {
+                    var deposito = depositos.FirstOrDefault(d => d.CodigoDepo == kvp.Key);
+                    return new DepositoSeleccionadoDTO
+                    {
+                        CodigoDepo = kvp.Key,
+                        Descripcion = deposito?.Descripcion ?? string.Empty,
+                        DescripcionAbreviada = deposito?.Descripcion ?? string.Empty
+                    };
+                })
                 .ToList();
                 
-            if (depositosIds.Any())
+            if (depositosSeleccionadosConDesc.Any())
             {
-                // Guardar selección en el servidor
-                string depositosString = string.Join(",", depositosIds);
+                // Guardar selección en el servidor (solo los códigos)
+                string depositosString = string.Join(",", depositosSeleccionadosConDesc.Select(d => d.CodigoDepo));
                 var response = await repository.Post("api/stock/guardardepositos", depositosString);
                 if (response.Error)
                 {
@@ -100,8 +110,8 @@
                     return;
                 }
                 
-                // Cerrar el modal y devolver los depósitos seleccionados
-                await Modal.CloseAsync(ModalResult.Ok<List<string>>(depositosIds));
+                // Cerrar el modal y devolver los depósitos seleccionados con descripciones
+                await Modal.CloseAsync(ModalResult.Ok<List<DepositoSeleccionadoDTO>>(depositosSeleccionadosConDesc));
             }
             else
             {

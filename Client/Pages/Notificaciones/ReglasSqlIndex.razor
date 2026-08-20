@@ -1,0 +1,240 @@
+@page "/notificaciones/reglas-sql"
+@using Microsoft.AspNetCore.Authorization
+@attribute [Authorize(Roles = "SUPERADMIN")]
+@using Microsoft.AspNetCore.Components
+@using Microsoft.AspNetCore.Components.Forms
+@using Microsoft.AspNetCore.Components.Routing
+@using IMPLANPROD.Client.Shared.Components
+@using IMPLANPROD.Shared.DTOs.Notificaciones
+@inject IRepository repository
+@inject NavigationManager navigationManager
+@inject SweetAlertService sweetAlertService
+
+<PageTitle>Reglas SQL</PageTitle>
+
+<h3>Reglas SQL</h3>
+
+<div class="mb-3">
+    <div class="card mb-2">
+        <div class="card-header bg-info text-white p-2">
+            <button class="btn btn-link text-white text-decoration-none w-100 text-start p-0"
+                    type="button"
+                    @onclick="() => mostrarInstructivoUsuario = !mostrarInstructivoUsuario">
+                <i class="fas @(mostrarInstructivoUsuario ? "fa-chevron-down" : "fa-chevron-right") me-2"></i>
+                <strong>Instructivo para el Usuario</strong>
+            </button>
+        </div>
+        @if (mostrarInstructivoUsuario)
+        {
+            <div class="card-body">
+                <h6 class="text-primary"><i class="fas fa-info-circle"></i> ¿Qué es una Regla SQL?</h6>
+                <p>
+                    Es una regla que ejecuta un <strong>SELECT</strong> cada cierto tiempo. Si el resultado cambia, el sistema genera una notificación.
+                </p>
+
+                <h6 class="text-primary"><i class="fas fa-list-check"></i> Acciones</h6>
+                <ul class="mb-0">
+                    <li><strong>Nueva regla:</strong> crea una regla automática.</li>
+                    <li><strong>Activar/Desactivar:</strong> habilita o pausa la ejecución de esa regla.</li>
+                    <li><strong>Editar:</strong> permite ajustar SQL, intervalo y límites.</li>
+                    <li><strong>Borrar:</strong> elimina la regla.</li>
+                </ul>
+            </div>
+        }
+    </div>
+
+    <InstructivoDesarrollador>
+        <h6 class="text-info"><i class="fas fa-code"></i> API</h6>
+        <ul>
+            <li><code>GET api/notificaciones/reglas-sql</code></li>
+            <li><code>GET api/notificaciones/reglas-sql/{id}</code></li>
+            <li><code>POST api/notificaciones/reglas-sql</code></li>
+            <li><code>PUT api/notificaciones/reglas-sql/{id}</code></li>
+            <li><code>DELETE api/notificaciones/reglas-sql/{id}</code></li>
+        </ul>
+
+        <h6 class="text-info mt-3"><i class="fas fa-sitemap"></i> Servicios involucrados</h6>
+        <ul>
+            <li><strong>Client:</strong> <code>IRepository</code>, <code>SweetAlertService</code></li>
+            <li><strong>Server:</strong> <code>NotificacionReglasSqlService</code>, <code>NotificacionReglasSqlHostedService</code>, <code>DataContext</code></li>
+        </ul>
+
+        <h6 class="text-info mt-3"><i class="fas fa-project-diagram"></i> Flujo (alto nivel)</h6>
+        <pre class="bg-light p-2 rounded"><code>Listado
+  ↓
+GET api/notificaciones/reglas-sql
+  ↓
+Render tabla
+
+Toggle activa
+  ↓
+GET api/notificaciones/reglas-sql/{id}
+  ↓
+dto.Activa = !dto.Activa
+  ↓
+PUT api/notificaciones/reglas-sql/{id}
+  ↓
+GET api/notificaciones/reglas-sql (reload)</code></pre>
+
+        <h6 class="text-info mt-3"><i class="fas fa-shield-alt"></i> Validaciones / reglas</h6>
+        <ul class="mb-0">
+            <li><strong>SQL:</strong> el server valida que sea <code>SELECT</code>.</li>
+            <li><strong>HostedService:</strong> solo procesa reglas activas.</li>
+        </ul>
+        <h6 class="text-info mt-3"><i class="fas fa-folder-open"></i> Archivos</h6>
+        <ul class="mb-0">
+            <li><code>Client/Pages/Notificaciones/ReglasSqlIndex.razor</code></li>
+            <li><code>Server/Controllers/NotificacionReglasSqlController.cs</code></li>
+            <li><code>Server/Services/NotificacionReglasSqlService.cs</code></li>
+            <li><code>Server/Services/NotificacionReglasSqlHostedService.cs</code></li>
+        </ul>
+    </InstructivoDesarrollador>
+</div>
+
+@if (reglas is null)
+{
+    <div class="spinner" />
+}
+else
+{
+    <div class="card">
+        <div class="card-header">
+            <span>
+                Reglas SQL
+                <a class="btn btn-sm btn-primary float-end" href="/notificaciones/reglas-sql/create">Nueva regla</a>
+            </span>
+        </div>
+        <div class="card-body">
+            <table class="table table-striped">
+                <thead>
+                    <tr>
+                        <th style="width: 80px;">Id</th>
+                        <th>Título</th>
+                        <th>Resumen</th>
+                        <th style="width: 90px;">Activa</th>
+                        <th style="width: 120px;">Modo</th>
+                        <th style="width: 140px;">Intervalo</th>
+                        <th style="width: 140px;">Max filas</th>
+                        <th style="width: 220px;">Última ejecución</th>
+                        <th style="width: 260px;"></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var r in reglas)
+                    {
+                        <tr>
+                            <td>@r.Id</td>
+                            <td>@r.Titulo</td>
+                            <td>@r.Resumen</td>
+                            <td>@(r.Activa ? "Sí" : "No")</td>
+                            <td>
+                                @if (r.ModoSeguimiento == 0)
+                                {
+                                    <span class="badge bg-secondary">Hash</span>
+                                }
+                                else
+                                {
+                                    <span class="badge bg-primary">Incremental</span>
+                                }
+                            </td>
+                            <td>@r.IntervaloMinutos min</td>
+                            <td>@r.MaxFilasDetalle</td>
+                            <td>@(r.UltimaEjecucion?.ToString("yyyy-MM-dd HH:mm") ?? "-")</td>
+                            <td>
+                                <a class="btn btn-warning btn-sm" href="/notificaciones/reglas-sql/edit/@r.Id">Editar</a>
+                                <button class="btn btn-outline-secondary btn-sm" @onclick="() => ToggleActivaAsync(r.Id)">@(r.Activa ? "Desactivar" : "Activar")</button>
+                                <button class="btn btn-danger btn-sm" @onclick="() => DeleteAsync(r.Id)">Borrar</button>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+}
+
+@code {
+    private List<NotificacionReglaSqlItemDTO>? reglas;
+
+    private bool mostrarInstructivoUsuario;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        try
+        {
+            var response = await repository.Get<List<NotificacionReglaSqlItemDTO>>("api/notificaciones/reglas-sql");
+            if (response.Error)
+            {
+                var message = await response.GetErrorMessageAsync();
+                await sweetAlertService.FireAsync("Error", message, SweetAlertIcon.Error);
+                reglas = new List<NotificacionReglaSqlItemDTO>();
+                return;
+            }
+
+            reglas = response.Response ?? new List<NotificacionReglaSqlItemDTO>();
+        }
+        catch (Exception ex)
+        {
+            await sweetAlertService.FireAsync("Error", ex.Message, SweetAlertIcon.Error);
+            reglas = new List<NotificacionReglaSqlItemDTO>();
+        }
+    }
+
+    private async Task DeleteAsync(int id)
+    {
+        var result = await sweetAlertService.FireAsync(new SweetAlertOptions
+            {
+                Title = "Confirmación",
+                Text = "¿Realmente deseas eliminar la regla?",
+                Icon = SweetAlertIcon.Question,
+                ShowCancelButton = true,
+                CancelButtonText = "No",
+                ConfirmButtonText = "Si"
+            });
+
+        var confirm = string.IsNullOrEmpty(result.Value);
+        if (confirm)
+        {
+            return;
+        }
+
+        var responseHTTP = await repository.Delete($"api/notificaciones/reglas-sql/{id}");
+        if (responseHTTP.Error)
+        {
+            var mensajeError = await responseHTTP.GetErrorMessageAsync();
+            await sweetAlertService.FireAsync("Error", mensajeError, SweetAlertIcon.Error);
+            return;
+        }
+
+        await LoadAsync();
+    }
+
+    private async Task ToggleActivaAsync(int id)
+    {
+        var responseGet = await repository.Get<NotificacionReglaSqlUpsertDTO>($"api/notificaciones/reglas-sql/{id}");
+        if (responseGet.Error || responseGet.Response is null)
+        {
+            var message = await responseGet.GetErrorMessageAsync();
+            await sweetAlertService.FireAsync("Error", message, SweetAlertIcon.Error);
+            return;
+        }
+
+        var dto = responseGet.Response;
+        dto.Activa = !dto.Activa;
+
+        var responsePut = await repository.Put($"api/notificaciones/reglas-sql/{id}", dto);
+        if (responsePut.Error)
+        {
+            var message = await responsePut.GetErrorMessageAsync();
+            await sweetAlertService.FireAsync("Error", message, SweetAlertIcon.Error);
+            return;
+        }
+
+        await LoadAsync();
+    }
+}

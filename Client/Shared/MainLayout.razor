@@ -3,6 +3,10 @@
 @using IMPLANPROD.Client.Services
 @inject AuthenticationStateProvider AuthStateProvider
 @inject InactivityService InactivityService
+@inject NotificationService NotificationService
+@inject CurrentUserService CurrentUserService
+@using Blazored.Modal.Services
+@inject IModalService Modal
 @implements IDisposable
 
 <div class="page" @onmousemove="OnUserActivity" @onkeydown="OnUserActivity" @onclick="OnUserActivity">
@@ -11,10 +15,22 @@
     </div>
 
     <main>
-        <div class="top-row px-4">
+         <div class="top-row px-4">
             <AuthorizeView>
                 <Authorized>
-                    <span>Bienvenido, @context.User.Identity?.Name</span>
+                    <div class="d-flex w-100 align-items-center justify-content-between">
+                        <span>Bienvenido, @context.User.Identity?.Name</span>
+
+                        <button type="button" class="btn btn-link text-decoration-none position-relative" title="Notificaciones" @onclick="OpenNotifications">
+                            <i class="fas fa-bell"></i>
+                            @if (UnreadForCurrentUser > 0)
+                            {
+                                <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger">
+                                    @UnreadForCurrentUser
+                                </span>
+                            }
+                        </button>
+                    </div>
                 </Authorized>
                 <NotAuthorized>
                     <a href="/login">Iniciar Sesión</a>
@@ -28,7 +44,17 @@
     </main>
 </div>
 
+
+
 @code {
+    private int _userId;
+    private int _unreadCount;
+    private PeriodicTimer? _unreadPollingTimer;
+    private CancellationTokenSource? _unreadPollingCts;
+    private Task? _unreadPollingTask;
+
+    private int UnreadForCurrentUser => _unreadCount;
+
     /// <summary>
     /// Método que se ejecuta cuando se inicializa el componente
     /// </summary>
@@ -36,13 +62,104 @@
     {
         // Suscribirse a los cambios de estado de autenticación
         ((AuthenticationStateProvider)AuthStateProvider).AuthenticationStateChanged += AuthenticationStateChanged;
+        NotificationService.OnChange += OnNotificationsChanged;
 
         // Verificar si el usuario está autenticado para iniciar el monitoreo
         var authState = await AuthStateProvider.GetAuthenticationStateAsync();
         if (authState.User.Identity?.IsAuthenticated == true)
         {
             InactivityService.StartMonitoring();
+            await LoadUserIdFlexoftAsync();
+            await RefreshNotificationsAsync();
+            StartUnreadPolling();
         }
+    }
+
+    private async Task LoadUserIdFlexoftAsync()
+    {
+        _userId = await CurrentUserService.GetUserIdAsync();
+    }
+
+    private async Task RefreshNotificationsAsync()
+    {
+        if (_userId <= 0)
+        {
+            _unreadCount = 0;
+            return;
+        }
+
+        await NotificationService.RefreshAsync();
+        _unreadCount = await NotificationService.GetUnreadCountFromServerAsync();
+    }
+
+    private void StartUnreadPolling()
+    {
+        if (_unreadPollingTask is not null)
+        {
+            return;
+        }
+
+        _unreadPollingCts = new CancellationTokenSource();
+        _unreadPollingTimer = new PeriodicTimer(TimeSpan.FromSeconds(20));
+        _unreadPollingTask = Task.Run(async () =>
+        {
+            try
+            {
+                while (_unreadPollingTimer is not null && await _unreadPollingTimer.WaitForNextTickAsync(_unreadPollingCts.Token))
+                {
+                    if (_userId <= 0)
+                    {
+                        continue;
+                    }
+
+                    var count = await NotificationService.GetUnreadCountFromServerAsync();
+                    if (count != _unreadCount)
+                    {
+                        _unreadCount = count;
+                        await InvokeAsync(StateHasChanged);
+                    }
+                }
+            }
+            catch (OperationCanceledException)
+            {
+            }
+            catch
+            {
+            }
+        });
+    }
+
+    private void StopUnreadPolling()
+    {
+        try
+        {
+            _unreadPollingCts?.Cancel();
+        }
+        catch
+        {
+        }
+
+        _unreadPollingCts?.Dispose();
+        _unreadPollingCts = null;
+
+        _unreadPollingTimer?.Dispose();
+        _unreadPollingTimer = null;
+
+        _unreadPollingTask = null;
+    }
+
+    private void OnNotificationsChanged()
+    {
+        InvokeAsync(async () =>
+        {
+            _unreadCount = await NotificationService.GetUnreadCountFromServerAsync();
+            StateHasChanged();
+        });
+    }
+
+    private void OpenNotifications()
+    {
+        Modal.Show<IMPLANPROD.Client.Shared.Components.NotificationsModal>(string.Empty);
     }
 
     /// <summary>
@@ -56,11 +173,17 @@
         if (authState.User.Identity?.IsAuthenticated == true)
         {
             InactivityService.StartMonitoring();
+            await LoadUserIdFlexoftAsync();
+            await RefreshNotificationsAsync();
+            StartUnreadPolling();
         }
         else
         {
             // Si cierra sesión, detener monitoreo
             InactivityService.StopMonitoring();
+            _userId = 0;
+            _unreadCount = 0;
+            StopUnreadPolling();
         }
 
         // Forzar la actualización del componente cuando cambia el estado de autenticación
@@ -85,8 +208,11 @@
     {
         // Cancelar la suscripción a los cambios de estado de autenticación
         ((AuthenticationStateProvider)AuthStateProvider).AuthenticationStateChanged -= AuthenticationStateChanged;
+        NotificationService.OnChange -= OnNotificationsChanged;
         
         // Detener el monitoreo de inactividad
         InactivityService.StopMonitoring();
+
+        StopUnreadPolling();
     }
 }

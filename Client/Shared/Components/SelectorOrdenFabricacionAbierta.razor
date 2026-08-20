@@ -1,0 +1,1090 @@
+@using IMPLANPROD.Client.Repositories
+@using IMPLANPROD.Client.Pages.Reportes
+@using IMPLANPROD.Shared.DTOs
+@using IMPLANPROD.Shared.Entities
+@using CurrieTechnologies.Razor.SweetAlert2
+@inject IRepository repository
+@inject SweetAlertService sweetAlertService
+
+<div class="card shadow-sm trazabilidad-card">
+    <div class="card-header trazabilidad-header">
+        <h6 class="mb-0 fw-bold">Trazabilidad</h6>
+    </div>
+
+    <div class="card-body">
+        <fieldset class="border rounded p-3 trazabilidad-fieldset">
+            <legend class="float-none w-auto px-2 fw-bold fs-6 mb-0">PRODUCTO</legend>
+
+            <div class="row g-2 align-items-end mb-3">
+                <div class="col-12 col-md-7">
+                    <label class="form-label mb-1 fw-semibold">Selector O.F.</label>
+                    <div class="input-group input-group-sm">
+                        <input class="form-control" value="@GetTextoOrdenSeleccionada()" readonly placeholder="Seleccione una O.F." />
+                        <button class="btn btn-outline-primary" @onclick="AbrirModalBusqueda">
+                            <i class="fas fa-search"></i>
+                        </button>
+                    </div>
+                </div>
+                <div class="col-12 col-md-5">
+                    <div class="form-text mt-0">Mostrando O.F. abiertas (StatuOrf &lt; 3).</div>
+                </div>
+            </div>
+
+            <div class="row g-2 align-items-end mb-3">
+                <div class="col-12 col-md-4">
+                    <label class="form-label mb-1 fw-semibold">N° de O.F.</label>
+                    <input class="form-control form-control-sm" value="@ordenSeleccionada?.IdSubOr" readonly />
+                </div>
+
+                <div class="col-12 col-md-4">
+                    <label class="form-label mb-1 fw-semibold">Código</label>
+                    <input class="form-control form-control-sm" value="@ordenSeleccionada?.Cod_Exte" readonly />
+                </div>
+
+                <div class="col-6 col-md-2">
+                    <label class="form-label mb-1 fw-semibold">Cant. O.F.</label>
+                    <input class="form-control form-control-sm text-end" value="@FormatDecimal(ordenSeleccionada?.CanProy)" readonly />
+                </div>
+
+                <div class="col-6 col-md-2">
+                    <label class="form-label mb-1 fw-semibold">Pendiente O.F.</label>
+                    <input class="form-control form-control-sm text-end" value="@FormatDecimal(CalcularPendiente(ordenSeleccionada))" readonly />
+                </div>
+            </div>
+
+            <div class="row g-2 align-items-end mb-3">
+                <div class="col-12 col-md-8">
+                    <label class="form-label mb-1 fw-semibold">Descripción</label>
+                    <input class="form-control form-control-sm" value="@ordenSeleccionada?.Descrip" readonly />
+                </div>
+
+                <div class="col-12 col-md-4">
+                    <label class="form-label mb-1 fw-semibold">N° Serie</label>
+                    <input class="form-control form-control-sm" value="@numeroSerie" @oninput="OnNumeroSerieInput" @onblur="OnNumeroSerieBlur" readonly="@numeroSerieEsSoloLectura" placeholder="Ingrese N° de serie" />
+                </div>
+            </div>
+
+            <div class="row g-2 align-items-end mb-3">
+                <div class="col-12 col-md-4">
+                    <label class="form-label mb-1 fw-semibold">Depósitos</label>
+
+                    @if (mostrarSelectorDepositos)
+                    {
+                        <div class="deposito-select-backdrop" @onclick="CerrarSelectorDepositos"></div>
+                    }
+
+                    <div class="position-relative deposito-select-container">
+                        <button type="button" class="form-control form-control-sm text-start deposito-select-btn" @onclick="ToggleSelectorDepositos" @onkeydown="OnSelectorDepositosKeyDown">
+                            @GetTextoDepositosSeleccionados()
+                        </button>
+
+                        @if (mostrarSelectorDepositos)
+                        {
+                            <div class="deposito-select-panel shadow-sm" @onkeydown="OnSelectorDepositosKeyDown">
+                                @if (!depositosDisponibles.Any())
+                                {
+                                    <div class="text-muted small">No hay depósitos activos.</div>
+                                }
+                                else
+                                {
+                                    @foreach (var deposito in depositosDisponibles)
+                                    {
+                                        var checkboxId = $"depo-check-{deposito.CodigoDepo}";
+                                        <div class="form-check deposito-check-row">
+                                            <input id="@checkboxId"
+                                                   class="form-check-input"
+                                                   type="checkbox"
+                                                   checked="@depositosSeleccionados.Contains(deposito.CodigoDepo)"
+                                                   @onchange="async e => await OnDepositoCheckedChangedAsync(deposito.CodigoDepo, e)" />
+                                            <label class="form-check-label" for="@checkboxId">
+                                                @deposito.CodigoDepo - @deposito.Descripcion
+                                            </label>
+                                        </div>
+                                    }
+                                }
+                            </div>
+                        }
+                    </div>
+
+                    <div class="form-text">Depósitos para visualizar stock.</div>
+                </div>
+
+                <div class="col-12 col-md-4">
+                    <label class="form-label mb-1 fw-semibold">Depósito (único) a transferir</label>
+
+                    @if (mostrarSelectorDepositoUnico)
+                    {
+                        <div class="deposito-select-backdrop" @onclick="CerrarSelectorDepositoUnico"></div>
+                    }
+
+                    <div class="position-relative deposito-select-container">
+                        <button type="button" class="form-control form-control-sm text-start deposito-select-btn" @onclick="ToggleSelectorDepositoUnico" @onkeydown="OnSelectorDepositoUnicoKeyDown">
+                            @GetTextoDepositoUnicoSeleccionado()
+                        </button>
+
+                        @if (mostrarSelectorDepositoUnico)
+                        {
+                            <div class="deposito-select-panel shadow-sm" @onkeydown="OnSelectorDepositoUnicoKeyDown">
+                                @if (!depositosDisponibles.Any())
+                                {
+                                    <div class="text-muted small">No hay depósitos activos.</div>
+                                }
+                                else
+                                {
+                                    @foreach (var deposito in depositosDisponibles)
+                                    {
+                                        var radioId = $"depo-radio-{deposito.CodigoDepo}";
+                                        <div class="form-check deposito-check-row">
+                                            <input id="@radioId"
+                                                   class="form-check-input"
+                                                   type="radio"
+                                                   name="deposito-unico"
+                                                   checked="@(depositoSeleccionadoUnico == deposito.CodigoDepo)"
+                                                   @onchange="_ => SeleccionarDepositoUnico(deposito.CodigoDepo)" />
+                                            <label class="form-check-label" for="@radioId">
+                                                @deposito.CodigoDepo - @deposito.Descripcion
+                                            </label>
+                                        </div>
+                                    }
+                                }
+                            </div>
+                        }
+                    </div>
+
+                    <div class="form-text">Selección de un único depósito a transferir.</div>
+                </div>
+
+                <div class="col-12 col-md-4 d-flex align-items-end">
+                    <div class="d-grid gap-2 w-100">
+                        <button type="button"
+                                class="btn btn-success btn-sm"
+                                @onclick="GrabarNumeroSerieAsync"
+                                disabled="@(!PuedeGrabarNumeroSerie || isGrabandoNumeroSerie)">
+                            @if (isGrabandoNumeroSerie)
+                            {
+                                <span class="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span>
+                            }
+                            Grabar Nro de Serie
+                        </button>
+
+                        <button type="button"
+                                class="btn btn-outline-primary btn-sm"
+                                title="Muestra los depósitos > 60 que tienen sus O.F. cerradas pero con Saldo de materiales"
+                                @onclick="CargarDepositosPosiblesConSaldoAsync"
+                                disabled="@isLoadingDepositosConSaldo">
+                            @if (isLoadingDepositosConSaldo)
+                            {
+                                <span class="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span>
+                                <span>Cargando...</span>
+                            }
+                            else
+                            {
+                                <span>Depósitos Posibles con Saldo de Stock</span>
+                            }
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            @if (ordenSeleccionada is not null)
+            {
+                <div class="border rounded p-2 detalle-panel">
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <span class="fw-semibold">Detalle de componentes</span>
+                        @if (isLoadingDetalle)
+                        {
+                            <span class="text-muted small">Cargando...</span>
+                        }
+                        else if (detalleTrazabilidad.Any())
+                        {
+                            <span class="badge bg-secondary">
+                                @(detalleVieneDeControserie ? "Origen: CONTROSERIE" : "Origen: ESTRUCTURA")
+                                @if (depositosSeleccionados.Any())
+                                {
+                                    @(" | Depósitos: " + string.Join(",", depositosSeleccionados))
+                                }
+                            </span>
+                        }
+                    </div>
+
+                    @if (!isLoadingDetalle && !detalleTrazabilidad.Any())
+                    {
+                        <div class="text-muted small">Sin datos para mostrar.</div>
+                    }
+                    else if (detalleTrazabilidad.Any())
+                    {
+                        <div class="table-responsive detalles-scroll">
+                            <table class="table table-sm table-striped mb-0 align-middle detalles-table">
+                                <thead>
+                                    <tr>
+                                        <th>CI</th>
+                                        <th>Código</th>
+                                        <th>Descripción</th>
+                                        <th>U.M.</th>
+                                        <th class="text-end">Uso</th>
+                                        <th class="text-end">Cant.Asig.</th>
+                                        <th class="text-end">ID</th>
+                                        @foreach (var deposito in depositosSeleccionados)
+                                        {
+                                            <th class="text-end">Dep.@deposito</th>
+                                        }
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var item in detalleTrazabilidad)
+                                    {
+                                        <tr>
+                                            <td>@item.CodInte</td>
+                                            <td>@item.CodExte</td>
+                                            <td style="padding-left:@(item.NivelIndentado * 8)px">@item.Descrip</td>
+                                            <td>@item.Unidad</td>
+                                            <td class="text-end">@item.UsoBruto.ToString("N4")</td>
+                                            <td class="text-end">@item.CantidadAsignada.ToString("N4")</td>
+                                            <td class="text-end">@(item.ControserieId > 0 ? item.ControserieId.ToString() : string.Empty)</td>
+                                            @foreach (var deposito in depositosSeleccionados)
+                                            {
+                                                var stock = item.StockPorDeposito.TryGetValue(deposito, out var valor) ? valor : 0m;
+                                                <td class="text-end">@stock.ToString("N1")</td>
+                                            }
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    }
+                </div>
+            }
+
+        </fieldset>
+    </div>
+</div>
+
+@if (mostrarModalBusqueda)
+{
+    <div class="modal fade show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5);" role="dialog" @onkeydown="OnModalKeyDown">
+        <div class="modal-dialog modal-xl modal-dialog-centered" role="document">
+            <div class="modal-content modal-trazabilidad-content">
+                <div class="modal-header modal-trazabilidad-header">
+                    <h5 class="modal-title"><i class="fas fa-search me-2"></i>Buscar O.F. abierta</h5>
+                    <button type="button" class="btn-close" @onclick="CerrarModalBusqueda" aria-label="Cerrar"></button>
+                </div>
+
+                <div class="modal-body">
+                    <form @onsubmit="BuscarAsync" @onsubmit:preventDefault>
+                        <div class="input-group mb-3">
+                            <input type="text"
+                                   class="form-control"
+                                   placeholder="Buscar por N° de O.F. (StatuOrf < 3)..."
+                                   @bind="filtroBusqueda"
+                                   @bind:event="oninput"
+                                   @ref="inputBusquedaModalRef" />
+
+                            <button class="btn btn-success" type="submit" disabled="@isLoading">
+                                <i class="fas fa-search"></i> Buscar
+                            </button>
+                        </div>
+                    </form>
+
+                    @if (isLoading)
+                    {
+                        <div class="text-center py-3">
+                            <div class="spinner-border" role="status">
+                                <span class="visually-hidden">Buscando O.F....</span>
+                            </div>
+                        </div>
+                    }
+                    else if (busquedaEjecutada && !ordenesAbiertas.Any())
+                    {
+                        <div class="alert alert-info mb-0">No se encontraron órdenes de fabricación abiertas.</div>
+                    }
+                    else if (ordenesAbiertas.Any())
+                    {
+                        <div class="table-responsive modal-detalles-scroll">
+                            <table class="table table-sm table-striped align-middle mb-0 modal-detalles-table">
+                                <thead>
+                                    <tr>
+                                        <th>Fecha</th>
+                                        <th>Ord.Fab</th>
+                                        <th>Código</th>
+                                        <th>Descripción</th>
+                                        <th class="text-end">Cant.Proy.</th>
+                                        <th></th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var item in ordenesAbiertas)
+                                    {
+                                        <tr>
+                                            <td>@(item.FechGen.HasValue ? item.FechGen.Value.ToString("dd/MM/yyyy") : string.Empty)</td>
+                                            <td>@item.IdSubOr</td>
+                                            <td>@item.Cod_Exte</td>
+                                            <td>@item.Descrip</td>
+                                            <td class="text-end">@FormatDecimal(item.CanProy)</td>
+                                            <td class="text-end">
+                                                <button class="btn btn-outline-success btn-sm" @onclick="() => SeleccionarOrdenAsync(item)">
+                                                    Seleccionar
+                                                </button>
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    }
+                </div>
+
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" @onclick="CerrarModalBusqueda">Cerrar</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@if (mostrarModalDepositosConSaldo)
+{
+    <div class="modal fade show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5);" role="dialog">
+        <div class="modal-dialog modal-xl modal-dialog-centered" role="document">
+            <div class="modal-content modal-trazabilidad-content">
+                <div class="modal-header modal-trazabilidad-header">
+                    <h5 class="modal-title"><i class="fas fa-warehouse me-2"></i>Depósitos Posibles c/ Ítems con Saldo</h5>
+                    <button type="button" class="btn-close" @onclick="CerrarModalDepositosConSaldo" aria-label="Cerrar"></button>
+                </div>
+
+                <div class="modal-body">
+                    <div class="row g-2 align-items-end mb-3">
+                        <div class="col-12 col-md-3">
+                            <label class="form-label mb-1">Filtro Depósito</label>
+                            <select class="form-select form-select-sm" @bind="filtroDepositoConSaldo">
+                                <option value="">Todos</option>
+                                @foreach (var deposito in depositosFiltroConSaldo)
+                                {
+                                    <option value="@deposito">@deposito</option>
+                                }
+                            </select>
+                        </div>
+                        <div class="col-12 col-md-9 d-flex justify-content-md-end">
+                            <button type="button"
+                                    class="btn btn-success btn-sm"
+                                    @onclick="MostrarImpresionDepositosConSaldo"
+                                    disabled="@(!depositosConSaldoFiltrados.Any())">
+                                <i class="fas fa-print me-1"></i>Imprimir / Excel
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="table-responsive modal-detalles-scroll">
+                        <table class="table table-sm table-striped align-middle mb-0 modal-detalles-table">
+                            <thead>
+                                <tr>
+                                    <th>Código</th>
+                                    <th>Descripción</th>
+                                    <th class="text-end">Saldo Stock</th>
+                                    <th class="text-end">Depósito</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @if (!depositosConSaldoFiltrados.Any())
+                                {
+                                    <tr>
+                                        <td colspan="4" class="text-center text-muted">No hay depósitos cerrados con saldo para mostrar.</td>
+                                    </tr>
+                                }
+                                else
+                                {
+                                    @foreach (var item in depositosConSaldoFiltrados)
+                                    {
+                                        <tr>
+                                            <td>@item.Codigo</td>
+                                            <td>@item.Descripcion</td>
+                                            <td class="text-end">@item.SaldoStock.ToString("N1")</td>
+                                            <td class="text-end">@item.Deposito</td>
+                                        </tr>
+                                    }
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" @onclick="CerrarModalDepositosConSaldo">Cerrar</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@if (mostrarModalImpresionDepositosConSaldo && datosDepositosConSaldoImpresion.Any())
+{
+    <ImpresionLista TItem="DepositosPosiblesConSaldoDTO"
+                    Datos="datosDepositosConSaldoImpresion"
+                    Titulo="@tituloDepositosConSaldo"
+                    UrlExportarExcel="api/excel/exportar-depositos-posibles-saldo"
+                    Encabezados="encabezadosDepositosConSaldo"
+                    ModoDirecto="false"
+                    MostrarModal="mostrarModalImpresionDepositosConSaldo"
+                    OnCerrar="ResetearImpresionDepositosConSaldo" />
+}
+
+<style>
+    .trazabilidad-card {
+        border: 1px solid #c7d3c7;
+        border-radius: 0.5rem;
+        overflow: visible;
+    }
+
+    .trazabilidad-header {
+        background: linear-gradient(180deg, #2f8f4e 0%, #217346 100%);
+        color: #ffffff;
+        border-bottom: 1px solid #1b5f3a;
+        letter-spacing: 0.2px;
+    }
+
+    .trazabilidad-fieldset {
+        background-color: #fcfdfc;
+        border-color: #d6dfd6 !important;
+    }
+
+    .detalle-panel {
+        background: #f9fbf9;
+        border-color: #d4ddd4 !important;
+    }
+
+    .deposito-select-btn {
+        position: relative;
+        z-index: 31;
+        background-color: #ffffff;
+        border: 1px solid #c9d4c9;
+    }
+
+    .deposito-select-btn:focus {
+        border-color: #217346;
+        box-shadow: 0 0 0 0.15rem rgba(33, 115, 70, 0.15);
+    }
+
+    .deposito-select-container {
+        z-index: 31;
+    }
+
+    .deposito-select-backdrop {
+        position: fixed;
+        inset: 0;
+        z-index: 30;
+    }
+
+    .deposito-select-panel {
+        position: absolute;
+        top: calc(100% + 4px);
+        left: 0;
+        right: 0;
+        z-index: 30;
+        max-height: 220px;
+        overflow-y: auto;
+        background: #ffffff;
+        border: 1px solid #1f1f1f;
+        border-radius: 0.35rem;
+        padding: 0.45rem 0.55rem;
+    }
+
+    .deposito-check-row {
+        margin-bottom: 0.25rem;
+    }
+
+    .deposito-check-row:last-child {
+        margin-bottom: 0;
+    }
+
+    .detalles-scroll {
+        max-height: 6cm;
+        overflow-y: auto;
+        border: 1px solid #1f1f1f;
+        border-radius: 0.35rem;
+    }
+
+    .detalles-table thead th {
+        background-color: #111111;
+        color: #ffffff;
+        border-color: #2a2a2a;
+        position: sticky;
+        top: 0;
+        z-index: 1;
+    }
+
+    .detalles-table tbody td {
+        border-color: #e6ece6;
+    }
+
+    .detalles-table tbody tr:nth-child(even) {
+        background-color: #f2f6f2;
+    }
+
+    .modal-trazabilidad-content {
+        border: 1px solid #c7d3c7;
+        overflow: hidden;
+    }
+
+    .modal-trazabilidad-header {
+        background: linear-gradient(180deg, #2f8f4e 0%, #217346 100%);
+        color: #ffffff;
+        border-bottom: 1px solid #1b5f3a;
+    }
+
+    .modal-trazabilidad-header .btn-close {
+        filter: invert(1);
+    }
+
+    .modal-detalles-scroll {
+        max-height: 8cm;
+        overflow-y: auto;
+        border: 1px solid #1f1f1f;
+        border-radius: 0.35rem;
+    }
+
+    .modal-detalles-table thead th {
+        background-color: #111111;
+        color: #ffffff;
+        border-color: #2a2a2a;
+        position: sticky;
+        top: 0;
+        z-index: 1;
+    }
+</style>
+
+@code {
+    // Evento para avisar al padre qué O.F. se eligió.
+    [Parameter] public EventCallback<OrdefabrIndexDTO?> OnOrdenSeleccionada { get; set; }
+    // Evento para avisar al padre el N° Serie que quedó en el input.
+    [Parameter] public EventCallback<string?> OnNumeroSerieChanged { get; set; }
+
+    private readonly List<OrdefabrIndexDTO> ordenesAbiertas = new();
+    private OrdefabrIndexDTO? ordenSeleccionada;
+    private string? numeroSerie;
+    private bool numeroSerieEsSoloLectura;
+    private bool isLoadingDetalle;
+    private bool detalleVieneDeControserie;
+    private readonly List<TrazabilidadOFSerieDetalleDTO> detalleTrazabilidad = new();
+    private readonly List<Tadeposi> depositosDisponibles = new();
+    private readonly List<int> depositosSeleccionados = new();
+    private int? depositoSeleccionadoUnico;
+    private bool mostrarSelectorDepositos;
+    private bool mostrarSelectorDepositoUnico;
+    private bool isGrabandoNumeroSerie;
+    private bool isLoadingDepositosConSaldo;
+    private string filtroBusqueda = string.Empty;
+    private bool isLoading;
+    private bool mostrarModalBusqueda;
+    private bool busquedaEjecutada;
+    private bool enfocarInputBusqueda;
+    private const int RecordsNumber = 50;
+    private ElementReference inputBusquedaModalRef;
+    private readonly List<DepositosPosiblesConSaldoDTO> depositosPosiblesConSaldo = new();
+    private bool mostrarModalDepositosConSaldo;
+    private string filtroDepositoConSaldo = string.Empty;
+    private bool mostrarModalImpresionDepositosConSaldo;
+    private List<DepositosPosiblesConSaldoDTO> datosDepositosConSaldoImpresion = new();
+    private string tituloDepositosConSaldo => $"Depósitos Posibles c/Saldo - {DateTime.Now:dd/MM/yyyy}";
+
+    private Dictionary<string, string> encabezadosDepositosConSaldo = new()
+    {
+        { "Codigo", "Código" },
+        { "Descripcion", "Descripción" },
+        { "SaldoStock", "Saldo Stock" },
+        { "Deposito", "Depósito" }
+    };
+
+    private IEnumerable<int> depositosFiltroConSaldo => depositosPosiblesConSaldo
+        .Select(x => x.Deposito)
+        .Distinct()
+        .OrderBy(x => x);
+
+    private List<DepositosPosiblesConSaldoDTO> depositosConSaldoFiltrados =>
+        string.IsNullOrWhiteSpace(filtroDepositoConSaldo)
+            ? depositosPosiblesConSaldo
+            : depositosPosiblesConSaldo.Where(x => x.Deposito.ToString() == filtroDepositoConSaldo).ToList();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await CargarDepositosDisponiblesAsync();
+    }
+
+    private async Task CargarDepositosDisponiblesAsync()
+    {
+        var response = await repository.Get<List<Tadeposi>>("api/tadeposi/activos");
+        if (response.Error)
+        {
+            await sweetAlertService.FireAsync("Error", await response.GetErrorMessageAsync(), SweetAlertIcon.Error);
+            return;
+        }
+
+        depositosDisponibles.Clear();
+        depositosDisponibles.AddRange((response.Response ?? new List<Tadeposi>())
+            .OrderBy(x => x.CodigoDepo));
+    }
+
+    private async Task BuscarAsync()
+    {
+        await CargarOrdenesAbiertasAsync();
+    }
+
+    private void AbrirModalBusqueda()
+    {
+        mostrarModalBusqueda = true;
+        enfocarInputBusqueda = true;
+    }
+
+    private void CerrarModalBusqueda()
+    {
+        mostrarModalBusqueda = false;
+        enfocarInputBusqueda = false;
+    }
+
+    private void OnModalKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Escape")
+        {
+            CerrarModalBusqueda();
+        }
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (mostrarModalBusqueda && enfocarInputBusqueda)
+        {
+            enfocarInputBusqueda = false;
+            await Task.Delay(50);
+            await inputBusquedaModalRef.FocusAsync();
+        }
+    }
+
+    private async Task CargarOrdenesAbiertasAsync()
+    {
+        try
+        {
+            isLoading = true;
+            busquedaEjecutada = true;
+
+            var url = $"api/ordefabr?page=1&recordsNumber={RecordsNumber}&statuOrf=2";
+
+            if (!string.IsNullOrWhiteSpace(filtroBusqueda))
+            {
+                url += $"&filter={Uri.EscapeDataString(filtroBusqueda.Trim())}";
+            }
+
+            var response = await repository.Get<List<OrdefabrIndexDTO>>(url);
+
+            if (response.Error)
+            {
+                await sweetAlertService.FireAsync("Error", await response.GetErrorMessageAsync(), SweetAlertIcon.Error);
+                return;
+            }
+
+            if (response.Response is null)
+            {
+                return;
+            }
+
+            ordenesAbiertas.Clear();
+            ordenesAbiertas.AddRange(response.Response.Where(x => (x.StatuOrf ?? 0) < 3));
+
+            if (ordenSeleccionada is not null && !ordenesAbiertas.Any(x => x.Id == ordenSeleccionada.Id))
+            {
+                ordenSeleccionada = null;
+                await OnOrdenSeleccionada.InvokeAsync(null);
+            }
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private async Task SeleccionarOrdenAsync(OrdefabrIndexDTO orden)
+    {
+        // Validación equivalente VB6:
+        // Si la cantidad proyectada de la O.F. es mayor a 1, se informa y no se continúa.
+        if ((orden.CanProy ?? 0m) > 1m)
+        {
+            await sweetAlertService.FireAsync("Advertencia", "Orden de Fabricación seleccionada tiene más de 1 item", SweetAlertIcon.Warning);
+            return;
+        }
+
+        // 1) Guardamos la O.F. elegida y cerramos el modal.
+        ordenSeleccionada = orden;
+        mostrarModalBusqueda = false;
+        mostrarSelectorDepositos = false;
+        mostrarSelectorDepositoUnico = false;
+
+        // 2) Pedimos el N° Serie al backend usando solo IdSubOr.
+        await CargarNumeroSerieAsync(ordenSeleccionada?.IdSubOr);
+
+        // 2.1) Si vino serie automática, cargamos detalle (equivalente VB6 Text1_Change).
+        await CargarDetalleTrazabilidadAsync();
+
+        // 3) Notificamos al padre la O.F. seleccionada.
+        await OnOrdenSeleccionada.InvokeAsync(ordenSeleccionada);
+    }
+
+    private async Task CargarNumeroSerieAsync(string? idSubOr)
+    {
+        // Sin IdSubOr no podemos ejecutar la búsqueda principal.
+        if (string.IsNullOrWhiteSpace(idSubOr))
+        {
+            numeroSerie = string.Empty;
+            numeroSerieEsSoloLectura = false;
+            detalleTrazabilidad.Clear();
+            detalleVieneDeControserie = false;
+            await NotificarNumeroSerieAsync();
+            return;
+        }
+
+        // Endpoint del backend que trae la serie desde CONTROSERIE.
+        var response = await repository.Get<string>($"/api/ordefabr/numero-serie/{Uri.EscapeDataString(idSubOr)}");
+        if (response.Error)
+        {
+            // Si falla la API, limpiamos el campo y mostramos error.
+            numeroSerie = string.Empty;
+            numeroSerieEsSoloLectura = false;
+            detalleTrazabilidad.Clear();
+            detalleVieneDeControserie = false;
+            await sweetAlertService.FireAsync("Error", await response.GetErrorMessageAsync(), SweetAlertIcon.Error);
+            await NotificarNumeroSerieAsync();
+            return;
+        }
+
+        // Si llega valor, lo mostramos en el input N° Serie.
+        numeroSerie = response.Response?.Trim() ?? string.Empty;
+        numeroSerieEsSoloLectura = !string.IsNullOrWhiteSpace(numeroSerie);
+        await InvokeAsync(StateHasChanged);
+        await NotificarNumeroSerieAsync();
+    }
+
+    private string GetTextoOrdenSeleccionada()
+    {
+        if (ordenSeleccionada is null)
+        {
+            return string.Empty;
+        }
+
+        return $"{ordenSeleccionada.IdSubOr} - {ordenSeleccionada.Cod_Exte} - {ordenSeleccionada.Descrip}";
+    }
+
+    private decimal? CalcularPendiente(OrdefabrIndexDTO? of)
+    {
+        if (of is null)
+        {
+            return null;
+        }
+
+        var canProy = of.CanProy ?? 0m;
+        var canApro = of.CanApro ?? 0m;
+        var pendiente = canProy - canApro;
+        return pendiente < 0m ? 0m : pendiente;
+    }
+
+    private string FormatDecimal(decimal? value)
+    {
+        return value.HasValue ? value.Value.ToString("N2") : string.Empty;
+    }
+
+    private async Task NotificarNumeroSerieAsync()
+    {
+        // Propaga el valor al componente padre (página de Trazabilidad).
+        await OnNumeroSerieChanged.InvokeAsync(numeroSerie);
+    }
+
+    private async Task OnNumeroSerieBlur(FocusEventArgs _)
+    {
+        await CargarDetalleTrazabilidadAsync();
+        await NotificarNumeroSerieAsync();
+    }
+
+    private async Task OnNumeroSerieInput(ChangeEventArgs e)
+    {
+        numeroSerie = e.Value?.ToString();
+        await NotificarNumeroSerieAsync();
+    }
+
+    private void ToggleSelectorDepositos()
+    {
+        mostrarSelectorDepositoUnico = false;
+        mostrarSelectorDepositos = !mostrarSelectorDepositos;
+    }
+
+    private void CerrarSelectorDepositos()
+    {
+        mostrarSelectorDepositos = false;
+    }
+
+    private void OnSelectorDepositosKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Escape")
+        {
+            CerrarSelectorDepositos();
+        }
+    }
+
+    private void ToggleSelectorDepositoUnico()
+    {
+        mostrarSelectorDepositos = false;
+        mostrarSelectorDepositoUnico = !mostrarSelectorDepositoUnico;
+    }
+
+    private void CerrarSelectorDepositoUnico()
+    {
+        mostrarSelectorDepositoUnico = false;
+    }
+
+    private void OnSelectorDepositoUnicoKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Escape")
+        {
+            CerrarSelectorDepositoUnico();
+        }
+    }
+
+    private void SeleccionarDepositoUnico(int codigoDeposito)
+    {
+        depositoSeleccionadoUnico = codigoDeposito;
+        mostrarSelectorDepositoUnico = false;
+    }
+
+    private bool PuedeGrabarNumeroSerie =>
+        ordenSeleccionada is not null &&
+        !string.IsNullOrWhiteSpace(ordenSeleccionada.IdSubOr) &&
+        !string.IsNullOrWhiteSpace(numeroSerie) &&
+        (ordenSeleccionada.Cod_Inte ?? 0) > 0 &&
+        detalleTrazabilidad.Any() &&
+        !detalleVieneDeControserie;
+
+    private async Task GrabarNumeroSerieAsync()
+    {
+        if (!PuedeGrabarNumeroSerie || isGrabandoNumeroSerie)
+        {
+            return;
+        }
+
+        var idSubOr = ordenSeleccionada?.IdSubOr?.Trim() ?? string.Empty;
+        var nserie = numeroSerie?.Trim() ?? string.Empty;
+        var codInte = ordenSeleccionada?.Cod_Inte ?? 0;
+
+        if (string.IsNullOrWhiteSpace(idSubOr))
+        {
+            await sweetAlertService.FireAsync("Advertencia", "Falta seleccionar Orden de Fabricación", SweetAlertIcon.Warning);
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(nserie))
+        {
+            await sweetAlertService.FireAsync("Advertencia", "Falta seleccionar N° de Serie", SweetAlertIcon.Warning);
+            return;
+        }
+
+        if (codInte < 1)
+        {
+            await sweetAlertService.FireAsync("Advertencia", "Falta Código", SweetAlertIcon.Warning);
+            return;
+        }
+
+        try
+        {
+            isGrabandoNumeroSerie = true;
+
+            var request = new GrabarNumeroSerieRequestDTO
+            {
+                IdSubOr = idSubOr,
+                NumeroSerie = nserie,
+                CodInte = codInte,
+                DepositoMovi = depositoSeleccionadoUnico,
+                Items = detalleTrazabilidad.Select(x => new TrazabilidadOFSerieDetalleDTO
+                {
+                    CodInte = x.CodInte,
+                    CodExte = x.CodExte,
+                    Descrip = x.Descrip,
+                    Unidad = x.Unidad,
+                    UsoBruto = x.UsoBruto,
+                    CantidadAsignada = x.CantidadAsignada,
+                    ControserieId = x.ControserieId,
+                    Orden = x.Orden,
+                    NivelIndentado = x.NivelIndentado
+                }).ToList()
+            };
+
+            var response = await repository.Post<GrabarNumeroSerieRequestDTO, GrabarNumeroSerieResultadoDTO>("/api/ordefabr/grabar-numero-serie", request);
+            if (response.Error)
+            {
+                await sweetAlertService.FireAsync("Error", await response.GetErrorMessageAsync(), SweetAlertIcon.Error);
+                return;
+            }
+
+            var resultado = response.Response;
+            if (resultado is null)
+            {
+                await sweetAlertService.FireAsync("Advertencia", "No se recibió respuesta de grabación.", SweetAlertIcon.Warning);
+                return;
+            }
+
+            await sweetAlertService.FireAsync(
+                resultado.YaExistia ? "Información" : "Correcto",
+                resultado.Mensaje,
+                resultado.YaExistia ? SweetAlertIcon.Info : SweetAlertIcon.Success);
+
+            if (!resultado.YaExistia)
+            {
+                await CargarDetalleTrazabilidadAsync();
+            }
+        }
+        finally
+        {
+            isGrabandoNumeroSerie = false;
+        }
+    }
+
+    private async Task CargarDepositosPosiblesConSaldoAsync()
+    {
+        if (isLoadingDepositosConSaldo)
+        {
+            return;
+        }
+
+        try
+        {
+            isLoadingDepositosConSaldo = true;
+
+            var response = await repository.Get<List<DepositosPosiblesConSaldoDTO>>("/api/ordefabr/depositos-posibles-con-saldo");
+            if (response.Error)
+            {
+                await sweetAlertService.FireAsync("Error", await response.GetErrorMessageAsync(), SweetAlertIcon.Error);
+                return;
+            }
+
+            depositosPosiblesConSaldo.Clear();
+            depositosPosiblesConSaldo.AddRange((response.Response ?? new List<DepositosPosiblesConSaldoDTO>())
+                .OrderBy(x => x.Deposito)
+                .ThenBy(x => x.Codigo));
+
+            filtroDepositoConSaldo = string.Empty;
+            mostrarModalDepositosConSaldo = true;
+        }
+        finally
+        {
+            isLoadingDepositosConSaldo = false;
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    private void CerrarModalDepositosConSaldo()
+    {
+        mostrarModalDepositosConSaldo = false;
+    }
+
+    private void MostrarImpresionDepositosConSaldo()
+    {
+        datosDepositosConSaldoImpresion = depositosConSaldoFiltrados.ToList();
+        mostrarModalImpresionDepositosConSaldo = datosDepositosConSaldoImpresion.Any();
+    }
+
+    private async Task ResetearImpresionDepositosConSaldo()
+    {
+        mostrarModalImpresionDepositosConSaldo = false;
+        datosDepositosConSaldoImpresion = new List<DepositosPosiblesConSaldoDTO>();
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private async Task OnDepositoCheckedChangedAsync(int codigoDeposito, ChangeEventArgs e)
+    {
+        var checkedValue = e.Value switch
+        {
+            bool boolValue => boolValue,
+            string textValue when bool.TryParse(textValue, out var parsed) => parsed,
+            _ => false
+        };
+
+        if (checkedValue)
+        {
+            if (!depositosSeleccionados.Contains(codigoDeposito))
+            {
+                depositosSeleccionados.Add(codigoDeposito);
+            }
+        }
+        else
+        {
+            depositosSeleccionados.Remove(codigoDeposito);
+        }
+
+        depositosSeleccionados.Sort();
+        await CargarDetalleTrazabilidadAsync();
+    }
+
+    private async Task CargarDetalleTrazabilidadAsync()
+    {
+        detalleTrazabilidad.Clear();
+        detalleVieneDeControserie = false;
+
+        var idSubOr = ordenSeleccionada?.IdSubOr?.Trim();
+        var nserie = numeroSerie?.Trim();
+        var codInte = ordenSeleccionada?.Cod_Inte ?? 0;
+
+        if (string.IsNullOrWhiteSpace(idSubOr) || string.IsNullOrWhiteSpace(nserie) || codInte < 1)
+        {
+            await InvokeAsync(StateHasChanged);
+            return;
+        }
+
+        try
+        {
+            isLoadingDetalle = true;
+            await InvokeAsync(StateHasChanged);
+
+            var queryDepositos = depositosSeleccionados.Any()
+                ? $"?depositos={Uri.EscapeDataString(string.Join(",", depositosSeleccionados))}"
+                : string.Empty;
+
+            var response = await repository.Get<TrazabilidadOFSerieResultadoDTO>($"/api/ordefabr/trazabilidad-detalle/{Uri.EscapeDataString(idSubOr)}/{codInte}/{Uri.EscapeDataString(nserie)}{queryDepositos}");
+            if (response.Error)
+            {
+                await sweetAlertService.FireAsync("Error", await response.GetErrorMessageAsync(), SweetAlertIcon.Error);
+                return;
+            }
+
+            if (response.Response is null)
+            {
+                return;
+            }
+
+            detalleVieneDeControserie = response.Response.TieneDatosControserie;
+            detalleTrazabilidad.AddRange(response.Response.Items ?? Enumerable.Empty<TrazabilidadOFSerieDetalleDTO>());
+        }
+        finally
+        {
+            isLoadingDetalle = false;
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    private string GetTextoDepositosSeleccionados()
+    {
+        if (!depositosSeleccionados.Any())
+        {
+            return "Seleccione depósitos";
+        }
+
+        return string.Join(", ", depositosSeleccionados);
+    }
+
+    private string GetTextoDepositoUnicoSeleccionado()
+    {
+        if (!depositoSeleccionadoUnico.HasValue)
+        {
+            return "Seleccione depósito";
+        }
+
+        var deposito = depositosDisponibles.FirstOrDefault(x => x.CodigoDepo == depositoSeleccionadoUnico.Value);
+        if (deposito is null)
+        {
+            return depositoSeleccionadoUnico.Value.ToString();
+        }
+
+        return $"{deposito.CodigoDepo} - {deposito.Descripcion}";
+    }
+}

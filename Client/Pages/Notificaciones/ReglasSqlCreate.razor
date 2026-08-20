@@ -1,0 +1,242 @@
+@page "/notificaciones/reglas-sql/create"
+@using Microsoft.AspNetCore.Authorization
+@attribute [Authorize(Roles = "SUPERADMIN")]
+@using Microsoft.AspNetCore.Components
+@using Microsoft.AspNetCore.Components.Forms
+@using Microsoft.AspNetCore.Components.Routing
+@using IMPLANPROD.Client.Shared.Components
+@using IMPLANPROD.Shared.DTOs.Notificaciones
+@inject IRepository repository
+@inject NavigationManager navigationManager
+@inject SweetAlertService sweetAlertService
+
+<PageTitle>Nueva regla SQL</PageTitle>
+
+<h3>Nueva regla SQL</h3>
+
+<div class="mb-3">
+    <div class="card mb-2">
+        <div class="card-header bg-info text-white p-2">
+            <button class="btn btn-link text-white text-decoration-none w-100 text-start p-0"
+                    type="button"
+                    @onclick="() => mostrarInstructivoUsuario = !mostrarInstructivoUsuario">
+                <i class="fas @(mostrarInstructivoUsuario ? "fa-chevron-down" : "fa-chevron-right") me-2"></i>
+                <strong>Instructivo para el Usuario</strong>
+            </button>
+        </div>
+        @if (mostrarInstructivoUsuario)
+        {
+            <div class="card-body">
+                <h6 class="text-primary"><i class="fas fa-info-circle"></i> Objetivo</h6>
+                <p>
+                    Configurar una regla automática que revise un <strong>SELECT</strong> cada X minutos y genere una notificación si hay cambios.
+                </p>
+
+                <h6 class="text-primary"><i class="fas fa-list-check"></i> Campos importantes</h6>
+                <ul class="mb-0">
+                    <li><strong>Título:</strong> texto que verás en la notificación.</li>
+                    <li><strong>SQL (solo SELECT):</strong> consulta que devuelve filas para armar el detalle.</li>
+                    <li><strong>Intervalo:</strong> cada cuántos minutos se ejecuta.</li>
+                    <li><strong>Max filas detalle:</strong> limita cuántas filas se muestran en el detalle para evitar notificaciones gigantes.</li>
+                    <li><strong>Modo de seguimiento:</strong>
+                        <ul>
+                            <li><strong>Hash (0):</strong> genera notificación si el resultado cambia (stock bajo, pedidos vencidos, etc.).</li>
+                            <li><strong>Incremental (1):</strong> genera notificación por cada nuevo registro (órdenes, compras, remitos, etc.).</li>
+                        </ul>
+                    </li>
+                    <li><strong>Campo de seguimiento:</strong> campo incremental (ej: NroPed, IdOrden) solo requerido en modo Incremental. El SQL debe usar <code>@@UltimoValorProcesado</code> como parámetro.</li>
+                </ul>
+            </div>
+        }
+    </div>
+
+    <InstructivoDesarrollador>
+        <h6 class="text-info"><i class="fas fa-code"></i> API</h6>
+        <ul>
+            <li><code>POST api/notificaciones/reglas-sql</code></li>
+        </ul>
+
+        <h6 class="text-info mt-3"><i class="fas fa-sitemap"></i> Servicios involucrados</h6>
+        <ul>
+            <li><strong>Client:</strong> <code>IRepository</code>, <code>SweetAlertService</code></li>
+            <li><strong>Server:</strong> <code>NotificacionReglasSqlService</code>, <code>DataContext</code></li>
+        </ul>
+
+        <h6 class="text-info mt-3"><i class="fas fa-project-diagram"></i> Flujo (alto nivel)</h6>
+        <pre class="bg-light p-2 rounded"><code>Submit
+  ↓
+POST api/notificaciones/reglas-sql
+  ↓
+Server valida SQL (solo SELECT)
+  ↓
+Guarda regla
+  ↓
+NavigateTo /notificaciones/reglas-sql</code></pre>
+        <h6 class="text-info mt-3"><i class="fas fa-exclamation-triangle"></i> Reglas</h6>
+        <ul class="mb-0">
+            <li>El SQL debe comenzar con <code>SELECT</code>.</li>
+            <li>Evitar consultas sin filtro que devuelvan miles de filas.</li>
+        </ul>
+    </InstructivoDesarrollador>
+</div>
+
+<EditForm Model="model" OnValidSubmit="CreateAsync">
+    <DataAnnotationsValidator />
+    <ValidationSummary />
+
+    <div class="mb-3">
+        <label class="form-label">Título</label>
+        <InputText class="form-control" @bind-Value="model.Titulo" />
+        <ValidationMessage For="() => model.Titulo" />
+    </div>
+
+    <div class="mb-3">
+        <label class="form-label">Resumen</label>
+        <InputText class="form-control" @bind-Value="model.Resumen" />
+    </div>
+
+    <div class="row">
+        <div class="col-md-3 mb-3">
+            <label class="form-label">Activa</label>
+            <InputCheckbox class="form-check-input ms-2" @bind-Value="model.Activa" />
+        </div>
+        <div class="col-md-3 mb-3">
+            <label class="form-label">Intervalo (min)</label>
+            <InputNumber class="form-control" @bind-Value="model.IntervaloMinutos" />
+        </div>
+        <div class="col-md-3 mb-3">
+            <label class="form-label">Max filas detalle</label>
+            <InputNumber class="form-control" @bind-Value="model.MaxFilasDetalle" />
+        </div>
+        <div class="col-md-3 mb-3">
+            <label class="form-label">Para todos</label>
+            <InputCheckbox class="form-check-input ms-2" @bind-Value="model.EsParaTodos" />
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-md-4 mb-3">
+            <label class="form-label">Modo de seguimiento</label>
+            <InputSelect class="form-select" @bind-Value="model.ModoSeguimiento">
+                <option value="0">Hash (cambios en resultado)</option>
+                <option value="1">Incremental (nuevos registros)</option>
+            </InputSelect>
+        </div>
+        <div class="col-md-4 mb-3">
+            <label class="form-label">Campo de seguimiento</label>
+            <InputText class="form-control" @bind-Value="model.CampoSeguimiento" placeholder="Ej: NroPed, IdOrden" disabled="@EsModoHash()" />
+            <small class="text-muted">Solo para modo Incremental. Campo incremental del SQL.</small>
+        </div>
+    </div>
+
+    <div class="mb-3">
+        <label class="form-label">SQL (solo SELECT)</label>
+        <InputTextArea class="form-control" @bind-Value="model.SqlQuery" rows="12" />
+        <ValidationMessage For="() => model.SqlQuery" />
+        @if (model.ModoSeguimiento == 1)
+        {
+            <small class="text-info">
+                <i class="fas fa-info-circle"></i> En modo Incremental, usa <code>@@UltimoValorProcesado</code> en el WHERE (ej: WHERE NroPed > @@UltimoValorProcesado)
+            </small>
+        }
+    </div>
+
+    @if (!model.EsParaTodos)
+    {
+        <div class="mb-3">
+            <label class="form-label">Destinatarios</label>
+            <div style="max-height: 260px; overflow-y: auto;" class="border rounded p-2">
+                @if (usuarios != null)
+                {
+                    @foreach (var u in usuarios)
+                    {
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="usr_@u.Id" @bind="selected[u.Id]" />
+                            <label class="form-check-label" for="usr_@u.Id">@u.NombreUsuario (Id: @u.Id)</label>
+                        </div>
+                    }
+                }
+                else
+                {
+                    <small class="text-muted">Cargando usuarios...</small>
+                }
+            </div>
+        </div>
+    }
+
+    <button class="btn btn-primary" type="submit">Guardar</button>
+    <button class="btn btn-secondary" type="button" @onclick="Return">Volver</button>
+</EditForm>
+
+@code {
+    private NotificacionReglaSqlUpsertDTO model = new();
+    private List<Usuario>? usuarios;
+    private Dictionary<int, bool> selected = new();
+
+    private bool mostrarInstructivoUsuario;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadUsuariosAsync();
+    }
+
+    private async Task LoadUsuariosAsync()
+    {
+        var response = await repository.Get<List<Usuario>>("/api/Usuarios/activos");
+        if (!response.Error)
+        {
+            usuarios = response.Response;
+            // Inicializar selected con todos los usuarios en false
+            foreach (var u in usuarios)
+            {
+                selected[u.Id] = false;
+            }
+        }
+    }
+
+    private bool EsModoHash()
+    {
+        return model.ModoSeguimiento == 0;
+    }
+
+    private async Task CreateAsync()
+    {
+        // Validación: si es modo incremental, debe tener CampoSeguimiento
+        if (model.ModoSeguimiento == 1 && string.IsNullOrWhiteSpace(model.CampoSeguimiento))
+        {
+            await sweetAlertService.FireAsync("Validación", "En modo Incremental debe especificar el Campo de seguimiento (ej: NroPed, IdOrden)", SweetAlertIcon.Warning);
+            return;
+        }
+
+        // Validación: si no es para todos, debe haber al menos un destinatario
+        if (!model.EsParaTodos)
+        {
+            var selectedIds = selected.Where(x => x.Value).Select(x => x.Key).ToList();
+            if (selectedIds.Count == 0)
+            {
+                await sweetAlertService.FireAsync("Validación", "Si no es para todos, debe seleccionar al menos un destinatario", SweetAlertIcon.Warning);
+                return;
+            }
+            model.DestinatariosIds = string.Join(",", selectedIds);
+        }
+        else
+        {
+            model.DestinatariosIds = null;
+        }
+
+        var httpResponse = await repository.Post("api/notificaciones/reglas-sql", model);
+        if (httpResponse.Error)
+        {
+            var message = await httpResponse.GetErrorMessageAsync();
+            await sweetAlertService.FireAsync("Error", message, SweetAlertIcon.Error);
+            return;
+        }
+
+        Return();
+    }
+
+    private void Return()
+    {
+        navigationManager.NavigateTo("/notificaciones/reglas-sql");
+    }
+}

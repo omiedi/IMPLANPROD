@@ -1,6 +1,7 @@
 using IMPLANPROD.Server.Data;
 using IMPLANPROD.Server.Helpers;
 using IMPLANPROD.Server.Services;
+using IMPLANPROD.Server.Utilities;
 using IMPLANPROD.Shared.DTOs;
 using IMPLANPROD.Shared.Entities;
 using Microsoft.AspNetCore.Mvc;
@@ -14,23 +15,36 @@ namespace IMPLANPROD.Server.Controllers
 {
     /// <summary>
     /// Controlador para la gestión de pedidos de venta (Pedenca)
-    /// </summary>
+    /// </summary> 
     [ApiController]
     [Route("api/[controller]")]
     public class PedencaController : ControllerBase
     {
         private readonly DataContext _context;
         private readonly ConversionMonedaService _conversionMonedaService;
+        private readonly DocumentNumberGenerator _documentNumberGenerator;
+        private readonly UserContextService _userContextService;
+        private readonly ISyncService _syncService;
 
         /// <summary>
         /// Constructor del controlador
         /// </summary>
         /// <param name="context">Contexto de base de datos</param>
         /// <param name="conversionMonedaService">Servicio de conversión de moneda</param>
-        public PedencaController(DataContext context, ConversionMonedaService conversionMonedaService)
+        /// <param name="documentNumberGenerator">Generador de números de documento</param>
+        /// <param name="userContextService">Servicio de contexto de usuario</param>
+        public PedencaController(
+        DataContext context,
+        ConversionMonedaService conversionMonedaService,
+        DocumentNumberGenerator documentNumberGenerator,
+        UserContextService userContextService,
+        ISyncService syncService)
         {
             _context = context;
             _conversionMonedaService = conversionMonedaService;
+            _documentNumberGenerator = documentNumberGenerator;
+            _userContextService = userContextService;
+            _syncService = syncService;
         }
 
         /// <summary>
@@ -175,7 +189,8 @@ namespace IMPLANPROD.Server.Controllers
                 encabezado.NroClie = request.NroClie;
                 encabezado.RasoClie = request.RasoClie;
                 encabezado.NroOcom = request.NroOcom;
-                encabezado.FeSolEnt = request.FeSolEnt;
+                encabezado.Observa = request.Observa;
+                encabezado.FeSolEnt = request.FeSolEnt ?? DateTime.Today; // Si está vacío, usar fecha de hoy
                 // Status: mantener la lógica actual del registro
                 encabezado.ListPre = request.ListPre;
                 encabezado.CondPag = request.CondPag;
@@ -260,7 +275,7 @@ namespace IMPLANPROD.Server.Controllers
                         // Preservar fecha de última entrega y número de remito si existían
                         FeUltEnt = valoresExistentes?.FeUltEnt,
                         NroRemi = valoresExistentes?.NroRemi ?? string.Empty,
-                        TPedItem = string.Empty,
+                        TPedItem = $"{request.NroPed}-{item.NuOrItem}", // Criterio VB6: NRO_PEDIDO-NRO_ITEM
                         NumeroSerie = item.NumeroSerie ?? string.Empty,
                         NROCOTI = string.Empty,
                         SIN_CARGO = item.SinCargo ?? 0,
@@ -273,6 +288,36 @@ namespace IMPLANPROD.Server.Controllers
                 await _context.SaveChangesAsync();
 
                 await transaction.CommitAsync();
+                // ====================================================================
+                // VALIDAR SI ES PEDIDO DE SUCURSAL Y GENERAR ARCHIVO ARCHIVO_GENERO_PEDIDO
+                // ====================================================================
+                try
+                {
+                    // Verificar si el pedido existe en OC_SUCURSAL (pedido de sucursal)
+                    var ocSucursal = await _context.O_Sucursals
+                        .FirstOrDefaultAsync(o => o.NpedGeneradoEnAvellaneda == request.NroPed && o.Marborra != -1);
+
+                    if (ocSucursal != null)
+                    {
+                        // Es un pedido de sucursal, generar archivo ARCHIVO_GENERO_PEDIDO
+                        var numUsuar = _userContextService.GetCurrentUserId() ?? 0;
+                        var nroClie = encabezado.NroClie ?? 0;
+                        var oCompraSuc = ocSucursal.OCompraSuc ?? 0;
+
+                        await _syncService.GenerarArchivoGeneroPedidoAsync(
+                            request.NroPed,
+                            nroClie,
+                            oCompraSuc,
+                            "MODIPEDI",
+                            numUsuar
+                        );
+                    }
+                }
+                catch (Exception ex)
+                {
+                    // No fallar la edición si hay error al generar el archivo
+                    Console.WriteLine($"Error al generar ARCHIVO_GENERO_PEDIDO al editar pedido: {ex.Message}");
+                }
                 return Ok(new { request.NroPed, Items = nuevos.Count });
             }
             catch (Exception ex)
@@ -335,7 +380,8 @@ namespace IMPLANPROD.Server.Controllers
                     NroClie = request.NroClie,
                     RasoClie = request.RasoClie,
                     NroOcom = request.NroOcom,
-                    FeSolEnt = request.FeSolEnt,
+                    Observa = request.Observa,
+                    FeSolEnt = request.FeSolEnt ?? DateTime.Today, // Si está vacío, usar fecha de hoy
                     Status = 0,        // 0: pendiente de aprobación (según requerimiento)
                     ListPre = request.ListPre,
                     CondPag = request.CondPag,
@@ -395,7 +441,7 @@ namespace IMPLANPROD.Server.Controllers
                         CanSaldo = item.CanPed, // inicial igual a lo pedido
                         FeUltEnt = null,
                         NroRemi = string.Empty,
-                        TPedItem = string.Empty,
+                        TPedItem = $"{nuevoNroPed}-{item.NuOrItem}", // Criterio VB6: NRO_PEDIDO-NRO_ITEM
 
                         NumeroSerie = item.NumeroSerie ?? string.Empty,
                         NROCOTI = string.Empty,
@@ -792,6 +838,141 @@ namespace IMPLANPROD.Server.Controllers
             {
                 Console.WriteLine($"Error al obtener seguimiento del pedido {nroPed}: {ex.Message}");
                 return BadRequest($"Error al obtener seguimiento del pedido: {ex.Message}");
+            }
+        }
+
+     
+
+      
+        /// <summary>
+        /// Transfiere productos de un pedido entre depósitos
+        /// </summary>
+        [HttpPost("transferir-por-pedido")]
+        public async Task<ActionResult> TransferirPorPedido([FromBody] TransferenciaPorPedidoDTO transferencia)
+        {
+            if (transferencia == null || !transferencia.Items.Any())
+            {
+                return BadRequest("Debe proporcionar al menos un producto para transferir");
+            }
+
+            if (transferencia.DepositoOrigen == transferencia.DepositoDestino)
+            {
+                return BadRequest("El depósito origen y destino no pueden ser el mismo");
+            }
+
+            using var transaction = await _context.Database.BeginTransactionAsync();
+            try
+            {
+                var fecha = DateTime.Now;
+                var secuencialCompleto = await _documentNumberGenerator.GenerateNextDocumentNumberAsync("TR");
+                var numeroSecuencial = int.Parse(secuencialCompleto.Split('.').Last());
+                var seccion = $"{fecha.Year % 10}{fecha:MMdd}";
+                
+                int? idFlexoft = _userContextService.GetCurrentUserId();
+                short? codigoEmpresa = _userContextService.GetCurrentCodigoEmpresa();
+                
+                if (!_userContextService.IsAuthenticated())
+                {
+                    return BadRequest("Sesión Caducada - Debe cerrar sesión y loguearse nuevamente.");
+                }
+
+                // Validar trazabilidad y lotes antes de procesar
+                foreach (var item in transferencia.Items)
+                {
+                    // Si el producto es trazable (Trazable = 1), el lote es obligatorio
+                    if (item.Trazable == 1)
+                    {
+                        if (string.IsNullOrWhiteSpace(item.Lote))
+                        {
+                            return BadRequest($"El producto '{item.CodigoExterno}' es trazable y requiere que se especifique un lote obligatoriamente.");
+                        }
+
+                        // Validar que el lote exista en MOVISTO con al menos un ingreso
+                        var loteExiste = await _context.Movistos
+                            .AnyAsync(m => m.Cod_Inte == item.CodigoInterno 
+                                        && m.IdenLote == item.Lote 
+                                        && m.CantIngre.HasValue 
+                                        && m.CantIngre.Value > 0);
+
+                        if (!loteExiste)
+                        {
+                            return BadRequest($"El lote '{item.Lote}' no existe para el producto '{item.CodigoExterno}'. Debe existir al menos un ingreso previo con ese lote.");
+                        }
+                    }
+
+                    // Validar que el producto no sea trazable nivel 2
+                    if (item.Trazable == 2)
+                    {
+                        return BadRequest($"El producto '{item.CodigoExterno}' tiene trazabilidad nivel 2 y no puede ser transferido.");
+                    }
+                }
+
+                // Construir referencia con número de pedido
+                var referenciaCompleta = $"TR. Asig. Pedido {transferencia.NumeroPedido}";
+                if (!string.IsNullOrWhiteSpace(transferencia.Referencia))
+                {
+                    referenciaCompleta = $"{referenciaCompleta} | {transferencia.Referencia}";
+                }
+
+                // Procesar cada item de la transferencia
+                foreach (var item in transferencia.Items)
+                {
+                    // Registro de salida del depósito origen
+                    var movimientoSalida = new Movisto
+                    {
+                        FeReMovi = fecha,
+                        CodiMovi = "TR",
+                        CantSalid = item.Cantidad,
+                        DepoMovi = transferencia.DepositoOrigen,
+                        Cod_Inte = item.CodigoInterno,
+                        Cod_Exte = item.CodigoExterno,
+                        Descrip = item.Descripcion,
+                        DoPriCor = $"TR.{numeroSecuencial}",
+                        DoPriLar = $"TR.{numeroSecuencial}",
+                        DoSecCor = $"TR.{seccion}",
+                        DoSecLar = $"TR.{seccion}",
+                        NumUsuar = idFlexoft,
+                        CodiEmpr = codigoEmpresa,
+                        ReferCor = referenciaCompleta,
+                        IdenLote = item.Lote
+                    };
+
+                    // Registro de ingreso al depósito destino
+                    var movimientoIngreso = new Movisto
+                    {
+                        FeReMovi = fecha,
+                        CodiMovi = "TR",
+                        CantIngre = item.Cantidad,
+                        DepoMovi = transferencia.DepositoDestino,
+                        Cod_Inte = item.CodigoInterno,
+                        Cod_Exte = item.CodigoExterno,
+                        Descrip = item.Descripcion,
+                        DoPriCor = $"TR.{numeroSecuencial}",
+                        DoPriLar = $"TR.{numeroSecuencial}",
+                        DoSecCor = $"TR.{seccion}",
+                        DoSecLar = $"TR.{seccion}",
+                        NumUsuar = idFlexoft,
+                        CodiEmpr = codigoEmpresa,
+                        ReferCor = referenciaCompleta,
+                        IdenLote = item.Lote
+                    };
+
+                    _context.Movistos.Add(movimientoSalida);
+                    _context.Movistos.Add(movimientoIngreso);
+                }
+
+                await _context.SaveChangesAsync();
+                await transaction.CommitAsync();
+
+                return Ok(new { 
+                    Message = $"Transferencia realizada con éxito. {transferencia.Items.Count} producto(s) transferido(s).",
+                    NumeroTransferencia = $"TR.{numeroSecuencial}"
+                });
+            }
+            catch (Exception ex)
+            {
+                await transaction.RollbackAsync();
+                return StatusCode(500, $"Error interno del servidor: {ex.Message}");
             }
         }
     }

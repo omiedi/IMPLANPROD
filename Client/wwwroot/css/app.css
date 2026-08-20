@@ -99,3 +99,51 @@ a, .btn-link {
     .loading-progress-text:after {
         content: var(--blazor-load-percentage-text, "Loading");
     }
+
+/* Ocultar los controles de incremento/decremento en inputs type="number" */
+.no-spinner::-webkit-outer-spin-button,
+.no-spinner::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+}
+
+.no-spinner {
+    -moz-appearance: textfield;
+}
+
+/* Quita las flechas en Chrome, Safari, Edge y Opera para InputNumeroLimpio */
+.sin-flechas input[type=number]::-webkit-inner-spin-button,
+.sin-flechas input[type=number]::-webkit-outer-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+}
+
+/* Quita las flechas en Firefox para InputNumeroLimpio */
+.sin-flechas input[type=number] {
+    -moz-appearance: textfield;
+    appearance: textfield;
+}
+
+/* =========================================================
+   ENCABEZADO FIJO EN TABLAS
+   ========================================================= */
+
+/* Contenedor con scroll para que el encabezado se pegue al tope */
+.table-sticky-container {
+    max-height: 70vh;
+    overflow: auto;
+}
+
+/* Fijar las celdas del encabezado en la parte superior */
+.table-sticky-header thead th {
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    background-color: #f8f9fa;
+    box-shadow: 0 2px 2px -1px rgba(0, 0, 0, 0.1);
+}
+
+/* Mantener el color verde cuando el thead usa la clase table-success */
+.table-sticky-header thead.table-success th {
+    background-color: #d1e7dd;
+}

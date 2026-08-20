@@ -38,6 +38,7 @@ namespace IMPLANPROD.Shared.DTOs
         [StringLength(64)]
         public string? Motivo { get; set; }
         public short? MoneEmis { get; set; }
+        public string? Observa { get; set; }
         public decimal? TipoCam { get; set; }
 
         public int? NumUsuar { get; set; }

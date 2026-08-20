@@ -1,0 +1,574 @@
+@using IMPLANPROD.Shared.DTOs
+@using IMPLANPROD.Client.Services
+@inject IRepository repository
+@inject SweetAlertService sweetAlertService
+
+<div class="modal fade @(MostrarModal ? "show" : "")" style="display: @(MostrarModal ? "block" : "none");" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title">
+                    <i class="oi oi-sync me-2"></i>
+                    Sincronización Central-Sucursal
+                </h5>
+                <button type="button" class="btn-close btn-close-white" @onclick="OnCerrar"></button>
+            </div>
+            <div class="modal-body">
+                @if (cargando)
+                {
+                    <div class="text-center py-4">
+                        <div class="spinner-border text-primary" role="status">
+                            <span class="visually-hidden">Cargando...</span>
+                        </div>
+                        <p class="mt-2">Consultando archivos pendientes...</p>
+                    </div>
+                }
+                else if (configSync == null)
+                {
+                    <div class="alert alert-warning">
+                        <i class="oi oi-warning me-2"></i>
+                        No hay configuración de sincronización. Configure las rutas de intercambio primero.
+                    </div>
+                }
+                else
+                {
+                    <!-- Información de archivos pendientes -->
+                    <div class="card mb-3">
+                        <div class="card-header bg-light">
+                            <h6 class="mb-0"><i class="oi oi-file me-2"></i>Archivos Pendientes de Sincronización</h6>
+                        </div>
+                        <div class="card-body">
+                            @if (configSync.GeneraScriptSync)
+                            {
+                                <div class="d-flex justify-content-between align-items-center mb-2">
+                                    <span><strong>Productos (Master, Formulas, SecOper):</strong></span>
+                                    <span class="badge @(archivosPendientes?.ArchivosProductos > 0 ? "bg-warning" : "bg-success")">
+                                        @archivosPendientes?.ArchivosProductos archivos
+                                    </span>
+                                </div>
+                                <div class="d-flex justify-content-between align-items-center mb-2">
+                                    <span><strong>Remitos:</strong></span>
+                                    <span class="badge @(archivosPendientes?.ArchivosRemitos > 0 ? "bg-warning" : "bg-success")">
+                                        @archivosPendientes?.ArchivosRemitos archivos
+                                    </span>
+                                </div>
+                                <div class="d-flex justify-content-between align-items-center mb-2">
+                                    <span><strong>Órdenes de Reparación:</strong></span>
+                                    <span class="badge @(archivosPendientes?.ArchivosReparaciones > 0 ? "bg-warning" : "bg-success")">
+                                        @archivosPendientes?.ArchivosReparaciones archivos
+                                    </span>
+                                </div>
+                                <div class="d-flex justify-content-between align-items-center">
+                                    <span><strong>Ajustes de Stock:</strong></span>
+                                    <span class="badge @(archivosPendientes?.ArchivosAjustes > 0 ? "bg-warning" : "bg-success")">
+                                        @archivosPendientes?.ArchivosAjustes archivos
+                                    </span>
+                                </div>
+                            }
+                            else
+                            {
+                                <div class="alert alert-info mb-0">
+                                    <i class="oi oi-info me-2"></i>
+                                    La sincronización está deshabilitada en la configuración.
+                                </div>
+                            }
+                        </div>
+                    </div>
+
+                    <!-- Botones de sincronización según configuración -->
+                    <div class="row g-2">
+                        <!-- Botón de productos si hay archivos pendientes o está configurado -->
+                        @if (archivosPendientes?.ArchivosProductos > 0 || configSync.ProcesaProductos || configSync.GeneraProductos)
+                        {
+                            <div class="col-md-4">
+                                <button class="btn btn-outline-primary w-100" @onclick="() => SincronizarProductosAsync()" disabled="@procesando">
+                                    <i class="oi oi-reload me-2"></i>
+                                    @(configSync.ProcesaProductos ? "Sinc. Productos" : "Sinc. Productos")
+                                </button>
+                            </div>
+                        }
+
+                        <!-- Botón de remitos si hay archivos pendientes o está configurado -->
+                        @if (archivosPendientes?.ArchivosRemitos > 0 || configSync.ProcesaRemitos || configSync.GeneraRemitos)
+                        {
+                            <div class="col-md-4">
+                                <button class="btn btn-outline-success w-100" @onclick="() => SincronizarRemitosAsync()" disabled="@procesando">
+                                    <i class="oi oi-reload me-2"></i>
+                                    @(configSync.ProcesaRemitos ? "Sinc. Remitos" : "Sinc. Remitos")
+                                </button>
+                            </div>
+                        }
+
+                        <!-- Botón de reparaciones si hay archivos pendientes o está configurado -->
+                        @if (archivosPendientes?.ArchivosReparaciones > 0 || configSync.ProcesaReparaciones || configSync.GeneraReparaciones)
+                        {
+                            <div class="col-md-4">
+                                <button class="btn btn-outline-warning w-100" @onclick="() => SincronizarReparacionesAsync()" disabled="@procesando">
+                                    <i class="oi oi-reload me-2"></i>
+                                    @(configSync.ProcesaReparaciones ? "Sinc. Reparaciones" : "Sinc. Reparaciones")
+                                </button>
+                            </div>
+                        }
+
+                        <!-- Botón de ajustes si hay archivos pendientes o está configurado -->
+                        @if (archivosPendientes?.ArchivosAjustes > 0 || configSync.ProcesaAjustes || configSync.GeneraAjustes)
+                        {
+                            <div class="col-md-4">
+                                <button class="btn btn-outline-info w-100" @onclick="() => SincronizarAjustesAsync()" disabled="@procesando">
+                                    <i class="oi oi-reload me-2"></i>
+                                    @(configSync.ProcesaAjustes ? "Sinc. Ajustes" : "Sinc. Ajustes")
+                                </button>
+                            </div>
+                        }
+
+                        <!-- Botón de sincronizar todo si hay archivos pendientes o está configurado -->
+                        @if ((archivosPendientes?.ArchivosProductos > 0 || archivosPendientes?.ArchivosRemitos > 0 || archivosPendientes?.ArchivosReparaciones > 0 || archivosPendientes?.ArchivosAjustes > 0) ||
+                             configSync.ProcesaProductos || configSync.GeneraProductos || configSync.ProcesaRemitos || configSync.GeneraRemitos || configSync.ProcesaReparaciones || configSync.GeneraReparaciones || configSync.ProcesaAjustes || configSync.GeneraAjustes)
+                        {
+                            <div class="col-12">
+                                <button class="btn btn-primary w-100" @onclick="() => SincronizarTodoAsync()" disabled="@procesando">
+                                    <i class="oi oi-reload me-2"></i>
+                                    Sincronizar Todo
+                                </button>
+                            </div>
+                        }
+
+                        <!-- Mensaje si no hay archivos pendientes y no está configurado -->
+                        @if (archivosPendientes?.ArchivosProductos == 0 && archivosPendientes?.ArchivosRemitos == 0 && archivosPendientes?.ArchivosReparaciones == 0 && archivosPendientes?.ArchivosAjustes == 0 &&
+                             !configSync.ProcesaProductos && !configSync.GeneraProductos && !configSync.ProcesaRemitos && !configSync.GeneraRemitos && !configSync.ProcesaReparaciones && !configSync.GeneraReparaciones && !configSync.ProcesaAjustes && !configSync.GeneraAjustes)
+                        {
+                            <div class="col-12">
+                                <div class="alert alert-info mb-0">
+                                    <i class="oi oi-info me-2"></i>
+                                    No hay archivos pendientes de sincronización.
+                                </div>
+                            </div>
+                        }
+                    </div>
+
+                    @if (procesando)
+                    {
+                        <div class="text-center mt-3">
+                            <div class="spinner-border text-primary" role="status">
+                                <span class="visually-hidden">Procesando...</span>
+                            </div>
+                            <p class="mt-2">Procesando sincronización...</p>
+                        </div>
+                    }
+                }
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" @onclick="OnCerrar">Cerrar</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+@if (MostrarModal)
+{
+    <div class="modal-backdrop fade show"></div>
+}
+
+@code {
+    [Parameter]
+    public bool MostrarModal { get; set; }
+
+    [Parameter]
+    public EventCallback OnCerrar { get; set; }
+
+    private bool cargando = true;
+    private bool procesando = false;
+    private bool modalAbiertoAnterior = false;
+    private SyncConfigDTO? configSync;
+    private SyncArchivosPendientesDTO? archivosPendientes;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        // Recargar datos cada vez que el modal pasa de cerrado a abierto
+        if (MostrarModal && !modalAbiertoAnterior)
+        {
+            modalAbiertoAnterior = true;
+            await CargarDatosAsync();
+        }
+        else if (!MostrarModal)
+        {
+            modalAbiertoAnterior = false;
+        }
+    }
+
+    private async Task CargarDatosAsync()
+    {
+        try
+        {
+            cargando = true;
+            StateHasChanged();
+
+            // Cargar configuración
+            var responseConfig = await repository.Get<SyncConfigDTO>("api/sync/config");
+            if (!responseConfig.Error && responseConfig.Response != null)
+            {
+                configSync = responseConfig.Response;
+            }
+
+            // Cargar archivos pendientes
+            var responseArchivos = await repository.Get<SyncArchivosPendientesDTO>("api/sync/archivos-pendientes");
+            if (!responseArchivos.Error && responseArchivos.Response != null)
+            {
+                archivosPendientes = responseArchivos.Response;
+            }
+        }
+        catch (Exception ex)
+        {
+            await sweetAlertService.FireAsync("Error", $"Error al cargar datos: {ex.Message}", SweetAlertIcon.Error);
+        }
+        finally
+        {
+            cargando = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task SincronizarProductosAsync()
+    {
+        if (configSync == null || string.IsNullOrWhiteSpace(configSync.RutaIntercambio))
+        {
+            await sweetAlertService.FireAsync("Error", "No hay configuración de ruta de intercambio de productos", SweetAlertIcon.Error);
+            return;
+        }
+
+        var confirmacion = await sweetAlertService.FireAsync(new SweetAlertOptions
+        {
+            Title = "Confirmar Sincronización de Productos",
+            Text = $"¿Desea sincronizar los archivos de productos?\nArchivos pendientes: {archivosPendientes?.ArchivosProductos}",
+            Icon = SweetAlertIcon.Warning,
+            ShowCancelButton = true,
+            ConfirmButtonText = "Sí, sincronizar",
+            CancelButtonText = "Cancelar"
+        });
+
+        if (!confirmacion.IsConfirmed)
+        {
+            return;
+        }
+
+        try
+        {
+            procesando = true;
+            StateHasChanged();
+
+            var request = new ValidarRutaDTO { Ruta = configSync.RutaIntercambio };
+            var response = await repository.Post<ValidarRutaDTO, SyncResultDTO>("api/sync/procesar", request);
+
+            if (!response.Error && response.Response != null)
+            {
+                var resultado = response.Response;
+
+                if (resultado.Exitoso)
+                {
+                    await sweetAlertService.FireAsync("Sincronización Exitosa", resultado.Mensaje, SweetAlertIcon.Success);
+                    await CargarDatosAsync(); // Recargar archivos pendientes
+                }
+                else
+                {
+                    var detalles = resultado.DetalleErrores.Count > 0
+                        ? string.Join("<br>", resultado.DetalleErrores.Take(5))
+                        : resultado.Mensaje;
+
+                    await sweetAlertService.FireAsync("Sincronización con Errores", $"{resultado.Mensaje}<br><br>{detalles}", SweetAlertIcon.Warning);
+                }
+            }
+            else
+            {
+                await sweetAlertService.FireAsync("Error", await response.GetErrorMessageAsync(), SweetAlertIcon.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            await sweetAlertService.FireAsync("Error", $"Error al sincronizar productos: {ex.Message}", SweetAlertIcon.Error);
+        }
+        finally
+        {
+            procesando = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task SincronizarRemitosAsync()
+    {
+        if (configSync == null || string.IsNullOrWhiteSpace(configSync.RutaIntercambioRemitos))
+        {
+            await sweetAlertService.FireAsync("Error", "No hay configuración de ruta de intercambio de remitos", SweetAlertIcon.Error);
+            return;
+        }
+
+        var confirmacion = await sweetAlertService.FireAsync(new SweetAlertOptions
+        {
+            Title = "Confirmar Sincronización de Remitos",
+            Text = $"¿Desea sincronizar los archivos de remitos?\nArchivos pendientes: {archivosPendientes?.ArchivosRemitos}",
+            Icon = SweetAlertIcon.Warning,
+            ShowCancelButton = true,
+            ConfirmButtonText = "Sí, sincronizar",
+            CancelButtonText = "Cancelar"
+        });
+
+        if (!confirmacion.IsConfirmed)
+        {
+            return;
+        }
+
+        try
+        {
+            procesando = true;
+            StateHasChanged();
+
+            var request = new ValidarRutaDTO { Ruta = configSync.RutaIntercambioRemitos };
+            var response = await repository.Post<ValidarRutaDTO, SyncResultDTO>("api/sync/procesar-remitos", request);
+
+            if (!response.Error && response.Response != null)
+            {
+                var resultado = response.Response;
+
+                if (resultado.Exitoso)
+                {
+                    await sweetAlertService.FireAsync("Sincronización Exitosa", resultado.Mensaje, SweetAlertIcon.Success);
+                    await CargarDatosAsync(); // Recargar archivos pendientes
+                }
+                else
+                {
+                    var detalles = resultado.DetalleErrores.Count > 0
+                        ? string.Join("<br>", resultado.DetalleErrores.Take(5))
+                        : resultado.Mensaje;
+
+                    await sweetAlertService.FireAsync("Sincronización con Errores", $"{resultado.Mensaje}<br><br>{detalles}", SweetAlertIcon.Warning);
+                }
+            }
+            else
+            {
+                await sweetAlertService.FireAsync("Error", await response.GetErrorMessageAsync(), SweetAlertIcon.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            await sweetAlertService.FireAsync("Error", $"Error al sincronizar remitos: {ex.Message}", SweetAlertIcon.Error);
+        }
+        finally
+        {
+            procesando = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task SincronizarReparacionesAsync()
+    {
+        if (configSync == null || string.IsNullOrWhiteSpace(configSync.RutaIntercambioReparaciones))
+        {
+            await sweetAlertService.FireAsync("Error", "No hay configuración de ruta de intercambio de reparaciones", SweetAlertIcon.Error);
+            return;
+        }
+
+        var confirmacion = await sweetAlertService.FireAsync(new SweetAlertOptions
+        {
+            Title = "Confirmar Sincronización de Reparaciones",
+            Text = $"¿Desea sincronizar los archivos de reparaciones?\nArchivos pendientes: {archivosPendientes?.ArchivosReparaciones}",
+            Icon = SweetAlertIcon.Warning,
+            ShowCancelButton = true,
+            ConfirmButtonText = "Sí, sincronizar",
+            CancelButtonText = "Cancelar"
+        });
+
+        if (!confirmacion.IsConfirmed)
+        {
+            return;
+        }
+
+        try
+        {
+            procesando = true;
+            StateHasChanged();
+
+            var request = new ValidarRutaDTO { Ruta = configSync.RutaIntercambioReparaciones };
+            var response = await repository.Post<ValidarRutaDTO, SyncResultDTO>("api/sync/procesar-reparaciones", request);
+
+            if (!response.Error && response.Response != null)
+            {
+                var resultado = response.Response;
+
+                if (resultado.Exitoso)
+                {
+                    await sweetAlertService.FireAsync("Sincronización Exitosa", resultado.Mensaje, SweetAlertIcon.Success);
+                    await CargarDatosAsync(); // Recargar archivos pendientes
+                }
+                else
+                {
+                    var detalles = resultado.DetalleErrores.Count > 0
+                        ? string.Join("<br>", resultado.DetalleErrores.Take(5))
+                        : resultado.Mensaje;
+
+                    await sweetAlertService.FireAsync("Sincronización con Errores", $"{resultado.Mensaje}<br><br>{detalles}", SweetAlertIcon.Warning);
+                }
+            }
+            else
+            {
+                await sweetAlertService.FireAsync("Error", await response.GetErrorMessageAsync(), SweetAlertIcon.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            await sweetAlertService.FireAsync("Error", $"Error al sincronizar reparaciones: {ex.Message}", SweetAlertIcon.Error);
+        }
+        finally
+        {
+            procesando = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task SincronizarAjustesAsync()
+    {
+        try
+        {
+            procesando = true;
+            StateHasChanged();
+
+            var request = new ValidarRutaDTO { Ruta = configSync.RutaIntercambioAjustes };
+            var response = await repository.Post<ValidarRutaDTO, SyncResultDTO>("api/sync/procesar-ajustes", request);
+
+            if (!response.Error && response.Response != null)
+            {
+                var resultado = response.Response;
+
+                if (resultado.Exitoso)
+                {
+                    await sweetAlertService.FireAsync("Sincronización Exitosa", resultado.Mensaje, SweetAlertIcon.Success);
+                    await CargarDatosAsync(); // Recargar archivos pendientes
+                }
+                else
+                {
+                    var detalles = resultado.DetalleErrores.Count > 0
+                        ? string.Join("<br>", resultado.DetalleErrores.Take(5))
+                        : resultado.Mensaje;
+
+                    await sweetAlertService.FireAsync("Sincronización con Errores", $"{resultado.Mensaje}<br><br>{detalles}", SweetAlertIcon.Warning);
+                }
+            }
+            else
+            {
+                await sweetAlertService.FireAsync("Error", await response.GetErrorMessageAsync(), SweetAlertIcon.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            await sweetAlertService.FireAsync("Error", $"Error al sincronizar ajustes: {ex.Message}", SweetAlertIcon.Error);
+        }
+        finally
+        {
+            procesando = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task SincronizarTodoAsync()
+    {
+        var confirmacion = await sweetAlertService.FireAsync(new SweetAlertOptions
+        {
+            Title = "Confirmar Sincronización Completa",
+            Text = $"¿Desea sincronizar todos los archivos?\nProductos: {archivosPendientes?.ArchivosProductos}\nRemitos: {archivosPendientes?.ArchivosRemitos}\nReparaciones: {archivosPendientes?.ArchivosReparaciones}\nAjustes: {archivosPendientes?.ArchivosAjustes}",
+            Icon = SweetAlertIcon.Warning,
+            ShowCancelButton = true,
+            ConfirmButtonText = "Sí, sincronizar todo",
+            CancelButtonText = "Cancelar"
+        });
+
+        if (!confirmacion.IsConfirmed)
+        {
+            return;
+        }
+
+        try
+        {
+            procesando = true;
+            StateHasChanged();
+
+            var resultadoFinal = new List<string>();
+
+            // Sincronizar productos si corresponde
+            if (configSync?.ProcesaProductos == true || configSync?.GeneraProductos == true)
+            {
+                if (!string.IsNullOrWhiteSpace(configSync.RutaIntercambio))
+                {
+                    var request = new ValidarRutaDTO { Ruta = configSync.RutaIntercambio };
+                    var response = await repository.Post<ValidarRutaDTO, SyncResultDTO>("api/sync/procesar", request);
+
+                    if (!response.Error && response.Response != null)
+                    {
+                        resultadoFinal.Add($"Productos: {response.Response.Mensaje}");
+                    }
+                }
+            }
+
+            // Sincronizar remitos si corresponde
+            if (configSync?.ProcesaRemitos == true || configSync?.GeneraRemitos == true)
+            {
+                if (!string.IsNullOrWhiteSpace(configSync.RutaIntercambioRemitos))
+                {
+                    var request = new ValidarRutaDTO { Ruta = configSync.RutaIntercambioRemitos };
+                    var response = await repository.Post<ValidarRutaDTO, SyncResultDTO>("api/sync/procesar-remitos", request);
+
+                    if (!response.Error && response.Response != null)
+                    {
+                        resultadoFinal.Add($"Remitos: {response.Response.Mensaje}");
+                    }
+                }
+            }
+
+            // Sincronizar reparaciones si corresponde
+            if (configSync?.ProcesaReparaciones == true || configSync?.GeneraReparaciones == true)
+            {
+                if (!string.IsNullOrWhiteSpace(configSync.RutaIntercambioReparaciones))
+                {
+                    var request = new ValidarRutaDTO { Ruta = configSync.RutaIntercambioReparaciones };
+                    var response = await repository.Post<ValidarRutaDTO, SyncResultDTO>("api/sync/procesar-reparaciones", request);
+
+                    if (!response.Error && response.Response != null)
+                    {
+                        resultadoFinal.Add($"Reparaciones: {response.Response.Mensaje}");
+                    }
+                }
+            }
+
+            // Sincronizar ajustes si corresponde
+            if (configSync?.ProcesaAjustes == true || configSync?.GeneraAjustes == true)
+            {
+                if (!string.IsNullOrWhiteSpace(configSync.RutaIntercambioAjustes))
+                {
+                    var request = new ValidarRutaDTO { Ruta = configSync.RutaIntercambioAjustes };
+                    var response = await repository.Post<ValidarRutaDTO, SyncResultDTO>("api/sync/procesar-ajustes", request);
+
+                    if (!response.Error && response.Response != null)
+                    {
+                        resultadoFinal.Add($"Ajustes: {response.Response.Mensaje}");
+                    }
+                }
+            }
+
+            if (resultadoFinal.Count > 0)
+            {
+                await sweetAlertService.FireAsync("Sincronización Completa", string.Join("<br><br>", resultadoFinal), SweetAlertIcon.Success);
+                await CargarDatosAsync(); // Recargar archivos pendientes
+            }
+            else
+            {
+                await sweetAlertService.FireAsync("Información", "No hay sincronizaciones configuradas para ejecutar", SweetAlertIcon.Info);
+            }
+        }
+        catch (Exception ex)
+        {
+            await sweetAlertService.FireAsync("Error", $"Error al sincronizar: {ex.Message}", SweetAlertIcon.Error);
+        }
+        finally
+        {
+            procesando = false;
+            StateHasChanged();
+        }
+    }
+}

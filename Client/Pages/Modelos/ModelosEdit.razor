@@ -1,11 +1,25 @@
 @page "/modelos-edit/{Id:int}"
+@using IMPLANPROD.Client.Services
 @using IMPLANPROD.Shared.Entities
 @inject IRepository repository
 @inject NavigationManager NavigationManager
 @inject SweetAlertService sweetAlertService
+@inject PageAccessService PageAccess
 
 <PageTitle>Editar Modelo</PageTitle>
 
+@if (validando)
+{
+    <p>Validando acceso...</p>
+}
+else if (modelo is null)
+{
+    <div class="spinner-border text-primary" role="status">
+        <span class="sr-only">Cargando...</span>
+    </div>
+}
+else
+{
 <!--
 Componente: ModelosEdit.razor
 Descripción: Página para editar un modelo existente (BADAMODE)
@@ -20,14 +34,6 @@ Fecha: 2026-01-08
     </h3>
 </div>
 
-@if (modelo is null)
-{
-    <div class="spinner-border text-primary" role="status">
-        <span class="sr-only">Cargando...</span>
-    </div>
-}
-else
-{
     <ModelosForm Modelo="modelo"
                  OnValidSubmit="EditAsync"
                  OnCancel="Cancel"
@@ -39,12 +45,16 @@ else
     public int Id { get; set; }
 
     private Badamode? modelo;
+    private bool validando = true;
 
     /// <summary>
-    /// Inicialización - Carga el modelo a editar
+    /// Inicialización - Valida acceso y carga el modelo a editar
     /// </summary>
     protected override async Task OnInitializedAsync()
     {
+        await PageAccess.RequiereAccesoAsync("/modelos-edit/{Id}");
+        validando = false;
+        
         await LoadModeloAsync();
     }
 

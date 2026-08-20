@@ -1,9 +1,19 @@
 @page "/material-suministrado-cliente"
 @using IMPLANPROD.Client.Shared.Components
+@using IMPLANPROD.Client.Services
 @inject IRepository repository
 @inject SweetAlertService sweetAlertService
 @inject NavigationManager navigationManager
+@inject PageAccessService PageAccess
 
+<PageTitle>Material Suministrado por el Cliente</PageTitle>
+
+@if (validando)
+{
+    <p>Validando acceso...</p>
+}
+else
+{
 <div class="container-fluid mt-3">
     <div class="card shadow">
         <div class="card-header bg-primary text-white">
@@ -403,6 +413,7 @@ HAVING (SUM(CANTINGRE) - SUM(CANTSALID)) &gt; 0</code></pre>
         </div>
     </div>
 </div>
+}
 
 <!-- Modal para movimientos -->
 @if (mostrarModal)
@@ -739,9 +750,14 @@ HAVING (SUM(CANTINGRE) - SUM(CANTSALID)) &gt; 0</code></pre>
     private bool mostrarModalMovimientos = false;
     private bool cargandoMovimientos = false;
     private List<MovimientoCuentaContableDTO> movimientosCuentaContable = new();
+    private bool validando = true;
 
     protected override async Task OnInitializedAsync()
     {
+        // Validar que el usuario tenga permiso para acceder a esta página antes de mostrar el contenido
+        await PageAccess.RequiereAccesoAsync("/material-suministrado-cliente");
+        validando = false;
+        
         await CargarReparaciones();
     }
 

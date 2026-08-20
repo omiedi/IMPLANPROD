@@ -1,16 +1,36 @@
 @page "/master-create"
+@using IMPLANPROD.Client.Services
 @inject NavigationManager navigationManager
 @inject IRepository repository
 @inject SweetAlertService sweetAlertService
-<div class="bg-primary bg-opacity-10 p-3 rounded-3 mb-3">
-    <h3 class="m-0 text-primary">Crear Nuevo Producto</h3>
-</div>
+@inject PageAccessService PageAccess
 
-<MasterForm @ref="masterForm" master="master" OnValidSubmit="CreateAsync" ReturnAction="Return" IsEdit="false" />
+<PageTitle>Crear Nuevo Producto</PageTitle>
+
+@if (validando)
+{
+    <p>Validando acceso...</p>
+}
+else
+{
+    <div class="bg-primary bg-opacity-10 p-3 rounded-3 mb-3">
+        <h3 class="m-0 text-primary">Crear Nuevo Producto</h3>
+    </div>
+
+    <MasterForm @ref="masterForm" master="master" OnValidSubmit="CreateAsync" ReturnAction="Return" IsEdit="false" />
+}
 
 @code {
     private Master master = new();
     private MasterForm? masterForm;
+    private bool validando = true;
+
+    // Validar que el usuario tenga permiso para acceder a esta página antes de mostrar el contenido
+    protected override async Task OnInitializedAsync()
+    {
+        await PageAccess.RequiereAccesoAsync("/master-create");
+        validando = false;
+    }
 
     private async Task CreateAsync()
     {
@@ -22,7 +42,9 @@
             await sweetAlertService.FireAsync("Error", mensajeError, SweetAlertIcon.Error);
             return;
         }
-        return;
+
+        await sweetAlertService.FireAsync("Éxito", "Alta Exitosa", SweetAlertIcon.Success);
+        Return();
     }
 
 

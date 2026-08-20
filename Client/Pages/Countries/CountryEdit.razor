@@ -1,28 +1,44 @@
 ﻿@page "/countries/edit/{Id:int}"
+@using IMPLANPROD.Client.Services
 @inject IRepository repository
 @inject NavigationManager navigationManager
 @inject SweetAlertService sweetAlertService
+@inject PageAccessService PageAccess
+
+<PageTitle>Editar País</PageTitle>
 
 <h3>Editar País</h3>
 
-@if(country is null)
+@if (validando)
 {
-    <div class="spinner"/>
+    <p>Validando acceso...</p>
 }
 else
 {
-    <CountryForm @ref="countryForm" Country="country" OnValidSubmit="EditAsync" ReturnAction="Return"/>
+    @if(country is null)
+    {
+        <div class="spinner"/>
+    }
+    else
+    {
+        <CountryForm @ref="countryForm" Country="country" OnValidSubmit="EditAsync" ReturnAction="Return"/>
+    }
 }
 
 @code {
     private Country? country;
     private CountryForm? countryForm;
+    private bool validando = true;
 
     [Parameter]
     public int Id { get; set; }
 
+    // Validar que el usuario tenga permiso para acceder a esta página antes de mostrar el contenido
     protected override async Task OnInitializedAsync()
     {
+        await PageAccess.RequiereAccesoAsync("/countries/edit");
+        validando = false;
+        
         var responseHttp = await repository.Get<Country>($"/api/countries/{Id}");
         if (responseHttp.Error)
         {

@@ -1,4 +1,5 @@
 @page "/master-index"
+@using IMPLANPROD.Client.Services
 @using IMPLANPROD.Client.Pages.Reportes
 @using IMPLANPROD.Shared.Entities
 @using IMPLANPROD.Client.Shared.Components
@@ -8,9 +9,16 @@
 @inject NavigationManager NavigationManager
 @inject SweetAlertService sweetAlertService
 @inject IJSRuntime JS
+@inject PageAccessService PageAccess
 
 <PageTitle>Ficha de Productos</PageTitle>
 
+@if (validando)
+{
+    <p>Validando acceso...</p>
+}
+else
+{
 <!--
 Componente: MasterIndex.razor
 Descripción: Listado paginado de productos (Master) con opciones de edición y gestión.
@@ -24,7 +32,15 @@ Implementa el modelo de carga y paginación LoadAsync como el resto del sistema.
 -->
 
 <div class="bg-primary bg-opacity-10 p-3 rounded-3 mb-3">
-    <h3 class="m-0 text-primary">Lista de Productos</h3>
+    <div class="d-flex align-items-center justify-content-between">
+        <h3 class="m-0 text-primary">Lista de Productos</h3>
+        <button type="button"
+                class="btn btn-sm btn-outline-primary"
+                title="Configuración de Master"
+                @onclick="AbrirConfiguracionMaster">
+            <i class="oi oi-cog"></i>
+        </button>
+    </div>
 </div>
 
 <div class="row mb-3">
@@ -38,10 +54,10 @@ Implementa el modelo de carga y paginación LoadAsync como el resto del sistema.
         <button class="btn btn-info" @onclick="AbrirConfiguracionSync">
             <i class="oi oi-cog"></i> Configuración Sincronización
         </button>
-        @if (configSync != null && !configSync.EsCentral && configSync.GeneraScriptSync)
+        @if (configSync != null && configSync.ProcesaRemitos && configSync.GeneraScriptSync)
         {
             <button class="btn btn-success me-2" @onclick="ProcesarSincronizacion" disabled="@isProcesandoSync">
-                <i class="oi oi-reload"></i> Sincronizar desde Central
+                <i class="oi oi-reload"></i> Sincronizar Remitos
             </button>
         }
     </div>
@@ -50,13 +66,17 @@ Implementa el modelo de carga y paginación LoadAsync como el resto del sistema.
 <div class="row mb-3">
     <div class="col-md-6">
         <div class="input-group">
-            <input type="text" class="form-control" placeholder="Buscar por descripción..." @bind-value="Filter" @onkeyup="HandleKeyPress" />
+            <input type="text" class="form-control" placeholder="Buscar por código o descripción..." @bind-value="Filter" @onkeyup="HandleKeyPress" />
             <button class="btn btn-outline-secondary" type="button" @onclick="ApplyFilterAsync">
                 <i class="oi oi-magnifying-glass"></i> Buscar
             </button>
             <button type="button" class="btn btn-outline-danger" @onclick="CleanFilterAsync">Limpiar</button>
         </div>
     </div>
+</div>
+
+<div class="text-muted" style="font-size: 0.85rem; margin-top: -0.5rem;">
+    Podés combinar términos con <b>+</b> para exigir coincidencia de ambos (AND). Ej: <code>TORN + acero</code>
 </div>
 <!-- Botón Imprimir alineado a la derecha -->
 <div class="d-flex justify-content-end mb-3">
@@ -83,9 +103,13 @@ Implementa el modelo de carga y paginación LoadAsync como el resto del sistema.
     </div>
 }
 
-<SyncConfigModal MostrarModal="mostrarModalSync" 
-                 OnCerrar="CerrarModalSync" 
+<SyncConfigModal MostrarModal="mostrarModalSync"
+                 OnCerrar="CerrarModalSync"
                  OnGuardado="OnConfigSyncGuardada" />
+
+<MasterConfigModal IsVisible="@mostrarModalConfigMaster"
+                   OnCloseRequested="CerrarModalConfigMaster"
+                   OnConfigurationSaved="OnConfigMasterGuardada" />
 
 @if (masterListadoIndexDTO != null && masterListadoIndexDTO.Any())
 {
@@ -142,6 +166,9 @@ else
                                 <button class="btn btn-sm btn-outline-primary me-1" @onclick="() => EditarProducto(producto.Id)">
                                     <i class="fas fa-edit"></i>
                                 </button>
+                                <button class="btn btn-sm btn-outline-danger" @onclick="() => ConfirmarBajaProducto(producto)">
+                                    <i class="fas fa-trash"></i>
+                                </button>
                             </td>
                         </tr>
                     }
@@ -149,13 +176,15 @@ else
             </table>
         </Body>
     </GenericList>
-}
+    }
+    }
 
 @code {
 
     private List<Master> Productos = new();
     private List<Tatimat> TiposMaterial = new();
     private bool isLoading = true;
+    private bool validando = true;
 
     [Parameter]
     [SupplyParameterFromQuery]
@@ -176,8 +205,12 @@ else
         }
     }
 
+    // Validar que el usuario tenga permiso para acceder a esta página antes de mostrar el contenido
     protected override async Task OnInitializedAsync()
     {
+        await PageAccess.RequiereAccesoAsync("/master-index");
+        validando = false;
+        
         await LoadAsync();
     }
 
@@ -212,8 +245,9 @@ else
             }
             else
             {
-                url1 = $"api/master?page={page}&filter={Filter}";
-                url2 = $"api/master/totalPages?filter={Filter}";
+                var encodedFilter = Uri.EscapeDataString(Filter);
+                url1 = $"api/master?page={page}&filter={encodedFilter}";
+                url2 = $"api/master/totalPages?filter={encodedFilter}";
             }
             var responseHttp = await repository.Get<List<Master>>(url1);
             var responseHttp2 = await repository.Get<int>(url2);
@@ -273,6 +307,80 @@ else
     }
 
     /// <summary>
+    /// Confirma la baja de un producto con validación de fórmulas
+    /// </summary>
+    private async Task ConfirmarBajaProducto(Master producto)
+    {
+        try
+        {
+            // Mostrar mensaje de confirmación inicial
+            var confirmacionInicial = await sweetAlertService.FireAsync(new SweetAlertOptions
+            {
+                Title = "Baja Lógica del Código",
+                Text = $"Baja Lógica del Código '{producto.Codigo}' {producto.Descripcion}\n\nCancelar\nConfirmar",
+                Icon = SweetAlertIcon.Warning,
+                ShowCancelButton = true,
+                ConfirmButtonText = "Confirmar",
+                CancelButtonText = "Cancelar"
+            });
+
+            if (!confirmacionInicial.IsConfirmed)
+            {
+                return;
+            }
+
+            // Validar si el producto está en fórmulas
+            var responseValidacion = await repository.Get<ValidacionBajaMasterDTO>($"api/master/validar-baja/{producto.Codint}");
+
+            if (responseValidacion.Error)
+            {
+                await sweetAlertService.FireAsync("Error", await responseValidacion.GetErrorMessageAsync(), SweetAlertIcon.Error);
+                return;
+            }
+
+            var validacion = responseValidacion.Response!;
+
+            if (!validacion.PuedeDarDeBaja)
+            {
+                // El producto está en fórmulas, mostrar lista de códigos padres
+                string listaCodigos = string.Join("; ", validacion.CodigosPadres);
+                var confirmacionConAdvertencia = await sweetAlertService.FireAsync(new SweetAlertOptions
+                {
+                    Title = "Imposible Baja de este Código",
+                    Text = $"El Código que Intenta dar de Baja\nEs Componente de la Fórmula de Producto (Activo o de Baja)\nDe los Productos Padre Correspondientes:\n\n{listaCodigos}\n\n¿Desea dar de baja de todas formas?",
+                    Icon = SweetAlertIcon.Warning,
+                    ShowCancelButton = true,
+                    ConfirmButtonText = "Sí, dar de baja",
+                    CancelButtonText = "Cancelar"
+                });
+
+                if (!confirmacionConAdvertencia.IsConfirmed)
+                {
+                    return;
+                }
+            }
+
+            // Realizar baja lógica
+            var responseBaja = await repository.Put<object>($"api/master/baja-logica/{producto.Codint}", null);
+
+            if (responseBaja.Error)
+            {
+                await sweetAlertService.FireAsync("Error", await responseBaja.GetErrorMessageAsync(), SweetAlertIcon.Error);
+                return;
+            }
+
+            await sweetAlertService.FireAsync("Éxito", "Producto dado de baja exitosamente", SweetAlertIcon.Success);
+
+            // Refrescar la pantalla
+            await LoadAsync(currentPage);
+        }
+        catch (Exception ex)
+        {
+            await sweetAlertService.FireAsync("Error", $"Error al dar de baja: {ex.Message}", SweetAlertIcon.Error);
+        }
+    }
+
+    /// <summary>
     /// IMPRESION
     /// </summary>
 
@@ -301,7 +409,8 @@ else
 
         try
         {
-            var response = await repository.Get<int>($"api/master/cantidad-registros?filter={Filter}");
+            var encodedFilter = Uri.EscapeDataString(Filter ?? string.Empty);
+            var response = await repository.Get<int>($"api/master/cantidad-registros?filter={encodedFilter}");
             if (response.Error)
             {
                 await sweetAlertService.FireAsync("Error", "No se pudo obtener la cantidad de registros.", SweetAlertIcon.Error);
@@ -323,7 +432,8 @@ else
 
             if (result.IsConfirmed)
             {
-                var responseDTO = await repository.Get<List<MasterListadoIndexDTO>>($"api/master/GetMasterListado?filter={Filter}");
+                var encodedFilter1 = Uri.EscapeDataString(Filter ?? string.Empty);
+                var responseDTO = await repository.Get<List<MasterListadoIndexDTO>>($"api/master/GetMasterListado?filter={encodedFilter1}");
                 masterListadoIndexDTO = responseDTO.Response!;
                 mostrarModalImpresion = true; // 👈 Mostramos el modal
             }
@@ -353,6 +463,30 @@ else
     private bool mostrarModalSync = false;
     private bool isProcesandoSync = false;
     private SyncConfigDTO? configSync = null;
+
+    /// <summary>
+    /// CONFIGURACIÓN DE MASTER
+    /// </summary>
+    private bool mostrarModalConfigMaster = false;
+
+    private void AbrirConfiguracionMaster()
+    {
+        mostrarModalConfigMaster = true;
+    }
+
+    private void CerrarModalConfigMaster()
+    {
+        mostrarModalConfigMaster = false;
+        StateHasChanged();
+    }
+
+    private Task OnConfigMasterGuardada()
+    {
+        // Por ahora no es necesario recargar nada en esta pantalla,
+        // pero dejamos el hook para que en el futuro se puedan refrescar comportamientos
+        // dependientes de la configuración.
+        return Task.CompletedTask;
+    }
 
     private async Task AbrirConfiguracionSync()
     {
@@ -388,11 +522,28 @@ else
         }
     }
 
+    /// <summary>
+    /// Procesa manualmente la sincronización de remitos (Solo Central)
+    /// 
+    /// Este botón solo se muestra cuando:
+    /// - La sincronización está habilitada (GeneraScriptSync = true)
+    /// - El equipo procesa archivos de remitos (ProcesaRemitos = true)
+    /// 
+    /// Flujo:
+    /// 1. Valida que haya configuración de sincronización de remitos
+    /// 2. Envía la ruta de intercambio de remitos al backend
+    /// 3. El backend busca archivos JSON pendientes de remitos en la carpeta configurada
+    /// 4. Procesa cada archivo y actualiza la base de datos
+    /// 5. Recarga la grilla para mostrar los datos actualizados
+    /// 
+    /// Nota: Este botón permite a la Central procesar manualmente los archivos de remitos
+    /// generados por la Sucursal de Neuquén en la carpeta de intercambio compartida.
+    /// </summary>
     private async Task ProcesarSincronizacion()
     {
-        if (configSync == null || string.IsNullOrWhiteSpace(configSync.RutaIntercambio))
+        if (configSync == null || string.IsNullOrWhiteSpace(configSync.RutaIntercambioRemitos))
         {
-            await sweetAlertService.FireAsync("Error", "No hay configuración de sincronización", SweetAlertIcon.Error);
+            await sweetAlertService.FireAsync("Error", "No hay configuración de sincronización de remitos", SweetAlertIcon.Error);
             return;
         }
 
@@ -401,8 +552,8 @@ else
             isProcesandoSync = true;
             StateHasChanged();
 
-            var request = new ValidarRutaDTO { Ruta = configSync.RutaIntercambio };
-            var response = await repository.Post<ValidarRutaDTO, SyncResultDTO>("api/sync/procesar", request);
+            var request = new ValidarRutaDTO { Ruta = configSync.RutaIntercambioRemitos };
+            var response = await repository.Post<ValidarRutaDTO, SyncResultDTO>("api/sync/procesar-remitos", request);
             
             if (!response.Error && response.Response != null)
             {

@@ -1,0 +1,845 @@
+@using IMPLANPROD.Shared.Entities
+@inject IRepository repository
+@inject SweetAlertService sweetAlertService
+
+@* Modal de configuración de Remito de Traslado *@
+@if (IsVisible)
+{
+    <div class="modal fade show" style="display: block" tabindex="-1">
+        <div class="modal-dialog modal-xl">
+            <div class="modal-content">
+                <div class="modal-header bg-info text-white">
+                    <h5 class="modal-title">
+                        <i class="fas fa-cogs me-2"></i>Configuración de Remito de Traslado
+                    </h5>
+                    <button type="button" class="btn-close btn-close-white" @onclick="CerrarModal"></button>
+                </div>
+                <div class="modal-body" style="max-height: 70vh; overflow-y: auto;">
+                    @if (cargandoConfiguracion)
+                    {
+                        <div class="d-flex justify-content-center align-items-center" style="min-height: 200px;">
+                            <div class="spinner-border text-info" role="status">
+                                <span class="visually-hidden">Cargando configuración...</span>
+                            </div>
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="row">
+                            <!-- Ruta Temporal -->
+                            <div class="col-md-6 mb-3">
+                                <div class="card h-100">
+                                    <div class="card-header bg-primary text-white">
+                                        <h6 class="card-title mb-0">
+                                            <i class="fas fa-folder-open me-2"></i>Ruta Temporal
+                                        </h6>
+                                    </div>
+                                    <div class="card-body">
+                                        <label class="form-label fw-bold">Ruta de archivos temporales:</label>
+                                        <input type="text" 
+                                               class="form-control" 
+                                               @bind="rutaTemporal"
+                                               placeholder="\\SERVIDOR\Compartida\Remitos\Temporarios" />
+                                        <div class="form-text">
+                                            <i class="fas fa-info-circle me-1"></i>
+                                            Ruta donde se generan inicialmente los archivos .txt
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Ruta Definitiva -->
+                            <div class="col-md-6 mb-3">
+                                <div class="card h-100">
+                                    <div class="card-header bg-success text-white">
+                                        <h6 class="card-title mb-0">
+                                            <i class="fas fa-folder me-2"></i>Ruta Definitiva
+                                        </h6>
+                                    </div>
+                                    <div class="card-body">
+                                        <label class="form-label fw-bold">Ruta de archivos definitivos:</label>
+                                        <input type="text" 
+                                               class="form-control" 
+                                               @bind="rutaDefinitiva"
+                                               placeholder="\\SERVIDOR\Compartida\Remitos\Pendientes" />
+                                        <div class="form-text">
+                                            <i class="fas fa-info-circle me-1"></i>
+                                            Ruta donde quedan los archivos para procesar
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Modo de Funcionamiento -->
+                            <div class="col-12 mb-3">
+                                <div class="card h-100">
+                                    <div class="card-header bg-warning text-dark">
+                                        <h6 class="card-title mb-0">
+                                            <i class="fas fa-cog me-2"></i>Modo de Funcionamiento
+                                        </h6>
+                                    </div>
+                                    <div class="card-body">
+                                        <div class="row">
+                                            <div class="col-md-6">
+                                                <div class="form-check form-switch">
+                                                    <input class="form-check-input" 
+                                                           type="checkbox" 
+                                                           id="generador"
+                                                           @bind="esGenerador" />
+                                                    <label class="form-check-label fw-bold" for="generador">
+                                                        Generador
+                                                    </label>
+                                                </div>
+                                                <div class="form-text ms-4">
+                                                    La CENTRAL genera los archivos de traslado
+                                                </div>
+                                            </div>
+                                            <div class="col-md-6">
+                                                <div class="form-check form-switch">
+                                                    <input class="form-check-input" 
+                                                           type="checkbox" 
+                                                           id="procesador"
+                                                           @bind="esProcesador" />
+                                                    <label class="form-check-label fw-bold" for="procesador">
+                                                        Procesador
+                                                    </label>
+                                                </div>
+                                                <div class="form-text ms-4">
+                                                    La SUCURSAL procesa los archivos de traslado
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div class="alert alert-secondary mt-3 mb-0">
+                                            <i class="fas fa-info-circle me-2"></i>
+                                            <strong>Configuración actual:</strong> 
+                                            @(esGenerador ? "Generador: SI" : "Generador: NO") | 
+                                            @(esProcesador ? "Procesador: SI" : "Procesador: NO")
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Depósito de Destino y Prefijo -->
+                            <div class="col-12 mb-3">
+                                <div class="card h-100">
+                                    <div class="card-header bg-secondary text-white">
+                                        <h6 class="card-title mb-0">
+                                            <i class="fas fa-warehouse me-2"></i>Depósito de Destino y Prefijo
+                                        </h6>
+                                    </div>
+                                    <div class="card-body">
+                                        <div class="row">
+                                            <!-- Depósito de Destino -->
+                                            <div class="col-md-6">
+                                                <label class="form-label fw-bold">Depósito asociado a la sucursal:</label>
+                                                <select class="form-select" @bind="depositoDestino">
+                                                    <option value="0">-- Seleccione --</option>
+                                                    @foreach (var deposito in depositos)
+                                                    {
+                                                        <option value="@deposito.CodigoDepo">
+                                                            @deposito.CodigoDepo - @deposito.Descripcion
+                                                        </option>
+                                                    }
+                                                </select>
+                                                <div class="form-text">
+                                                    <i class="fas fa-info-circle me-1"></i>
+                                                    Depósito de destino por defecto para traslados
+                                                </div>
+                                                @if (depositoDestino > 0)
+                                                {
+                                                    var depositoSeleccionado = depositos.FirstOrDefault(d => d.CodigoDepo == depositoDestino);
+                                                    if (depositoSeleccionado != null)
+                                                    {
+                                                        <div class="alert alert-info mt-2 mb-0 p-2">
+                                                            <strong>Seleccionado:</strong>
+                                                            <span class="badge bg-info ms-2">@depositoSeleccionado.CodigoDepo - @depositoSeleccionado.Descripcion</span>
+                                                        </div>
+                                                    }
+                                                }
+                                                else
+                                                {
+                                                    <div class="alert alert-warning mt-2 mb-0 p-2">
+                                                        <i class="fas fa-exclamation-triangle me-1"></i>
+                                                        Sin seleccionar
+                                                    </div>
+                                                }
+                                            </div>
+
+                                            <!-- Prefijo de Remito -->
+                                            <div class="col-md-6">
+                                                <label class="form-label fw-bold">Prefijo de Remito de Traslado:</label>
+                                                <input type="text" 
+                                                       class="form-control @(!prefijoValido ? "is-invalid" : "")" 
+                                                       @bind="prefijoRemito"
+                                                       @oninput="ValidarPrefijo"
+                                                       maxlength="4"
+                                                       placeholder="0001" />
+                                                <div class="form-text">
+                                                    <i class="fas fa-info-circle me-1"></i>
+                                                    Prefijo de 4 dígitos numéricos (ej: 0001)
+                                                </div>
+                                                @if (!string.IsNullOrEmpty(prefijoRemito) && !prefijoValido)
+                                                {
+                                                    <div class="alert alert-danger mt-2 mb-0 p-2">
+                                                        <i class="fas fa-exclamation-triangle me-1"></i>
+                                                        Prefijo no válido: debe ser 4 dígitos numéricos
+                                                    </div>
+                                                }
+                                                else if (!string.IsNullOrEmpty(prefijoRemito) && prefijoValido)
+                                                {
+                                                    <div class="alert alert-success mt-2 mb-0 p-2">
+                                                        <i class="fas fa-check-circle me-1"></i>
+                                                        Prefijo válido: @prefijoRemito
+                                                    </div>
+                                                }
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Tipo de Movimiento y Numeración -->
+                            <div class="col-12 mb-3">
+                                <div class="card h-100">
+                                    <div class="card-header bg-dark text-white">
+                                        <h6 class="card-title mb-0">
+                                            <i class="fas fa-cogs me-2"></i>Configuración de Rotulado
+                                        </h6>
+                                    </div>
+                                    <div class="card-body">
+                                        <div class="row">
+                                            <!-- Tipo de Movimiento (CODRETRA) -->
+                                            <div class="col-md-4">
+                                                <label class="form-label fw-bold">Tipo de Movimiento (Código):</label>
+                                                <input type="text"
+                                                       class="form-control @(!codigoMovimientoValido ? "is-invalid" : "")"
+                                                       @bind="codigoMovimiento"
+                                                       @oninput="ValidarCodigoMovimiento"
+                                                       maxlength="2"
+                                                       placeholder="RT" />
+                                                <div class="form-text">
+                                                    <i class="fas fa-info-circle me-1"></i>
+                                                    Código de 2 caracteres (ej: RT, RC, DV)
+                                                </div>
+                                                @if (!string.IsNullOrEmpty(codigoMovimiento) && !codigoMovimientoValido)
+                                                {
+                                                    <div class="alert alert-danger mt-2 mb-0 p-2">
+                                                        <i class="fas fa-exclamation-triangle me-1"></i>
+                                                        Código no válido: debe ser 2 caracteres
+                                                    </div>
+                                                }
+                                                else if (!string.IsNullOrEmpty(codigoMovimiento) && codigoMovimientoValido)
+                                                {
+                                                    <div class="alert alert-success mt-2 mb-0 p-2">
+                                                        <i class="fas fa-check-circle me-1"></i>
+                                                        Código válido: @codigoMovimiento.ToUpper()
+                                                    </div>
+                                                }
+                                            </div>
+
+                                            <!-- Tipo de Numeración (NURETRA) -->
+                                            <div class="col-md-4">
+                                                <label class="form-label fw-bold">Tipo de Numeración:</label>
+                                                <div class="mt-2">
+                                                    <div class="form-check">
+                                                        <input class="form-check-input"
+                                                               type="radio"
+                                                               id="autonume"
+                                                               name="tipoNumeracion"
+                                                               @bind:value="tipoNumeracion"
+                                                               value="AUTONUME" />
+                                                        <label class="form-check-label" for="autonume">
+                                                            <strong>AUTONUME</strong> - Autonumeración
+                                                        </label>
+                                                        <div class="form-text ms-4">
+                                                            El sistema asigna automáticamente el número
+                                                        </div>
+                                                    </div>
+                                                    <div class="form-check mt-2">
+                                                        <input class="form-check-input"
+                                                               type="radio"
+                                                               id="preimpreso"
+                                                               name="tipoNumeracion"
+                                                               @bind:value="tipoNumeracion"
+                                                               value="PREIMPRE" />
+                                                        <label class="form-check-label" for="preimpreso">
+                                                            <strong>PREIMPRE</strong> - Preimpreso
+                                                        </label>
+                                                        <div class="form-text ms-4">
+                                                            Los remitos tienen números preimpresos
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            <!-- Fecha Nueva Numeración (FENURET) -->
+                                            <div class="col-md-4">
+                                                <label class="form-label fw-bold">Fecha Nueva Numeración:</label>
+                                                <input type="datetime-local"
+                                                       class="form-control @(!fechaNumeracionValida ? "is-invalid" : "")"
+                                                       @bind="fechaNumeracion"
+                                                       @oninput="ValidarFechaNumeracion" />
+                                                <div class="form-text">
+                                                    <i class="fas fa-info-circle me-1"></i>
+                                                    Fecha y hora desde donde comienza la numeración
+                                                </div>
+                                                @if (fechaNumeracion.HasValue && !fechaNumeracionValida)
+                                                {
+                                                    <div class="alert alert-danger mt-2 mb-0 p-2">
+                                                        <i class="fas fa-exclamation-triangle me-1"></i>
+                                                        Fecha no válida
+                                                    </div>
+                                                }
+                                                else if (fechaNumeracion.HasValue && fechaNumeracionValida)
+                                                {
+                                                    <div class="alert alert-success mt-2 mb-0 p-2">
+                                                        <i class="fas fa-check-circle me-1"></i>
+                                                        Fecha válida: @fechaNumeracion.Value.ToString("dd/MM/yy HH:mm")
+                                                    </div>
+                                                }
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    }
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" @onclick="CerrarModal">
+                        <i class="fas fa-times me-1"></i>Cancelar
+                    </button>
+                    <button type="button" 
+                            class="btn btn-success" 
+                            @onclick="GuardarConfiguracion"
+                            disabled="@(cargandoConfiguracion || guardandoConfiguracion)">
+                        @if (guardandoConfiguracion)
+                        {
+                            <span class="spinner-border spinner-border-sm me-2" role="status"></span>
+                        }
+                        else
+                        {
+                            <i class="fas fa-save me-1"></i>
+                        }
+                        Guardar Configuración
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="modal-backdrop fade show"></div>
+}
+
+@code {
+    /// <summary>
+    /// Parámetros del componente
+    /// </summary>
+    [Parameter] public bool IsVisible { get; set; } = false;
+    [Parameter] public EventCallback OnCloseRequested { get; set; }
+    [Parameter] public EventCallback OnConfigurationSaved { get; set; }
+
+    /// <summary>
+    /// Variables de estado del componente
+    /// </summary>
+    private bool cargandoConfiguracion = false;
+    private bool guardandoConfiguracion = false;
+    private string rutaTemporal = string.Empty;
+    private string rutaDefinitiva = string.Empty;
+    private bool esGenerador = false;
+    private bool esProcesador = false;
+    private int depositoDestino = 0;
+    private string prefijoRemito = string.Empty;
+    private bool prefijoValido = true;
+    private string codigoMovimiento = string.Empty;
+    private bool codigoMovimientoValido = true;
+    private string tipoNumeracion = "AUTONUME";
+    private DateTime? fechaNumeracion = null;
+    private bool fechaNumeracionValida = true;
+    private List<Tadeposi> depositos = new();
+
+    // Constantes para los parámetros de FLEXCRL
+    private const string CLABUS_PARAM = "RTRASLA";
+    private const string CLABUS_PARAM_NURETRA = ""; // CLABUS vacío según VB6: GRACONTROL("", "NURETRA", MONUME$)
+    private const string PROBUS_PARAM_RUTATEMP = "RUTATEMP";
+    private const string PROBUS_PARAM_RUTADEFI = "RUTADEFI";
+    private const string PROBUS_PARAM_GENERADOR = "GENERADOR";
+    private const string PROBUS_PARAM_PROCESADOR = "PROCESADOR";
+    private const string PROBUS_PARAM_DEPODEST = "DEPODEST";
+    private const string PROBUS_PARAM_PREFIRET = "PREFIRET";
+    private const string PROBUS_PARAM_CODRETRA = "CODRETRA";
+    private const string PROBUS_PARAM_NURETRA = "NURETRA";
+    private const string PROBUS_PARAM_FENURET = "FENURET";
+
+    /// <summary>
+    /// Se ejecuta cuando el componente se inicializa
+    /// </summary>
+    protected override async Task OnInitializedAsync()
+    {
+        await CargarDepositos();
+        await CargarConfiguracion();
+    }
+    
+    /// <summary>
+    /// Se ejecuta cuando los parámetros cambian
+    /// </summary>
+    protected override async Task OnParametersSetAsync()
+    {
+        // Solo cargar configuración si el modal se hace visible y no se está cargando
+        if (IsVisible && !cargandoConfiguracion)
+        {
+            await CargarConfiguracion();
+        }
+    }
+
+    /// <summary>
+    /// Carga la lista de depósitos activos
+    /// </summary>
+    private async Task CargarDepositos()
+    {
+        try
+        {
+            var response = await repository.Get<List<Tadeposi>>("api/tadeposi/activos");
+            if (!response.Error && response.Response != null)
+            {
+                depositos = response.Response;
+                Console.WriteLine($"[RemitoTrasladoConfigModal] Depósitos cargados: {depositos.Count}");
+            }
+            else
+            {
+                Console.WriteLine("[RemitoTrasladoConfigModal] Error al cargar depósitos");
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[RemitoTrasladoConfigModal] Error al cargar depósitos: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// Carga la configuración actual desde FLEXCRL
+    /// </summary>
+    private async Task CargarConfiguracion()
+    {
+        try
+        {
+            cargandoConfiguracion = true;
+            StateHasChanged();
+
+            Console.WriteLine("[RemitoTrasladoConfigModal] Cargando configuración de remito traslado...");
+
+            // Cargar ruta temporal
+            await CargarConfiguracionIndividual(PROBUS_PARAM_RUTATEMP, "", valor => rutaTemporal = valor);
+
+            // Cargar ruta definitiva
+            await CargarConfiguracionIndividual(PROBUS_PARAM_RUTADEFI, "", valor => rutaDefinitiva = valor);
+
+            // Cargar modo generador
+            await CargarConfiguracionIndividual(PROBUS_PARAM_GENERADOR, "0", valor => esGenerador = valor == "1");
+
+            // Cargar modo procesador
+            await CargarConfiguracionIndividual(PROBUS_PARAM_PROCESADOR, "0", valor => esProcesador = valor == "1");
+
+            // Cargar depósito destino
+            await CargarConfiguracionIndividual(PROBUS_PARAM_DEPODEST, "0", valor => depositoDestino = int.TryParse(valor, out var depo) ? depo : 0);
+
+            // Cargar prefijo de remito (default "0001" según VB6)
+            await CargarConfiguracionIndividual(PROBUS_PARAM_PREFIRET, "0001", valor =>
+            {
+                prefijoRemito = valor;
+                ValidarPrefijo();
+            });
+
+            // Cargar código de movimiento (default "RT" según VB6)
+            await CargarConfiguracionIndividual(PROBUS_PARAM_CODRETRA, "RT", valor =>
+            {
+                codigoMovimiento = valor;
+                ValidarCodigoMovimiento();
+            });
+
+            // Cargar tipo de numeración (default "AUTONUME" según VB6)
+            // Usar CLABUS vacío según VB6: GRACONTROL("", "NURETRA", MONUME$)
+            await CargarConfiguracionIndividualConClabus(CLABUS_PARAM_NURETRA, PROBUS_PARAM_NURETRA, "AUTONUME", valor =>
+            {
+                tipoNumeracion = valor;
+            });
+
+            // Cargar fecha nueva numeración (default "01/01/80 00:00" según VB6)
+            await CargarConfiguracionIndividual(PROBUS_PARAM_FENURET, "01/01/80 00:00", valor =>
+            {
+                fechaNumeracion = ConvertirFechaVB6ADateTime(valor);
+                ValidarFechaNumeracion();
+            });
+
+            Console.WriteLine($"[RemitoTrasladoConfigModal] Configuración cargada - RutaTemp: {rutaTemporal}, RutaDef: {rutaDefinitiva}, Generador: {esGenerador}, Procesador: {esProcesador}, DepoDest: {depositoDestino}, Prefijo: {prefijoRemito}, CodMov: {codigoMovimiento}, TipNum: {tipoNumeracion}, Fenuret: {fechaNumeracion?.ToString("dd/MM/yy HH:mm")}");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[RemitoTrasladoConfigModal] Error al cargar configuración: {ex.Message}");
+            await sweetAlertService.FireAsync("Error", $"Error al cargar la configuración: {ex.Message}", SweetAlertIcon.Error);
+        }
+        finally
+        {
+            cargandoConfiguracion = false;
+            StateHasChanged();
+        }
+    }
+
+    /// <summary>
+    /// Carga una configuración individual desde FLEXCRL
+    /// </summary>
+    private async Task CargarConfiguracionIndividual(string probus, string valorDefecto, Action<string> asignarValor)
+    {
+        try
+        {
+            var response = await repository.Get<FLEXCRL>($"api/flexcrl/{CLABUS_PARAM}/{probus}");
+
+            if (response.Error || response.Response == null)
+            {
+                Console.WriteLine($"[RemitoTrasladoConfigModal] No existe configuración para {probus}, usando valor por defecto: {valorDefecto}");
+                asignarValor(valorDefecto);
+            }
+            else
+            {
+                var config = response.Response;
+                asignarValor(config.VALCONTROL ?? valorDefecto);
+                Console.WriteLine($"[RemitoTrasladoConfigModal] {probus} cargado: {config.VALCONTROL}");
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[RemitoTrasladoConfigModal] Error al cargar {probus}: {ex.Message}");
+            asignarValor(valorDefecto);
+        }
+    }
+
+    /// <summary>
+    /// Carga una configuración individual desde FLEXCRL con CLABUS específico
+    /// </summary>
+    private async Task CargarConfiguracionIndividualConClabus(string clabus, string probus, string valorDefecto, Action<string> asignarValor)
+    {
+        try
+        {
+            // Usar "empty" como placeholder cuando CLABUS está vacío para evitar URLs malformadas
+            string clabusParam = string.IsNullOrEmpty(clabus) ? "empty" : clabus;
+            var response = await repository.Get<FLEXCRL>($"api/flexcrl/{clabusParam}/{probus}");
+
+            if (response.Error || response.Response == null)
+            {
+                Console.WriteLine($"[RemitoTrasladoConfigModal] No existe configuración para CLABUS={clabus}, PROBUS={probus}, usando valor por defecto: {valorDefecto}");
+                asignarValor(valorDefecto);
+            }
+            else
+            {
+                var config = response.Response;
+                asignarValor(config.VALCONTROL ?? valorDefecto);
+                Console.WriteLine($"[RemitoTrasladoConfigModal] CLABUS={clabus}, PROBUS={probus} cargado: {config.VALCONTROL}");
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[RemitoTrasladoConfigModal] Error al cargar CLABUS={clabus}, PROBUS={probus}: {ex.Message}");
+            asignarValor(valorDefecto);
+        }
+    }
+
+    /// <summary>
+    /// Guarda la configuración usando FLEXCRL
+    /// </summary>
+    private async Task GuardarConfiguracion()
+    {
+        try
+        {
+            // Validar prefijo antes de guardar
+            if (!prefijoValido)
+            {
+                await sweetAlertService.FireAsync("Error", "El prefijo no es válido. Debe ser 4 dígitos numéricos.", SweetAlertIcon.Error);
+                return;
+            }
+
+            // Si el prefijo está vacío, usar "0001" por defecto según VB6
+            var prefijoAGuardar = string.IsNullOrWhiteSpace(prefijoRemito) ? "0001" : prefijoRemito.PadLeft(4, '0');
+
+            guardandoConfiguracion = true;
+            StateHasChanged();
+
+            Console.WriteLine("[RemitoTrasladoConfigModal] Guardando configuración...");
+
+            // Obtener nombre del depósito seleccionado
+            var nombreDeposito = depositoDestino > 0 
+                ? depositos.FirstOrDefault(d => d.CodigoDepo == depositoDestino)?.Descripcion ?? "No seleccionado"
+                : "No seleccionado";
+
+            var result = await sweetAlertService.FireAsync(new SweetAlertOptions
+            {
+                Title = "Confirmar Cambios",
+                Text = $"¿Está seguro de guardar la configuración?\n\n" +
+                       $"Ruta Temporal: {rutaTemporal}\n" +
+                       $"Ruta Definitiva: {rutaDefinitiva}\n" +
+                       $"Generador: {(esGenerador ? "SI" : "NO")}\n" +
+                       $"Procesador: {(esProcesador ? "SI" : "NO")}\n" +
+                       $"Depósito Destino: {depositoDestino} - {nombreDeposito}\n" +
+                       $"Prefijo Remito: {prefijoAGuardar}\n" +
+                       $"Código Movimiento: {codigoMovimiento.ToUpper()}\n" +
+                       $"Tipo Numeración: {tipoNumeracion}\n" +
+                       $"Fecha Nueva Numeración: {fechaNumeracion?.ToString("dd/MM/yy HH:mm")}",
+                Icon = SweetAlertIcon.Question,
+                ShowCancelButton = true,
+                ConfirmButtonText = "Sí, guardar",
+                CancelButtonText = "Cancelar"
+            });
+
+            if (!result.IsConfirmed)
+            {
+                Console.WriteLine("[RemitoTrasladoConfigModal] Guardado cancelado por el usuario");
+                return;
+            }
+
+            // Guardar ruta temporal
+            await GuardarConfiguracionControl(PROBUS_PARAM_RUTATEMP, rutaTemporal);
+
+            // Guardar ruta definitiva
+            await GuardarConfiguracionControl(PROBUS_PARAM_RUTADEFI, rutaDefinitiva);
+
+            // Guardar modo generador (0 = NO, 1 = SI)
+            var generadorAGuardar = esGenerador ? "1" : "0";
+            await GuardarConfiguracionControl(PROBUS_PARAM_GENERADOR, generadorAGuardar);
+
+            // Guardar modo procesador (0 = NO, 1 = SI)
+            var procesadorAGuardar = esProcesador ? "1" : "0";
+            await GuardarConfiguracionControl(PROBUS_PARAM_PROCESADOR, procesadorAGuardar);
+
+            // Guardar depósito destino
+            await GuardarConfiguracionControl(PROBUS_PARAM_DEPODEST, depositoDestino.ToString());
+
+            // Guardar prefijo de remito
+            await GuardarConfiguracionControl(PROBUS_PARAM_PREFIRET, prefijoAGuardar);
+
+            // Guardar código de movimiento (convertir a mayúsculas)
+            var codigoMovimientoAGuardar = string.IsNullOrWhiteSpace(codigoMovimiento) ? "RT" : codigoMovimiento.ToUpper();
+            await GuardarConfiguracionControl(PROBUS_PARAM_CODRETRA, codigoMovimientoAGuardar);
+
+            // Guardar tipo de numeración (usar CLABUS vacío según VB6: GRACONTROL("", "NURETRA", MONUME$))
+            await GuardarConfiguracionControlConClabus(CLABUS_PARAM_NURETRA, PROBUS_PARAM_NURETRA, tipoNumeracion);
+
+            // Guardar fecha nueva numeración (convertir a formato VB6 dd/mm/yy HH:mm)
+            var fechaNumeracionAGuardar = !fechaNumeracion.HasValue ? "01/01/80 00:00" : ConvertirDateTimeAVB6(fechaNumeracion.Value);
+            await GuardarConfiguracionControl(PROBUS_PARAM_FENURET, fechaNumeracionAGuardar);
+
+            Console.WriteLine($"[RemitoTrasladoConfigModal] Configuración guardada exitosamente - RutaTemp: {rutaTemporal}, RutaDef: {rutaDefinitiva}, Generador: {generadorAGuardar}, Procesador: {procesadorAGuardar}, DepoDest: {depositoDestino}, Prefijo: {prefijoAGuardar}, CodMov: {codigoMovimientoAGuardar}, TipNum: {tipoNumeracion}, Fenuret: {fechaNumeracionAGuardar}");
+
+            await sweetAlertService.FireAsync("Éxito", "Configuración guardada exitosamente.", SweetAlertIcon.Success);
+            
+            // Notificar que se guardó la configuración
+            await OnConfigurationSaved.InvokeAsync();
+            
+            // Cerrar el modal
+            await CerrarModal();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[RemitoTrasladoConfigModal] Error al guardar: {ex.Message}");
+            await sweetAlertService.FireAsync("Error", $"Error inesperado al guardar la configuración: {ex.Message}", SweetAlertIcon.Error);
+        }
+        finally
+        {
+            guardandoConfiguracion = false;
+            StateHasChanged();
+        }
+    }
+
+    /// <summary>
+    /// Guarda la configuración de un control específico en FLEXCRL
+    /// </summary>
+    private async Task GuardarConfiguracionControl(string probus, string valor)
+    {
+        try
+        {
+            // Crear el objeto para enviar al endpoint
+            var configData = new
+            {
+                clabus = CLABUS_PARAM,
+                probus = probus,
+                valcontrol = valor
+            };
+
+            // Llamar al endpoint para actualizar o crear el control
+            var response = await repository.Put("api/flexcrl", configData);
+
+            if (response.Error)
+            {
+                var errorMessage = await response.GetErrorMessageAsync();
+                throw new Exception($"Error al guardar {probus}: {errorMessage}");
+            }
+
+            Console.WriteLine($"[RemitoTrasladoConfigModal] {probus} guardado correctamente");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[RemitoTrasladoConfigModal] Error en GuardarConfiguracionControl: {ex.Message}");
+            await sweetAlertService.FireAsync("Error", ex.Message, SweetAlertIcon.Error);
+            throw; // Re-lanzar la excepción para que el método padre la maneje
+        }
+    }
+
+    /// <summary>
+    /// Guarda la configuración de un control específico en FLEXCRL con CLABUS específico
+    /// </summary>
+    private async Task GuardarConfiguracionControlConClabus(string clabus, string probus, string valor)
+    {
+        try
+        {
+            // Crear el objeto para enviar al endpoint
+            var configData = new
+            {
+                clabus = clabus,
+                probus = probus,
+                valcontrol = valor
+            };
+
+            // Llamar al endpoint para actualizar o crear el control
+            var response = await repository.Put("api/flexcrl", configData);
+
+            if (response.Error)
+            {
+                var errorMessage = await response.GetErrorMessageAsync();
+                throw new Exception($"Error al guardar CLABUS={clabus}, PROBUS={probus}: {errorMessage}");
+            }
+
+            Console.WriteLine($"[RemitoTrasladoConfigModal] CLABUS={clabus}, PROBUS={probus} guardado correctamente");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[RemitoTrasladoConfigModal] Error en GuardarConfiguracionControlConClabus: {ex.Message}");
+            await sweetAlertService.FireAsync("Error", ex.Message, SweetAlertIcon.Error);
+            throw; // Re-lanzar la excepción para que el método padre la maneje
+        }
+    }
+
+    /// <summary>
+    /// Valida el prefijo según la lógica VB6:
+    /// - Debe tener exactamente 4 caracteres
+    /// - Cada carácter debe ser un dígito numérico (ASCII 48-57)
+    /// </summary>
+    private void ValidarPrefijo()
+    {
+        // Si está vacío, se considera válido (se usará "0001" por defecto al guardar)
+        if (string.IsNullOrWhiteSpace(prefijoRemito))
+        {
+            prefijoValido = true;
+            return;
+        }
+
+        // Validar longitud exacta de 4 caracteres
+        if (prefijoRemito.Length != 4)
+        {
+            prefijoValido = false;
+            return;
+        }
+
+        // Validar que cada carácter sea un dígito numérico (ASCII 48-57)
+        foreach (char c in prefijoRemito)
+        {
+            int ascii = (int)c;
+            if (ascii < 48 || ascii > 57) // '0' = 48, '9' = 57
+            {
+                prefijoValido = false;
+                return;
+            }
+        }
+
+        prefijoValido = true;
+    }
+
+    /// <summary>
+    /// Valida el código de movimiento según la lógica VB6:
+    /// - Debe tener exactamente 2 caracteres
+    /// - Se convierte a mayúsculas
+    /// </summary>
+    private void ValidarCodigoMovimiento()
+    {
+        // Si está vacío, se considera válido (se usará "RT" por defecto al guardar)
+        if (string.IsNullOrWhiteSpace(codigoMovimiento))
+        {
+            codigoMovimientoValido = true;
+            return;
+        }
+
+        // Validar longitud exacta de 2 caracteres
+        if (codigoMovimiento.Length != 2)
+        {
+            codigoMovimientoValido = false;
+            return;
+        }
+
+        codigoMovimientoValido = true;
+    }
+
+    /// <summary>
+    /// Valida la fecha de numeración según la lógica VB6:
+    /// - Debe ser una fecha válida
+    /// </summary>
+    private void ValidarFechaNumeracion()
+    {
+        // Si está vacío, se considera válido (se usará "01/01/80" por defecto al guardar)
+        if (!fechaNumeracion.HasValue)
+        {
+            fechaNumeracionValida = true;
+            return;
+        }
+
+        // La fecha ya está validada por el control de tipo date
+        fechaNumeracionValida = true;
+    }
+
+    /// <summary>
+    /// Convierte fecha de formato VB6 (dd/mm/yy HH:mm) a DateTime
+    /// </summary>
+    private DateTime? ConvertirFechaVB6ADateTime(string fechaVB6)
+    {
+        if (string.IsNullOrWhiteSpace(fechaVB6))
+        {
+            return null;
+        }
+
+        // VB6 usa formato dd/mm/yy HH:mm para fecha y hora
+        if (DateTime.TryParseExact(fechaVB6, "dd/MM/yy HH:mm", null, System.Globalization.DateTimeStyles.None, out DateTime fecha))
+        {
+            return fecha;
+        }
+
+        // Intentar con formato dd/mm/yyyy HH:mm también
+        if (DateTime.TryParseExact(fechaVB6, "dd/MM/yyyy HH:mm", null, System.Globalization.DateTimeStyles.None, out fecha))
+        {
+            return fecha;
+        }
+
+        // Por compatibilidad, intentar solo fecha (sin hora)
+        if (DateTime.TryParseExact(fechaVB6, "dd/MM/yy", null, System.Globalization.DateTimeStyles.None, out fecha))
+        {
+            return fecha;
+        }
+
+        if (DateTime.TryParseExact(fechaVB6, "dd/MM/yyyy", null, System.Globalization.DateTimeStyles.None, out fecha))
+        {
+            return fecha;
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// Convierte DateTime a formato VB6 (dd/mm/yy HH:mm)
+    /// </summary>
+    private string ConvertirDateTimeAVB6(DateTime fecha)
+    {
+        return fecha.ToString("dd/MM/yy HH:mm");
+    }
+
+    /// <summary>
+    /// Cierra el modal
+    /// </summary>
+    private async Task CerrarModal()
+    {
+        await OnCloseRequested.InvokeAsync();
+    }
+}

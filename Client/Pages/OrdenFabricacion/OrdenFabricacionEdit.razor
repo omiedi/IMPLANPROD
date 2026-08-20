@@ -1,13 +1,17 @@
 @page "/orden-fabricacion-edit/{Id:int}"
+@using IMPLANPROD.Client.Services
 @inject NavigationManager navigationManager
 @inject IRepository repository
 @inject SweetAlertService sweetAlertService
+@inject PageAccessService PageAccess
 
-<div class="bg-primary bg-opacity-10 p-3 rounded-3 mb-3">
-    <h3 class="m-0 text-primary">Editar Orden de Fabricación</h3>
-</div>
+<PageTitle>Editar Orden de Fabricación</PageTitle>
 
-@if (ordenFabricacion == null)
+@if (validando)
+{
+    <p>Validando acceso...</p>
+}
+else if (ordenFabricacion == null)
 {
     <div class="d-flex justify-content-center">
         <div class="spinner-border text-primary" role="status">
@@ -17,6 +21,10 @@
 }
 else
 {
+<div class="bg-primary bg-opacity-10 p-3 rounded-3 mb-3">
+    <h3 class="m-0 text-primary">Editar Orden de Fabricación</h3>
+</div>
+
     <OrdenFabricacionForm @ref="ordenFabricacionForm" ordenFabricacion="ordenFabricacion" OnValidSubmit="EditAsync" ReturnAction="Return" IsEdit="true" />
 }
 
@@ -26,12 +34,17 @@ else
 
     private OrdeFabr? ordenFabricacion;
     private OrdenFabricacionForm? ordenFabricacionForm;
+    private bool validando = true;
 
     /// <summary>
     /// Método que se ejecuta cuando se inicializa el componente
     /// </summary>
     protected override async Task OnInitializedAsync()
     {
+        // Validar que el usuario tenga permiso para acceder a esta página antes de mostrar el contenido
+        await PageAccess.RequiereAccesoAsync("/orden-fabricacion-edit/{Id}");
+        validando = false;
+        
         await LoadOrdenFabricacion();
     }
 

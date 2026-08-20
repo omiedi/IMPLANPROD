@@ -1,0 +1,716 @@
+@page "/ficha-calibracion"
+@using IMPLANPROD.Client.Services
+@inject IRepository repository
+@inject SweetAlertService sweetAlertService
+@inject NavigationManager navigationManager
+@inject IJSRuntime JS
+@inject PageAccessService PageAccess
+@using IMPLANPROD.Shared.Entities
+@using CurrieTechnologies.Razor.SweetAlert2
+@using IMPLANPROD.Client.Shared.Components
+@using Microsoft.AspNetCore.WebUtilities
+
+<PageTitle>Instrumentos de Medición y Ensayo</PageTitle>
+
+@if (validando)
+{
+    <p>Validando acceso...</p>
+}
+else
+{
+    <div class="bg-primary bg-opacity-10 p-3 rounded-3 mb-4">
+    <h4 class="m-0 text-primary">
+        <i class="fas fa-ruler-combined me-2"></i>
+        B.D. Instrumentos de Medición y Ensayo
+    </h4>
+</div>
+
+<!-- ===== BUSCADOR ===== -->
+<div class="card shadow-sm mb-4">
+    <div class="card-body">
+        <label class="form-label fw-semibold">Buscar instrumento <small class="text-muted">(Cód. Interno, Código o Descripción)</small></label>
+        <div class="input-group">
+            <input type="text"
+                   class="form-control"
+                   placeholder="Escriba para buscar o presione la lupa para ver todos..."
+                   value="@searchText"
+                   @onkeydown="OnKeyDown"
+                   @oninput="OnSearchTextChanged"
+                   autocomplete="off" />
+            <button class="btn btn-outline-primary" type="button" @onclick="EjecutarBusqueda" title="Buscar">
+                <i class="fas fa-search"></i>
+            </button>
+            @if (!string.IsNullOrEmpty(searchText))
+            {
+                <button class="btn btn-outline-secondary" type="button" @onclick="LimpiarBusqueda" title="Limpiar">
+                    <i class="fas fa-times"></i>
+                </button>
+            }
+        </div>
+
+        @if (buscando)
+        {
+            <div class="mt-2 text-muted small">
+                <div class="spinner-border spinner-border-sm me-1" role="status"></div>
+                Buscando...
+            </div>
+        }
+
+        @if (resultadosBusqueda != null && resultadosBusqueda.Any())
+        {
+            <div class="list-group mt-2 shadow-sm" style="max-height:280px; overflow-y:auto;">
+                @foreach (var item in resultadosBusqueda)
+                {
+                    <button type="button"
+                            class="list-group-item list-group-item-action d-flex align-items-center gap-3"
+                            @onclick="() => SeleccionarInstrumento(item)">
+                        <span class="badge bg-secondary" style="min-width:3rem;">@item.CodIntMedIdent</span>
+                        <span class="fw-semibold text-primary" style="min-width:8rem;">@item.Codigo</span>
+                        <span class="text-truncate text-muted">@item.Descripcion</span>
+                    </button>
+                }
+            </div>
+        }
+        else if (resultadosBusqueda != null && !resultadosBusqueda.Any() && !buscando && !string.IsNullOrEmpty(searchText))
+        {
+            <div class="mt-2 text-muted small"><i class="fas fa-info-circle me-1"></i>Sin resultados para <strong>@searchText</strong></div>
+        }
+    </div>
+</div>
+
+<!-- ===== FICHA DE DETALLE ===== -->
+@if (instrumenoSeleccionado != null)
+{
+    <div class="card shadow border-0">
+        <div class="card-header bg-primary text-white d-flex align-items-center gap-2">
+            <i class="fas fa-clipboard-list"></i>
+            <strong>Ficha del Instrumento</strong>
+            <span class="ms-auto badge bg-light text-primary">Cód. Interno: @instrumenoSeleccionado.CodIntMedIdent</span>
+        </div>
+
+        @if (cargandoDetalle)
+        {
+            <div class="card-body text-center py-5">
+                <div class="spinner-border text-primary" role="status"></div>
+                <div class="mt-2 text-muted">Cargando...</div>
+            </div>
+        }
+        else
+        {
+            <div class="card-body">
+                <div class="row g-3">
+
+                    <!-- CODIGO INTERNO (CodIntMedIdent) - READONLY -->
+                    <div class="col-md-4">
+                        <label class="form-label fw-semibold">Código Interno</label>
+                        <input type="text" class="form-control bg-light" readonly value="@(instrumenoSeleccionado.CodIntMedIdent?.ToString() ?? "")" />
+                    </div>
+
+                    <!-- CODIGO - READONLY -->
+                    <div class="col-md-4">
+                        <label class="form-label fw-semibold">Código</label>
+                        <input type="text" class="form-control bg-light" readonly value="@LimpiarTexto(instrumenoSeleccionado.Codigo)" />
+                    </div>
+
+                    <!-- DESCRIPCION - READONLY -->
+                    <div class="col-md-4">
+                        <label class="form-label fw-semibold">Descripción</label>
+                        <input type="text" class="form-control bg-light" readonly value="@LimpiarTexto(instrumenoSeleccionado.Descripcion)" />
+                    </div>
+
+                    <!-- TIPO - EDITABLE -->
+                    <div class="col-md-4">
+                        <label class="form-label fw-semibold">Tipo</label>
+                        <input type="text" class="form-control" @bind="instrumenoSeleccionado.Tipo" />
+                    </div>
+
+                    <!-- MARCA - EDITABLE -->
+                    <div class="col-md-4">
+                        <label class="form-label fw-semibold">Marca</label>
+                        <input type="text" class="form-control" @bind="instrumenoSeleccionado.Marca" />
+                    </div>
+
+                    <!-- MODELO - EDITABLE -->
+                    <div class="col-md-4">
+                        <label class="form-label fw-semibold">Modelo</label>
+                        <input type="text" class="form-control" @bind="instrumenoSeleccionado.Modelo" />
+                    </div>
+
+                    <!-- NRO SERIE - EDITABLE -->
+                    <div class="col-md-4">
+                        <label class="form-label fw-semibold">Nro. de Serie</label>
+                        <input type="text" class="form-control" @bind="instrumenoSeleccionado.NroSerie" />
+                    </div>
+
+                    <!-- RANGO - EDITABLE -->
+                    <div class="col-md-4">
+                        <label class="form-label fw-semibold">Rango</label>
+                        <input type="text" class="form-control" @bind="instrumenoSeleccionado.Rango" />
+                    </div>
+
+                    <!-- PRECISION (Posicion) - EDITABLE -->
+                    <div class="col-md-4">
+                        <label class="form-label fw-semibold">Precisión</label>
+                        <input type="text" class="form-control" @bind="instrumenoSeleccionado.Posicion" />
+                    </div>
+
+                    <!-- UBICACION - EDITABLE -->
+                    <div class="col-md-4">
+                        <label class="form-label fw-semibold">Ubicación</label>
+                        <input type="text" class="form-control" @bind="instrumenoSeleccionado.Ubicacion" />
+                    </div>
+
+                    <!-- GRUPO - EDITABLE -->
+                    <div class="col-md-4">
+                        <label class="form-label fw-semibold">Grupo</label>
+                        <input type="number" class="form-control" @bind="instrumenoSeleccionado.NroGrupo" />
+                    </div>
+
+                    <!-- INTERVCALIBRA - EDITABLE -->
+                    <div class="col-md-4">
+                        <label class="form-label fw-semibold">Intervalo de Calibración</label>
+                        <input type="text" class="form-control" @bind="instrumenoSeleccionado.IntervCalibra" />
+                    </div>
+
+                    <!-- CodIntMedCalib - EDITABLE -->
+                    <div class="col-md-4">
+                        <label class="form-label fw-semibold">Cód. Interno Instrumento Calibrador</label>
+                        <input type="number" class="form-control" @bind="instrumenoSeleccionado.CodIntMedCalib" />
+                    </div>
+
+                    <!-- BOTONES DE ACCIÓN -->
+                    <div class="col-12 mt-3 d-flex justify-content-end gap-2">
+                        <button class="btn btn-outline-primary" 
+                                type="button"
+                                @onclick="IrAFichaInstrumento"
+                                title="Ver Ficha de Calibración (solo lectura)">
+                            <i class="fas fa-clipboard-list me-2"></i>
+                            Ficha de Calibración
+                        </button>
+                        <button class="btn btn-success" @onclick="GuardarInstrumento" disabled="@guardandoInstrumento">
+                            @if (guardandoInstrumento)
+                            {
+                                <span class="spinner-border spinner-border-sm me-2" role="status"></span>
+                            }
+                            else
+                            {
+                                <i class="fas fa-save me-2"></i>
+                            }
+                            Guardar Cambios
+                        </button>
+                    </div>
+
+                    <!-- OBSERVACIONES - EDITABLE -->
+                    <div class="col-12 mt-2">
+                        <label class="form-label fw-semibold">Componentes y/o Accesorios</label>
+                        <textarea class="form-control" @bind="instrumenoSeleccionado.Observaciones" rows="6"></textarea>
+                    </div>
+
+                </div>
+            </div>
+        }
+    </div>
+
+    <!-- ===== FRAME DE INSTRUCCI RELACIONADA ===== -->
+    @if (instrumenoSeleccionado != null)
+    {
+        <div class="card shadow border-0 mt-3">
+            <div class="card-header bg-info text-white d-flex align-items-center gap-2">
+                <i class="fas fa-file-alt"></i>
+                <strong>Instrucción de Proceso Relacionada</strong>
+                @if (instruciRelacionada != null)
+                {
+                    <button class="btn btn-sm btn-warning ms-auto" @onclick="DesvincularInstrucci" title="Desvincular instrucción">
+                        <i class="fas fa-unlink me-1"></i>
+                        Desvincular
+                    </button>
+                }
+            </div>
+
+            <div class="card-body">
+                <!-- BUSCADOR DE INSTRUCCI -->
+                <label class="form-label fw-semibold">Buscar Instrucción <small class="text-muted">(Código o Descripción)</small></label>
+                <div class="input-group mb-3">
+                    <input type="text"
+                           class="form-control"
+                           placeholder="Escriba para buscar o presione la lupa para ver todas..."
+                           value="@searchTextInstrucci"
+                           @onkeydown="OnKeyDownInstrucci"
+                           @oninput="OnSearchTextChangedInstrucci"
+                           autocomplete="off" />
+                    <button class="btn btn-outline-info" type="button" @onclick="EjecutarBusquedaInstrucci" title="Buscar">
+                        <i class="fas fa-search"></i>
+                    </button>
+                    @if (!string.IsNullOrEmpty(searchTextInstrucci))
+                    {
+                        <button class="btn btn-outline-secondary" type="button" @onclick="LimpiarBusquedaInstrucci" title="Limpiar">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    }
+                </div>
+
+                @if (buscandoInstrucci)
+                {
+                    <div class="mb-3 text-muted small">
+                        <div class="spinner-border spinner-border-sm me-1" role="status"></div>
+                        Buscando instrucciones...
+                    </div>
+                }
+
+                @if (resultadosBusquedaInstrucci != null && resultadosBusquedaInstrucci.Any())
+                {
+                    <div class="list-group mb-3 shadow-sm" style="max-height:200px; overflow-y:auto;">
+                        @foreach (var item in resultadosBusquedaInstrucci)
+                        {
+                            <button type="button"
+                                    class="list-group-item list-group-item-action d-flex align-items-center gap-3"
+                                    @onclick="() => SeleccionarInstrucci(item)">
+                                <span class="badge bg-info" style="min-width:3rem;">@item.Cod_Inte</span>
+                                <span class="fw-semibold text-info" style="min-width:8rem;">@item.Codigo</span>
+                                <span class="text-truncate text-muted">@item.Descripcion</span>
+                            </button>
+                        }
+                    </div>
+                }
+                else if (resultadosBusquedaInstrucci != null && !resultadosBusquedaInstrucci.Any() && !buscandoInstrucci && !string.IsNullOrEmpty(searchTextInstrucci))
+                {
+                    <div class="mb-3 text-muted small"><i class="fas fa-info-circle me-1"></i>Sin resultados para <strong>@searchTextInstrucci</strong></div>
+                }
+
+                <!-- DETALLE DE INSTRUCCI SELECCIONADA -->
+                @if (cargandoInstrucci)
+                {
+                    <div class="text-center py-4">
+                        <div class="spinner-border text-info" role="status"></div>
+                        <div class="mt-2 text-muted">Cargando instrucción...</div>
+                    </div>
+                }
+                else if (instruciRelacionada != null)
+                {
+                    <div class="row g-3">
+                        <div class="col-md-4">
+                            <label class="form-label fw-semibold">Código</label>
+                            <input type="text" class="form-control bg-light" readonly value="@(instruciRelacionada.Codigo ?? "")" />
+                        </div>
+                        <div class="col-md-8">
+                            <label class="form-label fw-semibold">Descripción</label>
+                            <input type="text" class="form-control bg-light" readonly value="@(instruciRelacionada.Descripcion ?? "")" />
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label fw-semibold">Revisión</label>
+                            <input type="text" class="form-control bg-light" readonly value="@(instruciRelacionada.Revision ?? "")" />
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label fw-semibold">Fecha de Aprobación</label>
+                            <input type="text" class="form-control bg-light" readonly value="@(instruciRelacionada.FechaPro?.ToString("dd/MM/yyyy") ?? "")" />
+                        </div>
+                        <div class="col-md-1 d-flex align-items-end">
+                            <button class="btn btn-outline-info w-100" type="button" 
+                                    title="Detalle de Instrucciones de Ingeniería"
+                                    @onclick="VerDetalleInstrucci">
+                                <i class="fas fa-eye"></i>
+                            </button>
+                        </div>
+                    </div>
+                }
+            </div>
+        </div>
+    }
+
+    <!-- Modal de detalle de instrucción -->
+    <InstruciDetalleModal IsVisible="@showDetalleInstrucci"
+                          Titulo="Instrucción de Proceso"
+                          Instruci="@instruciRelacionada"
+                          OnCloseRequested="@(() => showDetalleInstrucci = false)" />
+    }
+}
+
+@code {
+    private string? searchText;
+    private List<Instrume>? resultadosBusqueda;
+    private Instrume? instrumenoSeleccionado;
+    private Instruci? instruciRelacionada;
+    private bool buscando = false;
+    private bool cargandoDetalle = false;
+    private bool cargandoInstrucci = false;
+    private bool guardandoInstrumento = false;
+    private bool validando = true;
+    private System.Threading.CancellationTokenSource? _cts;
+
+    // Variables para buscador de Instrucci
+    private string? searchTextInstrucci;
+    private List<Instruci>? resultadosBusquedaInstrucci;
+    private bool buscandoInstrucci = false;
+    private bool showDetalleInstrucci = false;
+    private System.Threading.CancellationTokenSource? _ctsInstrucci;
+
+    private string LimpiarTexto(string? texto)
+    {
+        if (string.IsNullOrEmpty(texto))
+            return "";
+        
+        return new string(texto.Where(c => c >= 32 || c == '\r' || c == '\n' || c == '\t').ToArray()).Trim();
+    }
+
+    // Validar que el usuario tenga permiso para acceder a esta página antes de mostrar el contenido
+    protected override async Task OnInitializedAsync()
+    {
+        await PageAccess.RequiereAccesoAsync("/ficha-calibracion");
+        validando = false;
+        
+        var uri = navigationManager.ToAbsoluteUri(navigationManager.Uri);
+        if (!QueryHelpers.ParseQuery(uri.Query).TryGetValue("id", out var idValue))
+        {
+            return;
+        }
+
+        if (!int.TryParse(idValue, out var id) || id <= 0)
+        {
+            return;
+        }
+
+        try
+        {
+            cargandoDetalle = true;
+            StateHasChanged();
+
+            var response = await repository.Get<Instrume>($"api/Instrume/{id}");
+            if (response.Error || response.Response == null)
+            {
+                return;
+            }
+
+            await SeleccionarInstrumento(response.Response);
+        }
+        finally
+        {
+            cargandoDetalle = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task OnSearchTextChanged(ChangeEventArgs e)
+    {
+        searchText = e.Value?.ToString();
+        
+        // Si hay resultados desplegados, filtrar automáticamente con cada cambio
+        if (resultadosBusqueda != null)
+        {
+            _cts?.Cancel();
+            _cts = new System.Threading.CancellationTokenSource();
+            var token = _cts.Token;
+
+            try
+            {
+                await Task.Delay(300, token);
+                if (!token.IsCancellationRequested)
+                {
+                    await EjecutarBusquedaInterno();
+                }
+            }
+            catch (TaskCanceledException) { }
+        }
+    }
+
+    private async Task OnKeyDown(KeyboardEventArgs e)
+    {
+        // Solo actuar con Enter si no hay resultados desplegados
+        if (e.Key == "Enter" && resultadosBusqueda == null)
+        {
+            await EjecutarBusqueda();
+        }
+    }
+
+    private async Task EjecutarBusqueda()
+    {
+        instrumenoSeleccionado = null;
+        
+        // Si no hay texto, mostrar todos los registros
+        await EjecutarBusquedaInterno();
+    }
+
+    private async Task EjecutarBusquedaInterno()
+    {
+        try
+        {
+            buscando = true;
+            StateHasChanged();
+
+            var filter = string.IsNullOrWhiteSpace(searchText) ? "" : searchText.Trim();
+            var encoded = Uri.EscapeDataString(filter);
+            var pageSize = string.IsNullOrWhiteSpace(filter) ? 100 : 15;
+            
+            var response = await repository.Get<List<Instrume>>($"api/Instrume/search?filter={encoded}&pageSize={pageSize}");
+
+            resultadosBusqueda = response.Error ? new List<Instrume>() : (response.Response ?? new List<Instrume>());
+        }
+        catch
+        {
+            resultadosBusqueda = new List<Instrume>();
+        }
+        finally
+        {
+            buscando = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task SeleccionarInstrumento(Instrume item)
+    {
+        resultadosBusqueda = null;
+        searchText = $"{item.Codigo} — {item.Descripcion}";
+        cargandoDetalle = true;
+        instrumenoSeleccionado = item;
+        instruciRelacionada = null;
+        StateHasChanged();
+
+        // Cargar detalle del instrumento
+        var response = await repository.Get<Instrume>($"api/Instrume/{item.Id}");
+        instrumenoSeleccionado = response.Error ? item : (response.Response ?? item);
+        
+        // Limpiar caracteres basura de los campos de texto
+        if (instrumenoSeleccionado != null)
+        {
+            instrumenoSeleccionado.Tipo = LimpiarTexto(instrumenoSeleccionado.Tipo);
+            instrumenoSeleccionado.Marca = LimpiarTexto(instrumenoSeleccionado.Marca);
+            instrumenoSeleccionado.Modelo = LimpiarTexto(instrumenoSeleccionado.Modelo);
+            instrumenoSeleccionado.NroSerie = LimpiarTexto(instrumenoSeleccionado.NroSerie);
+            instrumenoSeleccionado.Rango = LimpiarTexto(instrumenoSeleccionado.Rango);
+            instrumenoSeleccionado.Posicion = LimpiarTexto(instrumenoSeleccionado.Posicion);
+            instrumenoSeleccionado.Ubicacion = LimpiarTexto(instrumenoSeleccionado.Ubicacion);
+            instrumenoSeleccionado.IntervCalibra = LimpiarTexto(instrumenoSeleccionado.IntervCalibra);
+            instrumenoSeleccionado.Observaciones = LimpiarTexto(instrumenoSeleccionado.Observaciones);
+        }
+        
+        cargandoDetalle = false;
+        StateHasChanged();
+
+        // Cargar Instrucci relacionada si existe CodIntMedIdent
+        if (instrumenoSeleccionado?.CodIntMedIdent != null)
+        {
+            await CargarInstruciRelacionada(instrumenoSeleccionado.CodIntMedIdent.Value);
+        }
+    }
+
+    private async Task CargarInstruciRelacionada(int codIntMedIdent)
+    {
+        cargandoInstrucci = true;
+        StateHasChanged();
+
+        try
+        {
+            var response = await repository.Get<Instruci>($"api/instruci/by-codinte/{codIntMedIdent}");
+            instruciRelacionada = response.Error ? null : response.Response;
+        }
+        catch
+        {
+            instruciRelacionada = null;
+        }
+        finally
+        {
+            cargandoInstrucci = false;
+            StateHasChanged();
+        }
+    }
+
+    private void LimpiarBusqueda()
+    {
+        _cts?.Cancel();
+        searchText = null;
+        resultadosBusqueda = null;
+        instrumenoSeleccionado = null;
+        instruciRelacionada = null;
+        buscando = false;
+    }
+
+    // ===== MÉTODO PARA GUARDAR INSTRUMENTO =====
+
+    private async Task GuardarInstrumento()
+    {
+        if (instrumenoSeleccionado == null) return;
+
+        try
+        {
+            guardandoInstrumento = true;
+            StateHasChanged();
+
+            var response = await repository.Put($"api/instrume/{instrumenoSeleccionado.Id}", instrumenoSeleccionado);
+
+            if (response.Error)
+            {
+                await sweetAlertService.FireAsync(new SweetAlertOptions
+                {
+                    Title = "Error",
+                    Text = "No se pudo guardar el instrumento. Intente nuevamente.",
+                    Icon = SweetAlertIcon.Error
+                });
+            }
+            else
+            {
+                await sweetAlertService.FireAsync(new SweetAlertOptions
+                {
+                    Title = "Guardado",
+                    Text = "Los cambios se guardaron correctamente.",
+                    Icon = SweetAlertIcon.Success,
+                    Timer = 2000,
+                    ShowConfirmButton = false
+                });
+            }
+        }
+        catch (Exception)
+        {
+            await sweetAlertService.FireAsync(new SweetAlertOptions
+            {
+                Title = "Error",
+                Text = "Ocurrió un error al guardar. Intente nuevamente.",
+                Icon = SweetAlertIcon.Error
+            });
+        }
+        finally
+        {
+            guardandoInstrumento = false;
+            StateHasChanged();
+        }
+    }
+
+    private void DesvincularInstrucci()
+    {
+        if (instrumenoSeleccionado == null) return;
+
+        // Limpiar instrucción relacionada a nivel de pantalla
+        instruciRelacionada = null;
+        searchTextInstrucci = null;
+        resultadosBusquedaInstrucci = null;
+        
+        // Poner CodIntMedIdent en 0 para desvincular (se guardará al hacer clic en Guardar Cambios)
+        instrumenoSeleccionado.CodIntMedIdent = 0;
+        
+        StateHasChanged();
+    }
+
+    // ===== MÉTODOS PARA BUSCADOR DE INSTRUCCI =====
+
+    private async Task OnSearchTextChangedInstrucci(ChangeEventArgs e)
+    {
+        searchTextInstrucci = e.Value?.ToString();
+        
+        // Si hay resultados desplegados, filtrar automáticamente con cada cambio
+        if (resultadosBusquedaInstrucci != null)
+        {
+            _ctsInstrucci?.Cancel();
+            _ctsInstrucci = new System.Threading.CancellationTokenSource();
+            var token = _ctsInstrucci.Token;
+
+            try
+            {
+                await Task.Delay(300, token);
+                if (!token.IsCancellationRequested)
+                {
+                    await EjecutarBusquedaInstruciInterno();
+                }
+            }
+            catch (TaskCanceledException) { }
+        }
+    }
+
+    private async Task OnKeyDownInstrucci(KeyboardEventArgs e)
+    {
+        // Solo actuar con Enter si no hay resultados desplegados
+        if (e.Key == "Enter" && resultadosBusquedaInstrucci == null)
+        {
+            await EjecutarBusquedaInstrucci();
+        }
+    }
+
+    private async Task EjecutarBusquedaInstrucci()
+    {
+        await EjecutarBusquedaInstruciInterno();
+    }
+
+    private async Task EjecutarBusquedaInstruciInterno()
+    {
+        try
+        {
+            buscandoInstrucci = true;
+            StateHasChanged();
+
+            var filter = string.IsNullOrWhiteSpace(searchTextInstrucci) ? "" : searchTextInstrucci.Trim();
+            var encoded = Uri.EscapeDataString(filter);
+            var pageSize = string.IsNullOrWhiteSpace(filter) ? 100 : 15;
+            
+            var response = await repository.Get<List<Instruci>>($"api/instruci/search?filter={encoded}&pageSize={pageSize}");
+
+            resultadosBusquedaInstrucci = response.Error ? new List<Instruci>() : (response.Response ?? new List<Instruci>());
+        }
+        catch
+        {
+            resultadosBusquedaInstrucci = new List<Instruci>();
+        }
+        finally
+        {
+            buscandoInstrucci = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task SeleccionarInstrucci(Instruci item)
+    {
+        resultadosBusquedaInstrucci = null;
+        searchTextInstrucci = $"{item.Codigo} — {item.Descripcion}";
+        cargandoInstrucci = true;
+        instruciRelacionada = item;
+        StateHasChanged();
+
+        // Cargar detalle completo si es necesario
+        if (item.Id > 0)
+        {
+            try
+            {
+                var response = await repository.Get<Instruci>($"api/instruci/{item.Id}");
+                instruciRelacionada = response.Error ? item : (response.Response ?? item);
+                
+                // Limpiar caracteres basura
+                if (instruciRelacionada != null)
+                {
+                    instruciRelacionada.Codigo = LimpiarTexto(instruciRelacionada.Codigo);
+                    instruciRelacionada.Descripcion = LimpiarTexto(instruciRelacionada.Descripcion);
+                    instruciRelacionada.Revision = LimpiarTexto(instruciRelacionada.Revision);
+                    
+                    // Asignar Cod_Inte al CodIntMedIdent del instrumento (se guardará al hacer clic en Guardar Cambios)
+                    if (instrumenoSeleccionado != null)
+                    {
+                        instrumenoSeleccionado.CodIntMedIdent = instruciRelacionada.Cod_Inte;
+                    }
+                }
+            }
+            catch
+            {
+                instruciRelacionada = item;
+            }
+        }
+
+        cargandoInstrucci = false;
+        StateHasChanged();
+    }
+
+    private void LimpiarBusquedaInstrucci()
+    {
+        _ctsInstrucci?.Cancel();
+        searchTextInstrucci = null;
+        resultadosBusquedaInstrucci = null;
+        buscandoInstrucci = false;
+    }
+
+    private void VerDetalleInstrucci()
+    {
+        showDetalleInstrucci = true;
+    }
+
+    private void IrAFichaInstrumento()
+    {
+        if (instrumenoSeleccionado != null && instrumenoSeleccionado.Id > 0)
+        {
+            navigationManager.NavigateTo($"/ficha-instrumento?id={instrumenoSeleccionado.Id}");
+        }
+    }
+}

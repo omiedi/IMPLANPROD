@@ -1,9 +1,13 @@
 @using IMPLANPROD.Shared.Entities
 @using IMPLANPROD.Shared.DTOs
 @using IMPLANPROD.Client.Repositories
+@using Microsoft.AspNetCore.Components.Authorization
+@using System.Security.Claims
 @inject IRepository repository
+@inject HttpClient Http
 @inject IJSRuntime JS
 @inject SweetAlertService sweetAlertService
+@inject AuthenticationStateProvider AuthStateProvider
 
 @if (MostrarModal && OrdenCompra != null)
 {
@@ -12,7 +16,7 @@
             <div class="modal-content">
                 <div class="modal-header">
                     <h5 class="modal-title">
-                        <i class="fas fa-print"></i> Vista Previa - Orden de Compra N° @OrdenCompra.NumeOcom
+                        <i class="fas fa-print"></i> Vista Previa - Orden de Compra N° @NumeroOrdenConVersion
                     </h5>
                     <button type="button" class="btn-close" @onclick="CerrarModal"></button>
                 </div>
@@ -25,13 +29,16 @@
                             <div class="col-8">
                                 @if (DatosEmpresa != null)
                                 {
-                                    <div style="border: 2px solid #000; padding: 12px;">
-                                        <h4 style="margin: 0; font-weight: bold; color: #ff6600; font-size: 16px;">@DatosEmpresa.razon</h4>
-                                        <p style="margin: 4px 0; font-size: 11px; line-height: 1.3;">
-                                            Dirección: @($"{DatosEmpresa.calle} {DatosEmpresa.numero}") @DatosEmpresa.complemento<br>
-                                            (@DatosEmpresa.CP) @DatosEmpresa.localidad - Argentina<br>
-                                            Teléfono: @DatosEmpresa.TEL1 - Email: @DatosEmpresa.email<br>
-                                            CUIT: @DatosEmpresa.CUIT
+                                    <div style="border: 2px solid #000; padding: 12px; text-align: left;">
+                                        <img src="images/logoConDNV.jpeg" style="max-height: 75px; max-width: 100%; margin-bottom: 6px; display: block;" />
+                                        <p style="margin: 0 0 2px 0; font-size: 13px; line-height: 1.3; font-weight: bold; text-align: left;">
+                                            METALURGICASIAM S.A.
+                                        </p>
+                                        <p style="margin: 4px 0; font-size: 11px; line-height: 1.3; text-align: left;">
+                                            Dirección: Dr. Atilio Lavarello  2156<br>
+                                            (1870) Avellaneda Buenos Aires - Argentina<br>
+                                            Teléfono: (5411) 4203-0011 - Email: info@siam-arcon.com.ar<br>
+                                            CUIT: 30-71135193-7
                                         </p>
                                     </div>
                                 }
@@ -40,7 +47,7 @@
                                 <div style="border: 2px solid #000; padding: 12px; text-align: center;">
                                     <h5 style="margin: 0; font-weight: bold; font-size: 14px;">PEDIDO DE SUMINISTRO</h5>
                                     <div style="border: 1px solid #000; padding: 8px; margin: 8px 0;">
-                                        <strong style="font-size: 13px;">Nro: @OrdenCompra.NumeOcom</strong>
+                                        <strong style="font-size: 13px;">Nro: @NumeroOrdenConVersion</strong>
                                     </div>
                                     <p style="margin: 5px 0; font-size: 12px;">
                                         <strong>Fecha: @(OrdenCompra.FemiOcom?.ToString("dd/MM/yyyy") ?? "N/A")</strong>
@@ -54,10 +61,9 @@
                             <div class="col-8">
                                 <div style="border: 1px solid #000;">
                                     <div style="background: #f0f0f0; padding: 6px; border-bottom: 1px solid #000; font-size: 12px;">
-                                        <strong>Señores:</strong>
+                                        <strong>Señores:</strong> <strong>@OrdenCompra.RaSoProv</strong>
                                     </div>
                                     <div style="padding: 10px; font-size: 11px;">
-                                        <strong>@OrdenCompra.RaSoProv</strong><br>
                                         Responsable/Contacto: @(OrdenCompra.ObseOcom ?? "N/A")
                                     </div>
                                 </div>
@@ -70,7 +76,7 @@
                                     </tr>
                                     <tr>
                                         <td style="border: 1px solid #000; padding: 5px 6px; background: #f0f0f0; font-size: 11px;"><strong>Condición</strong></td>
-                                        <td style="border: 1px solid #000; padding: 5px 6px; font-size: 11px;">@(OrdenCompra.CpagOcom?.ToString() ?? "N/A")</td>
+                                        <td style="border: 1px solid #000; padding: 5px 6px; font-size: 11px;">@DescripcionCondicionPago</td>
                                     </tr>
                                     <tr>
                                         <td style="border: 1px solid #000; padding: 5px 6px; background: #f0f0f0; font-size: 11px;"><strong>Moneda</strong></td>
@@ -102,12 +108,22 @@
                                         <tr>
                                             <td style="border: 1px solid #000; padding: 5px; text-align: center; font-size: 10px;">@item.NuOrdItem</td>
                                             <td style="border: 1px solid #000; padding: 5px; font-size: 10px;">
-                                                <strong>@item.CodExte</strong><br>
+                                                <strong>@GetCodigoImpreso(item)</strong><br>
                                                 @item.Descritem
+                                                @if (incluirEspecificacion && item.CodInte.HasValue)
+                                                {
+                                                    var key = (int)item.CodInte.Value;
+                                                    if (especificacionesPorCodInte.TryGetValue(key, out var especificacion) && !string.IsNullOrWhiteSpace(especificacion))
+                                                    {
+                                                        <div style="margin-top: 4px; font-size: 9px; color: #555; font-style: italic; white-space: pre-wrap;">
+                                                            @especificacion
+                                                        </div>
+                                                    }
+                                                }
                                             </td>
                                             <td style="border: 1px solid #000; padding: 5px; text-align: center; font-size: 10px;">@item.UniMas</td>
                                             <td style="border: 1px solid #000; padding: 5px; text-align: right; font-size: 10px;">@((item.CantOcom ?? 0).ToString("N1"))</td>
-                                            <td style="border: 1px solid #000; padding: 5px; text-align: right; font-size: 10px;">@((item.PreUnit ?? 0).ToString("N2"))</td>
+                                            <td style="border: 1px solid #000; padding: 5px; text-align: right; font-size: 10px;">@((item.PrUnNeto ?? 0).ToString("N2"))</td>
                                             <td style="border: 1px solid #000; padding: 5px; text-align: right; font-size: 10px;">@((item.INetItem ?? 0).ToString("N2"))</td>
                                             <td style="border: 1px solid #000; padding: 5px; text-align: center; font-size: 10px;">@(item.FentreSol?.ToString("dd/MM/yy") ?? "")</td>
                                         </tr>
@@ -139,6 +155,13 @@
                                         <strong>OBS:</strong>
                                     </div>
                                     <div style="padding: 10px; font-size: 10px; flex-grow: 1;">
+                                        @if (!string.IsNullOrWhiteSpace(ObservacionesCostos))
+                                        {
+                                            <div style="margin-bottom: 6px; white-space: pre-wrap;">
+                                                <strong>OBSERVACIONES:</strong><br>
+                                                @ObservacionesCostos
+                                            </div>
+                                        }
                                         @(OrdenCompra.ObseOcom ?? "")
                                     </div>
                                     <div style="padding: 8px; font-size: 10px; border-top: 1px solid #000;">
@@ -157,7 +180,7 @@
                                     </colgroup>
                                     <tr>
                                         <td style="border: 1px solid #000; border-left: none; padding: 6px 8px; background: #f0f0f0; font-size: 11px; text-align: left;"><strong>SUBTOTAL</strong></td>
-                                        <td style="border: 1px solid #000; padding: 6px 8px; text-align: right; font-size: 11px;">@((OrdenCompra.TotalOcom ?? 0).ToString("N2"))</td>
+                                        <td style="border: 1px solid #000; padding: 6px 8px; text-align: right; font-size: 11px;">@TotalAMostrar.ToString("N2")</td>
                                     </tr>
                                     <tr>
                                         <td style="border: 1px solid #000; border-left: none; padding: 6px 8px; background: #f0f0f0; font-size: 11px; text-align: left;"><strong>DESC.</strong></td>
@@ -165,15 +188,26 @@
                                     </tr>
                                     <tr>
                                         <td style="border: 1px solid #000; border-left: none; padding: 6px 8px; background: #f0f0f0; font-size: 11px; text-align: left;"><strong>NETO</strong></td>
-                                        <td style="border: 1px solid #000; padding: 6px 8px; text-align: right; font-size: 11px;">@((OrdenCompra.TotalOcom ?? 0).ToString("N2"))</td>
+                                        <td style="border: 1px solid #000; padding: 6px 8px; text-align: right; font-size: 11px;">@TotalAMostrar.ToString("N2")</td>
                                     </tr>
                                     <tr>
                                         <td style="border: 1px solid #000; border-left: none; padding: 6px 8px; background: #f0f0f0; font-size: 11px; text-align: left;"><strong>IVA</strong></td>
-                                        <td style="border: 1px solid #000; padding: 6px 8px; text-align: right; font-size: 11px;">%</td>
+                                        <td style="border: 1px solid #000; padding: 6px 8px; text-align: right; font-size: 11px;">
+                                            <div>@ImporteIvaTotal.ToString("N2")</div>
+                                            @if (detalleIvaPorTasa.Any())
+                                            {
+                                                <div style="margin-top: 4px; font-size: 9px; text-align: left;">
+                                                    @foreach (var detalle in detalleIvaPorTasa)
+                                                    {
+                                                        <div>IVA @detalle.Tasa.ToString("0.##")%: @detalle.Importe.ToString("N2")</div>
+                                                    }
+                                                </div>
+                                            }
+                                        </td>
                                     </tr>
                                     <tr>
                                         <td style="border: 1px solid #000; border-left: none; padding: 8px; background: #f0f0f0; font-size: 12px; text-align: left;"><strong>TOTAL</strong></td>
-                                        <td style="border: 1px solid #000; padding: 8px; text-align: right; font-size: 12px; font-weight: bold;">@((OrdenCompra.TotalOcom ?? 0).ToString("N2"))</td>
+                                        <td style="border: 1px solid #000; padding: 8px; text-align: right; font-size: 12px; font-weight: bold;">@TotalConIva.ToString("N2")</td>
                                     </tr>
                                 </table>
                             </div>
@@ -225,7 +259,12 @@
                 </div>
                 <div class="mb-3">
                     <label class="form-label">Email:</label>
-                    <input type="email" class="form-control" @bind="emailProveedor" />
+                    <input type="email" class="form-control" @bind="emailProveedor" placeholder="proveedor@empresa.com" />
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Observaciones <span class="text-muted small">(opcional — se incluirán en el cuerpo del correo)</span></label>
+                    <textarea class="form-control" rows="4" @bind="observacionEmail"
+                              placeholder="Ej: Favor confirmar recepción. Plazo de entrega acordado: 10 días hábiles."></textarea>
                 </div>
             </div>
             <div class="modal-footer">
@@ -251,10 +290,172 @@
     [Parameter] public EventCallback OnCerrar { get; set; }
     [Parameter] public Ocomenca? OrdenCompra { get; set; }
     [Parameter] public List<Ocomdeta>? DetalleItems { get; set; }
+    [Parameter] public string? ObservacionesCostos { get; set; }
+    
+    /// <summary>
+    /// Total personalizado para mostrar en SUBTOTAL (opcional)
+    /// Si no se proporciona, usa OrdenCompra.TotalOcom
+    /// </summary>
+    [Parameter] public decimal? TotalPersonalizado { get; set; }
+
+    /// <summary>
+    /// Total a mostrar en la impresión
+    /// Usa TotalPersonalizado si está disponible, sino OrdenCompra.TotalOcom
+    /// </summary>
+    private decimal TotalAMostrar => TotalPersonalizado ?? OrdenCompra?.TotalOcom ?? 0;
+
+    private decimal ImporteIvaTotal => importeIvaTotal;
+
+    private decimal TotalConIva => TotalAMostrar + ImporteIvaTotal;
+
+    private string NumeroOrdenConVersion
+    {
+        get
+        {
+            if (OrdenCompra?.NumeOcom == null)
+            {
+                return "";
+            }
+
+            var version = (OrdenCompra.OcomRevis ?? 0) + 1;
+            return $"{OrdenCompra.NumeOcom.Value:000000}-{version:000}";
+        }
+    }
+
+    private async Task CargarConfigRevisarCodigoAsync()
+    {
+        revisarCodigo = false;
+
+        try
+        {
+            var response = await repository.Get<FLEXCRL>("api/flexcrl/OCOMPRA/REVICOD");
+            if (response.Error || response.Response == null)
+            {
+                return;
+            }
+
+            if (int.TryParse(response.Response.VALCONTROL, out var val) && val > 0)
+            {
+                revisarCodigo = true;
+            }
+        }
+        catch
+        {
+        }
+    }
+
+    private async Task CargarConfigIncluirEspecificacionAsync()
+    {
+        incluirEspecificacion = false;
+
+        try
+        {
+            var response = await repository.Get<FLEXCRL>("api/flexcrl/OCOMPRA/INCLUSPE");
+            if (response.Error || response.Response == null)
+            {
+                return;
+            }
+
+            if (int.TryParse(response.Response.VALCONTROL, out var val) && val > 0)
+            {
+                incluirEspecificacion = true;
+            }
+        }
+        catch
+        {
+        }
+    }
+
+    private async Task CargarRevisionesItemsAsync()
+    {
+        revisionesPorCodInte = new();
+
+        if (!revisarCodigo)
+        {
+            return;
+        }
+
+        if (DetalleItems == null || DetalleItems.Count == 0)
+        {
+            return;
+        }
+
+        try
+        {
+            var cods = DetalleItems
+                .Where(i => (i.StatOcom ?? 0) < 10)
+                .Select(i => i.CodInte)
+                .Where(ci => ci.HasValue && ci.Value > 0)
+                .Select(ci => (int)ci!.Value)
+                .Distinct()
+                .ToList();
+
+            foreach (var codint in cods)
+            {
+                var resp = await repository.Get<Master>($"api/master/xCodint{codint}");
+                if (!resp.Error && resp.Response != null)
+                {
+                    revisionesPorCodInte[codint] = (resp.Response.Revision, resp.Response.Ferevis);
+                }
+            }
+        }
+        catch
+        {
+        }
+    }
+
+    private async Task CargarEspecificacionesItemsAsync()
+    {
+        especificacionesPorCodInte = new();
+
+        if (!incluirEspecificacion)
+        {
+            return;
+        }
+
+        if (DetalleItems == null || DetalleItems.Count == 0)
+        {
+            return;
+        }
+
+        try
+        {
+            var cods = DetalleItems
+                .Where(i => (i.StatOcom ?? 0) < 10)
+                .Select(i => i.CodInte)
+                .Where(ci => ci.HasValue && ci.Value > 0)
+                .Select(ci => (int)ci!.Value)
+                .Distinct()
+                .ToList();
+
+            foreach (var codint in cods)
+            {
+                var resp = await repository.Get<Master>($"api/master/xCodint{codint}");
+                if (!resp.Error && resp.Response != null)
+                {
+                    especificacionesPorCodInte[codint] = resp.Response.Especificacion ?? string.Empty;
+                }
+            }
+        }
+        catch
+        {
+        }
+    }
 
     private Empresa? DatosEmpresa;
+    private List<CondPag>? condicionesPago;
     private bool mostrarModalEmail = false;
     private string emailProveedor = "";
+    private string observacionEmail = "";
+    private bool reemplazarCodigoPropio;
+    private Dictionary<int, string> equivalenciasPorCodInte = new();
+    private bool revisarCodigo;
+    private Dictionary<int, (string? Revision, DateTime? Ferevis)> revisionesPorCodInte = new();
+    private bool incluirEspecificacion;
+    private Dictionary<int, string> especificacionesPorCodInte = new();
+    private Dictionary<int, decimal> tasasIvaPorCodinte = new();
+    private List<(decimal Tasa, decimal Importe)> detalleIvaPorTasa = new();
+    private decimal importeIvaTotal = 0m;
     private string DescripcionMoneda => OrdenCompra?.MoneEmis switch
     {
         1 => "Pesos",
@@ -263,11 +464,244 @@
         _ => "Pesos"
     };
 
+    private string DescripcionCondicionPago
+    {
+        get
+        {
+            if (OrdenCompra?.CpagOcom == null)
+            {
+                return "N/A";
+            }
+
+            var desc = condicionesPago?.FirstOrDefault(c => c.NumCondPag == OrdenCompra.CpagOcom)?.DescCondPag;
+            return string.IsNullOrWhiteSpace(desc) ? "N/A" : desc;
+        }
+    }
+
     protected override async Task OnParametersSetAsync()
     {
         if (MostrarModal && DatosEmpresa == null)
         {
             await CargarDatosEmpresa();
+        }
+
+        if (MostrarModal && condicionesPago == null)
+        {
+            await CargarCondicionesPago();
+        }
+
+        if (MostrarModal)
+        {
+            await CargarConfigReemplazoCodigoAsync();
+            await CargarEquivalenciasProveedorAsync();
+            await CargarConfigRevisarCodigoAsync();
+            await CargarConfigIncluirEspecificacionAsync();
+            await CargarRevisionesItemsAsync();
+            await CargarEspecificacionesItemsAsync();
+            await CargarTasasIvaItemsAsync();
+        }
+    }
+
+    private async Task CargarTasasIvaItemsAsync()
+    {
+        tasasIvaPorCodinte = new();
+
+        if (!MostrarModal || DetalleItems == null || DetalleItems.Count == 0)
+        {
+            return;
+        }
+
+        try
+        {
+            var responseGruposIva = await repository.Get<List<Grupiva>>("api/grupivas/combo");
+            var tasasPorGrupo = !responseGruposIva.Error && responseGruposIva.Response != null
+                ? responseGruposIva.Response
+                    .Where(x => x.Status >= 0)
+                    .GroupBy(x => x.CodigoID)
+                    .ToDictionary(g => g.Key, g => g.First().tasa)
+                : new Dictionary<int, decimal>();
+
+            var codintes = DetalleItems
+                .Where(i => (i.StatOcom ?? 0) < 10)
+                .Select(i => i.CodInte)
+                .Where(ci => ci.HasValue && ci.Value > 0)
+                .Select(ci => (int)ci!.Value)
+                .Distinct()
+                .ToList();
+
+            foreach (var codint in codintes)
+            {
+                decimal tasa = 0m;
+
+                var responseMaster = await repository.Get<Master>($"api/master/xCodint{codint}");
+                if (!responseMaster.Error && responseMaster.Response != null)
+                {
+                    var grupoIva = responseMaster.Response.Grupiva;
+                    if (grupoIva.HasValue && tasasPorGrupo.TryGetValue(grupoIva.Value, out var tasaEncontrada))
+                    {
+                        tasa = tasaEncontrada;
+                    }
+                }
+
+                tasasIvaPorCodinte[codint] = tasa;
+            }
+
+            RecalcularIva();
+        }
+        catch
+        {
+            tasasIvaPorCodinte = new();
+            detalleIvaPorTasa = new();
+            importeIvaTotal = 0m;
+        }
+    }
+
+    private void RecalcularIva()
+    {
+        detalleIvaPorTasa = new();
+        importeIvaTotal = 0m;
+
+        if (DetalleItems == null || DetalleItems.Count == 0)
+        {
+            return;
+        }
+
+        var acumuladoPorTasa = new Dictionary<decimal, decimal>();
+
+        foreach (var item in DetalleItems.Where(i => (i.StatOcom ?? 0) < 10))
+        {
+            var baseNeta = item.INetItem ?? ((item.CantOcom ?? 0m) * (item.PrUnNeto ?? 0m));
+            if (baseNeta <= 0m)
+            {
+                continue;
+            }
+
+            decimal tasa = 0m;
+            if (item.CodInte.HasValue && tasasIvaPorCodinte.TryGetValue(item.CodInte.Value, out var tasaEncontrada))
+            {
+                tasa = tasaEncontrada;
+            }
+
+            if (tasa <= 0m)
+            {
+                continue;
+            }
+
+            var importe = baseNeta * (tasa / 100m);
+            importeIvaTotal += importe;
+
+            if (acumuladoPorTasa.ContainsKey(tasa))
+            {
+                acumuladoPorTasa[tasa] += importe;
+            }
+            else
+            {
+                acumuladoPorTasa[tasa] = importe;
+            }
+        }
+
+        detalleIvaPorTasa = acumuladoPorTasa
+            .OrderBy(x => x.Key)
+            .Select(x => (x.Key, x.Value))
+            .ToList();
+    }
+
+    private async Task CargarConfigReemplazoCodigoAsync()
+    {
+        reemplazarCodigoPropio = false;
+
+        try
+        {
+            var response = await repository.Get<FLEXCRL>("api/flexcrl/OCOMPRA/RECOPROP");
+            if (response.Error || response.Response == null)
+            {
+                return;
+            }
+
+            if (int.TryParse(response.Response.VALCONTROL, out var val) && val > 0)
+            {
+                reemplazarCodigoPropio = true;
+            }
+        }
+        catch
+        {
+        }
+    }
+
+    private async Task CargarEquivalenciasProveedorAsync()
+    {
+        equivalenciasPorCodInte = new();
+
+        if (!reemplazarCodigoPropio)
+        {
+            return;
+        }
+
+        if (OrdenCompra?.NproOcom == null || OrdenCompra.NproOcom <= 0)
+        {
+            return;
+        }
+
+        try
+        {
+            var response = await repository.Get<List<ReplacoProvRowDTO>>($"api/replacoprov/proveedor/{OrdenCompra.NproOcom}");
+            if (response.Error || response.Response == null)
+            {
+                return;
+            }
+
+            equivalenciasPorCodInte = response.Response
+                .Where(x => x.CodInte > 0 && !string.IsNullOrWhiteSpace(x.Referencia))
+                .GroupBy(x => x.CodInte)
+                .ToDictionary(g => g.Key, g => g.First().Referencia!.Trim());
+        }
+        catch
+        {
+        }
+    }
+
+    private string GetCodigoImpreso(Ocomdeta item)
+    {
+        var coddx = item.CodExte ?? string.Empty;
+
+        if (reemplazarCodigoPropio && item.CodInte.HasValue)
+        {
+            var key = (int)item.CodInte.Value;
+            if (equivalenciasPorCodInte.TryGetValue(key, out var codEq) && !string.IsNullOrWhiteSpace(codEq))
+            {
+                coddx = codEq;
+            }
+        }
+
+        if (revisarCodigo && item.CodInte.HasValue)
+        {
+            var key = (int)item.CodInte.Value;
+            if (revisionesPorCodInte.TryGetValue(key, out var revData))
+            {
+                var rv = (revData.Revision ?? string.Empty).Trim();
+                if (!string.IsNullOrWhiteSpace(rv) && revData.Ferevis.HasValue)
+                {
+                    var ferevx = revData.Ferevis.Value.ToString("dd/MM/yy");
+                    coddx = $"{coddx} (Letra: {rv} - {ferevx})";
+                }
+            }
+        }
+
+        return coddx;
+    }
+
+    private async Task CargarCondicionesPago()
+    {
+        try
+        {
+            var response = await repository.Get<List<CondPag>>("api/condpag/combo");
+            if (!response.Error)
+            {
+                condicionesPago = response.Response;
+            }
+        }
+        catch
+        {
         }
     }
 
@@ -308,6 +742,7 @@
                             <html>
                             <head>
                                 <meta charset='utf-8'>
+                                <base href='${document.baseURI}'>
                                 <title>Orden de Compra</title>
                                 <style>
                                     * {
@@ -462,12 +897,13 @@
     {
         mostrarModalEmail = false;
         emailProveedor = "";
+        observacionEmail = "";
     }
 
     private void EnviarPorMail()
     {
-        // Aquí podrías cargar el email del proveedor desde la base de datos si está disponible
-        emailProveedor = ""; // Inicializar vacío o con email del proveedor si existe
+        emailProveedor = "";
+        observacionEmail = "";
         mostrarModalEmail = true;
     }
 
@@ -481,13 +917,10 @@
                 return;
             }
 
-            // Obtener la configuración del email
-            var configResponse = await repository.Get<EmailConfigDTO>("api/emailconfig");
-            if (configResponse.Error)
-            {
-                await sweetAlertService.FireAsync("Error", "No se pudo obtener la configuración del email", SweetAlertIcon.Error);
-                return;
-            }
+            // Obtener email y nombre del usuario logueado para Reply-To
+            var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+            var userEmail   = authState.User.FindFirst(ClaimTypes.Email)?.Value;
+            var userNombre  = authState.User.FindFirst(ClaimTypes.Name)?.Value;
 
             // Obtener el PDF de la orden de compra
             var pdfResponse = await repository.Get<PdfResponse>($"api/ocomenca/{OrdenCompra.NumeOcom}/pdf");
@@ -497,7 +930,6 @@
                 return;
             }
 
-            // Convertir la respuesta a byte array
             byte[] pdfContent;
             if (!string.IsNullOrEmpty(pdfResponse.Response?.Base64Content))
             {
@@ -509,27 +941,36 @@
                 return;
             }
 
-            // Crear el objeto para enviar el email
-            // El backend ahora genera PDF real usando iTextSharp
-            var emailTest = new EmailTestDTO
+            var observacionesHtml = string.IsNullOrWhiteSpace(observacionEmail)
+                ? ""
+                : "<p><strong>Observaciones:</strong><br/>" + observacionEmail.Replace("\r\n", "<br/>").Replace("\n", "<br/>") + "</p>";
+
+            var contactoHtml = string.IsNullOrWhiteSpace(userEmail)
+                ? $"<strong>{userNombre ?? "nuestro equipo"}</strong>"
+                : $"<strong>{userNombre ?? "nuestro equipo"}</strong> (<a href=\"mailto:{userEmail}\">{userEmail}</a>)";
+
+            var dto = new SendOrdenEmailDto
             {
-                Config = configResponse.Response,
+                To      = emailProveedor,
+                Subject = $"Orden de Compra N° {NumeroOrdenConVersion}",
+                Body    = "<h3>Orden de Compra N° " + NumeroOrdenConVersion + "</h3>" +
+                          "<p>Estimado proveedor,</p>" +
+                          "<p>Adjunto encontrará la orden de compra correspondiente en formato PDF.</p>" +
+                          observacionesHtml +
+                          "<p>Para consultas relacionadas con esta orden, por favor responda este correo " +
+                          "o comuníquese directamente con " + contactoHtml + ".</p>" +
+                          "<p>Saludos cordiales.</p>",
                 AttachmentContent = pdfContent,
-                AttachmentName = $"OrdenCompra_{OrdenCompra.NumeOcom}.pdf",
-                AttachmentContentType = "application/pdf",
-                To = emailProveedor,
-                Subject = $"Orden de Compra N° {OrdenCompra.NumeOcom}",
-                Body = $@"<h3>Orden de Compra N° {OrdenCompra.NumeOcom}</h3>
-                        <p>Estimado proveedor,</p>
-                        <p>Adjunto encontrará la orden de compra correspondiente en formato PDF.</p>
-                        <p>Saludos cordiales.</p>"
+                AttachmentName    = $"OrdenCompra_{NumeroOrdenConVersion}.pdf",
+                ReplyTo           = userEmail,
+                ReplyToName       = userNombre
             };
 
-            // Enviar el email
-            var response = await repository.Post("api/emailconfig/sendorder", emailTest);
+            var response = await repository.Post("api/email-empresa/sendorder", dto);
             if (response.Error)
             {
-                await sweetAlertService.FireAsync("Error", "No se pudo enviar el email", SweetAlertIcon.Error);
+                var msg = await response.GetErrorMessageAsync();
+                await sweetAlertService.FireAsync("Error", msg, SweetAlertIcon.Error);
                 return;
             }
 
@@ -541,6 +982,7 @@
             await sweetAlertService.FireAsync("Error", $"Error al enviar el email: {ex.Message}", SweetAlertIcon.Error);
         }
     }
+
 }
 
 <style>

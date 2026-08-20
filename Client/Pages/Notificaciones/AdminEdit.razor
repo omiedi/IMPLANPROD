@@ -1,0 +1,224 @@
+@page "/notificaciones/admin/edit/{Id:int}"
+@using Microsoft.AspNetCore.Authorization
+@attribute [Authorize(Roles = "SUPERADMIN")]
+@using Microsoft.AspNetCore.Components
+@using Microsoft.AspNetCore.Components.Forms
+@using IMPLANPROD.Client.Repositories
+@using IMPLANPROD.Client.Shared.Components
+@using IMPLANPROD.Shared.DTOs.Notificaciones
+@using IMPLANPROD.Shared.Entities
+@inject IRepository repository
+@inject NavigationManager navigationManager
+@inject SweetAlertService sweetAlertService
+
+<PageTitle>Editar notificación</PageTitle>
+
+<h3>Editar notificación</h3>
+
+<div class="mb-3">
+    <div class="card mb-2">
+        <div class="card-header bg-info text-white p-2">
+            <button class="btn btn-link text-white text-decoration-none w-100 text-start p-0"
+                    type="button"
+                    @onclick="() => mostrarInstructivoUsuario = !mostrarInstructivoUsuario">
+                <i class="fas @(mostrarInstructivoUsuario ? "fa-chevron-down" : "fa-chevron-right") me-2"></i>
+                <strong>Instructivo para el Usuario</strong>
+            </button>
+        </div>
+        @if (mostrarInstructivoUsuario)
+        {
+            <div class="card-body">
+                <h6 class="text-primary"><i class="fas fa-info-circle"></i> ¿Qué podés modificar?</h6>
+                <ul>
+                    <li><strong>Título / Resumen / Detalle:</strong> cambian el texto que ve el usuario.</li>
+                    <li><strong>Para todos:</strong> hace que le aparezca a todos los usuarios.</li>
+                    <li><strong>Destinatarios:</strong> si NO es para todos, elegís quién la recibe.</li>
+                    <li><strong>Vence:</strong> después de esa fecha deja de mostrarse.</li>
+                </ul>
+
+                <h6 class="text-primary mt-3"><i class="fas fa-lightbulb"></i> Consejo</h6>
+                <p class="mb-0">
+                    Si cambiás el destino (destinatarios), guardá y luego verificá en la campanita con un usuario destinatario.
+                </p>
+            </div>
+        }
+    </div>
+
+    <InstructivoDesarrollador>
+        <h6 class="text-info"><i class="fas fa-code"></i> API</h6>
+        <ul>
+            <li><code>GET api/notificaciones/admin/{id}</code></li>
+            <li><code>PUT api/notificaciones/admin/{id}</code></li>
+            <li><code>GET /api/Usuarios/activos</code></li>
+        </ul>
+
+        <h6 class="text-info mt-3"><i class="fas fa-sitemap"></i> Servicios involucrados</h6>
+        <ul>
+            <li><strong>Client:</strong> <code>IRepository</code>, <code>SweetAlertService</code></li>
+            <li><strong>Server:</strong> <code>NotificacionesService</code> (AdminUpdate), <code>DataContext</code></li>
+        </ul>
+
+        <h6 class="text-info mt-3"><i class="fas fa-project-diagram"></i> Flujo (alto nivel)</h6>
+        <pre class="bg-light p-2 rounded"><code>OnInitialized
+  ↓
+GET /api/Usuarios/activos
+  ↓
+GET api/notificaciones/admin/{id}
+  ↓
+Marca selected[uid]=true para destinatarios
+
+Submit
+  ↓
+PUT api/notificaciones/admin/{id}
+  ↓
+NavigateTo /notificaciones/admin</code></pre>
+
+        <h6 class="text-info mt-3"><i class="fas fa-shield-alt"></i> Validaciones / reglas</h6>
+        <ul class="mb-0">
+            <li><strong>Destino:</strong> si <code>EsParaTodos</code> es false, debe haber al menos 1 <code>UsuarioId</code>.</li>
+            <li><strong>Consistencia:</strong> al cambiar de <code>EsParaTodos=true</code>, server limpia destinatarios específicos.</li>
+        </ul>
+        <h6 class="text-info mt-3"><i class="fas fa-folder-open"></i> Archivos</h6>
+        <ul class="mb-0">
+            <li><code>Client/Pages/Notificaciones/AdminEdit.razor</code></li>
+            <li><code>Server/Controllers/NotificacionesAdminController.cs</code></li>
+        </ul>
+    </InstructivoDesarrollador>
+</div>
+
+@if (model is null || usuarios is null)
+{
+    <div class="spinner" />
+}
+else
+{
+    <EditForm Model="model" OnValidSubmit="UpdateAsync">
+        <DataAnnotationsValidator />
+        <ValidationSummary />
+
+        <div class="mb-3">
+            <label class="form-label">Título</label>
+            <InputText class="form-control" @bind-Value="model.Titulo" />
+            <ValidationMessage For="() => model.Titulo" />
+        </div>
+
+        <div class="mb-3">
+            <label class="form-label">Resumen</label>
+            <InputText class="form-control" @bind-Value="model.Resumen" />
+        </div>
+
+        <div class="mb-3">
+            <label class="form-label">Detalle HTML</label>
+            <InputTextArea class="form-control" @bind-Value="model.DetalleHtml" rows="8" />
+        </div>
+
+        <div class="row">
+            <div class="col-md-3 mb-3">
+                <label class="form-label">Para todos</label>
+                <InputCheckbox class="form-check-input ms-2" @bind-Value="model.EsParaTodos" />
+            </div>
+            <div class="col-md-3 mb-3">
+                <label class="form-label">Vence</label>
+                <InputDate class="form-control" @bind-Value="model.FechaExpiracion" />
+            </div>
+        </div>
+
+        @if (!model.EsParaTodos)
+        {
+            <div class="mb-3">
+                <label class="form-label">Destinatarios</label>
+                <div style="max-height: 260px; overflow-y: auto;" class="border rounded p-2">
+                    @foreach (var u in usuarios)
+                    {
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="usr_@u.Id" @bind="selected[u.Id]" />
+                            <label class="form-check-label" for="usr_@u.Id">@u.NombreUsuario (Id: @u.Id)</label>
+                        </div>
+                    }
+                </div>
+            </div>
+        }
+
+        <button class="btn btn-primary" type="submit">Guardar</button>
+        <button class="btn btn-secondary" type="button" @onclick="Return">Volver</button>
+    </EditForm>
+}
+
+@code {
+    [Parameter] public int Id { get; set; }
+
+    private NotificacionAdminUpsertDTO? model;
+    private List<Usuario>? usuarios;
+    private Dictionary<int, bool> selected = new();
+
+    private bool mostrarInstructivoUsuario;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        var responseUsuarios = await repository.Get<List<Usuario>>("/api/Usuarios/activos");
+        if (responseUsuarios.Error)
+        {
+            var message = await responseUsuarios.GetErrorMessageAsync();
+            await sweetAlertService.FireAsync("Error", message, SweetAlertIcon.Error);
+            navigationManager.NavigateTo("/notificaciones/admin");
+            return;
+        }
+
+        usuarios = responseUsuarios.Response ?? new List<Usuario>();
+        selected = usuarios.ToDictionary(x => x.Id, _ => false);
+
+        var response = await repository.Get<NotificacionAdminUpsertDTO>($"api/notificaciones/admin/{Id}");
+        if (response.Error)
+        {
+            var message = await response.GetErrorMessageAsync();
+            await sweetAlertService.FireAsync("Error", message, SweetAlertIcon.Error);
+            navigationManager.NavigateTo("/notificaciones/admin");
+            return;
+        }
+
+        model = response.Response;
+        if (model is null)
+        {
+            navigationManager.NavigateTo("/notificaciones/admin");
+            return;
+        }
+
+        foreach (var uid in model.UsuarioIds)
+        {
+            if (selected.ContainsKey(uid))
+            {
+                selected[uid] = true;
+            }
+        }
+    }
+
+    private async Task UpdateAsync()
+    {
+        if (model is null)
+        {
+            return;
+        }
+
+        model.UsuarioIds = selected.Where(kv => kv.Value).Select(kv => kv.Key).ToList();
+
+        var httpResponse = await repository.Put($"api/notificaciones/admin/{Id}", model);
+        if (httpResponse.Error)
+        {
+            var message = await httpResponse.GetErrorMessageAsync();
+            await sweetAlertService.FireAsync("Error", message, SweetAlertIcon.Error);
+            return;
+        }
+
+        Return();
+    }
+
+    private void Return()
+    {
+        navigationManager.NavigateTo("/notificaciones/admin");
+    }
+}

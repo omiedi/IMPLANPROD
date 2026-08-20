@@ -1,11 +1,15 @@
 @page "/usuarios/editar/{Id:int}"
+@page "/mi-perfil"
 @using IMPLANPROD.Shared.Entities
 @using System.Text.Json
 @using System.Net.Http.Headers
+@using System.Security.Claims
+@using Microsoft.AspNetCore.Components.Authorization
 @inject HttpClient Http
 @inject NavigationManager NavigationManager
 @inject IModalService ModalService
 @inject IRepository repository
+@inject AuthenticationStateProvider AuthenticationStateProvider
 
 
 <style>
@@ -74,18 +78,27 @@ else
             <div class="col-md-6">
                 <div class="form-group mb-3">
                     <label for="nombreUsuario">Nombre de Usuario:</label>
-                    <InputText id="nombreUsuario" @bind-Value="usuarioEdit.NombreUsuario" class="form-control" />
+                    <InputText id="nombreUsuario" @bind-Value="usuarioEdit.NombreUsuario" class="form-control" readonly="@modoPerfilUsuario" />
                     <ValidationMessage For="@(() => usuarioEdit.NombreUsuario)" />
                 </div>
 
                 <div class="form-group mb-3">
                     <label for="email">Correo Electrónico:</label>
-                    <InputText id="email" @bind-Value="usuarioEdit.Email" class="form-control" />
+                    <InputText id="email"
+                               @bind-Value="usuarioEdit.Email"
+                               class="form-control"
+                               @onfocusout="VerificarEmailAsync" />
                     <ValidationMessage For="@(() => usuarioEdit.Email)" />
+                    @if (emailDuplicado)
+                    {
+                        <div class="alert alert-warning py-1 mt-1 mb-0 small">
+                            <i class="oi oi-warning me-1"></i>Este email ya está registrado en otro usuario.
+                        </div>
+                    }
                 </div>
                 <div class="form-group mb-3">
                     <label for="email">N° Us.Flexoft:</label>
-                    <InputNumber id="idflexoft" @bind-Value="usuarioEdit.IdFlexoft" class="form-control" />
+                    <InputNumber id="idflexoft" @bind-Value="usuarioEdit.IdFlexoft" class="form-control" readonly="@modoPerfilUsuario" />
                     <ValidationMessage For="@(() => usuarioEdit.IdFlexoft)" />
                 </div>
 
@@ -126,7 +139,7 @@ else
                 <div class="form-group mb-3">
                     <label for="country">País:</label>
                     <!-- Selector de país: al cambiar, se ejecuta CountryChangeAsync y se actualiza usuarioEdit.CountryId -->
-                    <select id="country" class="form-select" @onchange="CountryChangeAsync">
+                    <select id="country" class="form-select" @onchange="CountryChangeAsync" disabled="@modoPerfilUsuario">
                         <option value="0">Seleccione un país...</option>
                         @foreach (var country in countries)
                         {
@@ -139,7 +152,7 @@ else
                 <div class="form-group mb-3">
                     <label for="state">Provincia:</label>
                     <!-- Selector de provincia: al cambiar, se ejecuta StateChangeAsync y se actualiza usuarioEdit.StateId -->
-                    <select id="state" class="form-select" @onchange="StateChangeAsync">
+                    <select id="state" class="form-select" @onchange="StateChangeAsync" disabled="@modoPerfilUsuario">
                         <option value="0">Seleccione una provincia...</option>
                         @foreach (var state in states)
                         {
@@ -152,7 +165,7 @@ else
                 <div class="form-group mb-3">
                     <label for="city">Localidad:</label>
                     <!-- Selector de localidad: al cambiar, usuarioEdit.CityId se actualiza automáticamente -->
-                    <select id="city" class="form-select" @onchange="CityChangeAsync">
+                    <select id="city" class="form-select" @onchange="CityChangeAsync" disabled="@modoPerfilUsuario">
                         <option value="0">Seleccione una localidad...</option>
                         @foreach (var city in cities)
                         {
@@ -166,7 +179,7 @@ else
                     <div class="form-group mb-3">
                         <label>Empresa:</label>
                         <!-- Selector de empresa: al cambiar, se ejecuta EmpresaChangeAsync y se actualiza usuarioEdit.EmpresaId -->
-                        <select class="form-select" @onchange="EmpresaChangeAsync">
+                        <select class="form-select" @onchange="EmpresaChangeAsync" disabled="@modoPerfilUsuario">
                             <option value="0">-- Seleccione una empresa --</option>
                             @if (empresa is not null)
                             {
@@ -180,7 +193,7 @@ else
                     <div class="form-group mb-3">
                         <label>Filial:</label>
                         <!-- Selector de dependencia (filial): al cambiar, se ejecuta DependenciaChangedAsync y se actualiza usuarioEdit.DependenciaId -->
-                        <select class="form-select" @onchange="DependenciaChangedAsync">
+                        <select class="form-select" @onchange="DependenciaChangedAsync" disabled="@modoPerfilUsuario">
                             <option value="0">-- Seleccione una filial --</option>
                             @if (dependencia is not null)
                             {
@@ -194,7 +207,7 @@ else
                     <div class="form-group mb-3">
                         <label>Sector:</label>
                         <!-- Selector de sector con binding directo. Al cambiar, usuarioEdit.SectorId se actualiza automáticamente -->
-                        <select class="form-select" @bind="usuarioEdit.SectorId">
+                        <select class="form-select" @bind="usuarioEdit.SectorId" disabled="@modoPerfilUsuario">
                             <option value="0">-- Seleccione un sector --</option>
                             @if (sector is not null)
                             {
@@ -208,7 +221,7 @@ else
                 </div>     
                 <div class="form-group mb-3">
                     <label for="perfil">Perfil:</label>
-                    <InputSelect id="perfil" @bind-Value="usuarioEdit.PerfilId" class="form-control">
+                    <InputSelect id="perfil" @bind-Value="usuarioEdit.PerfilId" class="form-control" disabled="@modoPerfilUsuario">
                         <option value="">Seleccione un perfil...</option>
                         @foreach (var perfil in perfiles)
                         {
@@ -218,11 +231,22 @@ else
                     <ValidationMessage For="@(() => usuarioEdit.PerfilId)" />
                 </div>
 
-                <button type="submit" class="btn btn-primary">Guardar Cambios</button>
+                <button type="submit" class="btn btn-primary" disabled="@emailDuplicado">Guardar Cambios</button>
                 <button type="button" class="btn btn-secondary" @onclick="Cancelar">Cancelar</button>
             </div>
         </div>
     </EditForm>
+
+    @if (!modoPerfilUsuario && (string.Equals(perfilAutenticado, "SUPERADMIN", StringComparison.OrdinalIgnoreCase)
+         || string.Equals(perfilAutenticado, "ADMINISTRADOR", StringComparison.OrdinalIgnoreCase)
+         || string.Equals(perfilAutenticado, "ADMIN", StringComparison.OrdinalIgnoreCase)))
+    {
+        <div class="row mt-3">
+            <div class="col-md-10 col-lg-8">
+                <AsignadorPermisosPaginas @ref="asignadorPermisos" UsuarioId="@Id" />
+            </div>
+        </div>
+    }
 }
 
 @code {
@@ -257,6 +281,14 @@ else
     private IBrowserFile? foto;
     private string? fotoPreview;
     private string? mensajeError;
+    private bool emailDuplicado = false;
+    private int usuarioAutenticadoId;
+    private string perfilAutenticado = string.Empty;
+    private AsignadorPermisosPaginas? asignadorPermisos;
+    private bool modoPerfilUsuario =>
+        usuarioAutenticadoId > 0 &&
+        string.Equals(perfilAutenticado, "USUARIO", StringComparison.OrdinalIgnoreCase) &&
+        usuarioAutenticadoId == Id;
 
     // Listas para los combos de selección
     private List<Country> countries = new List<Country>();
@@ -282,6 +314,7 @@ else
 
     protected override async Task OnInitializedAsync()
     {
+        await CargarContextoUsuarioAsync();
         await CargarDatos();
         // Cargar lista de países y perfiles (solo generales, dependientes se cargan en CargarDatos)
         countries = await Http.GetFromJsonAsync<List<Country>>("api/countries") ?? new List<Country>();
@@ -299,6 +332,18 @@ else
         try
         {
             cargando = true;
+
+            if (Id <= 0)
+            {
+                if (usuarioAutenticadoId <= 0)
+                {
+                    mensajeError = "No se pudo identificar el usuario autenticado.";
+                    return;
+                }
+
+                Id = usuarioAutenticadoId;
+            }
+
             // Reiniciar el estado
             usuario = null;
             usuarioEdit = new Usuario
@@ -538,9 +583,50 @@ else
         }
     }
 
+    private async Task VerificarEmailAsync(FocusEventArgs e)
+    {
+        emailDuplicado = false;
+        if (string.IsNullOrWhiteSpace(usuarioEdit.Email)) return;
+        try
+        {
+            var resp = await Http.GetAsync($"api/Usuarios/check-email?email={Uri.EscapeDataString(usuarioEdit.Email)}&excludeId={Id}");
+            if (resp.IsSuccessStatusCode)
+            {
+                var json = await resp.Content.ReadFromJsonAsync<System.Text.Json.JsonElement>();
+                emailDuplicado = json.TryGetProperty("existe", out var existe) && existe.GetBoolean();
+            }
+        }
+        catch { }
+    }
+
     private void Cancelar()
     {
+        if (modoPerfilUsuario)
+        {
+            NavigationManager.NavigateTo("/");
+            return;
+        }
+
         NavigationManager.NavigateTo("/usuarios");
+    }
+
+    private async Task CargarContextoUsuarioAsync()
+    {
+        var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+        var user = authState.User;
+
+        if (user?.Identity?.IsAuthenticated != true)
+        {
+            return;
+        }
+
+        var userIdClaim = user.FindFirst("UserId")?.Value;
+        if (!string.IsNullOrWhiteSpace(userIdClaim) && int.TryParse(userIdClaim, out var userId))
+        {
+            usuarioAutenticadoId = userId;
+        }
+
+        perfilAutenticado = user.FindFirst(ClaimTypes.Role)?.Value ?? string.Empty;
     }
 
     private async Task EmpresaChangeAsync(ChangeEventArgs e)

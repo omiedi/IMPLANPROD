@@ -53,6 +53,14 @@ namespace IMPLANPROD.Server.Services
             var user = GetCurrentUser();
             if (user?.Identity?.IsAuthenticated ?? false)
             {
+                // Primero intentar obtener el ID directo del claim NameIdentifier (usuarios.Id en el JWT)
+                var userIdClaim = user.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+                if (!string.IsNullOrEmpty(userIdClaim) && int.TryParse(userIdClaim, out int userId))
+                {
+                    return userId;
+                }
+
+                // Fallback: buscar por nombre de usuario y email
                 var username = user.Identity?.Name;
                 var email = user.FindFirst(System.Security.Claims.ClaimTypes.Email)?.Value;
 

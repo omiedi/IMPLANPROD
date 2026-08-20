@@ -6,7 +6,7 @@
 @if (IsVisible)
 {
     <div class="modal fade show" style="display: block" tabindex="-1">
-        <div class="modal-dialog modal-lg">
+        <div class="modal-dialog modal-xl">
             <div class="modal-content">
                 <div class="modal-header bg-primary text-white">
                     <h5 class="modal-title">
@@ -74,6 +74,108 @@
                                             <strong>Actual:</strong>
                                             <span class="badge bg-@(modoAprobacionSeleccionado == "DIRECTA" ? "success" : "warning") ms-2">
                                                 @modoAprobacionSeleccionado
+                                            </span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Reemplazar Código Propio -->
+                            <div class="col-md-6 mb-3">
+                                <div class="card h-100">
+                                    <div class="card-header bg-primary text-white">
+                                        <h6 class="card-title mb-0">
+                                            <i class="fas fa-exchange-alt me-2"></i>Reemplazar Código Propio
+                                        </h6>
+                                    </div>
+                                    <div class="card-body">
+                                        <div class="mb-3">
+                                            <div class="form-check">
+                                                <input class="form-check-input"
+                                                       type="checkbox"
+                                                       id="reemplazarCodigoPropio"
+                                                       @bind="reemplazarCodigoPropio" />
+                                                <label class="form-check-label" for="reemplazarCodigoPropio">
+                                                    Reemplazar Codigo propio en orden de compra
+                                                </label>
+                                            </div>
+                                            <div class="form-text">
+                                                Control: Control$("OCOMPRA", "RECOPROP") (0/1)
+                                            </div>
+                                        </div>
+                                        <div class="alert alert-info">
+                                            <i class="fas fa-info-circle me-2"></i>
+                                            <strong>Actual:</strong>
+                                            <span class="badge bg-@(reemplazarCodigoPropio ? "success" : "secondary") ms-2">
+                                                @(reemplazarCodigoPropio ? "SI" : "NO")
+                                            </span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Revisar Código / Revisión -->
+                            <div class="col-md-6 mb-3">
+                                <div class="card h-100">
+                                    <div class="card-header bg-secondary text-white">
+                                        <h6 class="card-title mb-0">
+                                            <i class="fas fa-tag me-2"></i>Revisión del Código
+                                        </h6>
+                                    </div>
+                                    <div class="card-body">
+                                        <div class="mb-3">
+                                            <div class="form-check">
+                                                <input class="form-check-input"
+                                                       type="checkbox"
+                                                       id="revisarCodigo"
+                                                       @bind="revisarCodigo" />
+                                                <label class="form-check-label" for="revisarCodigo">
+                                                    Agregar revisión (letra y fecha) al código impreso
+                                                </label>
+                                            </div>
+                                            <div class="form-text">
+                                                Control: Control$("OCOMPRA", "REVICOD") (0/1)
+                                            </div>
+                                        </div>
+                                        <div class="alert alert-info">
+                                            <i class="fas fa-info-circle me-2"></i>
+                                            <strong>Actual:</strong>
+                                            <span class="badge bg-@(revisarCodigo ? "success" : "secondary") ms-2">
+                                                @(revisarCodigo ? "SI" : "NO")
+                                            </span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Imprimir Especificación del Código -->
+                            <div class="col-md-6 mb-3">
+                                <div class="card h-100">
+                                    <div class="card-header bg-info text-white">
+                                        <h6 class="card-title mb-0">
+                                            <i class="fas fa-file-alt me-2"></i>Especificación del Código
+                                        </h6>
+                                    </div>
+                                    <div class="card-body">
+                                        <div class="mb-3">
+                                            <div class="form-check">
+                                                <input class="form-check-input"
+                                                       type="checkbox"
+                                                       id="incluirEspecificacion"
+                                                       @bind="incluirEspecificacion" />
+                                                <label class="form-check-label" for="incluirEspecificacion">
+                                                    Imprimir especificación del producto en la orden de compra
+                                                </label>
+                                            </div>
+                                            <div class="form-text">
+                                                Control: Control$("OCOMPRA", "INCLUSPE") (0/1)
+                                            </div>
+                                        </div>
+                                        <div class="alert alert-info">
+                                            <i class="fas fa-info-circle me-2"></i>
+                                            <strong>Actual:</strong>
+                                            <span class="badge bg-@(incluirEspecificacion ? "success" : "secondary") ms-2">
+                                                @(incluirEspecificacion ? "SI" : "NO")
                                             </span>
                                         </div>
                                     </div>
@@ -354,6 +456,9 @@
     private string actualizarCostoSeleccionado = "SIEMPRE";
     private string considerarDescuentoSeleccionado = "SI";
     private string monedaCostoSeleccionada = "1";
+    private bool reemplazarCodigoPropio = false;
+    private bool revisarCodigo = false;
+    private bool incluirEspecificacion = false;
 
     // Constantes para los parámetros de FLEXCRL según la lógica VB6
     private const string CLABUS_PARAM = "OCOMPRA";
@@ -362,6 +467,9 @@
     private const string PROBUS_PARAM_ACOSREP = "ACOSREP";
     private const string PROBUS_PARAM_NODESCUE = "NODESCUE";
     private const string PROBUS_PARAM_MONECOS = "MONECOS";
+    private const string PROBUS_PARAM_RECOPROP = "RECOPROP";
+    private const string PROBUS_PARAM_REVICOD = "REVICOD";
+    private const string PROBUS_PARAM_INCLUSPE = "INCLUSPE";
 
     /// <summary>
     /// Se ejecuta cuando el componente se inicializa
@@ -417,6 +525,18 @@
             // Cargar moneda costo por defecto
             await CargarConfiguracionIndividual(PROBUS_PARAM_MONECOS, "1", 
                 valor => monedaCostoSeleccionada = string.IsNullOrEmpty(valor) ? "1" : valor);
+
+            // Cargar reemplazar código propio (0/1)
+            await CargarConfiguracionIndividual(PROBUS_PARAM_RECOPROP, "0",
+                valor => reemplazarCodigoPropio = valor == "1");
+
+            // Cargar revisar código (0/1)
+            await CargarConfiguracionIndividual(PROBUS_PARAM_REVICOD, "0",
+                valor => revisarCodigo = valor == "1");
+
+            // Cargar incluir especificación (0/1)
+            await CargarConfiguracionIndividual(PROBUS_PARAM_INCLUSPE, "0",
+                valor => incluirEspecificacion = valor == "1");
         }
         catch (Exception ex)
         {
@@ -427,6 +547,9 @@
             actualizarCostoSeleccionado = "SIEMPRE";
             considerarDescuentoSeleccionado = "SI";
             monedaCostoSeleccionada = "1";
+            reemplazarCodigoPropio = false;
+            revisarCodigo = false;
+            incluirEspecificacion = false;
         }
         finally
         {
@@ -497,6 +620,9 @@
             // NODESCUE es inverso: SI = no considerar descuento, NO = considerar descuento
             await GuardarConfiguracionControl(PROBUS_PARAM_NODESCUE, considerarDescuentoSeleccionado == "SI" ? "NO" : "SI");
             await GuardarConfiguracionControl(PROBUS_PARAM_MONECOS, monedaCostoSeleccionada);
+            await GuardarConfiguracionControl(PROBUS_PARAM_RECOPROP, reemplazarCodigoPropio ? "1" : "0");
+            await GuardarConfiguracionControl(PROBUS_PARAM_REVICOD, revisarCodigo ? "1" : "0");
+            await GuardarConfiguracionControl(PROBUS_PARAM_INCLUSPE, incluirEspecificacion ? "1" : "0");
             
             // Si llegamos aquí, la configuración se guardó exitosamente
             await sweetAlertService.FireAsync("Éxito", "Configuración guardada exitosamente.", SweetAlertIcon.Success);

@@ -35,6 +35,150 @@ namespace IMPLANPROD.Server.Controllers
             _Codiempresa = Codiempresa;
         }
 
+        [HttpGet("componentes-cierre/{idSubOr}")]
+        public async Task<ActionResult<List<FormulaComponenteDTO>>> GetComponentesCierrePorReserva(string idSubOr)
+        {
+            try
+            {
+                if (string.IsNullOrWhiteSpace(idSubOr))
+                {
+                    return BadRequest("El identificador de la orden de fabricación es requerido.");
+                }
+
+                var orden = await _context.Ordefabrs
+                    .AsNoTracking()
+                    .FirstOrDefaultAsync(x => x.IdSubOr == idSubOr);
+
+                if (orden == null)
+                {
+                    return NotFound($"No se encontró la orden de fabricación {idSubOr}");
+                }
+
+                var canProy = orden.CanProy ?? 0m;
+
+                var reservas = await _context.Reservas
+                    .AsNoTracking()
+                    .Where(r => r.IdSubOr == idSubOr)
+                    .ToListAsync();
+
+                if (reservas.Count == 0)
+                {
+                    return Ok(new List<FormulaComponenteDTO>());
+                }
+
+                var codigos = reservas
+                    .Select(r => r.Cod_Inte)
+                    .Distinct()
+                    .ToList();
+
+                var stocks = await _context.Movistos
+                    .AsNoTracking()
+                    .Where(m => codigos.Contains(m.Cod_Inte ?? 0))
+                    .GroupBy(m => m.Cod_Inte ?? 0)
+                    .Select(g => new
+                    {
+                        CodInte = g.Key,
+                        Stock = g.Sum(x => (x.CantIngre ?? 0m) - (x.CantSalid ?? 0m))
+                    })
+                    .ToDictionaryAsync(x => x.CodInte, x => x.Stock);
+
+                var resultado = reservas
+                    .GroupBy(r => new
+                    {
+                        CodInte = r.Cod_Inte,
+                        CodExte = r.Cod_Exte ?? string.Empty,
+                        Descrip = r.Descrip ?? string.Empty
+                    })
+                    .OrderBy(g => g.Key.CodExte)
+                    .Select(g =>
+                    {
+                        var cantRes = g.Sum(x => x.CantRes ?? 0m);
+                        var usoUnit = g.Sum(x => x.UsoUnit ?? 0m);
+                        var uso = usoUnit;
+
+                        if (uso <= 0m && canProy >= 0.05m)
+                        {
+                            uso = cantRes / canProy;
+                        }
+
+                        stocks.TryGetValue(g.Key.CodInte, out var stock);
+
+                        return new FormulaComponenteDTO
+                        {
+                            CodIElem = g.Key.CodInte,
+                            CodXElem = g.Key.CodExte,
+                            Descripcion = g.Key.Descrip,
+                            UsoBruto = uso,
+                            Stock = stock,
+                            EsRepetido = false,
+                            NecesidadTotal = 0m,
+                            CantidadAUtilizar = 0m
+                        };
+                    })
+                    .ToList();
+
+                return Ok(resultado);
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, $"Error al obtener componentes de cierre desde reservas: {ex.Message}");
+            }
+        }
+
+        [HttpGet("pendientes-por-producto/{codint:int}")]
+        public async Task<ActionResult<List<StockReservaPendienteDTO>>> GetPendientesPorProducto(int codint)
+        {
+            try
+            {
+                var agrupado = _context.Reservas
+                    .AsNoTracking()
+                    .Where(r => r.Cod_Inte == codint
+                                && (r.CantCons ?? 0m) < ((r.CantRes ?? 0m) - 0.005m))
+                    .GroupBy(r => new
+                    {
+                        IdSubOr = r.IdSubOr ?? string.Empty,
+                        IdenLote = r.IdenLote ?? string.Empty,
+                        Fecha = r.FechRes.HasValue ? r.FechRes.Value.Date : DateTime.MinValue
+                    })
+                    .Select(g => new
+                    {
+                        g.Key.IdSubOr,
+                        g.Key.IdenLote,
+                        FechaReserva = g.Key.Fecha,
+                        CantRes = g.Sum(x => x.CantRes ?? 0m),
+                        CantCons = g.Sum(x => x.CantCons ?? 0m)
+                    });
+
+                var query = from g in agrupado
+                            join ofa in _context.Ordefabrs.AsNoTracking()
+                                on g.IdSubOr equals (ofa.IdSubOr ?? string.Empty) into ofJoin
+                            from ofa in ofJoin.DefaultIfEmpty()
+                            select new StockReservaPendienteDTO
+                            {
+                                IdSubOr = g.IdSubOr,
+                                IdenLote = g.IdenLote,
+                                FechaReserva = g.FechaReserva == DateTime.MinValue ? null : g.FechaReserva,
+                                FechaEntregaSolicitada = ofa != null ? ofa.FechEnSol : null,
+                                CodExteDestino = ofa != null ? (ofa.Cod_Exte ?? string.Empty) : string.Empty,
+                                DescripDestino = ofa != null ? (ofa.Descrip ?? string.Empty) : string.Empty,
+                                CantReservada = g.CantRes,
+                                CantConsumida = g.CantCons,
+                                CantPendiente = (g.CantRes - g.CantCons) < 0m ? 0m : (g.CantRes - g.CantCons)
+                            };
+
+                var result = await query
+                    .Where(x => x.CantPendiente > 0m)
+                    .OrderBy(x => x.IdSubOr)
+                    .ToListAsync();
+
+                return Ok(result);
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, $"Error al obtener reservas pendientes: {ex.Message}");
+            }
+        }
+
         /// <summary>
         /// Actualiza las reservas consumidas para una orden de fabricación específica
         /// Traducción de la rutina ACTUALIZARESERVA de VB6

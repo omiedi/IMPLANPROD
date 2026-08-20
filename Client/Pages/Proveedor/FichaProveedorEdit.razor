@@ -1,6 +1,8 @@
 @page "/ficha-proveedor-edit/{Id:int}"
+@using IMPLANPROD.Client.Services
 @using IMPLANPROD.Shared.Entities
 @using Microsoft.AspNetCore.Components
+@inject PageAccessService PageAccess
 
 <!--
     Componente: FichaProveedorEdit.razor
@@ -12,10 +14,26 @@
 
 <!-- Este archivo es una copia adaptada de FichaClienteEdit.razor para proveedores -->
 <!-- Aquí irá la edición de proveedores usando la entidad Proved12 -->
+<PageTitle>Editar Proveedor</PageTitle>
+@if (validando)
+{
+    <p>Validando acceso...</p>
+}
+else
+{
+   <FichaProveedorForm Id="@Id" />
+}
 
-<FichaProveedorForm Id="@Id" />
 
 @code {
+    private bool validando = true;
     [Parameter]
     public int Id { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        await PageAccess.RequiereAccesoAsync("/ficha-proveedor-edit/");   // ? validación
+        validando = false;
+    }
 }
+

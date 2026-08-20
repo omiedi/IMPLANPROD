@@ -212,7 +212,7 @@
                     <pre class="bg-dark text-light p-3 rounded">
 <strong>Carga de Derechos:</strong>
 1. OnInitializedAsync()
-2. CargarDatosUsuario() → GET /api/usuarios/{IdFlexoft}
+2. CargarDatosUsuario() → GET /api/usuarios/{UsuarioId}
 3. CargarDerechos() → GET /api/DerechosUsuario/usuario/{IdFlexoft}
 4. Backend: LEFT JOIN INDI_APLI con DER_ACCE
 5. Retorna lista completa de aplicaciones con flags de permisos
@@ -281,7 +281,7 @@ Next U&
 
                     <h6 class="text-info mt-3"><i class="fas fa-server"></i> Endpoints API</h6>
                     <ul>
-                        <li><code>GET /api/usuarios/{idFlexoft}</code> - Obtener datos del usuario por IdFlexoft</li>
+                        <li><code>GET /api/usuarios/{id}</code> - Obtener datos del usuario por Id (identity)</li>
                         <li><code>GET /api/DerechosUsuario/usuario/{numUser}</code> - Obtener derechos del usuario</li>
                         <li><code>POST /api/DerechosUsuario/usuario/{numUser}</code> - Guardar derechos (lista completa)</li>
                     </ul>
@@ -782,7 +782,7 @@ Acceso a CLIENTES: Nivel 2 - Escritura: true</code></pre>
     {
         try
         {
-            var responseHttp = await repository.Get<Usuario>($"api/usuarios/{IdFlexoft}");
+            var responseHttp = await repository.Get<Usuario>($"api/usuarios/{UsuarioId}");
             if (!responseHttp.Error && responseHttp.Response != null)
             {
                 usuario = responseHttp.Response;

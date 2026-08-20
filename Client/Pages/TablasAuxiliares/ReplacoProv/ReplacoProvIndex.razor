@@ -1,0 +1,195 @@
+@page "/TablasAuxiliares/ReplacoProv"
+@inject IRepository repository
+@inject SweetAlertService sweetAlertService
+
+@using CurrieTechnologies.Razor.SweetAlert2
+@using IMPLANPROD.Client.Shared.Components
+@using IMPLANPROD.Client.Shared
+@using IMPLANPROD.Shared.DTOs
+@using IMPLANPROD.Shared.Entities
+@using Blazored.Modal
+@using Blazored.Modal.Services
+
+<div class="bg-primary text-white text-center p-3 mb-4">
+    <h1>Codigos Eq. x Pr.</h1>
+</div>
+
+<div class="row mb-3">
+    <div class="col-md-8">
+        <label class="form-label"><strong class="text-danger">*</strong> Proveedor</label>
+        <div class="input-group">
+            <input type="text" class="form-control" @bind="proveedorSeleccionado" readonly placeholder="Debe seleccionar un proveedor..." />
+            <button class="btn btn-outline-secondary" @onclick="LimpiarProveedor" disabled="@(numeProvSeleccionado == null)">
+                <i class="fas fa-times"></i>
+            </button>
+            <button class="btn btn-outline-primary" @onclick="AbrirSelectorProveedor" title="Seleccionar Proveedor">
+                <i class="fas fa-truck"></i>
+            </button>
+        </div>
+    </div>
+    <div class="col-md-4 d-flex align-items-end justify-content-end">
+        <button class="btn btn-sm btn-primary" @onclick="Nuevo" disabled="@(numeProvSeleccionado == null)">
+            <i class="oi oi-plus"></i> Agregar
+        </button>
+    </div>
+</div>
+
+@if (cargando)
+{
+    <div class="d-flex justify-content-center my-4">
+        <div class="spinner-border text-primary" role="status"></div>
+    </div>
+}
+else
+{
+    @if (numeProvSeleccionado == null)
+    {
+        <div class="alert alert-info">
+            Primero debe seleccionar un proveedor para agregar o visualizar los códigos con equivalencias.
+        </div>
+    }
+    else
+    {
+        <GenericList MyList="rows">
+            <Body>
+                <table class="table table-striped">
+                    <thead>
+                        <tr>
+                            <th>Id</th>
+                            <th>Nume Prov</th>
+                            <th>Cod Inte</th>
+                            <th>Código</th>
+                            <th>Descripción</th>
+                            <th>Referencia</th>
+                            <th>Observaciones</th>
+                            <th>Acciones</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var row in rows!)
+                        {
+                            <tr>
+                                <td>@row.Id</td>
+                                <td>@row.NumeProv</td>
+                                <td>@row.CodInte</td>
+                                <td>@row.Codigo</td>
+                                <td>@row.Descripcion</td>
+                                <td>@row.Referencia</td>
+                                <td>@row.Observaciones</td>
+                                <td>
+                                    <button class="btn btn-warning btn-sm" @onclick="(() => Editar(row.Id))">
+                                        <i class="oi oi-pencil"></i> Editar
+                                    </button>
+                                    <button class="btn btn-danger btn-sm" @onclick="(() => Eliminar(row.Id))">
+                                        <i class="fas fa-trash"></i> Eliminar
+                                    </button>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </Body>
+        </GenericList>
+    }
+}
+
+<SelectorProveedores @ref="selectorProveedores" OnProveedorSeleccionado="OnProveedorSeleccionado" />
+
+@code {
+    [CascadingParameter]
+    private IModalService Modal { get; set; } = default!;
+
+    private bool cargando;
+
+    private string proveedorSeleccionado = string.Empty;
+    private int? numeProvSeleccionado;
+
+    private List<ReplacoProvRowDTO> rows = new();
+
+    private SelectorProveedores selectorProveedores = null!;
+
+    private async Task AbrirSelectorProveedor()
+    {
+        await selectorProveedores.AbrirModal();
+    }
+
+    private async Task OnProveedorSeleccionado(SelectorProveedores.ProveedorSeleccionado proveedor)
+    {
+        numeProvSeleccionado = proveedor.NumeCli;
+        proveedorSeleccionado = $"{proveedor.NumeCli} - {proveedor.RazonSocial}";
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        if (numeProvSeleccionado == null)
+        {
+            rows = new();
+            return;
+        }
+
+        cargando = true;
+        StateHasChanged();
+
+        try
+        {
+            var response = await repository.Get<List<ReplacoProvRowDTO>>($"api/replacoprov/proveedor/{numeProvSeleccionado}");
+            if (response.Error)
+            {
+                var msg = await response.GetErrorMessageAsync();
+                await sweetAlertService.FireAsync("Error", msg, SweetAlertIcon.Error);
+                rows = new();
+                return;
+            }
+
+            rows = response.Response ?? new();
+        }
+        finally
+        {
+            cargando = false;
+            StateHasChanged();
+        }
+    }
+
+    private void LimpiarProveedor()
+    {
+        proveedorSeleccionado = string.Empty;
+        numeProvSeleccionado = null;
+        rows = new();
+    }
+
+    private async Task Nuevo()
+    {
+        if (numeProvSeleccionado == null)
+        {
+            return;
+        }
+
+        var modalReference = Modal.Show<ReplacoProvCreate>(string.Empty, new ModalParameters().Add("NumeProv", numeProvSeleccionado.Value));
+        var result = await modalReference.Result;
+        if (result.Confirmed)
+        {
+            await LoadAsync();
+        }
+    }
+
+    private async Task Editar(int id)
+    {
+        var modalReference = Modal.Show<ReplacoProvEdit>(string.Empty, new ModalParameters().Add("Id", id));
+        var result = await modalReference.Result;
+        if (result.Confirmed)
+        {
+            await LoadAsync();
+        }
+    }
+
+    private async Task Eliminar(int id)
+    {
+        var modalReference = Modal.Show<ReplacoProvBaja>(string.Empty, new ModalParameters().Add("Id", id));
+        var result = await modalReference.Result;
+        if (result.Confirmed)
+        {
+            await LoadAsync();
+        }
+    }
+}

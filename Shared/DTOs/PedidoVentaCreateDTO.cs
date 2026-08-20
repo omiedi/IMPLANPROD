@@ -76,6 +76,11 @@ namespace IMPLANPROD.Shared.DTOs
         public short? MoneEmis { get; set; }
 
         /// <summary>
+        /// Observaciones del pedido (PEDENCA.Observa)
+        /// </summary>
+        public string? Observa { get; set; }
+
+        /// <summary>
         /// Tipo de cambio (si aplica al encabezado)
         /// </summary>
         public decimal? TipoCam { get; set; }

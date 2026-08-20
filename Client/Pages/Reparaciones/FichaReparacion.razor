@@ -3,11 +3,13 @@
 @using IMPLANPROD.Shared.Entities
 @using IMPLANPROD.Shared.DTOs
 @using IMPLANPROD.Client.Shared.Components
+@using IMPLANPROD.Client.Services
 @using System.Globalization
 @inject IRepository repository
 @inject SweetAlertService sweetAlertService
 @inject NavigationManager navigationManager
 @inject IJSRuntime jsRuntime
+@inject PageAccessService PageAccess
 
 <PageTitle>Ficha de Reparación</PageTitle>
 
@@ -15,6 +17,12 @@
     [Parameter] public int? NumRepa { get; set; }
 }
 
+@if (validando)
+{
+    <p>Validando acceso...</p>
+}
+else
+{
 <div class="container-fluid">
     <h3><i class="fas fa-file-medical"></i> Ficha de Reparación</h3>
 
@@ -126,33 +134,35 @@
             <div class="card-body">
                 @if (clienteActual != null)
                 {
-                    <div class="row">
-                        <div class="col-md-4">
-                            <p><strong>Razón Social:</strong> @clienteActual.Raso_Cli</p>
-                            <p><strong>N° Cuenta:</strong> @clienteActual.Nume_Cli</p>
-                        </div>
-                        <div class="col-md-4">
-                            <p><strong>Teléfono:</strong> @clienteActual.Tele_Cli</p>
-                            <p><strong>Fax:</strong> @clienteActual.Faxi_Cli</p>
-                        </div>
-                        <div class="col-md-4">
-                            <div class="row">
-                                <div class="col-8">
-                                    <p><strong>Domicilio:</strong> @clienteActual.Domi_Cli</p>
-                                </div>
-                                <div class="col-4">
-                                    <p><strong>CP:</strong> @clienteActual.Cpos_Cli</p>
-                                </div>
-                            </div>
-                            <div class="row">
-                                <div class="col-8">
-                                    <p><strong>Localidad:</strong> @clienteActual.Loca_Cli</p>
-                                </div>
-                                <div class="col-4">
-                                    <p><strong>Fecha:</strong> @reparacionSeleccionada.FechRecep?.ToString("dd/MM/yyyy")</p>
-                                </div>
-                            </div>
-                        </div>
+                    <div class="table-responsive rounded border">
+                        <table class="table table-sm table-hover align-middle mb-0">
+                            <tbody>
+                                <tr>
+                                    <th style="width: 18%;" class="bg-light text-secondary text-uppercase small fw-semibold">Razón Social</th>
+                                    <td style="width: 32%;" class="fw-semibold">@(string.IsNullOrWhiteSpace(clienteActual.Raso_Cli) ? "-" : clienteActual.Raso_Cli)</td>
+                                    <th style="width: 18%;" class="bg-secondary-subtle border-start border-3 border-light text-secondary text-uppercase small fw-semibold">N° Cuenta</th>
+                                    <td style="width: 32%;" class="bg-secondary-subtle"><span class="badge bg-white text-dark border">@clienteActual.Nume_Cli</span></td>
+                                </tr>
+                                <tr>
+                                    <th class="bg-light text-secondary text-uppercase small fw-semibold">Teléfono</th>
+                                    <td class="fw-semibold">@(string.IsNullOrWhiteSpace(clienteActual.Tele_Cli) ? "-" : clienteActual.Tele_Cli)</td>
+                                    <th class="bg-secondary-subtle border-start border-3 border-light text-secondary text-uppercase small fw-semibold">Fax</th>
+                                    <td class="fw-semibold bg-secondary-subtle">@(string.IsNullOrWhiteSpace(clienteActual.Faxi_Cli) ? "-" : clienteActual.Faxi_Cli)</td>
+                                </tr>
+                                <tr>
+                                    <th class="bg-light text-secondary text-uppercase small fw-semibold">Domicilio</th>
+                                    <td class="fw-semibold">@(string.IsNullOrWhiteSpace(clienteActual.Domi_Cli) ? "-" : clienteActual.Domi_Cli)</td>
+                                    <th class="bg-secondary-subtle border-start border-3 border-light text-secondary text-uppercase small fw-semibold">Código Postal</th>
+                                    <td class="fw-semibold bg-secondary-subtle">@(string.IsNullOrWhiteSpace(clienteActual.Cpos_Cli) ? "-" : clienteActual.Cpos_Cli)</td>
+                                </tr>
+                                <tr>
+                                    <th class="bg-light text-secondary text-uppercase small fw-semibold">Localidad</th>
+                                    <td class="fw-semibold">@(string.IsNullOrWhiteSpace(clienteActual.Loca_Cli) ? "-" : clienteActual.Loca_Cli)</td>
+                                    <th class="bg-secondary-subtle border-start border-3 border-light text-secondary text-uppercase small fw-semibold">Fecha Recepción</th>
+                                    <td class="bg-secondary-subtle"><span class="badge bg-white text-dark border">@(reparacionSeleccionada.FechRecep?.ToString("dd/MM/yyyy") ?? "-")</span></td>
+                                </tr>
+                            </tbody>
+                        </table>
                     </div>
                 }
                 else
@@ -776,7 +786,38 @@
                         </div>
                     </div>
 
-                    <div class="d-flex justify-content-end">
+                    <div class="d-flex align-items-center gap-3 my-4">
+                        <hr class="flex-grow-1 my-0 border-2 border-secondary opacity-75" />
+                        <span class="text-secondary text-uppercase fw-bold fs-5">Notas</span>
+                        <hr class="flex-grow-1 my-0 border-2 border-secondary opacity-75" />
+                    </div>
+
+                    <div class="row mt-3">
+                        <div class="col-12">
+                            <label class="form-label fw-bold fs-5">Notas</label>
+                            <pre class="form-control bg-light" style="min-height: 220px; max-height: 380px; overflow-y: auto; white-space: pre-wrap;">@(string.IsNullOrWhiteSpace(reparacionSeleccionada?.AnotaRep) ? "(sin notas)" : reparacionSeleccionada!.AnotaRep)</pre>
+                        </div>
+                    </div>
+
+                    <div class="row mt-2">
+                        <div class="col-12">
+                            <label class="form-label fw-bold">Agregar nueva nota manual</label>
+                            <textarea class="form-control"
+                                      rows="3"
+                                      @bind="nuevaNotaReparacion"
+                                      placeholder="Ingrese el texto de la nota..."></textarea>
+                            <small class="text-muted">Se agrega al final del memo manteniendo formato posicional.</small>
+                        </div>
+                    </div>
+
+                    <div class="d-flex justify-content-end gap-2 mt-3">
+                        <button class="btn btn-outline-primary" @onclick="AgregarNotaManualAsync" disabled="@(guardandoNotaReparacion || string.IsNullOrWhiteSpace(nuevaNotaReparacion))">
+                            @if (guardandoNotaReparacion)
+                            {
+                                <span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+                            }
+                            <i class="fas fa-sticky-note me-2"></i> Agregar nota
+                        </button>
                         <button class="btn btn-primary" @onclick="GuardarDetalleInspeccionReparacion">
                             <i class="fas fa-save me-2"></i> Guardar
                         </button>
@@ -904,6 +945,7 @@
                   CantidadDefault="1"
                   OnProductoSeleccionadoCantidad="OnProductoSeleccionadoOFLimpieza"
                   OnClose="OnCloseSelectorProductosOFLimpieza" />
+}
 
 @code {
     private List<Repara>? listaReparaciones;
@@ -916,6 +958,8 @@
     private List<Docanre>? documentos;
     private bool cargandoDocumentos = false;
     private string solapaActiva = "imagenes";
+    private string nuevaNotaReparacion = string.Empty;
+    private bool guardandoNotaReparacion = false;
 
     // Repuestos (REPUREPA)
     // - Se cargan por NUMREPA y ORIGEN=0 (según VB6)
@@ -956,9 +1000,14 @@
 
     private SelectorReparaciones? selectorReparaciones;
     private string textoReparacionSeleccionada = string.Empty;
+    private bool validando = true;
 
     protected override async Task OnInitializedAsync()
     {
+        // Validar que el usuario tenga permiso para acceder a esta página antes de mostrar el contenido
+        await PageAccess.RequiereAccesoAsync("/ficha-reparacion");
+        validando = false;
+        
         // IMPORTANTE (Performance):
         // - Ya NO precargamos la lista de nota de reparación. al iniciar (era lento).
         // - El modal SelectorReparaciones realiza paginado server-side y carga bajo demanda.
@@ -991,9 +1040,19 @@
                 {
                     await CargarDatosCliente(reparacion.Nume_Cli.Value);
                 }
-                
-                // Cargar datos de la solapa activa
-                await CambiarSolapaAsync(solapaActiva);
+
+                await CargarImagenes();
+                await CargarDocumentos();
+
+                if (solapaActiva == "repuestos" && !hayCambiosPendientesRepuestos)
+                {
+                    await CargarRepuestos();
+                }
+
+                if (solapaActiva == "materiales" && !hayCambiosPendientesMateriales)
+                {
+                    await CargarMateriales();
+                }
                 
                 StateHasChanged();
             }
@@ -1369,16 +1428,26 @@
 
         solapaActiva = solapa;
 
+        if (solapaActiva == "imagenes" && numRepaSeleccionado > 0)
+        {
+            await CargarImagenes();
+        }
+
+        if (solapaActiva == "documentos" && numRepaSeleccionado > 0)
+        {
+            await CargarDocumentos();
+        }
+
         // Si el usuario entra a la solapa de repuestos, cargamos automáticamente.
         // Esto replica la idea VB6 de "refrescar lista" cuando se abre el módulo.
         if (solapaActiva == "repuestos" && numRepaSeleccionado > 0)
         {
-            _ = CargarRepuestos();
+            await CargarRepuestos();
         }
 
         if (solapaActiva == "materiales" && numRepaSeleccionado > 0)
         {
-            _ = CargarMateriales();
+            await CargarMateriales();
         }
     }
 
@@ -2056,6 +2125,69 @@
         {
             await sweetAlertService.FireAsync("Error", $"Error al guardar detalle: {ex.Message}", SweetAlertIcon.Error);
         }
+    }
+
+    private async Task AgregarNotaManualAsync()
+    {
+        if (numRepaSeleccionado <= 0)
+        {
+            return;
+        }
+
+        var texto = (nuevaNotaReparacion ?? string.Empty).Trim();
+        if (string.IsNullOrWhiteSpace(texto))
+        {
+            return;
+        }
+
+        try
+        {
+            guardandoNotaReparacion = true;
+
+            var request = new AgregarAnotacionReparacionRequest
+            {
+                NumRepa = numRepaSeleccionado,
+                Texto = texto,
+                Usuario = "USUARIO"
+            };
+
+            var response = await repository.Post<AgregarAnotacionReparacionRequest, AgregarAnotacionReparacionResponse>("api/repara/agregar-anotacion", request);
+            if (response.Error || response.Response == null)
+            {
+                var message = await response.GetErrorMessageAsync();
+                await sweetAlertService.FireAsync("Error", message, SweetAlertIcon.Error);
+                return;
+            }
+
+            if (reparacionSeleccionada != null)
+            {
+                reparacionSeleccionada.AnotaRep = response.Response.AnotaRep;
+            }
+
+            nuevaNotaReparacion = string.Empty;
+            await sweetAlertService.FireAsync("Éxito", "Nota agregada correctamente", SweetAlertIcon.Success);
+        }
+        catch (Exception ex)
+        {
+            await sweetAlertService.FireAsync("Error", $"Error al agregar nota: {ex.Message}", SweetAlertIcon.Error);
+        }
+        finally
+        {
+            guardandoNotaReparacion = false;
+        }
+    }
+
+    private sealed class AgregarAnotacionReparacionRequest
+    {
+        public int NumRepa { get; set; }
+        public string Texto { get; set; } = string.Empty;
+        public string? Usuario { get; set; }
+    }
+
+    private sealed class AgregarAnotacionReparacionResponse
+    {
+        public int NumRepa { get; set; }
+        public string? AnotaRep { get; set; }
     }
 
     private static string FormatoTamano(long? bytes)

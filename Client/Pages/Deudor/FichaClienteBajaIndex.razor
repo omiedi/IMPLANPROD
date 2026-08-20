@@ -1,11 +1,22 @@
 @page "/ficha-cliente-baja"
+@using IMPLANPROD.Client.Services
 @using IMPLANPROD.Shared.Entities
 @inject IRepository repository
 @using IMPLANPROD.Shared.DTOs
 @inject NavigationManager NavigationManager
 @inject SweetAlertService sweetAlertService
+@inject PageAccessService PageAccess  
+
+<PageTitle>Clientes dados de baja</PageTitle>
 
 <!--
+	para permisos de acceso a esta página, se deben aplicar estos dos lineas:
+    ___________________________
+    debe tener arrobapage "/ficha-cliente-baja" (ejemplo)
+    en las declaraciones: arrobainject PageAccessService PageAccess
+	y en code: cuando va a cargar la página, se debe llamar a:
+     await PageAccess.RequiereAccesoAsync("/ficha-cliente-baja");
+   ___________________________________________________________________________________
     Componente: FichaClienteBajaIndex.razor
     Descripción: Listado paginado de clientes dados de baja (Stat_Cli < 0) con opción de restaurar (Stat_Cli = 0).
     Autor: IA Cascade (solicitud de Omar)
@@ -15,8 +26,14 @@
     Incluye paginación y botón para restaurar clientes.
 -->
 
-<h3>Clientes dados de baja</h3>
-<div class="mb-3">
+@if (validando)
+{
+    <p>Validando acceso...</p>
+}
+else
+{
+    <h3>Clientes dados de baja</h3>
+    <div class="mb-3">
     <button class="btn btn-secondary" @onclick="VolverListado">
         <i class="fas fa-arrow-left"></i> Volver al listado
     </button>
@@ -76,6 +93,7 @@ else
         <span>Página @PaginaActual de @TotalPaginas</span>
         <button class="btn btn-outline-secondary" @onclick="()=>LoadAsync(PaginaActual+1)" disabled="@(PaginaActual == TotalPaginas)">Siguiente</button>
     </div>
+    }
 }
 
 @code {
@@ -85,8 +103,17 @@ else
     private int TotalPaginas = 1;
     private int RegistrosPorPagina = 10;
     private bool isLoading = true;
+    private bool validando = true;
     private string? Filter = string.Empty;
     private string? Page = string.Empty;
+
+    // Validar que el usuario tenga permiso para acceder a esta página antes de mostrar el contenido
+    protected override async Task OnInitializedAsync()
+    {
+        await PageAccess.RequiereAccesoAsync("/ficha-cliente-baja");
+        validando = false;
+        await LoadAsync();
+    }
 
     /// <summary>
     /// Carga los clientes dados de baja (Stat_Cli < 0) paginados desde el backend
@@ -107,8 +134,9 @@ else
         }
         else
         {
-            url1 = $"api/deudor12?page={page}&recordsNumber={RegistrosPorPagina}&filter={Filter}&stat_Cli=-1";
-            url2 = $"api/deudor12/totalPages?recordsNumber={RegistrosPorPagina}&filter={Filter}&stat_Cli=-1";
+            var encodedFilter = Uri.EscapeDataString(Filter);
+            url1 = $"api/deudor12?page={page}&recordsNumber={RegistrosPorPagina}&filter={encodedFilter}&stat_Cli=-1";
+            url2 = $"api/deudor12/totalPages?recordsNumber={RegistrosPorPagina}&filter={encodedFilter}&stat_Cli=-1";
         }
         try
         {
@@ -126,10 +154,6 @@ else
         StateHasChanged();
     }
 
-    protected override async Task OnInitializedAsync()
-    {
-        await LoadAsync();
-    }
 
     private async Task RestaurarCliente(int id)
     {

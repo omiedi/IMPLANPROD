@@ -116,6 +116,7 @@
                         <label>Cantidad a Fabricar:</label>
                         <InputNumber class="form-control"
                                      @bind-Value="ordenFabricacion.CanProy"
+                                     disabled="@IsEdit"
                                      @bind-Value:after="OnCantidadChanged" />
                     </div>
                 </div>

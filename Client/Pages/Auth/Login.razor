@@ -34,7 +34,7 @@
                         </div>
                     </div>
 
-                    <button type="submit" class="btn btn-primary" disabled="@loading">
+                    <button type="submit" class="btn btn-primary w-100" disabled="@loading">
                         @if (loading)
                         {
                             <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
@@ -45,6 +45,12 @@
                             <span>Iniciar Sesión</span>
                         }
                     </button>
+
+                    <div class="text-center mt-3">
+                        <a href="/recuperar-password" class="text-muted small">
+                            ¿Olvidaste tu contraseña?
+                        </a>
+                    </div>
                 </EditForm>
             </div>
         </div>

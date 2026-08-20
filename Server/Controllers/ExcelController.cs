@@ -3,6 +3,10 @@ using Microsoft.AspNetCore.Mvc;
 using IMPLANPROD.Server.Services;
 using IMPLANPROD.Shared.Entities;
 using IMPLANPROD.Shared.DTOs;
+using Microsoft.EntityFrameworkCore;
+using System.Globalization;
+using IMPLANPROD.Server.Data;
+using System.IO;
 
 namespace IMPLANPROD.Server.Controllers
 {
@@ -12,11 +16,289 @@ namespace IMPLANPROD.Server.Controllers
     {
         private readonly ILogger<ExcelController> _logger;
         private readonly ExcelService _excelService;
+        private readonly IWebHostEnvironment _env;
+        private readonly DataContext _db;
 
-        public ExcelController(ILogger<ExcelController> logger, ExcelService excelService)
+        public ExcelController(ILogger<ExcelController> logger, ExcelService excelService, IWebHostEnvironment env, DataContext db)
         {
             _logger = logger;
             _excelService = excelService;
+            _env = env;
+            _db = db;
+        }
+
+        [HttpPost("exportar-orden-compra")]
+        public IActionResult ExportarOrdenCompra([FromBody] IMPLANPROD.Shared.DTOs.OrdenCompraConDetalleDTO datos)
+        {
+            try
+            {
+                if (datos?.Encabezado == null)
+                {
+                    return BadRequest("No se recibió el encabezado de la orden de compra");
+                }
+
+                if (datos.Detalle == null || !datos.Detalle.Any())
+                {
+                    return BadRequest("No hay items para exportar");
+                }
+
+                var encabezado = datos.Encabezado;
+                var items = datos.Detalle
+                    .Where(i => (i.StatOcom ?? 0) < 10)
+                    .OrderBy(i => i.NuOrdItem)
+                    .ToList();
+
+                var reemplazarCodigoPropio = false;
+                var flex = _db.Set<FLEXCRL>().FirstOrDefault(f => f.CLABUS == "OCOMPRA" && f.PROBUS == "RECOPROP");
+                if (flex != null && int.TryParse(flex.VALCONTROL, out var valFlex) && valFlex > 0)
+                {
+                    reemplazarCodigoPropio = true;
+                }
+
+                var revisarCodigo = false;
+                var flexRevi = _db.Set<FLEXCRL>().FirstOrDefault(f => f.CLABUS == "OCOMPRA" && f.PROBUS == "REVICOD");
+                if (flexRevi != null && int.TryParse(flexRevi.VALCONTROL, out var valFlexRevi) && valFlexRevi > 0)
+                {
+                    revisarCodigo = true;
+                }
+
+                Dictionary<int, string> equivalenciasPorCodInte = new();
+                if (reemplazarCodigoPropio && encabezado.NproOcom.HasValue && encabezado.NproOcom.Value > 0)
+                {
+                    equivalenciasPorCodInte = _db.Replacos
+                        .AsNoTracking()
+                        .Where(r => r.NumeProv == encabezado.NproOcom.Value && r.CodInte > 0 && r.Referencia != null && r.Referencia != "")
+                        .GroupBy(r => r.CodInte)
+                        .ToDictionary(g => g.Key, g => g.First().Referencia!.Trim());
+                }
+
+                Dictionary<int, (string? Revision, DateTime? Ferevis)> revisionesPorCodInte = new();
+                if (revisarCodigo)
+                {
+                    var codints = items
+                        .Select(i => i.CodInte)
+                        .Where(ci => ci.HasValue && ci.Value > 0)
+                        .Select(ci => (int)ci!.Value)
+                        .Distinct()
+                        .ToList();
+
+                    revisionesPorCodInte = _db.masters
+                        .AsNoTracking()
+                        .Where(m => codints.Contains(m.Codint))
+                        .Select(m => new { m.Codint, m.Revision, m.Ferevis })
+                        .ToDictionary(x => x.Codint, x => (x.Revision, x.Ferevis));
+                }
+
+                var nro = encabezado.NumeOcom ?? 0;
+                var version = (short)((encabezado.OcomRevis ?? 0) + 1);
+                var nroConVersion = $"{nro:000000}-{version:000}";
+
+                using var wb = new XLWorkbook();
+                var ws = wb.Worksheets.Add("OrdenCompra");
+
+                // Config general
+                ws.Style.Font.FontName = "Arial";
+                ws.Style.Font.FontSize = 10;
+                ws.PageSetup.PaperSize = XLPaperSize.A4Paper;
+                ws.PageSetup.PageOrientation = XLPageOrientation.Portrait;
+
+                // Anchos aproximados para parecerse al impreso
+                ws.Column(1).Width = 6;   // Item
+                ws.Column(2).Width = 18;  // Código
+                ws.Column(3).Width = 42;  // Descripción
+                ws.Column(4).Width = 6;   // UM
+                ws.Column(5).Width = 12;  // Cantidad
+                ws.Column(6).Width = 12;  // Precio
+                ws.Column(7).Width = 14;  // Importe
+                ws.Column(8).Width = 12;  // F. Entrega
+
+                var empresaActiva = _db.Empresas
+                    .Where(e => e.status == 1)
+                    .OrderBy(e => e.Id)
+                    .FirstOrDefault();
+
+                var fila = 1;
+
+                // Encabezado empresa (logo + datos)
+                ws.Row(fila).Height = 45;
+                ws.Row(fila + 1).Height = 15;
+                ws.Row(fila + 2).Height = 15;
+                ws.Row(fila + 3).Height = 15;
+                ws.Row(fila + 4).Height = 15;
+
+                var logoPath = Path.Combine(_env.ContentRootPath, "..", "Client", "wwwroot", "images", "logo.png");
+                if (System.IO.File.Exists(logoPath))
+                {
+                    using var logoStream = new MemoryStream(System.IO.File.ReadAllBytes(logoPath));
+                    ws.AddPicture(logoStream)
+                        .MoveTo(ws.Cell(fila, 1))
+                        .WithSize(140, 40);
+                }
+
+                if (empresaActiva != null)
+                {
+                    var nombreProvincia = "";
+                    if (empresaActiva.provinciaemp.HasValue)
+                    {
+                        nombreProvincia = _db.States
+                            .Where(s => s.Id == empresaActiva.provinciaemp.Value)
+                            .Select(s => s.Name)
+                            .FirstOrDefault() ?? "";
+                    }
+
+                    var direccion = $"{empresaActiva.calle} {empresaActiva.numero} {empresaActiva.complemento}".Trim();
+                    var localidad = (empresaActiva.localidad ?? "").Trim();
+                    var web = (empresaActiva.WEB ?? "").Trim();
+                    var tel = (empresaActiva.TEL1 ?? "").Trim();
+
+                    ws.Range(fila + 1, 1, fila + 1, 4).Merge();
+                    ws.Range(fila + 2, 1, fila + 2, 4).Merge();
+                    ws.Range(fila + 3, 1, fila + 3, 4).Merge();
+
+                    ws.Cell(fila + 1, 1).Value = $"Dirección: {direccion} - {localidad},";
+                    ws.Cell(fila + 2, 1).Value = $"({nombreProvincia} - Tel.: {tel})";
+                    ws.Cell(fila + 3, 1).Value = web;
+
+                    ws.Range(fila + 1, 1, fila + 3, 4).Style.Font.FontSize = 9;
+                    ws.Range(fila + 1, 1, fila + 3, 4).Style.Alignment.WrapText = true;
+                }
+
+                fila += 6;
+
+                // Encabezado (título)
+                ws.Cell(fila, 1).Value = "PEDIDO DE SUMINISTRO";
+                ws.Range(fila, 1, fila, 8).Merge();
+                ws.Range(fila, 1, fila, 8).Style.Font.Bold = true;
+                ws.Range(fila, 1, fila, 8).Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
+                ws.Range(fila, 1, fila, 8).Style.Border.OutsideBorder = XLBorderStyleValues.Thin;
+                fila++;
+
+                ws.Cell(fila, 1).Value = "Nro:";
+                ws.Cell(fila, 2).Value = nroConVersion;
+                ws.Cell(fila, 6).Value = "Fecha:";
+                ws.Cell(fila, 7).Value = encabezado.FemiOcom?.ToString("dd/MM/yyyy") ?? "";
+                ws.Range(fila, 1, fila, 8).Style.Border.OutsideBorder = XLBorderStyleValues.Thin;
+                ws.Range(fila, 1, fila, 8).Style.Border.InsideBorder = XLBorderStyleValues.Thin;
+                ws.Range(fila, 2, fila, 2).Style.Font.Bold = true;
+                fila += 2;
+
+                // Proveedor
+                ws.Cell(fila, 1).Value = "Proveedor:";
+                ws.Cell(fila, 2).Value = $"{encabezado.NproOcom} - {encabezado.RaSoProv}";
+                ws.Range(fila, 2, fila, 8).Merge();
+                fila++;
+
+                ws.Cell(fila, 1).Value = "Condición Pago:";
+                ws.Cell(fila, 2).Value = encabezado.CpagOcom?.ToString(CultureInfo.InvariantCulture) ?? "";
+                ws.Cell(fila, 4).Value = "Moneda:";
+                ws.Cell(fila, 5).Value = encabezado.MoneEmis?.ToString(CultureInfo.InvariantCulture) ?? "";
+                ws.Range(fila - 1, 1, fila, 8).Style.Border.OutsideBorder = XLBorderStyleValues.Thin;
+                ws.Range(fila - 1, 1, fila, 8).Style.Border.InsideBorder = XLBorderStyleValues.Thin;
+                fila += 2;
+
+                // Tabla encabezados
+                var filaHeader = fila;
+                ws.Cell(fila, 1).Value = "Item";
+                ws.Cell(fila, 2).Value = "Código";
+                ws.Cell(fila, 3).Value = "Descripción";
+                ws.Cell(fila, 4).Value = "UM";
+                ws.Cell(fila, 5).Value = "Cantidad";
+                ws.Cell(fila, 6).Value = "Precio";
+                ws.Cell(fila, 7).Value = "Importe";
+                ws.Cell(fila, 8).Value = "F. Entrega";
+                ws.Range(fila, 1, fila, 8).Style.Font.Bold = true;
+                ws.Range(fila, 1, fila, 8).Style.Fill.BackgroundColor = XLColor.LightGray;
+                ws.Range(fila, 1, fila, 8).Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
+                ws.Range(fila, 1, fila, 8).Style.Border.OutsideBorder = XLBorderStyleValues.Thin;
+                ws.Range(fila, 1, fila, 8).Style.Border.InsideBorder = XLBorderStyleValues.Thin;
+                fila++;
+
+                var filaInicioItems = fila;
+
+                foreach (var it in items)
+                {
+                    ws.Cell(fila, 1).Value = it.NuOrdItem ?? 0;
+                    var codigoImpreso = it.CodExte ?? "";
+                    if (reemplazarCodigoPropio && it.CodInte.HasValue)
+                    {
+                        var key = (int)it.CodInte.Value;
+                        if (equivalenciasPorCodInte.TryGetValue(key, out var codEq) && !string.IsNullOrWhiteSpace(codEq))
+                        {
+                            codigoImpreso = codEq;
+                        }
+                    }
+
+                    if (revisarCodigo && it.CodInte.HasValue)
+                    {
+                        var key = (int)it.CodInte.Value;
+                        if (revisionesPorCodInte.TryGetValue(key, out var revData))
+                        {
+                            var rv = (revData.Revision ?? string.Empty).Trim();
+                            if (!string.IsNullOrWhiteSpace(rv) && revData.Ferevis.HasValue)
+                            {
+                                var ferevx = revData.Ferevis.Value.ToString("dd/MM/yy");
+                                codigoImpreso = $"{codigoImpreso} (Letra: {rv} - {ferevx})";
+                            }
+                        }
+                    }
+
+                    ws.Cell(fila, 2).Value = codigoImpreso;
+                    ws.Cell(fila, 3).Value = it.Descritem ?? "";
+                    ws.Cell(fila, 4).Value = it.UniMas ?? "";
+                    ws.Cell(fila, 5).Value = it.CantOcom ?? 0m;
+                    ws.Cell(fila, 6).Value = it.PreUnit ?? 0m;
+                    ws.Cell(fila, 8).Value = it.FentreSol?.ToString("dd/MM/yy") ?? "";
+
+                    // Formatos numéricos
+                    ws.Cell(fila, 5).Style.NumberFormat.Format = "0.0";
+                    ws.Cell(fila, 6).Style.NumberFormat.Format = "0.00";
+                    ws.Cell(fila, 7).Style.NumberFormat.Format = "0.00";
+
+                    // Importe = Cantidad * Precio (editable)
+                    ws.Cell(fila, 7).FormulaA1 = $"=E{fila}*F{fila}";
+
+                    // Bordes
+                    ws.Range(fila, 1, fila, 8).Style.Border.OutsideBorder = XLBorderStyleValues.Thin;
+                    ws.Range(fila, 1, fila, 8).Style.Border.InsideBorder = XLBorderStyleValues.Thin;
+
+                    // Alineaciones
+                    ws.Cell(fila, 1).Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
+                    ws.Cell(fila, 5).Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Right;
+                    ws.Cell(fila, 6).Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Right;
+                    ws.Cell(fila, 7).Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Right;
+                    ws.Cell(fila, 8).Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
+
+                    fila++;
+                }
+
+                var filaFinItems = fila - 1;
+
+                // Totales
+                fila++;
+                ws.Cell(fila, 6).Value = "TOTAL";
+                ws.Cell(fila, 6).Style.Font.Bold = true;
+                ws.Cell(fila, 7).FormulaA1 = $"=SUM(G{filaInicioItems}:G{filaFinItems})";
+                ws.Cell(fila, 7).Style.Font.Bold = true;
+                ws.Cell(fila, 7).Style.NumberFormat.Format = "0.00";
+                ws.Range(fila, 6, fila, 7).Style.Border.OutsideBorder = XLBorderStyleValues.Thin;
+                ws.Range(fila, 6, fila, 7).Style.Border.InsideBorder = XLBorderStyleValues.Thin;
+
+                // Congelar encabezados de tabla
+                ws.SheetView.FreezeRows(filaHeader);
+
+                using var stream = new MemoryStream();
+                wb.SaveAs(stream);
+                var bytes = stream.ToArray();
+
+                return File(bytes,
+                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    $"OrdenCompra_{nroConVersion}_{DateTime.Now:yyyyMMdd_HHmmss}.xlsx");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error al generar Excel de Orden de Compra");
+                return StatusCode(500, "Error interno al generar Excel.");
+            }
         }
 
         [HttpPost("exportar-masterlistado")]
@@ -106,6 +388,168 @@ namespace IMPLANPROD.Server.Controllers
             return File(archivo,
                         "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                         "Historial_Movimientos.xlsx");
+        }
+
+        [HttpPost("exportar-estructura-componentes")]
+        public IActionResult ExportarEstructuraComponentes([FromBody] List<DetalleStockDTO> datos)
+        {
+            try
+            {
+                if (datos == null || !datos.Any())
+                    return BadRequest("No hay datos para exportar");
+
+                var encabezados = new Dictionary<string, string>
+                {
+                    { "ItemJerarquico", "ItemJerarquico" },
+                    { "Nivel",       "Nivel"       },
+                    { "CI1",         "CodiElem"    },
+                    { "CodXEelem",   "CodXEelem"   },
+                    { "Descripcion", "Descripción" },
+                    { "UM",          "U.M."        },
+                    { "Uso",         "Uso"         }
+                };
+
+                var orden = new List<string> { "ItemJerarquico", "Nivel", "CI1", "CodXEelem", "Descripcion", "UM", "Uso" };
+
+                var archivo = _excelService.GenerarExcel(datos, "Estructura Componentes", encabezados, orden);
+
+                return File(archivo,
+                            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                            $"Estructura_Componentes_{DateTime.Now:yyyyMMdd_HHmmss}.xlsx");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error al generar Excel de Estructura Componentes");
+                return StatusCode(500, "Error al generar el archivo excel");
+            }
+        }
+
+        [HttpPost("exportar-stock-componentes")]
+        public IActionResult ExportarStockComponentes([FromBody] List<DetalleStockDTO> datos)
+        {
+            try
+            {
+                if (datos == null || !datos.Any())
+                {
+                    return BadRequest("No hay datos para exportar");
+                }
+
+                var depositos = datos
+                    .SelectMany(d => d.StockPorDeposito?.Keys ?? Enumerable.Empty<string>())
+                    .Where(k => !string.IsNullOrWhiteSpace(k))
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .OrderBy(k => k)
+                    .ToList();
+
+                var encabezados = new Dictionary<string, string>
+                {
+                    { "CI1", "CI1" },
+                    { "CodXEelem", "CodXEelem" },
+                    { "Descripcion", "Descripción" },
+                    { "UM", "U.M." },
+                    { "Uso", "Uso" },
+                    { "CantSimulada", "Cant.Simulada" },
+                    { "StAcumulado", "St.Acumulado" },
+                };
+
+                var orden = new List<string>
+                {
+                    "CI1",
+                    "CodXEelem",
+                    "Descripcion",
+                    "UM",
+                    "Uso",
+                    "CantSimulada",
+                    "StAcumulado",
+                };
+
+                foreach (var dep in depositos)
+                {
+                    var key = $"Dep.{dep}";
+                    encabezados[key] = $"Dep. {dep}";
+                    orden.Add(key);
+                }
+
+                var datosPlano = new List<Dictionary<string, object?>>();
+                foreach (var item in datos)
+                {
+                    var row = new Dictionary<string, object?>
+                    {
+                        ["CI1"] = item.CI1,
+                        ["CodXEelem"] = item.CodXEelem,
+                        ["Descripcion"] = item.Descripcion,
+                        ["UM"] = item.UM,
+                        ["Uso"] = item.Uso,
+                        ["CantSimulada"] = item.CantSimulada,
+                        ["StAcumulado"] = item.StAcumulado,
+                    };
+
+                    foreach (var dep in depositos)
+                    {
+                        var key = $"Dep.{dep}";
+                        if (item.StockPorDeposito != null && item.StockPorDeposito.TryGetValue(dep, out var stock))
+                        {
+                            row[key] = stock;
+                        }
+                        else
+                        {
+                            row[key] = 0m;
+                        }
+                    }
+
+                    datosPlano.Add(row);
+                }
+
+                var archivo = _excelService.GenerarExcel(datosPlano, "Stock Componentes", encabezados, orden);
+
+                return File(archivo,
+                            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                            $"Stock_Componentes_{DateTime.Now:yyyyMMdd_HHmmss}.xlsx");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error al generar Excel de Stock Componentes");
+                return StatusCode(500, "Error al generar el archivo excel");
+            }
+        }
+
+        [HttpPost("exportar-depositos-posibles-saldo")]
+        public IActionResult ExportarDepositosPosiblesSaldo([FromBody] List<DepositosPosiblesConSaldoDTO> datos)
+        {
+            try
+            {
+                if (datos == null || !datos.Any())
+                {
+                    return BadRequest("No hay datos para exportar");
+                }
+
+                var encabezados = new Dictionary<string, string>
+                {
+                    { "Codigo", "Código" },
+                    { "Descripcion", "Descripción" },
+                    { "SaldoStock", "Saldo Stock" },
+                    { "Deposito", "Depósito" }
+                };
+
+                var orden = new List<string>
+                {
+                    "Codigo",
+                    "Descripcion",
+                    "SaldoStock",
+                    "Deposito"
+                };
+
+                var archivo = _excelService.GenerarExcel(datos, "Depósitos Posibles con Saldo", encabezados, orden);
+
+                return File(archivo,
+                            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                            $"Depositos_Posibles_Saldo_{DateTime.Now:yyyyMMdd_HHmmss}.xlsx");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error al generar Excel de Depósitos Posibles con Saldo");
+                return StatusCode(500, "Error al generar el archivo excel");
+            }
         }
 
         // Método de generación con ClosedXML
@@ -219,6 +663,157 @@ namespace IMPLANPROD.Server.Controllers
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error al generar Excel de Pedidos de Venta");
+                return StatusCode(500, "Error al generar el archivo excel");
+            }
+        }
+
+        [HttpPost("exportar-pedidos-pendientes-detalle")]
+        public IActionResult ExportarPedidosPendientesDetalle([FromBody] List<PedidoVentaPendienteDetalleDTO> datos)
+        {
+            try
+            {
+                if (datos == null || !datos.Any())
+                {
+                    return BadRequest("No hay datos para exportar");
+                }
+
+                var encabezados = new Dictionary<string, string>
+                {
+                    { nameof(PedidoVentaPendienteDetalleDTO.NroPed), "N° Pedido" },
+                    { nameof(PedidoVentaPendienteDetalleDTO.Codigo), "Código" },
+                    { nameof(PedidoVentaPendienteDetalleDTO.Descripcion), "Descripción" },
+                    { nameof(PedidoVentaPendienteDetalleDTO.CantSolicitada), "Cant. Solicitada" },
+                    { nameof(PedidoVentaPendienteDetalleDTO.UMedida), "U. Medida" },
+                    { nameof(PedidoVentaPendienteDetalleDTO.CantEntregada), "Cant. Entregada" },
+                    { nameof(PedidoVentaPendienteDetalleDTO.Saldo), "Saldo" },
+                    { nameof(PedidoVentaPendienteDetalleDTO.FechaEntrega), "Fecha Entrega" }
+                };
+
+                var orden = new List<string>
+                {
+                    nameof(PedidoVentaPendienteDetalleDTO.NroPed),
+                    nameof(PedidoVentaPendienteDetalleDTO.Codigo),
+                    nameof(PedidoVentaPendienteDetalleDTO.Descripcion),
+                    nameof(PedidoVentaPendienteDetalleDTO.CantSolicitada),
+                    nameof(PedidoVentaPendienteDetalleDTO.UMedida),
+                    nameof(PedidoVentaPendienteDetalleDTO.CantEntregada),
+                    nameof(PedidoVentaPendienteDetalleDTO.Saldo),
+                    nameof(PedidoVentaPendienteDetalleDTO.FechaEntrega)
+                };
+
+                var archivo = _excelService.GenerarExcel(datos, "Pedidos Pendientes", encabezados, orden);
+
+                return File(archivo,
+                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    $"Pedidos_Pendientes_{DateTime.Now:yyyyMMdd_HHmmss}.xlsx");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error al generar Excel de Pedidos Pendientes (detalle)");
+                return StatusCode(500, "Error al generar el archivo excel");
+            }
+        }
+
+        /// <summary>
+        /// Exporta implosión de productos a Excel
+        /// </summary>
+        /// <param name="datos">Lista de implosión a exportar</param>
+        /// <returns>Archivo Excel con la implosión</returns>
+        [HttpPost("exportar-implosion")]
+        public IActionResult ExportarImplosion([FromBody] List<ImplosionItemDTO> datos)
+        {
+            try
+            {
+                if (datos == null || !datos.Any())
+                {
+                    _logger.LogWarning("[ExportarImplosion] No hay datos para exportar");
+                    return BadRequest("No hay datos para exportar");
+                }
+
+                var encabezados = new Dictionary<string, string>
+                {
+                    { "Codigo", "Código" },
+                    { "Descripcion", "Descripción" },
+                    { "Umedida", "U.Med." },
+                    { "UsoBruto", "Uso Bruto" }
+                };
+
+                var orden = new List<string>
+                {
+                    "Codigo",
+                    "Descripcion",
+                    "Umedida",
+                    "UsoBruto"
+                };
+
+                var archivo = _excelService.GenerarExcel(datos, "Implosión", encabezados, orden);
+
+                return File(archivo,
+                            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                            $"Implosion_{DateTime.Now:yyyyMMdd_HHmmss}.xlsx");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error al generar Excel de Implosión");
+                return StatusCode(500, "Error al generar el archivo excel");
+            }
+        }
+
+        /// <summary>
+        /// Exporta estadística de pedidos de venta a Excel
+        /// </summary>
+        /// <param name="datos">Lista de detalle de pedidos a exportar</param>
+        /// <returns>Archivo Excel con la estadística de pedidos</returns>
+        [HttpPost("exportar-estadistica-pedidos")]
+        public IActionResult ExportarEstadisticaPedidos([FromBody] List<DetallePedidoEstadisticaDTO> datos)
+        {
+            try
+            {
+                if (datos == null || !datos.Any())
+                {
+                    _logger.LogWarning("[ExportarEstadisticaPedidos] No hay datos para exportar");
+                    return BadRequest("No hay datos para exportar");
+                }
+
+                var encabezados = new Dictionary<string, string>
+                {
+                    { "NroPed", "N° Pedido" },
+                    { "FechEmis", "Fecha Emisión" },
+                    { "NroClie", "N° Cliente" },
+                    { "RasoClie", "Cliente" },
+                    { "CodiExt", "Código" },
+                    { "Descrip", "Descripción" },
+                    { "CanPed", "Cant. Pedida" },
+                    { "CantidadEntregada", "Cant. Entregada" },
+                    { "CantidadPendiente", "Cant. Pendiente" },
+                    { "FeSolEnt", "Entrega Solicitada" },
+                    { "Estado", "Estado" }
+                };
+
+                var orden = new List<string>
+                {
+                    "NroPed",
+                    "FechEmis",
+                    "NroClie",
+                    "RasoClie",
+                    "CodiExt",
+                    "Descrip",
+                    "CanPed",
+                    "CantidadEntregada",
+                    "CantidadPendiente",
+                    "FeSolEnt",
+                    "Estado"
+                };
+
+                var archivo = _excelService.GenerarExcel(datos, "Estadística de Pedidos", encabezados, orden);
+
+                return File(archivo,
+                            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                            $"Estadistica_Pedidos_{DateTime.Now:yyyyMMdd_HHmmss}.xlsx");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error al generar Excel de Estadística de Pedidos");
                 return StatusCode(500, "Error al generar el archivo excel");
             }
         }

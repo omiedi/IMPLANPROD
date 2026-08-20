@@ -1,15 +1,34 @@
 ﻿@page "/countries/create"
+@using IMPLANPROD.Client.Services
 @inject IRepository repository
 @inject NavigationManager navigationManager
 @inject SweetAlertService sweetAlertService
+@inject PageAccessService PageAccess
+
+<PageTitle>Crear País</PageTitle>
 
 <h3>Crear País</h3>
 
-<CountryForm @ref="countryForm" Country="country" OnValidSubmit="CreateAsync" ReturnAction="Return" />
+@if (validando)
+{
+    <p>Validando acceso...</p>
+}
+else
+{
+    <CountryForm @ref="countryForm" Country="country" OnValidSubmit="CreateAsync" ReturnAction="Return" />
+}
 
 @code {
     private Country country = new();
     private CountryForm? countryForm;
+    private bool validando = true;
+
+    // Validar que el usuario tenga permiso para acceder a esta página antes de mostrar el contenido
+    protected override async Task OnInitializedAsync()
+    {
+        await PageAccess.RequiereAccesoAsync("/countries/create");
+        validando = false;
+    }
 
     private async Task CreateAsync()
     {

@@ -1,8 +1,18 @@
 @page "/impresion-recepcion-bombas/{NumRepa:int}"
 @layout EmptyLayout
+@using IMPLANPROD.Client.Services
 @inject IRepository repository
 @inject NavigationManager navigationManager
+@inject PageAccessService PageAccess
 
+<PageTitle>Impresión Recepción Bombas</PageTitle>
+
+@if (validando)
+{
+    <p>Validando acceso...</p>
+}
+else
+{
 @if (cargando)
 {
     <div class="text-center p-5">
@@ -174,15 +184,21 @@ else if (repara != null)
         </div>
     </div>
 }
+}
 
 @code {
     [Parameter] public int NumRepa { get; set; }
 
     private Repara? repara;
     private bool cargando = true;
+    private bool validando = true;
 
     protected override async Task OnInitializedAsync()
     {
+        // Validar que el usuario tenga permiso para acceder a esta página antes de mostrar el contenido
+        await PageAccess.RequiereAccesoAsync("/impresion-recepcion-bombas");
+        validando = false;
+        
         await CargarDatos();
     }
 

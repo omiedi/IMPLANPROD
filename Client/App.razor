@@ -15,7 +15,14 @@
             <Found Context="routeData">
                 <AuthorizeRouteView RouteData="@routeData" DefaultLayout="@typeof(MainLayout)">
                     <NotAuthorized>
-                        <RedirectToLogin />
+                        <AuthorizeView>
+                            <Authorized Context="authCtx">
+                                <AccesoDenegado />
+                            </Authorized>
+                            <NotAuthorized Context="noAuthCtx">
+                                <RedirectToLogin />
+                            </NotAuthorized>
+                        </AuthorizeView>
                     </NotAuthorized>
                     <Authorizing>
                         <div class="d-flex justify-content-center align-items-center" style="height: 100vh;">

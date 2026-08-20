@@ -1,9 +1,19 @@
 @page "/anular-orden-reparacion"
 @using IMPLANPROD.Client.Shared.Components
+@using IMPLANPROD.Client.Services
 @inject IRepository repository
 @inject NavigationManager navigationManager
 @inject SweetAlertService sweetAlertService
+@inject PageAccessService PageAccess
 
+<PageTitle>Anular Orden de Reparación</PageTitle>
+
+@if (validando)
+{
+    <p>Validando acceso...</p>
+}
+else
+{
 <div class="container-fluid mt-4">
     <div class="card shadow-sm">
         <div class="card-header bg-danger text-white">
@@ -302,6 +312,7 @@ Call BORRAREGISTROS("RESERVA", CONDI$, REG&)</code></pre>
         </div>
     </div>
 </div>
+}
 
 @code {
     private List<OrdenReparacionDTO>? ordenesEnCurso;
@@ -311,12 +322,17 @@ Call BORRAREGISTROS("RESERVA", CONDI$, REG&)</code></pre>
     private bool cargando = true;
     private bool cargandoRepuestos = false;
     private bool cargandoReservas = false;
+    private bool validando = true;
     
     // Variables para controlar la visibilidad de los instructivos
     private bool mostrarInstructivoUsuario = false;
 
     protected override async Task OnInitializedAsync()
     {
+        // Validar que el usuario tenga permiso para acceder a esta página antes de mostrar el contenido
+        await PageAccess.RequiereAccesoAsync("/anular-orden-reparacion");
+        validando = false;
+        
         await CargarOrdenesEnCurso();
     }
 

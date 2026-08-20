@@ -1,9 +1,11 @@
 @page "/ficha-proveedor-index"
+@using IMPLANPROD.Client.Services
 @using IMPLANPROD.Shared.Entities
 @using IMPLANPROD.Client.Pages.Reportes
 @inject IRepository repository
 @inject NavigationManager NavigationManager
 @inject SweetAlertService sweetAlertService
+@inject PageAccessService PageAccess
 
 <PageTitle>Ficha de Proveedores</PageTitle>
 
@@ -32,11 +34,15 @@
 
 <div class="row mb-3">
     <div class="col-md-4">
-        <input class="form-control" placeholder="Buscar por Razón Social..." @bind="Filter" @bind:event="oninput" />
+        <input class="form-control" placeholder="Buscar por Código o Razón Social..." @bind="Filter" @bind:event="oninput" @onkeydown="OnSearchKeyDown" />
     </div>
     <div class="col-md-2">
         <button class="btn btn-outline-secondary" @onclick="()=>LoadAsync(1)"><i class="fas fa-search"></i> Buscar</button>
     </div>
+</div>
+
+<div class="text-muted" style="font-size: 0.85rem; margin-top: -0.5rem;">
+    Podés combinar términos con <b>+</b> para exigir coincidencia de ambos (AND). Ej: <code>1001 + perez</code>
 </div>
 
 @if (isLoading)
@@ -62,7 +68,7 @@ else
                 @foreach (var proveedor in Proveedores)
                 {
                     <tr>
-                        <td>@proveedor.Id</td>
+                        <td>@proveedor.Nume_Cli</td>
                         <td>@proveedor.Raso_Cli</td>
                         <td>@proveedor.Domi_Cli</td>
                         <td>@proveedor.Tele_Cli</td>
@@ -131,8 +137,9 @@ else
         }
         else
         {
-            url1 = $"api/proved12?page={page}&recordsNumber={RegistrosPorPagina}&filter={Filter}&stat_Cli=0";
-            url2 = $"api/proved12/totalPages?recordsNumber={RegistrosPorPagina}&filter={Filter}&stat_Cli=0";
+            var encodedFilter = Uri.EscapeDataString(Filter);
+            url1 = $"api/proved12?page={page}&recordsNumber={RegistrosPorPagina}&filter={encodedFilter}&stat_Cli=0";
+            url2 = $"api/proved12/totalPages?recordsNumber={RegistrosPorPagina}&filter={encodedFilter}&stat_Cli=0";
         }
         try
         {
@@ -155,7 +162,16 @@ else
     /// </summary>
     protected override async Task OnInitializedAsync()
     {
+        await PageAccess.RequiereAccesoAsync("/ficha-proveedor-index");   // ? validación
         await LoadAsync();
+    }
+
+    private async Task OnSearchKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+        {
+            await LoadAsync(1);
+        }
     }
 
     /// <summary>
@@ -187,6 +203,21 @@ else
     /// </summary>
     private async Task DarDeBajaProveedor(int id)
     {
+        var confirm = await sweetAlertService.FireAsync(new SweetAlertOptions
+            {
+                Title = "Confirmar baja",
+                Text = "¿Deseás dar de baja este proveedor?",
+                Icon = SweetAlertIcon.Warning,
+                ShowCancelButton = true,
+                ConfirmButtonText = "Sí, dar de baja",
+                CancelButtonText = "Cancelar"
+            });
+
+        if (!confirm.IsConfirmed)
+        {
+            return;
+        }
+
         var proveedor = await repository.Get<Proved12>($"/api/proved12/{id}");
         if (proveedor.Response != null)
         {
@@ -233,7 +264,8 @@ else
             
             if (!string.IsNullOrEmpty(Filter))
             {
-                parametros.Add($"filter={Filter}");
+                var encodedFilter = Uri.EscapeDataString(Filter);
+                parametros.Add($"filter={encodedFilter}");
             }
 
             // Agregar parámetros para obtener todos los registros (sin paginación)

@@ -53,9 +53,9 @@
 @code {
     [CascadingParameter] BlazoredModalInstance BlazoredModal { get; set; } = default!;
 
-    private List<DepositoDTO> depositos;
+    private List<DepositoDTO> depositos = new();
     private string searchText = "";
-    private Timer debounceTimer;
+    private Timer? debounceTimer;
 
     protected override void OnInitialized()
     {
@@ -67,12 +67,23 @@
     {
         try
         {
-            var response = await repository.Get<List<DepositoDTO>>("api/depositos");
-            if (!response.Error)
+            var response = await repository.Get<Dictionary<int, string>>("api/tadeposi/combo");
+            if (response.Error || response.Response == null)
             {
-                depositos = response.Response;
-                StateHasChanged();
+                await sweetAlertService.FireAsync("Error", await response.GetErrorMessageAsync(), SweetAlertIcon.Error);
+                return;
             }
+
+            depositos = response.Response
+                .OrderBy(x => x.Value)
+                .Select(x => new DepositoDTO
+                {
+                    Id = x.Key,
+                    Nombre = x.Value
+                })
+                .ToList();
+
+            StateHasChanged();
         }
         catch (Exception ex)
         {
@@ -82,10 +93,10 @@
 
     private void HandleKeyUp(KeyboardEventArgs e)
     {
-        debounceTimer.Change(300, Timeout.Infinite);
+        debounceTimer?.Change(300, Timeout.Infinite);
     }
 
-    private void Search(object state)
+    private void Search(object? state)
     {
         InvokeAsync(() =>
         {
@@ -98,7 +109,7 @@
                 depositos = depositos?
                     .Where(d => d.Nombre.Contains(searchText, StringComparison.OrdinalIgnoreCase) ||
                                d.Id.ToString().Contains(searchText))
-                    .ToList();
+                    .ToList() ?? new List<DepositoDTO>();
                 StateHasChanged();
             }
         });
@@ -106,12 +117,12 @@
 
     private void SeleccionarDeposito(DepositoDTO deposito)
     {
-        BlazoredModal.CloseAsync(ModalResult.Ok(deposito));
+        _ = BlazoredModal.CloseAsync(ModalResult.Ok(deposito));
     }
 
     private void Cancel()
     {
-        BlazoredModal.CancelAsync();
+        _ = BlazoredModal.CancelAsync();
     }
 
     public void Dispose()

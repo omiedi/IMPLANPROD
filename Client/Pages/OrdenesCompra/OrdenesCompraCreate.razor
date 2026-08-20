@@ -1,22 +1,36 @@
 @page "/ordenes-compra/crear"
+@using IMPLANPROD.Client.Services
 @using IMPLANPROD.Shared.Entities
 @using IMPLANPROD.Client.Repositories
 @inject IRepository repository
 @inject NavigationManager navigationManager
 @inject SweetAlertService sweetAlertService
+@inject PageAccessService PageAccess
 
 <PageTitle>Nueva Orden de Compra</PageTitle>
 
+@if (validando)
+{
+    <p>Validando acceso...</p>
+}
+else
+{
 <OrdenesCompraForm ordenCompra="ordenCompra"
                    OnValidSubmit="CrearAsync"
                    OnCancel="Regresar"
                    IsEdit="false" />
+}
 
 @code {
     private Ocomenca ordenCompra = new();
+    private bool validando = true;
 
     protected override async Task OnInitializedAsync()
     {
+        // Validar que el usuario tenga permiso para acceder a esta página antes de mostrar el contenido
+        await PageAccess.RequiereAccesoAsync("/ordenes-compra/crear");
+        validando = false;
+        
         // Obtener el siguiente número de orden
         try
         {

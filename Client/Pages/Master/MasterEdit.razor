@@ -1,12 +1,18 @@
 @page "/master/edit/{Id:int}"
+@using IMPLANPROD.Client.Services
 @inject IRepository repository
 @inject NavigationManager navigationManager
 @inject SweetAlertService sweetAlertService
 @inject IModalService Modal
+@inject PageAccessService PageAccess
 
-<h3>Editar Producto</h3>
+<PageTitle>Editar Producto</PageTitle>
 
-@if (master is null)
+@if (validando)
+{
+    <p>Validando acceso...</p>
+}
+else if (master is null)
 {
     <div class="align-items-center">
         <img src="https://media0.giphy.com/media/3oEjI6SIIHBdRxXI40/giphy.gif?cid=ecf05e47q4b7z67j4s1jr2t1uymf1mh3kq8sxpgmj89wf4xg&rid=giphy.gif&ct=g" />
@@ -20,6 +26,7 @@ else
 @code {
     private Master? master;
     private MasterForm? masterForm;
+    private bool validando = true;
     public bool FormPostedSuccessfully { get; set; }
     [Parameter]
     public int Id { get; set; }
@@ -27,8 +34,12 @@ else
     [CascadingParameter]
     BlazoredModalInstance BlazoredModal { get; set; } = default!;
 
+    // Validar que el usuario tenga permiso para acceder a esta página antes de mostrar el contenido
     protected override async Task OnInitializedAsync()
     {
+        await PageAccess.RequiereAccesoAsync("/master/edit/{Id}");
+        validando = false;
+        
         var responseHttp = await repository.Get<Master>($"/api/master/{Id}");
         if (responseHttp.Error)
         {

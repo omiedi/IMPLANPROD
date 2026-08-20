@@ -13,14 +13,27 @@
 @inject SweetAlertService sweetAlertService
 @inject RemitosConfigService remitosConfigService
 @inject IModalService modalService
+@inject PageAccessService PageAccess
 
 <PageTitle>Remitos de Cliente</PageTitle>
 
+@if (validando)
+{
+    <p>Validando acceso...</p>
+}
+else
+{
 <div class="container-fluid">
     <!-- Barra de botones superior -->
     <div class="d-flex justify-content-end gap-2 mb-3">
         <button type="button" class="btn btn-info" @onclick="AbrirGraficos">
             <i class="fas fa-chart-bar"></i> Gráficos
+        </button>
+        
+        <button class="btn btn-sm btn-outline-primary"
+                title="Configuración Sincronización"
+                @onclick="AbrirConfiguracionSync">
+            <i class="oi oi-cog"></i>
         </button>
         
         <div class="btn-group">
@@ -384,6 +397,7 @@
         </div>
     </EditForm>
 </div>
+}
 
 <!-- Selector de Clientes -->
 <SelectorClientes @ref="selectorClientes" OnClienteSeleccionado="OnClienteSeleccionado" />
@@ -400,6 +414,11 @@
 <RemitosConfigModal IsVisible="@mostrarModalConfiguracion"
                     OnCloseRequested="CerrarModalConfiguracion"
                     OnConfigurationSaved="OnConfiguracionGuardada" />
+
+<!-- Modal de Configuración de Sincronización -->
+<SyncConfigModal MostrarModal="mostrarModalSync"
+                 OnCerrar="CerrarModalSync"
+                 OnGuardado="OnConfigSyncGuardada" />
 
 <!-- Componente de Impresión de Remito -->
 <ImpresionRemito @ref="impresionRemito"
@@ -440,6 +459,8 @@
 
     // Control del modal de configuración
     private bool mostrarModalConfiguracion = false;
+    private bool mostrarModalSync = false;
+    private bool validando = true;
 
     // Variables para impresión del remito
     private string nciImpresion = "";
@@ -529,6 +550,10 @@
 
     protected override async Task OnInitializedAsync()
     {
+        // Validar que el usuario tenga permiso para acceder a esta página antes de mostrar el contenido
+        await PageAccess.RequiereAccesoAsync("/remitos/cliente");
+        validando = false;
+        
         Console.WriteLine("[RemitoCliente] Componente inicializado");
         await CargarDepositos();
         await CargarPrefijoDefecto();
@@ -690,8 +715,8 @@
         {
             Console.WriteLine($"[RemitoCliente] Verificando pedidos pendientes para cliente {numeroCliente}");
 
-            // Consultar pedidos pendientes del cliente
-            var response = await repository.Get<List<Peddeta>>($"api/peddeta/pendientes/{numeroCliente}");
+            // Consultar pedidos pendientes del cliente (endpoint específico para remitos de cliente)
+            var response = await repository.Get<List<Peddeta>>($"api/peddeta/pendientes-cliente/{numeroCliente}");
 
             if (response.Error)
             {
@@ -1126,6 +1151,26 @@
     private void OnConfiguracionGuardada()
     {
         Console.WriteLine("[RemitoCliente] Configuración guardada exitosamente");
+        // Aquí se puede recargar datos si es necesario
+    }
+
+    private void AbrirConfiguracionSync()
+    {
+        Console.WriteLine("[RemitoCliente] Abriendo modal de configuración de sincronización");
+        mostrarModalSync = true;
+        StateHasChanged();
+    }
+
+    private void CerrarModalSync()
+    {
+        Console.WriteLine("[RemitoCliente] Cerrando modal de configuración de sincronización");
+        mostrarModalSync = false;
+        StateHasChanged();
+    }
+
+    private void OnConfigSyncGuardada()
+    {
+        Console.WriteLine("[RemitoCliente] Configuración de sincronización guardada exitosamente");
         // Aquí se puede recargar datos si es necesario
     }
 

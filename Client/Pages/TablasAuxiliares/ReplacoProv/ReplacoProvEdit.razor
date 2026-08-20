@@ -1,0 +1,195 @@
+@inject IRepository repository
+@inject SweetAlertService sweetAlertService
+
+@using CurrieTechnologies.Razor.SweetAlert2
+@using IMPLANPROD.Client.Shared.Components
+@using IMPLANPROD.Shared.Entities
+@using Blazored.Modal
+@using Blazored.Modal.Services
+
+<div class="modal-body">
+    <h3>Editar Código Equivalente (Proveedor)</h3>
+
+    @if (cargando)
+    {
+        <div class="d-flex justify-content-center my-4">
+            <div class="spinner-border text-primary" role="status"></div>
+        </div>
+    }
+    else
+    {
+        <div class="mb-3">
+            <label class="form-label">Proveedor</label>
+            <input class="form-control" value="@model.NumeProv" readonly />
+        </div>
+
+        <div class="mb-3">
+            <label class="form-label"><strong class="text-danger">*</strong> Producto (Master)</label>
+            <div class="input-group">
+                <input class="form-control" value="@productoSeleccionadoTexto" readonly placeholder="Debe seleccionar un producto..." />
+                <button class="btn btn-outline-primary" @onclick="AbrirSelectorProducto" title="Seleccionar Producto">
+                    <i class="fas fa-box"></i>
+                </button>
+                <button class="btn btn-outline-secondary" @onclick="LimpiarProducto" disabled="@(productoSeleccionado == null)">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+        </div>
+
+        <div class="mb-3">
+            <label class="form-label">Referencia</label>
+            <input class="form-control" maxlength="64" @bind="model.Referencia" />
+        </div>
+
+        <div class="mb-3">
+            <label class="form-label">Observaciones</label>
+            <input class="form-control" maxlength="256" @bind="model.Observaciones" />
+        </div>
+
+        <div class="d-flex justify-content-end gap-2">
+            <button class="btn btn-secondary" @onclick="Cancelar">
+                Cancelar
+            </button>
+            <button class="btn btn-primary" @onclick="Guardar" disabled="@(guardando)">
+                @(guardando ? "Guardando..." : "Guardar")
+            </button>
+        </div>
+    }
+</div>
+
+<SelectorProductos @ref="selectorProductos" 
+                  PermitirCantidad="false"
+                  OnProductoSeleccionado="OnProductoSeleccionado"
+                  OnClose="OnCloseSelectorProductos" />
+
+@code {
+    [CascadingParameter]
+    private BlazoredModalInstance BlazoredModal { get; set; } = default!;
+
+    [Parameter]
+    public int Id { get; set; }
+
+    private bool cargando;
+    private bool guardando;
+
+    private Replaco model = new();
+
+    private Master? productoSeleccionado;
+    private string productoSeleccionadoTexto = string.Empty;
+
+    private SelectorProductos selectorProductos = null!;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await Cargar();
+    }
+
+    private async Task Cargar()
+    {
+        cargando = true;
+        try
+        {
+            var response = await repository.Get<Replaco>($"/api/replacoprov/{Id}");
+            if (response.Error || response.Response == null)
+            {
+                var msg = await response.GetErrorMessageAsync();
+                await sweetAlertService.FireAsync("Error", msg, SweetAlertIcon.Error);
+                await BlazoredModal.CancelAsync();
+                return;
+            }
+
+            model = response.Response;
+            model.NumeCli = 0;
+
+            await CargarProductoSeleccionado(model.CodInte);
+        }
+        finally
+        {
+            cargando = false;
+        }
+    }
+
+    private async Task CargarProductoSeleccionado(int codInte)
+    {
+        productoSeleccionado = null;
+        productoSeleccionadoTexto = string.Empty;
+
+        if (codInte <= 0)
+        {
+            return;
+        }
+
+        var response = await repository.Get<List<Master>>($"api/master/search?filter={codInte}");
+        if (!response.Error && response.Response != null)
+        {
+            var p = response.Response.FirstOrDefault(x => x.Codint == codInte);
+            if (p != null)
+            {
+                productoSeleccionado = p;
+                productoSeleccionadoTexto = $"{p.Codigo} - {p.Descripcion}";
+            }
+        }
+
+        if (productoSeleccionado == null)
+        {
+            productoSeleccionadoTexto = $"CodInt {codInte}";
+        }
+    }
+
+    private async Task AbrirSelectorProducto()
+    {
+        await selectorProductos.AbrirModal();
+    }
+
+    private void LimpiarProducto()
+    {
+        productoSeleccionado = null;
+        productoSeleccionadoTexto = string.Empty;
+        model.CodInte = 0;
+    }
+
+    private async Task OnProductoSeleccionado(Master master)
+    {
+        productoSeleccionado = master;
+        productoSeleccionadoTexto = $"{master.Codigo} - {master.Descripcion}";
+        model.CodInte = master.Codint;
+        await Task.CompletedTask;
+    }
+
+    private async Task OnCloseSelectorProductos()
+    {
+        await Task.CompletedTask;
+    }
+
+    private async Task Guardar()
+    {
+        if (model.CodInte <= 0)
+        {
+            await sweetAlertService.FireAsync("Error", "Debe seleccionar un producto.", SweetAlertIcon.Error);
+            return;
+        }
+
+        guardando = true;
+        try
+        {
+            var response = await repository.Put("/api/replacoprov", model);
+            if (response.Error)
+            {
+                var msg = await response.GetErrorMessageAsync();
+                await sweetAlertService.FireAsync("Error", msg, SweetAlertIcon.Error);
+                return;
+            }
+
+            await BlazoredModal.CloseAsync(ModalResult.Ok());
+        }
+        finally
+        {
+            guardando = false;
+        }
+    }
+
+    private async Task Cancelar()
+    {
+        await BlazoredModal.CancelAsync();
+    }
+}

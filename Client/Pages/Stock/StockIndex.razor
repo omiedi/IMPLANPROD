@@ -7,6 +7,8 @@
 @using System.Security.Claims
 @using IMPLANPROD.Client.Pages.StockAjustes
 @using IMPLANPROD.Shared.DTOs
+@using IMPLANPROD.Client.Pages.Stock
+@using IMPLANPROD.Client.Shared.Components
 @inject IRepository repository
 @inject NavigationManager NavigationManager
 @inject SweetAlertService sweetAlertService
@@ -25,7 +27,18 @@
         <hr class="border-primary border-2 opacity-50" />
     </div>
 
-<div class="bg-primary bg-opacity-10 p-3 rounded-3 mb-3 d-flex justify-content-end align-items-center">
+<div class="bg-primary bg-opacity-10 p-3 rounded-3 mb-3 d-flex justify-content-between align-items-center">
+    <div class="d-flex gap-2">
+        <button type="button" class="btn btn-success" @onclick="AbrirTransferenciaMultiple">
+            <i class="oi oi-list"></i> Transf. Múltiple
+        </button>
+        <button type="button" class="btn btn-info" @onclick="AbrirAsignadoPedidos">
+            <i class="oi oi-document"></i> TR-Asignado a Pedidos
+        </button>
+        <button type="button" class="btn btn-warning" @onclick="AbrirSincronizacion">
+            <i class="oi oi-sync"></i> Sincronización
+        </button>
+    </div>
     <div class="dropdown">
         <button class="btn btn-sm btn-primary dropdown-toggle" type="button" data-bs-toggle="dropdown">
             Informes
@@ -36,16 +49,6 @@
                     Consulta de Stocks de Componentes
                 </NavLink>
             </li>
-            @* <li>
-                <NavLink class="dropdown-item" href="/ajuste-stock">
-                    Ajuste de Stock
-                </NavLink>
-            </li> *@
-            @* <li>
-                <NavLink class="dropdown-item" href="/movimientos-stock">
-                    Movimientos Históricos
-                </NavLink>
-            </li> *@
         </ul>
     </div>
 </div>
@@ -63,191 +66,255 @@ TotalPages="totalPages"
 SelectedPage="SelectedPageAsync" />
 
 @if (isLoading)
-{
-    <div class="spinner-border text-primary" role="status">
-        <span class="sr-only">Cargando...</span>
-    </div>
-}
-else
-{
-    @if (Productos.Count == 0 && !string.IsNullOrEmpty(Filter))
     {
-        <div class="alert alert-info">
-            <i class="fas fa-info-circle me-2"></i> No se encontraron coincidencias para el filtro "@Filter".
+        <div class="spinner-border text-primary" role="status">
+            <span class="sr-only">Cargando...</span>
         </div>
-    }
-    <GenericList MyList="Productos">
-        <Body>
-            <table class="table table-striped">
-                <thead>            <tr>
-                        <th>Cód.Interno</th>
-                        <th>Código</th>
-                        <th>Descripción</th>
-                        <th class="text-end">Saldo</th>
-                        <th>U.Med.</th>
-                        <th>X Depósito</th>
-                        <th>Transferenrir</th>
-                        <th>Mov.Históricos</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    @if (Productos.Count > 0)
-                    {
-                        @foreach (var item in Productos)
-                        {
-                            <tr>
-                                <td>@item.Cod_inte</td>
-                                <td>@item.Codigo</td>
-                                <td>@item.Descripcion</td>
-                                <td class="text-end">@item.Saldo.ToString("N2")</td>
-                                <td>@item.UnidadMedida</td>
-                                <td>
-                                    <button class="btn btn-warning" @onclick="() => MostrarStockPorDeposito(item)">
-                                        <i class="oi oi-eye"></i> X Depósito + Ajustes
-                                    </button>
-                                </td>
-                                <td>
-                                    <button class="btn btn-info" @onclick="() => AbrirTransferencias(item)">
-                                        <i class="oi oi-transfer"></i> Transferencias
-                                    </button>
-                                </td>
-                                <td>
-                                    <button class="btn btn-secondary" @onclick="() => AbrirHistorico(item)">
-                                        <i class="oi oi-clock"></i> Histórico
-                                    </button>
-
-
-                                </td>
-                            </tr>
-                        }
-                    }
-                    else
-                    {
-                        <tr><td colspan="3">No hay productos con saldo.</td></tr>
-                    }
-                </tbody>
-            </table>
-        </Body>
-    </GenericList>
-}
-@if (mostrarDetalleDeposito)
-{
-    <div class="modal fade show" style="display: block" tabindex="-1">
-        <div class="modal-dialog">
-            <div class="modal-content">
-                <div class="modal-header bg-warning text-dark">
-                    <h5 class="modal-title">Stock por Depósito - @repuestoSeleccionado?.Codigo</h5>
-                    <button type="button" class="btn-close" @onclick="CerrarDetalleDeposito"></button>
-                </div>
-                <div class="modal-body">
-                    @if (stocksPorDeposito == null)
-                    {
-                        <div class="spinner-border text-primary" role="status">
-                            <span class="sr-only">Cargando...</span>
-                        </div>
-                    }
-                    else if (!stocksPorDeposito.Any())
-                    {
-                        <div class="alert alert-info">
-                            No hay stock registrado en ningún depósito.
-                        </div>
-                    }
-                    else
-                    {
-                        <div id="tablaScroll" class="table-container" style="max-height: 15cm; overflow-y: auto;">
-                            <div class="table-responsive">
-                                <table class="table table-striped table-hover">
-                                    <thead>
-                                        <tr>
-                                            <th>Depósito</th>
-                                            <th>Descripción</th>
-                                            <th class="text-end">Stock</th>
-                                            <th></th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        @foreach (var stock in stocksPorDeposito)
-                                        {
-                                            <tr>
-                                                <td>@stock.Deposito</td>
-                                                <td>@stock.Descripcion</td>
-                                                <td class="text-end">@stock.Stock.ToString("N2")</td>
-                                                <td class="text-end">
-                                                   @*  <button class="btn btn-primary btn-sm" @onclick="() => AbrirModalAjuste(stock)">
-                                                        <i class="oi oi-pencil"></i> Ajustar
-                                                    </button *@>
-                                                    <button class="btn btn-primary btn-sm" @onclick="async () => await PrepararAjuste(stock)">
-                                                        <i class="oi oi-pencil"></i> Ajustar
-                                                    </button>
-                                                </td>
-                                            </tr>
-                                        }
-                                    </tbody>
-                                </table>
-                            </div>
-                        </div>
-
-                    }
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" @onclick="CerrarDetalleDeposito">Cerrar</button>
-                </div>
-            </div>
-        </div>
-    </div>
-    <div class="modal-backdrop fade show"></div>
-
-}
-@if (mostrarModalAjuste && repuestoSeleccionado != null && stockDepositoSeleccionado != null)
-{
-    @if (NivelTrazable == 1)
-    {
-        <StockAjustesTrazablesFormModal
-            Repuesto="repuestoSeleccionado"
-            StockDeposito="stockDepositoSeleccionado"
-            Visible="true"
-            OnClose="CerrarModalAjuste"
-            OnSave="GuardarAjuste" />
     }
     else
     {
-        <StockAjustesFormModal
-            Repuesto="repuestoSeleccionado"
-            StockDeposito="stockDepositoSeleccionado"
-            Visible="true"
-            OnClose="CerrarModalAjuste"
-            OnSave="GuardarAjuste" />
+        @if (Productos.Count == 0 && !string.IsNullOrEmpty(Filter))
+        {
+            <div class="alert alert-info">
+                <i class="fas fa-info-circle me-2"></i> No se encontraron coincidencias para el filtro "@Filter".
+            </div>
+        }
+        <GenericList MyList="Productos">
+            <Body>
+                <table class="table table-striped">
+                    <thead>            <tr>
+                            <th>Cód.Interno</th>
+                            <th>Código</th>
+                            <th>Descripción</th>
+                            <th>U.Med.</th>
+                            <th>Inf.General</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @if (Productos.Count > 0)
+                        {
+                            @foreach (var item in Productos)
+                            {
+                                <tr>
+                                    <td>@item.Codint</td>
+                                    <td>@item.Codigo</td>
+                                    <td>@item.Descripcion</td>
+                                    <td>@item.Umedida</td>
+                                    <td>
+                                        <button class="btn btn-primary ms-2" @onclick="() => AbrirInfGeneral(item)">
+                                            <i class="oi oi-info"></i> Inf.General
+                                        </button>
+                                    </td>
+                                </tr>
+                            }
+                        }
+                        else
+                        {
+                            <tr><td colspan="5">No hay productos para mostrar.</td></tr>
+                        }
+                    </tbody>
+                </table>
+            </Body>
+        </GenericList>
     }
-}
+</div>
+
+<!-- Modal Transferencia Múltiple -->
 @if (mostrarModalTransferencia)
 {
-    <StockTransferenciaModal
-    Repuesto="repuestoSeleccionado" 
-    Visible="mostrarModalTransferencia"
-    OnClose="CerrarModalTransferencia"
-    OnSave="GuardarTransferencia" />
+    <StockTransferenciaModal 
+    Repuesto="@productoParaTransferencia" 
+    Visible="@mostrarModalTransferencia"
+    OnClose="CerrarTransferenciaMultiple" />
 }
-@if (mostrarModalHistorico)
+
+<!-- Modal Asignado a Pedidos -->
+@if (mostrarModalAsignadoPedidos)
 {
-    <div class="modal fade show" style="display: block" tabindex="-1">
+    <div class="modal fade show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5);">
         <div class="modal-dialog modal-xl">
             <div class="modal-content">
-                <div class="modal-header bg-secondary text-white">
-                    <h5 class="modal-title">Histórico de Movimientos</h5>
-                    <button type="button" class="btn-close btn-close-white" @onclick="CerrarHistorico"></button>
+                <div class="modal-header bg-info text-white">
+                    <h5 class="modal-title">
+                        <i class="oi oi-document me-2"></i>Productos Asignados a Pedidos
+                    </h5>
+                    <button type="button" class="btn-close btn-close-white" @onclick="CerrarAsignadoPedidos"></button>
                 </div>
-                <div class="modal-body p-0">
-                    <HistoricoMovimientosComponent Repuesto="repuestoSeleccionado"
-                    ShowInModal="true"
-                    HeaderClass="bg-secondary"
-                    HeaderStyle="margin: -1px;" />
+                <div class="modal-body">
+                    <!-- Selectores de Cliente y Pedido -->
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold">Cliente:</label>
+                            <select class="form-select" @onchange="OnClienteChanged">
+                                <option value="0">-- Todos los Clientes --</option>
+                                @foreach (var cliente in clientes)
+                                {
+                                    <option value="@cliente.Nume_Cli">@cliente.Nume_Cli - @cliente.Raso_Cli</option>
+                                }
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold">Pedido:</label>
+                            <select class="form-select" value="@pedidoSeleccionado" @onchange="OnPedidoChanged">
+                                <option value="0">-- Seleccione un Pedido --</option>
+                                @foreach (var pedido in pedidosPendientes)
+                                {
+                                    <option value="@pedido.NroPed">@pedido.NroPed - @pedido.Referencia</option>
+                                }
+                            </select>
+                        </div>
+                    </div>
+
+                    <!-- Selectores de Depósitos -->
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold">Depósito Origen:</label>
+                            <select class="form-select" @bind="depositoOrigenSeleccionado">
+                                <option value="0">-- Seleccione Depósito Origen --</option>
+                                @foreach (var deposito in depositos)
+                                {
+                                    <option value="@deposito.Key">@deposito.Value</option>
+                                }
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold">Depósito Destino:</label>
+                            <select class="form-select" @bind="depositoDestinoSeleccionado">
+                                <option value="0">-- Seleccione Depósito Destino --</option>
+                                @foreach (var deposito in depositos)
+                                {
+                                    <option value="@deposito.Key">@deposito.Value</option>
+                                }
+                            </select>
+                        </div>
+                    </div>
+
+                    <!-- Grilla de Detalle del Pedido -->
+                    @if (detallePedido.Any())
+                    {
+                        <div class="table-responsive">
+                            <table class="table table-striped table-hover table-sm">
+                                <thead class="table-primary">
+                                    <tr>
+                                        <th>Pedido</th>
+                                        <th>Código</th>
+                                        <th>Descripción</th>
+                                        <th class="text-end">Cant. Pedida</th>
+                                        <th class="text-end">Cant. Entregada</th>
+                                        <th class="text-end">Pend. Remitir</th>
+                                        <th>Fecha Solicitada</th>
+                                        <th class="text-end">Atraso (días)</th>
+                                        <th class="text-end" style="min-width: 120px;">Cant. a Remitir</th>
+                                        <th class="text-center">Trazabilidad</th>
+                                        <th style="min-width: 150px;">Lote</th>
+                                        <th class="text-center">Acciones</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var item in detallePedido)
+                                    {
+                                        <tr>
+                                            <td>@item.NroPed</td>
+                                            <td>@item.CodiExt</td>
+                                            <td>@item.Descrip</td>
+                                            <td class="text-end">@item.CanPed.ToString("N2")</td>
+                                            <td class="text-end">@item.CantEnt.ToString("N2")</td>
+                                            <td class="text-end">@item.PendienteRemitir.ToString("N2")</td>
+                                            <td>@(item.FeSolEnt?.ToString("dd/MM/yyyy") ?? "")</td>
+                                            <td class="text-end">
+                                                @if (item.Atraso > 0)
+                                                {
+                                                    <span class="badge bg-danger">@item.Atraso</span>
+                                                }
+                                                else
+                                                {
+                                                    <span>0</span>
+                                                }
+                                            </td>
+                                            <td>
+                                                <input type="number" 
+                                                class="form-control form-control-sm text-end" 
+                                                step="0.01"
+                                                min="0"
+                                                max="@item.PendienteRemitir"
+                                                @bind="item.CantidadARemitir"
+                                                @bind:event="oninput"
+                                                style="width: 100px;" />
+                                            </td>
+                                            <td class="text-center">
+                                                @if (item.Trazable == 0)
+                                                {
+                                                    <span class="badge bg-success">0</span>
+                                                }
+                                                else if (item.Trazable == 1)
+                                                {
+                                                    <span class="badge bg-warning text-dark">1</span>
+                                                }
+                                                else if (item.Trazable == 2)
+                                                {
+                                                    <span class="badge bg-danger">2</span>
+                                                }
+                                            </td>
+                                            <td>
+                                                @if (item.Trazable == 1)
+                                                {
+                                                    <select class="form-select form-select-sm" 
+                                                    @bind="item.LoteSeleccionado"
+                                                    @onfocus="() => CargarLotesParaProducto(item)">
+                                                        <option value="">-- Seleccione Lote --</option>
+                                                        @if (lotesDisponibles.ContainsKey(item.CodiInt))
+                                                        {
+                                                            @foreach (var lote in lotesDisponibles[item.CodiInt])
+                                                            {
+                                                                <option value="@lote.Lote">@lote.Lote (Stock: @lote.Saldo.ToString("N2"))</option>
+                                                            }
+                                                        }
+                                                    </select>
+                                                }
+                                                else
+                                                {
+                                                    <span class="text-muted">N/A</span>
+                                                }
+                                            </td>
+                                            <td class="text-center">
+                                                <button type="button" 
+                                                class="btn btn-danger btn-sm" 
+                                                @onclick="() => EliminarFilaDetalle(item)"
+                                                title="Eliminar">
+                                                    <i class="oi oi-trash"></i>
+                                                </button>
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    }
+                    else if (pedidoSeleccionado > 0)
+                    {
+                        <div class="alert alert-info">
+                            <i class="fas fa-info-circle me-2"></i>No hay productos pendientes para este pedido.
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="alert alert-warning">
+                            <i class="fas fa-exclamation-triangle me-2"></i>Seleccione un pedido para ver el detalle.
+                        </div>
+                    }
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" @onclick="CerrarAsignadoPedidos">
+                        <i class="oi oi-x me-1"></i>Cerrar
+                    </button>
+                    <button type="button" class="btn btn-primary" @onclick="TransferirProductosPedido" disabled="@(!detallePedido.Any())">
+                        <i class="oi oi-transfer me-1"></i>TRANSFERIR
+                    </button>
                 </div>
             </div>
         </div>
     </div>
-    <div class="modal-backdrop fade show"></div>
 }
-</div>
 
 @code {
 
@@ -256,7 +323,13 @@ else
     protected override async Task OnInitializedAsync()
     {
         if (isProcessing) return;
-        await LoadAsync();
+        var page = 1;
+        if (!string.IsNullOrWhiteSpace(Page) && int.TryParse(Page, out var parsedPage) && parsedPage > 0)
+        {
+            page = parsedPage;
+        }
+
+        await LoadAsync(page);
     }
 
     int? NivelTrazable;
@@ -265,9 +338,8 @@ else
 
 
     private int PaginaActual = 1;
-    private Dictionary<int, decimal> stocksTotales = new();
-    private List<ProductoConSaldoDTO>Productos = new();
-    private ProductoConSaldoDTO? repuestoSeleccionado;
+    private List<MasterStockListItemDTO>Productos = new();
+    private MasterStockListItemDTO? repuestoSeleccionado;
     // private List<Master>? repuestos;
     private List<Usuario>? usuarios;
     private MasterFuncionesDTO? masterFuncionesDTO;
@@ -275,6 +347,21 @@ else
     private bool isLoading = true;
     private int? idFlexoft;
 
+    // Variables para Transferencia Múltiple
+    private bool mostrarModalTransferencia = false;
+    private ProductoConSaldoDTO? productoParaTransferencia = null;
+
+    // Variables para Asignado a Pedidos
+    private bool mostrarModalAsignadoPedidos = false;
+    private List<Deudor12> clientes = new();
+    private List<PedidoPendienteClienteDTO> pedidosPendientes = new();
+    private List<DetallePedidoPendienteDTO> detallePedido = new();
+    private int clienteSeleccionado = 0;
+    private int pedidoSeleccionado = 0;
+    private Dictionary<int, string> depositos = new();
+    private int depositoOrigenSeleccionado = 0;
+    private int depositoDestinoSeleccionado = 0;
+    private Dictionary<int, List<LoteDisponibleDTO>> lotesDisponibles = new();
 
     [Parameter]
     [SupplyParameterFromQuery]
@@ -287,14 +374,6 @@ else
     private int currentPage = 1;
     private int totalPages;
     private bool isProcessing = false;
-    private StockDepositoDTO? stockDepositoSeleccionado;
-
-    private List<StockDepositoDTO>? stocksPorDeposito;
-
-    private bool mostrarDetalleDeposito;
-    private bool mostrarModalTransferencia;
-    private bool mostrarModalHistorico;
-    private bool mostrarModalAjuste;
 
 
 
@@ -305,19 +384,14 @@ else
     {
         if (isProcessing) return;
 
-        if (!string.IsNullOrWhiteSpace(Page))
-        {
-            page = Convert.ToInt32(Page);
-        }
-
         try
         {
             isLoading = true;
             isProcessing = true;
 
-            // Construir URLs con parámetros de paginación correctos
-            string url1 = $"api/movisto?page={page}&recordsNumber=10";
-            string url2 = $"api/movisto/totalPages?page={page}&recordsNumber=10";
+            // Listado liviano (sin cálculo de saldo). Solo Master.
+            string url1 = $"api/master/stock-index?page={page}&recordsNumber=10";
+            string url2 = $"api/master/stock-index/totalPages?page={page}&recordsNumber=10";
 
             // Agregar filtro si existe
             if (!string.IsNullOrEmpty(Filter))
@@ -326,10 +400,10 @@ else
                 url2 += $"&filter={Uri.EscapeDataString(Filter)}";
             }
 
-            var responseHppt = await repository.Get<List<ProductoConSaldoDTO>>(url1);
+            var responseHppt = await repository.Get<List<MasterStockListItemDTO>>(url1);
             var responseHppt2 = await repository.Get<int>(url2);
-            
-            Productos = responseHppt.Response!;
+
+            Productos = responseHppt.Response ?? new List<MasterStockListItemDTO>();
             totalPages = responseHppt2.Response!;
             currentPage = page;
         }
@@ -345,212 +419,13 @@ else
         }
     }
 
-    private async Task PrepararAjuste(StockDepositoDTO stockDeposito)
+    private void AbrirInfGeneral(MasterStockListItemDTO repuesto)
     {
-        try
-        {
-            Console.WriteLine($"[PrepararAjuste] Iniciando ajuste para depósito: {stockDeposito.Deposito}");
-            Console.WriteLine($"[PrepararAjuste] Repuesto seleccionado: {repuestoSeleccionado?.Codigo ?? "NULL"}");
-            
-            if (repuestoSeleccionado == null)
-            {
-                await sweetAlertService.FireAsync("Error", "No hay un producto seleccionado", SweetAlertIcon.Error);
-                return;
-            }
-
-            stockDepositoSeleccionado = stockDeposito;
-            
-            Console.WriteLine($"[PrepararAjuste] Leyendo trazabilidad para Cod_inte: {repuestoSeleccionado.Cod_inte}");
-            await LeerTrazabilidad(repuestoSeleccionado);
-
-            Console.WriteLine($"[PrepararAjuste] Nivel trazable: {NivelTrazable}");
-            Console.WriteLine($"[PrepararAjuste] Abriendo modal de ajuste");
-            
-            mostrarModalAjuste = true;
-            StateHasChanged();
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"[PrepararAjuste] ERROR: {ex.Message}");
-            await sweetAlertService.FireAsync("Error", $"Error al preparar ajuste: {ex.Message}", SweetAlertIcon.Error);
-        }
+        var filtro = string.IsNullOrWhiteSpace(Filter) ? string.Empty : $"&Filter={Uri.EscapeDataString(Filter)}";
+        var urlVolver = $"/Stock-index?Page={currentPage}{filtro}";
+        var returnUrl = Uri.EscapeDataString(urlVolver);
+        NavigationManager.NavigateTo($"/StockInfGeneral/{repuesto.Codint}?returnUrl={returnUrl}");
     }
-
-    private async Task LeerTrazabilidad(ProductoConSaldoDTO repuesto)
-    {
-        var funcionesMaster = await repository.Get<MasterFuncionesDTO>($"api/masterfunciones/funcionesAtributos/{repuesto.Cod_inte}");
-
-        if (funcionesMaster?.Response != null)
-        {
-            NivelTrazable = funcionesMaster.Response.Trazable;
-        }
-        else
-        {
-            NivelTrazable = 0; // Valor por defecto si el producto no tiene datos o hubo error
-        }
-    }
-
-
-    // private async Task CargarUsuarios()
-    // {
-    //     try
-    //     {
-
-    //         var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
-    //         user = authState.User;
-
-    //         if (user.Identity.IsAuthenticated)
-    //         {
-    //             var username = user.Identity.Name;
-    //             var email = user.FindFirst(ClaimTypes.Email)?.Value;
-
-    //             if (!string.IsNullOrEmpty(username) && !string.IsNullOrEmpty(email))
-    //             {
-
-    //             idFlexoft = await Http.GetFromJsonAsync<int?>(
-    //                 $"api/Usuarios/ObtenerIdFlexoft?username={username}&email={email}");
-    //             }
-    //             else
-    //             {
-    //                 await sweetAlertService.FireAsync("Atención", "No se encontró el usuario autenticado en la lista.", SweetAlertIcon.Warning);
-    //             }
-    //         }
-    //     }
-    // catch (Exception ex)
-    // {
-    //     await sweetAlertService.FireAsync("Error", "Error al leer lista de usuarios", SweetAlertIcon.Error);
-    // }
-
-
-    private async Task MostrarStockPorDeposito(ProductoConSaldoDTO repuesto)
-    {
-        try
-        {
-            repuestoSeleccionado = repuesto;
-
-            // Primero obtenemos la lista de todos los depósitos
-            var responseDepositos = await repository.Get<List<int>>("api/tadeposi/SoloCodigos");
-            if (responseDepositos.Error)
-            {
-                await sweetAlertService.FireAsync("Error", "No se pudieron cargar los depósitos", SweetAlertIcon.Error);
-                return;
-            }
-
-            // Luego obtenemos el stock por depósito
-
-            int codint = 0;
-
-            codint = repuesto.Cod_inte;
-
-            // Obtenemos el stock por depósito para el producto seleccionado
-            var responseStock = await repository.Get<List<StockDepositoDTO>>($"api/movisto/stock/{codint}");
-            if (responseStock.Error)
-            {
-                await sweetAlertService.FireAsync("Error", responseStock.HttpResponseMessage.ReasonPhrase, SweetAlertIcon.Error);
-                return;
-            }
-
-            // Obtenemos la información de todos los depósitos (incluida la descripción)
-            // El endpoint devuelve un diccionario donde la clave es el código del depósito y el valor es la descripción
-            var responseDepositosInfo = await repository.Get<Dictionary<int, string>>("api/tadeposi/combo");
-            if (responseDepositosInfo.Error)
-            {
-                await sweetAlertService.FireAsync("Error", responseDepositosInfo.HttpResponseMessage.ReasonPhrase, SweetAlertIcon.Error);
-                return;
-            }
-
-            // Creamos una lista con todos los depósitos, tengan o no stock
-            // Incluimos la descripción del depósito y ordenamos por cantidad de stock descendente
-            stocksPorDeposito = responseDepositos.Response.Select(deposito =>
-            {
-                // Buscamos si existe stock para este depósito
-                var stockExistente = responseStock.Response?.FirstOrDefault(s => s.Deposito == deposito);
-
-                // Obtenemos la descripción directamente del diccionario usando el código del depósito como clave
-                string descripcion = "Sin descripción";
-                if (responseDepositosInfo.Response != null && responseDepositosInfo.Response.TryGetValue(deposito, out string desc))
-                {
-                    descripcion = desc;
-                }
-
-                return new StockDepositoDTO
-            {
-                Deposito = deposito,
-                Stock = stockExistente?.Stock ?? 0,
-                Descripcion = descripcion // Asignamos la descripción obtenida del diccionario
-            };
-            })
-            .OrderByDescending(s => s.Stock) // Ordenamos por cantidad de stock de manera descendente
-            .ToList();
-
-            // // Agregamos un log para verificar que las descripciones se están obteniendo correctamente
-            // Console.WriteLine($"Se cargaron {stocksPorDeposito.Count} depósitos con sus descripciones");
-            // foreach (var stock in stocksPorDeposito.Take(3)) // Mostramos los primeros 3 como ejemplo
-            // {
-            //     Console.WriteLine($"Depósito: {stock.Deposito}, Descripción: {stock.Descripcion}, Stock: {stock.Stock}");
-            // }
-
-            mostrarDetalleDeposito = true;
-        }
-        catch (Exception ex)
-        {
-            await sweetAlertService.FireAsync("Error", "No se pudo cargar el stock por depósito", SweetAlertIcon.Error);
-        }
-    }
-    private async Task GuardarAjuste()
-    {
-        // await CargarRepuestos();
-        await LoadAsync();
-        await MostrarStockPorDeposito(repuestoSeleccionado);
-        CerrarModalAjuste();
-    }
-
-    private void AbrirTransferencias(ProductoConSaldoDTO repuesto)
-    {
-        repuestoSeleccionado = repuesto;
-        mostrarModalTransferencia = true;
-    }
-    private void AbrirTransferencias()
-    {
-        mostrarModalTransferencia = false;
-    }
-    private void CerrarDetalleDeposito()
-    {
-        mostrarDetalleDeposito = false;
-        repuestoSeleccionado = null;
-        stocksPorDeposito = null;
-    }
-    private void CerrarModalTransferencia()
-    {
-        mostrarModalTransferencia = false;
-    }
-    private async Task GuardarTransferencia()
-    {
-        CerrarModalTransferencia();
-    }
-    private void AbrirHistorico(ProductoConSaldoDTO repuesto)
-    {
-        repuestoSeleccionado = repuesto;
-        mostrarModalHistorico = true;
-    }
-
-    private void CerrarHistorico()
-    {
-        mostrarModalHistorico = false;
-    }
-
-    private void AbrirModalAjuste(StockDepositoDTO stockDeposito)
-    {
-        stockDepositoSeleccionado = stockDeposito;
-        mostrarModalAjuste = true;
-    }
-
-    private void CerrarModalAjuste()
-    {
-        mostrarModalAjuste = false;
-        stockDepositoSeleccionado = null;
-    }
-
 
     private async Task CleanFilterAsync()
     {
@@ -561,12 +436,23 @@ else
     private async Task ApplyFilterAsync()
     {
         int page = 1;
+        currentPage = page;
+        Page = page.ToString();
+
+        var filtro = string.IsNullOrWhiteSpace(Filter) ? string.Empty : $"&Filter={Uri.EscapeDataString(Filter)}";
+        NavigationManager.NavigateTo($"/Stock-index?Page={page}{filtro}", forceLoad: false, replace: true);
+
         await LoadAsync(page);
     }
 
     private async Task SelectedPageAsync(int page)
     {
         currentPage = page;
+        Page = page.ToString();
+
+        var filtro = string.IsNullOrWhiteSpace(Filter) ? string.Empty : $"&Filter={Uri.EscapeDataString(Filter)}";
+        NavigationManager.NavigateTo($"/Stock-index?Page={page}{filtro}", forceLoad: false, replace: true);
+
         await LoadAsync(page);
     }
     private async Task HandleKeyPress(KeyboardEventArgs e)
@@ -576,4 +462,349 @@ else
             await ApplyFilterAsync();
         }
     }
+
+    // ===================================================================
+    // MÉTODOS PARA TRANSFERENCIA MÚLTIPLE
+    // ===================================================================
+
+    private void AbrirTransferenciaMultiple()
+    {
+        productoParaTransferencia = null; // No pasar producto específico para habilitar modo múltiple
+        mostrarModalTransferencia = true;
+    }
+
+    private void CerrarTransferenciaMultiple()
+    {
+        mostrarModalTransferencia = false;
+        productoParaTransferencia = null;
+    }
+
+    // ===================================================================
+    // MÉTODOS PARA ASIGNADO A PEDIDOS
+    // ===================================================================
+
+    private async Task AbrirAsignadoPedidos()
+    {
+        try
+        {
+            // Cargar lista de depósitos
+            await CargarDepositos();
+
+            // Cargar lista de clientes
+            var responseClientes = await repository.Get<List<Deudor12>>("api/Deudor12");
+            if (!responseClientes.Error && responseClientes.Response != null)
+            {
+                clientes = responseClientes.Response
+                    .Where(c => c.Stat_Cli >= 0)
+                    .OrderBy(c => c.Raso_Cli)
+                    .ToList();
+            }
+
+            // Cargar todos los pedidos pendientes (sin filtro de cliente)
+            await CargarPedidosPendientes(0);
+
+            mostrarModalAsignadoPedidos = true;
+        }
+        catch (Exception ex)
+        {
+            await sweetAlertService.FireAsync("Error", $"Error al abrir modal: {ex.Message}", SweetAlertIcon.Error);
+        }
+    }
+
+    private void CerrarAsignadoPedidos()
+    {
+        mostrarModalAsignadoPedidos = false;
+        clienteSeleccionado = 0;
+        pedidoSeleccionado = 0;
+        depositoOrigenSeleccionado = 0;
+        depositoDestinoSeleccionado = 0;
+        pedidosPendientes.Clear();
+        detallePedido.Clear();
+    }
+
+    private async Task OnClienteChanged(ChangeEventArgs e)
+    {
+        if (int.TryParse(e.Value?.ToString(), out int nroClie))
+        {
+            clienteSeleccionado = nroClie;
+            pedidoSeleccionado = 0;
+            detallePedido.Clear();
+            await CargarPedidosPendientes(nroClie);
+        }
+    }
+
+    private async Task CargarPedidosPendientes(int nroClie)
+    {
+        try
+        {
+            if (nroClie > 0)
+            {
+                var url = $"api/Peddeta/pedidos-pendientes-por-cliente?nroClie={nroClie}";
+                var response = await repository.Get<List<PedidoPendienteClienteDTO>>(url);
+
+                if (!response.Error && response.Response != null)
+                {
+                    pedidosPendientes = response.Response;
+                }
+
+                else
+                {
+                    pedidosPendientes = new List<PedidoPendienteClienteDTO>();
+                }
+
+            }
+            else { pedidosPendientes = new List<PedidoPendienteClienteDTO>(); }
+
+        }
+        catch (Exception ex)
+        {
+            await sweetAlertService.FireAsync("Error", $"Error al cargar pedidos: {ex.Message}", SweetAlertIcon.Error);
+            pedidosPendientes = new List<PedidoPendienteClienteDTO>();
+        }
+    }
+
+    private async Task OnPedidoChanged(ChangeEventArgs e)
+    {
+        if (int.TryParse(e.Value?.ToString(), out int nroPed))
+        {
+            pedidoSeleccionado = nroPed;
+            await CargarDetallePedido(nroPed);
+        }
+    }
+
+    private async Task CargarDetallePedido(int nroPed)
+    {
+        try
+        {
+            if (nroPed < 1)
+            {
+                detallePedido.Clear();
+                return;
+            }
+
+            var url = $"api/Peddeta/detalle-pendiente/{nroPed}";
+            var response = await repository.Get<List<DetallePedidoPendienteDTO>>(url);
+            
+            if (!response.Error && response.Response != null)
+            {
+                detallePedido = response.Response;
+            }
+            else
+            {
+                detallePedido = new List<DetallePedidoPendienteDTO>();
+            }
+        }
+        catch (Exception ex)
+        {
+            await sweetAlertService.FireAsync("Error", $"Error al cargar detalle del pedido: {ex.Message}", SweetAlertIcon.Error);
+            detallePedido = new List<DetallePedidoPendienteDTO>();
+        }
+    }
+
+    private void EliminarFilaDetalle(DetallePedidoPendienteDTO item)
+    {
+        detallePedido.Remove(item);
+        StateHasChanged();
+    }
+
+    private async Task CargarDepositos()
+    {
+        try
+        {
+            var response = await repository.Get<Dictionary<int, string>>("api/tadeposi/combo");
+            if (!response.Error && response.Response != null)
+            {
+                depositos = response.Response;
+            }
+        }
+        catch (Exception ex)
+        {
+            await sweetAlertService.FireAsync("Error", $"Error al cargar depósitos: {ex.Message}", SweetAlertIcon.Error);
+        }
+    }
+
+    private async Task CargarLotesParaProducto(DetallePedidoPendienteDTO item)
+    {
+        try
+        {
+            // Validar que haya depósito origen seleccionado
+            if (depositoOrigenSeleccionado == 0)
+            {
+                await sweetAlertService.FireAsync("Validación", "Debe seleccionar un Depósito Origen antes de seleccionar un lote", SweetAlertIcon.Warning);
+                return;
+            }
+
+            // Si ya se cargaron los lotes para este producto, no volver a cargar
+            if (lotesDisponibles.ContainsKey(item.CodiInt))
+            {
+                return;
+            }
+
+            // Cargar lotes disponibles para el producto en el depósito origen
+            var url = $"api/Stock/lotes/{item.CodiInt}/{depositoOrigenSeleccionado}";
+            var response = await repository.Get<List<LoteDisponibleDTO>>(url);
+
+            if (!response.Error && response.Response != null)
+            {
+                lotesDisponibles[item.CodiInt] = response.Response;
+                StateHasChanged();
+            }
+            else
+            {
+                lotesDisponibles[item.CodiInt] = new List<LoteDisponibleDTO>();
+            }
+        }
+        catch (Exception ex)
+        {
+            await sweetAlertService.FireAsync("Error", $"Error al cargar lotes: {ex.Message}", SweetAlertIcon.Error);
+        }
+    }
+
+    private async Task TransferirProductosPedido()
+    {
+        try
+        {
+            // Validar que se hayan seleccionado los depósitos
+            if (depositoOrigenSeleccionado == 0)
+            {
+                await sweetAlertService.FireAsync("Validación", "Debe seleccionar un Depósito Origen", SweetAlertIcon.Warning);
+                return;
+            }
+
+            if (depositoDestinoSeleccionado == 0)
+            {
+                await sweetAlertService.FireAsync("Validación", "Debe seleccionar un Depósito Destino", SweetAlertIcon.Warning);
+                return;
+            }
+
+            if (depositoOrigenSeleccionado == depositoDestinoSeleccionado)
+            {
+                await sweetAlertService.FireAsync("Validación", "El Depósito Origen y Destino no pueden ser el mismo", SweetAlertIcon.Warning);
+                return;
+            }
+
+            // Validar que haya productos en la lista
+            if (!detallePedido.Any())
+            {
+                await sweetAlertService.FireAsync("Validación", "No hay productos para transferir", SweetAlertIcon.Warning);
+                return;
+            }
+
+            // Validar productos con trazabilidad = 2 (no se pueden transferir)
+            var productosTrazables2 = detallePedido.Where(d => d.Trazable == 2).ToList();
+            if (productosTrazables2.Any())
+            {
+                var codigos = string.Join(", ", productosTrazables2.Select(p => p.CodiExt));
+                await sweetAlertService.FireAsync(
+                    "Productos No Transferibles", 
+                    $"Los siguientes productos tienen trazabilidad nivel 2 y NO pueden ser transferidos:\n{codigos}\n\nElimínelos de la lista para continuar.", 
+                    SweetAlertIcon.Error);
+                return;
+            }
+
+            // Validar que productos trazables (nivel 1) tengan lote seleccionado
+            var productosTrazablesSinLote = detallePedido
+                .Where(d => d.Trazable == 1 && string.IsNullOrWhiteSpace(d.LoteSeleccionado))
+                .ToList();
+            
+            if (productosTrazablesSinLote.Any())
+            {
+                var codigos = string.Join(", ", productosTrazablesSinLote.Select(p => p.CodiExt));
+                await sweetAlertService.FireAsync(
+                    "Lote Requerido", 
+                    $"Los siguientes productos son trazables y requieren que seleccione un lote:\n{codigos}", 
+                    SweetAlertIcon.Warning);
+                return;
+            }
+
+            // Validar que todos los productos tengan cantidad a remitir > 0
+            var productosSinCantidad = detallePedido.Where(d => d.CantidadARemitir <= 0).ToList();
+            if (productosSinCantidad.Any())
+            {
+                await sweetAlertService.FireAsync("Validación", "Todos los productos deben tener una cantidad a remitir mayor a 0", SweetAlertIcon.Warning);
+                return;
+            }
+
+            // Validar que haya stock disponible en el depósito origen para cada producto
+            bool stockInsuficiente = false;
+            foreach (var item in detallePedido)
+            {
+                var urlStock = $"api/movisto/stock/{item.CodiInt}";
+                var responseStock = await repository.Get<List<StockDepositoDTO>>(urlStock);
+                
+                if (responseStock.Error || responseStock.Response == null)
+                {
+                    await sweetAlertService.FireAsync(
+                        "Error", 
+                        $"No se pudo obtener el stock del producto {item.CodiExt}", 
+                        SweetAlertIcon.Error);
+                    stockInsuficiente = true;
+                    break;
+                }
+
+                // Buscar el stock en el depósito origen
+                var stockEnDeposito = responseStock.Response
+                    .FirstOrDefault(s => s.Deposito == depositoOrigenSeleccionado);
+                
+                var stockDisponible = stockEnDeposito?.Stock ?? 0;
+
+                if (stockDisponible < item.CantidadARemitir)
+                {
+                    await sweetAlertService.FireAsync(
+                        "Stock Insuficiente", 
+                        $"El producto {item.CodiExt} no tiene stock suficiente en el depósito origen.\nStock disponible: {stockDisponible:N2}\nCantidad solicitada: {item.CantidadARemitir:N2}", 
+                        SweetAlertIcon.Error);
+                    stockInsuficiente = true;
+                    break;
+                }
+            }
+
+            if (stockInsuficiente)
+            {
+                return;
+            }
+
+            // Construir el DTO para la transferencia
+            var transferencia = new TransferenciaPorPedidoDTO
+            {
+                NumeroPedido = pedidoSeleccionado,
+                CodigoCliente = clienteSeleccionado,
+                DepositoOrigen = depositoOrigenSeleccionado,
+                DepositoDestino = depositoDestinoSeleccionado,
+                Referencia = "", // Puede agregarse un campo en el modal si se desea
+                Items = detallePedido.Select(d => new ItemTransferenciaPedidoDTO
+                {
+                    PeddetaId = d.PeddetaId,
+                    CodigoInterno = d.CodiInt,
+                    CodigoExterno = d.CodiExt,
+                    Descripcion = d.Descrip,
+                    Cantidad = d.CantidadARemitir,
+                    Lote = d.LoteSeleccionado,
+                    Trazable = d.Trazable
+                }).ToList()
+            };
+
+            // Realizar la transferencia
+            var response = await repository.Post("api/Pedenca/transferir-por-pedido", transferencia);
+            
+            if (response.Error)
+            {
+                await sweetAlertService.FireAsync("Error", "Error al realizar la transferencia. Verifique los datos e intente nuevamente.", SweetAlertIcon.Error);
+                return;
+            }
+
+            // Mostrar mensaje de éxito
+            await sweetAlertService.FireAsync("Éxito", "Transferencia realizada con éxito", SweetAlertIcon.Success);
+            
+            // Cerrar el modal y limpiar
+            CerrarAsignadoPedidos();
+        }
+        catch (Exception ex)
+        {
+            await sweetAlertService.FireAsync("Error", $"Error al transferir: {ex.Message}", SweetAlertIcon.Error);
+        }
+    }
 }
+
+<!-- La lógica de sincronización está en StockIndex.razor.cs -->
+<SyncModal MostrarModal="mostrarModalSync" OnCerrar="CerrarModalSync" />

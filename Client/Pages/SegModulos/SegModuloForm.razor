@@ -1,0 +1,78 @@
+@inject SweetAlertService sweetAlertService
+
+<NavigationLock OnBeforeInternalNavigation="OnBeforeInternalNavigation" />
+
+<EditForm EditContext="editContext" OnValidSubmit="OnValidSubmit">
+    <DataAnnotationsValidator />
+    <ValidationSummary />
+
+    <div class="row">
+        <div class="col-md-4 mb-3">
+            <label class="form-label fw-semibold">Código <span class="text-danger">*</span></label>
+            <InputText class="form-control" @bind-Value="Modulo.Codigo" placeholder="Ej: ORDENES_COMPRA" />
+            <ValidationMessage For="@(() => Modulo.Codigo)" />
+        </div>
+        <div class="col-md-4 mb-3">
+            <label class="form-label fw-semibold">Nombre <span class="text-danger">*</span></label>
+            <InputText class="form-control" @bind-Value="Modulo.Nombre" placeholder="Ej: Órdenes de Compra" />
+            <ValidationMessage For="@(() => Modulo.Nombre)" />
+        </div>
+        <div class="col-md-2 mb-3">
+            <label class="form-label fw-semibold">Orden</label>
+            <InputNumber class="form-control" @bind-Value="Modulo.Orden" />
+        </div>
+        <div class="col-md-2 mb-3 d-flex align-items-end">
+            <div class="form-check mb-2">
+                <InputCheckbox class="form-check-input" @bind-Value="Modulo.Activo" id="chkActivo" />
+                <label class="form-check-label fw-semibold" for="chkActivo">Activo</label>
+            </div>
+        </div>
+    </div>
+    <div class="mb-3">
+        <label class="form-label">Descripción</label>
+        <InputTextArea class="form-control" rows="2" @bind-Value="Modulo.Descripcion" placeholder="Descripción opcional del módulo..." />
+        <ValidationMessage For="@(() => Modulo.Descripcion)" />
+    </div>
+
+    <button class="btn btn-primary me-2" type="submit">
+        <i class="fas fa-save me-1"></i>Guardar
+    </button>
+    <button class="btn btn-secondary" type="button" @onclick="ReturnAction">
+        <i class="fas fa-arrow-left me-1"></i>Volver
+    </button>
+</EditForm>
+
+@code {
+    private EditContext editContext = null!;
+
+    [Parameter, EditorRequired]
+    public SegModulo Modulo { get; set; } = null!;
+
+    [Parameter, EditorRequired]
+    public EventCallback OnValidSubmit { get; set; }
+
+    [Parameter, EditorRequired]
+    public EventCallback ReturnAction { get; set; }
+
+    public bool FormPostedSuccessfully { get; set; }
+
+    protected override void OnInitialized() => editContext = new(Modulo);
+
+    private async Task OnBeforeInternalNavigation(LocationChangingContext context)
+    {
+        if (!editContext.IsModified() || FormPostedSuccessfully) return;
+
+        var result = await sweetAlertService.FireAsync(new SweetAlertOptions
+        {
+            Title = "Confirmación",
+            Text = "¿Abandonar la página y perder los cambios?",
+            Icon = SweetAlertIcon.Question,
+            ShowCancelButton = true,
+            ConfirmButtonText = "Sí",
+            CancelButtonText = "No"
+        });
+
+        if (string.IsNullOrEmpty(result.Value))
+            context.PreventNavigation();
+    }
+}

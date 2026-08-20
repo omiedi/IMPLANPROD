@@ -1,0 +1,2249 @@
+@page "/impresiones/remitos/disenador"
+@using Microsoft.AspNetCore.Authorization
+@attribute [Authorize(Roles = "SUPERADMIN")]
+@using IMPLANPROD.Shared.DTOs.Impresiones
+@using System.Globalization
+@using System.Text.Json
+@inject IRepository repository
+@inject SweetAlertService sweetAlertService
+@inject IJSRuntime JSRuntime
+
+<PageTitle>Diseñador Plantilla Remito</PageTitle>
+
+<h3>Diseñador de Plantillas - Remito</h3>
+
+<div class="row g-3">
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <span>Plantillas guardadas</span>
+                <div class="d-flex gap-1">
+                    <button class="btn btn-sm btn-outline-success" @onclick="GuardarAsync" disabled="@guardando">Guardar plantilla</button>
+                    <button class="btn btn-sm btn-outline-primary" @onclick="NuevaPlantilla">Nueva</button>
+                    <button class="btn btn-sm btn-outline-warning" @onclick="NuevaPlantillaPorCopiaAsync" disabled="@(guardando || selectedTemplateCopyId <= 0)">Nueva x copia</button>
+                </div>
+            </div>
+            <div class="card-body" style="max-height: 280px; overflow-y: auto;">
+                <div class="mb-2">
+                    <label class="form-label small mb-1">Seleccionar existente para copiar</label>
+                    <select class="form-select form-select-sm" @bind="selectedTemplateCopyId" disabled="@(cargandoListado || plantillas.Count == 0)">
+                        <option value="0">Seleccionar plantilla...</option>
+                        @foreach (var item in plantillas)
+                        {
+                            <option value="@item.Id">@item.Nombre</option>
+                        }
+                    </select>
+                </div>
+                @if (cargandoListado)
+                {
+                    <div class="text-muted">Cargando...</div>
+                }
+                else if (plantillas.Count == 0)
+                {
+                    <div class="text-muted">No hay plantillas de remito.</div>
+                }
+                else
+                {
+                    <ul class="list-group">
+                        @foreach (var item in plantillas)
+                        {
+                            <li class="list-group-item d-flex justify-content-between align-items-center">
+                                <button class="btn btn-link p-0 text-start" @onclick="() => CargarPlantilla(item.Id)">@item.Nombre</button>
+                                <small class="text-muted">@item.FechaModificacion.ToString("dd/MM HH:mm")</small>
+                            </li>
+                        }
+                    </ul>
+                }
+            </div>
+        </div>
+
+        @if (showPropertiesModal && SelectedElement != null)
+        {
+            <div class="designer-modal-backdrop" @onclick="CloseElementProperties"></div>
+            <div class="designer-modal">
+                <div class="designer-modal-header d-flex justify-content-between align-items-center">
+                    <h6 class="m-0">Propiedades del objeto</h6>
+                    <button type="button" class="btn-close" aria-label="Close" @onclick="CloseElementProperties"></button>
+                </div>
+                <div class="designer-modal-body">
+                    <div class="row g-2">
+                        <div class="col-md-6">
+                            <label class="form-label">Tipo</label>
+                            <select class="form-select" @bind="SelectedElement.Type">
+                                <option value="text">Texto</option>
+                                <option value="field">Campo</option>
+                                <option value="qrcode">Código QR</option>
+                                <option value="barcode">Código de barras</option>
+                                <option value="detailTable">Tabla detalle</option>
+                                <option value="image">Imagen / Logo</option>
+                                <option value="hline">Línea horizontal</option>
+                                <option value="vline">Línea vertical</option>
+                                <option value="rectangle">Rectángulo / Cuadrado</option>
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Etiqueta / Texto</label>
+                            <input class="form-control" @bind="SelectedElement.Label" />
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">X (mm)</label>
+                            <input type="number" step="1" class="form-control" @bind="SelectedElement.XMm" />
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">Y (mm)</label>
+                            <input type="number" step="1" class="form-control" @bind="SelectedElement.YMm" />
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">Ancho (mm)</label>
+                            <input type="number" step="1" class="form-control" @bind="SelectedElement.WidthMm" />
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">Alto (mm)</label>
+                            <input type="number" step="1" class="form-control" @bind="SelectedElement.HeightMm" />
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Fuente</label>
+                            <select class="form-select" @bind="SelectedElement.FontName">
+                                @foreach (var font in FontOptions)
+                                {
+                                    <option value="@font">@font</option>
+                                }
+                            </select>
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label">Tamaño</label>
+                            <input type="number" step="1" min="6" max="40" class="form-control" @bind="SelectedElement.FontSize" />
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">Alineación</label>
+                            <select class="form-select" @bind="SelectedElement.Align">
+                                <option value="Left">Izquierda</option>
+                                <option value="Center">Centro</option>
+                                <option value="Right">Derecha</option>
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">Largo máximo</label>
+                            <input type="number" step="1" min="0" class="form-control" @bind="SelectedElement.MaxLength" />
+                        </div>
+                        <div class="col-md-8">
+                            <label class="form-label">Binding de datos</label>
+                            <input class="form-control" @bind="SelectedElement.Binding" placeholder="HeaderMovisto.DOPRILAR" />
+                        </div>
+                        <div class="col-md-4 d-flex align-items-end">
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" @bind="SelectedElement.NumericOverflowAsterisks" id="chkAsteriscos" />
+                                <label class="form-check-label" for="chkAsteriscos">Numérico: excede => *****</label>
+                            </div>
+                        </div>
+                        <div class="col-md-12">
+                            <label class="form-label">SQL del objeto (opcional)</label>
+                            <textarea rows="3" class="form-control font-monospace" @bind="SelectedElement.SqlQuery" placeholder="SELECT ..."></textarea>
+                        </div>
+                        @if (IsCodeElement(SelectedElement))
+                        {
+                            <div class="col-md-6">
+                                <label class="form-label">Contenido para código</label>
+                                <input class="form-control" @bind="SelectedElement.Label" placeholder="COD: {{HeaderMovisto.CODIGO}} | LOTE: {{HeaderMovisto.LOTE}} | VTO: {{HeaderMovisto.VENCIMIENTO}}" />
+                                <small class="text-muted">Podés combinar varios campos usando tokens {{Dataset.Campo}}.</small>
+                                <div class="mt-2">
+                                    <button type="button" class="btn btn-sm btn-outline-secondary" @onclick="ApplyCodePresetCodigoLoteVencimiento">Preset COD + LOTE + VTO</button>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">Simbología de barras</label>
+                                <select class="form-select" @bind="SelectedElement.BarcodeSymbology" disabled="@(!string.Equals(SelectedElement.Type, "barcode", StringComparison.OrdinalIgnoreCase))">
+                                    <option value="Code128">Code128</option>
+                                    <option value="Ean13">EAN-13</option>
+                                </select>
+                            </div>
+                        }
+                        @if (string.Equals(SelectedElement.Type, "image", StringComparison.OrdinalIgnoreCase))
+                        {
+                            <div class="col-md-12">
+                                <label class="form-label">Ruta imagen</label>
+                                <input class="form-control" @bind="SelectedElement.ImagePath" placeholder="images/logo.png o C:\\...\\Client\\wwwroot\\images\\logo.png" />
+                            </div>
+                        }
+                        @if (IsShapeElement(SelectedElement))
+                        {
+                            <div class="col-md-4">
+                                <label class="form-label">Trazo</label>
+                                <select class="form-select" @bind="SelectedElement.StrokeStyle">
+                                    <option value="Solid">Sólido</option>
+                                    <option value="Dash">Guiones</option>
+                                    <option value="Dot">Punteado</option>
+                                    <option value="DashDot">Guión-punto</option>
+                                </select>
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label">Espesor (mm)</label>
+                                <input type="number" min="0.2" step="0.1" class="form-control" @bind="SelectedElement.StrokeWidth" />
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label">Color (hex)</label>
+                                <input class="form-control" @bind="SelectedElement.StrokeColor" placeholder="#000000" />
+                            </div>
+                        }
+                        @if (string.Equals(SelectedElement.Type, "detailTable", StringComparison.OrdinalIgnoreCase))
+                        {
+                            <div class="col-md-4">
+                                <label class="form-label">Dataset detalle</label>
+                                <input class="form-control" @bind="SelectedElement.Binding" placeholder="DetalleMovisto" />
+                            </div>
+                            <div class="col-md-8">
+                                <label class="form-label">Columnas (coma separadas)</label>
+                                <input class="form-control" @bind="SelectedElement.DetailColumnsCsv" placeholder="CODI_ARTI,DESCRI_ARTI,CANTI" />
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label">Alto de fila (mm)</label>
+                                <input type="number" min="1" step="1" class="form-control" @bind="SelectedElement.DetailRowHeightMm" />
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label">Máx. filas</label>
+                                <input type="number" min="1" step="1" class="form-control" @bind="SelectedElement.DetailMaxRows" />
+                            </div>
+                            <div class="col-md-4 d-flex align-items-end">
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" @bind="SelectedElement.DetailShowHeader" id="chkDetailHeader" />
+                                    <label class="form-check-label" for="chkDetailHeader">Mostrar cabecera</label>
+                                </div>
+                            </div>
+                            <div class="col-md-4 d-flex align-items-end">
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" @bind="SelectedElement.DetailAutoAlign" id="chkDetailAutoAlign" />
+                                    <label class="form-check-label" for="chkDetailAutoAlign">Auto: número derecha / texto izquierda</label>
+                                </div>
+                            </div>
+                            <div class="col-md-4 d-flex align-items-end">
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" @bind="SelectedElement.DetailRowLines" id="chkDetailRowLines" />
+                                    <label class="form-check-label" for="chkDetailRowLines">Líneas entre filas</label>
+                                </div>
+                            </div>
+                            <div class="col-md-4 d-flex align-items-end">
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" @bind="SelectedElement.DetailColumnLines" id="chkDetailColumnLines" />
+                                    <label class="form-check-label" for="chkDetailColumnLines">Líneas verticales entre columnas</label>
+                                </div>
+                            </div>
+                            <div class="col-md-8">
+                                <label class="form-label">Alineación por columna (opcional)</label>
+                                <input class="form-control" @bind="SelectedElement.DetailColumnAlignCsv" placeholder="CANTI:right,DESCRI_ARTI:left,PRECIO:right" />
+                            </div>
+                            <div class="col-md-8">
+                                <label class="form-label">Anchos por columna en mm (opcional)</label>
+                                <input class="form-control" @bind="SelectedElement.DetailColumnWidthsCsv" placeholder="20,90,20" />
+                                <small class="text-muted">Ordenado igual que Columnas. Si la suma no coincide con el ancho total, se ajusta automáticamente.</small>
+                            </div>
+                        }
+                        @if (HasBindingValidationWarning)
+                        {
+                            <div class="col-md-12">
+                                <div class="alert alert-warning py-2 mb-0">@BindingValidationWarning</div>
+                            </div>
+                        }
+                    </div>
+                </div>
+                <div class="designer-modal-footer text-end">
+                    <button type="button" class="btn btn-secondary" @onclick="CloseElementProperties">Cerrar</button>
+                </div>
+            </div>
+        }
+
+        <div class="card mt-3">
+            <div class="card-header">Parámetros</div>
+            <div class="card-body">
+                @foreach (var parameter in parameters)
+                {
+                    <div class="row g-2 mb-2">
+                        <div class="col-md-5">
+                            <input class="form-control" @bind="parameter.Name" placeholder="Nombre (ej: Doprilar, NumeCli)" />
+                        </div>
+                        <div class="col-md-5">
+                            <input class="form-control" @bind="parameter.Value" placeholder="Valor" />
+                        </div>
+                        <div class="col-md-2 d-grid">
+                            <button type="button" class="btn btn-outline-danger" @onclick="(() => RemoveParameter(parameter))">Quitar</button>
+                        </div>
+                    </div>
+                }
+                <button type="button" class="btn btn-sm btn-outline-primary mb-2" @onclick="AddParameter">+ Parámetro</button>
+                <button class="btn btn-outline-secondary w-100" @onclick="PreviewAsync" disabled="@guardando">Previsualizar datasets</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-header">Configuración de plantilla</div>
+            <div class="card-body">
+                <div class="mb-3">
+                    <label class="form-label">Nombre</label>
+                    <input class="form-control" @bind="modelo.Nombre" placeholder="Remito estándar" />
+                </div>
+
+                <div class="mb-3">
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <label class="form-label mb-0">Datasets (dinámicos e ilimitados)</label>
+                        <button type="button" class="btn btn-sm btn-outline-primary" @onclick="AddDataset">+ Dataset</button>
+                    </div>
+                    @foreach (var dataset in datasetItems)
+                    {
+                        var hasEmptyKey = string.IsNullOrWhiteSpace(dataset.Key);
+                        var hasDuplicateKey = IsDatasetKeyDuplicated(dataset);
+                        <div class="border rounded p-2 mb-2 @(hasEmptyKey || hasDuplicateKey ? "border-danger bg-white" : "bg-light")">
+                            <div class="row g-2 align-items-end">
+                                <div class="col-md-4">
+                                    <label class="form-label">Key</label>
+                                    <input class="form-control @(hasEmptyKey || hasDuplicateKey ? "is-invalid" : string.Empty)" @bind="dataset.Key" placeholder="HeaderMovisto" />
+                                    @if (hasEmptyKey)
+                                    {
+                                        <div class="invalid-feedback d-block">La Key es obligatoria.</div>
+                                    }
+                                    else if (hasDuplicateKey)
+                                    {
+                                        <div class="invalid-feedback d-block">La Key está repetida.</div>
+                                    }
+                                </div>
+                                <div class="col-md-2">
+                                    <label class="form-label">Máx. filas</label>
+                                    <input type="number" min="1" class="form-control" @bind="dataset.MaxRows" />
+                                </div>
+                                <div class="col-md-6 d-grid">
+                                    <button type="button" class="btn btn-outline-danger" @onclick="(() => RemoveDataset(dataset))">Quitar dataset</button>
+                                </div>
+                                <div class="col-12">
+                                    <label class="form-label">SQL</label>
+                                    <textarea class="form-control font-monospace" rows="4" @bind="dataset.Sql" placeholder="SELECT ..."></textarea>
+                                </div>
+                            </div>
+                        </div>
+                    }
+                    <small class="text-muted">Sugeridos: HeaderMovisto (1), HeaderCliente (1), DetalleMovisto (500).</small>
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label">Diseñador de lienzo (milimetrado)</label>
+                    <div class="d-flex gap-2 flex-wrap mb-2">
+                        <button class="btn btn-sm btn-outline-primary" type="button" @onclick="AddTexto">+ Texto</button>
+                        <button class="btn btn-sm btn-outline-primary" type="button" @onclick="AddCampo">+ Campo</button>
+                        <button class="btn btn-sm btn-outline-primary" type="button" @onclick="AddCodigoQr">+ QR</button>
+                        <button class="btn btn-sm btn-outline-primary" type="button" @onclick="AddCodigoBarra">+ Código barra</button>
+                        <button class="btn btn-sm btn-outline-primary" type="button" @onclick="AddImagen">+ Imagen / logo</button>
+                        <button class="btn btn-sm btn-outline-primary" type="button" @onclick="AddLineaHorizontal">+ Línea H</button>
+                        <button class="btn btn-sm btn-outline-primary" type="button" @onclick="AddLineaVertical">+ Línea V</button>
+                        <button class="btn btn-sm btn-outline-primary" type="button" @onclick="AddRectangulo">+ Rectángulo</button>
+                        <button class="btn btn-sm btn-outline-primary" type="button" @onclick="AddDetalle">+ Tabla detalle</button>
+                        <button class="btn btn-sm btn-outline-secondary" type="button" @onclick="DuplicateSeleccionado" disabled="@(SelectedElement == null)">Copiar seleccionado</button>
+                        <button class="btn btn-sm btn-outline-secondary" type="button" @onclick="BringSelectedToFront" disabled="@(SelectedElement == null)">Traer al frente</button>
+                        <button class="btn btn-sm btn-outline-secondary" type="button" @onclick="SendSelectedToBack" disabled="@(SelectedElement == null)">Enviar al fondo</button>
+                        <button class="btn btn-sm btn-outline-danger" type="button" @onclick="RemoveSeleccionado" disabled="@(SelectedElement == null)">Quitar seleccionado</button>
+                    </div>
+                    <small class="text-muted">Atajos en lienzo: Ctrl/Cmd + click selección múltiple, Ctrl+C copiar, Ctrl+V pegar.</small>
+                    <div class="row g-2">
+                        <div class="col-md-4">
+                            <label class="form-label">Orientación</label>
+                            <select class="form-select" @bind="design.Orientation">
+                                <option value="Portrait">Retrato</option>
+                                <option value="Landscape">Paisaje</option>
+                            </select>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Escala (px por mm)</label>
+                            <input type="number" step="0.1" min="1" max="8" class="form-control" @bind="pxPerMm" />
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Margen lateral (mm)</label>
+                            <input type="number" step="1" min="0" class="form-control" @bind="design.MarginLeftMm" />
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Margen vertical (mm)</label>
+                            <input type="number" step="1" min="0" class="form-control" @bind="design.MarginTopMm" />
+                        </div>
+                        <div class="col-md-8 d-flex align-items-end gap-2 flex-wrap">
+                            <button type="button" class="btn btn-sm btn-outline-secondary" @onclick="ResetMargins">Reset márgenes</button>
+                            <button type="button" class="btn btn-sm btn-outline-secondary" @onclick="(() => ApplyMarginPreset(5))">Preset 5 mm</button>
+                            <button type="button" class="btn btn-sm btn-outline-secondary" @onclick="(() => ApplyMarginPreset(10))">Preset 10 mm</button>
+                        </div>
+                        <div class="col-md-4 d-flex align-items-end">
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" @bind="design.ShowPageNumbers" id="chkShowPageNumbers" />
+                                <label class="form-check-label" for="chkShowPageNumbers">Mostrar numeración de páginas</label>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Posición numeración</label>
+                            <select class="form-select" @bind="design.PageNumberAlign" disabled="@(!design.ShowPageNumbers)">
+                                <option value="Left">Izquierda</option>
+                                <option value="Center">Centro</option>
+                                <option value="Right">Derecha</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="d-flex gap-2">
+                    <button class="btn btn-primary" @onclick="GuardarAsync" disabled="@guardando">Guardar cambios</button>
+                    <button class="btn btn-outline-secondary" @onclick="PreviewAsync" disabled="@guardando">Previsualizar</button>
+                    <button class="btn btn-outline-dark" @onclick="ImprimirPaginaMilimetradaAsync" disabled="@guardando">Imprimir página milimetrada</button>
+                    <button class="btn btn-outline-info" @onclick="VerPdfAsync" disabled="@(guardando || modelo.Id <= 0)">Ver PDF</button>
+                    <button class="btn btn-outline-info" @onclick="VerPdfConReglaAsync" disabled="@(guardando || modelo.Id <= 0)">Ver PDF + regla</button>
+                    <button class="btn btn-outline-danger" @onclick="GenerarPdfAsync" disabled="@(guardando || modelo.Id <= 0)">Generar PDF</button>
+                </div>
+                <small class="text-muted d-block mt-1">Los dos botones de guardar persisten exactamente lo mismo (plantilla + diseño). Si cerrás sin guardar, se mantiene la última versión guardada.</small>
+            </div>
+        </div>
+
+        <div class="card mt-3">
+            <div class="card-header">Lienzo (drag & drop con grilla mm)</div>
+            <div class="card-body">
+                <div class="lienzo-wrapper">
+                    <div class="lienzo-ruler-layout">
+                        <div class="lienzo-ruler-corner"></div>
+                        <div class="lienzo-ruler-top" style="@RulerTopStyle">
+                            @foreach (var tick in HorizontalRuleTicks)
+                            {
+                                <span class="ruler-tick-label" style="left:@(tick * pxPerMm)px">@tick</span>
+                            }
+                        </div>
+                        <div class="lienzo-ruler-left" style="@RulerLeftStyle">
+                            @foreach (var tick in VerticalRuleTicks)
+                            {
+                                <span class="ruler-tick-label-y" style="top:@(tick * pxPerMm)px">@tick</span>
+                            }
+                        </div>
+                        <div class="lienzo-grid"
+                             style="@CanvasStyle"
+                             tabindex="0"
+                             @onmousedown="OnCanvasMouseDown"
+                             @onmousemove="OnCanvasMouseMove"
+                             @onkeydown="OnLienzoKeyDown"
+                             @onmouseup="StopDrag"
+                             @onmouseleave="StopDrag">
+                            @foreach (var el in design.Elements)
+                            {
+                                <div class="bloque-diseno @(IsElementSelected(el.Id) ? "seleccionado" : string.Empty)"
+                                     style="@BuildElementStyle(el)"
+                                     @onmousedown="(e => StartDrag(el, e))"
+                                     @onmousedown:stopPropagation="true"
+                                     @oncontextmenu="(e => OpenElementProperties(el))"
+                                     @oncontextmenu:preventDefault="true"
+                                     @onmouseup="StopDrag">
+                                    @if (string.Equals(el.Type, "image", StringComparison.OrdinalIgnoreCase))
+                                    {
+                                        <img src="@ResolveImageUrl(el)" alt="@el.Label" class="designer-image-preview" />
+                                    }
+                                    else if (IsShapeElement(el))
+                                    {
+                                        <div style="@BuildShapeInnerStyle(el)"></div>
+                                    }
+                                    else if (IsCodeElement(el))
+                                    {
+                                        <div class="text-center text-success small fw-semibold">@GetCodePreviewLabel(el)</div>
+                                    }
+                                    else
+                                    {
+                                        @el.Label
+                                    }
+                                </div>
+                            }
+                        </div>
+                    </div>
+                </div>
+
+                @if (SelectedElement != null)
+                {
+                    <div class="row g-2 mt-2">
+                        <div class="col-md-2">
+                            <label class="form-label">X (mm)</label>
+                            <input type="number" step="1" class="form-control" @bind="SelectedElement.XMm" />
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label">Y (mm)</label>
+                            <input type="number" step="1" class="form-control" @bind="SelectedElement.YMm" />
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label">Ancho</label>
+                            <input type="number" step="1" class="form-control" @bind="SelectedElement.WidthMm" />
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label">Alto</label>
+                            <input type="number" step="1" class="form-control" @bind="SelectedElement.HeightMm" />
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Etiqueta</label>
+                            <input class="form-control" @bind="SelectedElement.Label" />
+                        </div>
+                    </div>
+                }
+            </div>
+        </div>
+
+        @if (!string.IsNullOrWhiteSpace(errorPreview))
+        {
+            <div class="alert alert-danger mt-3">@errorPreview</div>
+        }
+
+        @if (preview?.Results?.Any() == true)
+        {
+            @foreach (var dataset in preview.Results)
+            {
+                <div class="card mt-3">
+                    <div class="card-header">Preview @dataset.Key (@dataset.Value.Count filas)</div>
+                    <div class="card-body" style="max-height: 260px; overflow-y: auto;">
+                        @if (dataset.Value.Count == 0)
+                        {
+                            <span class="text-muted">Sin datos</span>
+                        }
+                        else
+                        {
+                            var cols = dataset.Value.First().Keys.ToList();
+                            <table class="table table-sm table-bordered">
+                                <thead>
+                                    <tr>
+                                        @foreach (var c in cols)
+                                        {
+                                            <th>@c</th>
+                                        }
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var row in dataset.Value.Take(25))
+                                    {
+                                        <tr>
+                                            @foreach (var c in cols)
+                                            {
+                                                <td>@(row[c]?.ToString())</td>
+                                            }
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        }
+                    </div>
+                </div>
+            }
+        }
+
+        @if (showPdfOverlay && !string.IsNullOrWhiteSpace(pdfPreviewDataUrl))
+        {
+            <div class="designer-modal-backdrop" @onclick="ClosePdfOverlay"></div>
+            <div class="designer-modal designer-modal-wide">
+                <div class="designer-modal-header d-flex justify-content-between align-items-center">
+                    <h6 class="m-0">Vista PDF con regla y grilla</h6>
+                    <button type="button" class="btn-close" aria-label="Close" @onclick="ClosePdfOverlay"></button>
+                </div>
+                <div class="designer-modal-body">
+                    <div class="text-muted small mb-2">La grilla y las reglas son una guía visual sobre el PDF; no modifican el archivo generado.</div>
+                    <div class="lienzo-wrapper">
+                        <div class="lienzo-ruler-layout">
+                            <div class="lienzo-ruler-corner"></div>
+                            <div class="lienzo-ruler-top" style="@PdfRulerTopStyle">
+                                @foreach (var tick in PdfHorizontalRuleTicks)
+                                {
+                                    <span class="ruler-tick-label" style="left:@(tick * pdfPreviewPxPerMm)px">@tick</span>
+                                }
+                            </div>
+                            <div class="lienzo-ruler-left" style="@PdfRulerLeftStyle">
+                                @foreach (var tick in PdfVerticalRuleTicks)
+                                {
+                                    <span class="ruler-tick-label-y" style="top:@(tick * pdfPreviewPxPerMm)px">@tick</span>
+                                }
+                            </div>
+                            <div class="pdf-preview-page" style="@PdfPreviewPageStyle">
+                                <iframe src="@pdfPreviewDataUrl" title="Preview PDF" class="pdf-preview-frame"></iframe>
+                                <div class="pdf-preview-grid" style="@PdfPreviewGridStyle"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        }
+    </div>
+</div>
+
+<style>
+    .lienzo-wrapper {
+        overflow: auto;
+        border: 1px solid #dee2e6;
+        padding: 8px;
+        background: #f8f9fa;
+    }
+
+    .lienzo-grid {
+        position: relative;
+        border: 1px solid #ced4da;
+        background-color: #fff;
+        background-size: 6px 6px;
+        background-image: linear-gradient(to right, #eef2f7 1px, transparent 1px), linear-gradient(to bottom, #eef2f7 1px, transparent 1px);
+        user-select: none;
+    }
+
+    .lienzo-content-row {
+        display: flex;
+    }
+
+    .lienzo-ruler-layout {
+        display: grid;
+        grid-template-columns: 24px auto;
+        grid-template-rows: 24px auto;
+        align-items: start;
+    }
+
+    .lienzo-ruler-corner {
+        grid-column: 1;
+        grid-row: 1;
+        width: 24px;
+        height: 24px;
+        border: 1px solid #ced4da;
+        border-right: none;
+        border-bottom: none;
+        background: #f1f3f5;
+    }
+
+    .lienzo-ruler-top {
+        grid-column: 2;
+        grid-row: 1;
+        position: relative;
+        height: 24px;
+        border: 1px solid #ced4da;
+        border-bottom: none;
+        background: #f1f3f5;
+        overflow: hidden;
+    }
+
+    .lienzo-ruler-left {
+        grid-column: 1;
+        grid-row: 2;
+        position: relative;
+        width: 24px;
+        border: 1px solid #ced4da;
+        border-right: none;
+        background: #f1f3f5;
+        overflow: hidden;
+        flex: 0 0 24px;
+    }
+
+    .ruler-tick-label {
+        position: absolute;
+        top: 2px;
+        transform: translateX(-50%);
+        font-size: 10px;
+        color: #495057;
+    }
+
+    .ruler-tick-label-y {
+        position: absolute;
+        left: 2px;
+        transform: translateY(-50%);
+        font-size: 10px;
+        color: #495057;
+    }
+
+    .bloque-diseno {
+        position: absolute;
+        border: 1px dashed #6c757d;
+        background: #ffffff;
+        font-size: 12px;
+        padding: 4px;
+        cursor: move;
+        overflow: hidden;
+        white-space: nowrap;
+        text-overflow: ellipsis;
+    }
+
+    .designer-image-preview {
+        width: 100%;
+        height: 100%;
+        object-fit: contain;
+        display: block;
+    }
+
+    .pdf-preview-page {
+        grid-column: 2;
+        grid-row: 2;
+        position: relative;
+        border: 1px solid #ced4da;
+        background: #fff;
+        overflow: hidden;
+        flex: 0 0 auto;
+    }
+
+    .pdf-preview-frame {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        border: 0;
+        background: #fff;
+    }
+
+    .pdf-preview-grid {
+        position: absolute;
+        inset: 0;
+        pointer-events: none;
+    }
+
+    .bloque-diseno.seleccionado {
+        border: 2px solid #0d6efd;
+        background: #e9f2ff;
+    }
+
+    .designer-modal-backdrop {
+        position: fixed;
+        inset: 0;
+        background: rgba(0, 0, 0, 0.35);
+        z-index: 1050;
+    }
+
+    .designer-modal {
+        position: fixed;
+        left: 50%;
+        top: 50%;
+        transform: translate(-50%, -50%);
+        width: min(900px, 96vw);
+        max-height: 90vh;
+        overflow: auto;
+        background: #fff;
+        border: 1px solid #dee2e6;
+        border-radius: 6px;
+        box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.25);
+        z-index: 1060;
+    }
+
+    .designer-modal-wide {
+        width: min(1600px, 99vw);
+        max-height: 96vh;
+    }
+
+    .designer-modal-header,
+    .designer-modal-body,
+    .designer-modal-footer {
+        padding: 12px;
+    }
+
+    .designer-modal-header {
+        border-bottom: 1px solid #dee2e6;
+    }
+
+    .designer-modal-footer {
+        border-top: 1px solid #dee2e6;
+    }
+</style>
+
+@code {
+    private readonly RemitoPlantillaUpsertDto modelo = new();
+    private readonly List<RemitoPlantillaItemDto> plantillas = new();
+
+    private List<DatasetItemDto> datasetItems = CreateDefaultDatasetItems();
+    private readonly List<ParameterItemDto> parameters = new() { new() { Name = "Doprilar", Value = "rt-x-0001-0002020" } };
+    private static readonly string[] FontOptions = { "Arial", "Calibri", "Courier New", "Times New Roman", "Verdana", "Tahoma", "Segoe UI" };
+    private readonly JsonSerializerOptions jsonOptions = new() { PropertyNamingPolicy = JsonNamingPolicy.CamelCase };
+    private LienzoDesignDto design = CreateDefaultDesign();
+    private string? selectedElementId;
+    private readonly HashSet<string> selectedElementIds = new(StringComparer.Ordinal);
+    private const string CodePresetCodigoLoteVencimiento = "COD: {{HeaderMovisto.CODIGO}} | LOTE: {{HeaderMovisto.LOTE}} | VTO: {{HeaderMovisto.VENCIMIENTO}}";
+    private readonly HashSet<string> dragSelectionIds = new(StringComparer.Ordinal);
+    private bool isDragging;
+    private double lastClientX;
+    private double lastClientY;
+    private double pxPerMm = 3;
+    private bool showPropertiesModal;
+    private LienzoElementDto? copiedElement;
+    private bool showPdfOverlay;
+    private string? pdfPreviewDataUrl;
+    private double pdfPreviewPxPerMm = 3;
+
+    private bool cargandoListado;
+    private bool guardando;
+    private string? errorPreview;
+    private RemitoPlantillaPreviewResultDto? preview;
+    private int selectedTemplateCopyId;
+
+    protected override async Task OnInitializedAsync()
+    {
+        LoadDesignFromModelo();
+
+        await CargarListado();
+    }
+
+    private async Task CargarListado()
+    {
+        cargandoListado = true;
+        try
+        {
+            var response = await repository.Get<List<RemitoPlantillaItemDto>>("api/impresiones/remito-plantillas");
+            plantillas.Clear();
+            if (!response.Error && response.Response != null)
+            {
+                plantillas.AddRange(response.Response);
+                if (selectedTemplateCopyId > 0 && !plantillas.Any(x => x.Id == selectedTemplateCopyId))
+                {
+                    selectedTemplateCopyId = 0;
+                }
+            }
+        }
+        finally
+        {
+            cargandoListado = false;
+        }
+    }
+
+    private async Task VerPdfConReglaAsync()
+    {
+        var (ok, response) = await ObtenerPdfResponseAsync();
+        if (!ok || response?.Response == null)
+        {
+            return;
+        }
+
+        pdfPreviewPxPerMm = pxPerMm;
+        var base64 = Convert.ToBase64String(response.Response);
+        pdfPreviewDataUrl = $"data:application/pdf;base64,{base64}#toolbar=0&navpanes=0&scrollbar=0&zoom=page-width";
+        showPdfOverlay = true;
+    }
+
+    private void ClosePdfOverlay()
+    {
+        showPdfOverlay = false;
+        pdfPreviewDataUrl = null;
+    }
+
+    private async Task CargarPlantilla(int id)
+    {
+        var response = await repository.Get<RemitoPlantillaDetailDto>($"api/impresiones/remito-plantillas/{id}");
+        if (response.Error || response.Response == null)
+        {
+            var message = await response.GetErrorMessageAsync();
+            await sweetAlertService.FireAsync("Error", message, SweetAlertIcon.Error);
+            return;
+        }
+
+        var data = response.Response;
+        selectedTemplateCopyId = data.Id;
+        ApplyLoadedTemplate(data);
+    }
+
+    private async Task NuevaPlantillaPorCopiaAsync()
+    {
+        if (selectedTemplateCopyId <= 0)
+        {
+            await sweetAlertService.FireAsync("Atención", "Selecciona una plantilla para copiar.", SweetAlertIcon.Warning);
+            return;
+        }
+
+        var selectedName = plantillas.FirstOrDefault(x => x.Id == selectedTemplateCopyId)?.Nombre ?? "plantilla";
+        var confirmResult = await sweetAlertService.FireAsync(new SweetAlertOptions
+        {
+            Title = "Confirmación",
+            Text = $"Se creará y guardará automáticamente una copia de '{selectedName}'. ¿Deseas continuar?",
+            Icon = SweetAlertIcon.Question,
+            ShowCancelButton = true,
+            ConfirmButtonText = "Sí, crear copia",
+            CancelButtonText = "Cancelar"
+        });
+
+        var confirm = !string.IsNullOrEmpty(confirmResult.Value);
+        if (!confirm)
+        {
+            return;
+        }
+
+        guardando = true;
+        try
+        {
+            var sourceResponse = await repository.Get<RemitoPlantillaDetailDto>($"api/impresiones/remito-plantillas/{selectedTemplateCopyId}");
+            if (sourceResponse.Error || sourceResponse.Response == null)
+            {
+                var message = await sourceResponse.GetErrorMessageAsync();
+                await sweetAlertService.FireAsync("Error", message, SweetAlertIcon.Error);
+                return;
+            }
+
+            var source = sourceResponse.Response;
+            var copyName = $"Copia de {source.Nombre}";
+            var copyDto = new RemitoPlantillaUpsertDto
+            {
+                Id = 0,
+                Nombre = copyName,
+                LienzoJson = source.LienzoJson,
+                Datasets = (source.Datasets ?? new List<RemitoPlantillaDatasetDto>())
+                    .Select(x => new RemitoPlantillaDatasetDto
+                    {
+                        Key = x.Key,
+                        Sql = x.Sql,
+                        MaxRows = x.MaxRows > 0 ? x.MaxRows : 500
+                    })
+                    .ToList()
+            };
+
+            var saveResponse = await repository.Post<RemitoPlantillaUpsertDto, int>("api/impresiones/remito-plantillas", copyDto);
+            if (saveResponse.Error)
+            {
+                var message = await saveResponse.GetErrorMessageAsync();
+                await sweetAlertService.FireAsync("Error", message, SweetAlertIcon.Error);
+                return;
+            }
+
+            var newTemplateData = new RemitoPlantillaDetailDto
+            {
+                Id = saveResponse.Response,
+                Nombre = copyName,
+                LienzoJson = source.LienzoJson,
+                Datasets = copyDto.Datasets
+            };
+
+            ApplyLoadedTemplate(newTemplateData);
+            selectedTemplateCopyId = newTemplateData.Id;
+            await CargarListado();
+            await sweetAlertService.FireAsync("Ok", $"Copia creada: {copyName}", SweetAlertIcon.Success);
+        }
+        finally
+        {
+            guardando = false;
+        }
+    }
+
+    private void NuevaPlantilla()
+    {
+        modelo.Id = 0;
+        modelo.Nombre = string.Empty;
+        datasetItems = CreateDefaultDatasetItems();
+        design = CreateDefaultDesign();
+        SelectOnly(design.Elements.FirstOrDefault()?.Id);
+        SyncModelLienzoJson();
+        preview = null;
+        errorPreview = null;
+    }
+
+    private void ApplyLoadedTemplate(RemitoPlantillaDetailDto data)
+    {
+        modelo.Id = data.Id;
+        modelo.Nombre = data.Nombre;
+        modelo.LienzoJson = data.LienzoJson;
+        LoadDesignFromModelo();
+
+        datasetItems = (data.Datasets ?? new List<RemitoPlantillaDatasetDto>())
+            .Select(x => new DatasetItemDto
+            {
+                Key = x.Key,
+                Sql = x.Sql,
+                MaxRows = x.MaxRows > 0 ? x.MaxRows : 500
+            })
+            .ToList();
+
+        if (datasetItems.Count == 0)
+        {
+            datasetItems = CreateDefaultDatasetItems();
+        }
+    }
+
+    private async Task GuardarAsync()
+    {
+        guardando = true;
+        try
+        {
+            if (!TryBuildDatasets(out var datasets, out var datasetError))
+            {
+                await sweetAlertService.FireAsync("Atención", datasetError, SweetAlertIcon.Warning);
+                return;
+            }
+
+            SyncModelLienzoJson();
+            modelo.Datasets = datasets;
+            var response = await repository.Post<RemitoPlantillaUpsertDto, int>("api/impresiones/remito-plantillas", modelo);
+            if (response.Error)
+            {
+                var message = await response.GetErrorMessageAsync();
+                await sweetAlertService.FireAsync("Error", message, SweetAlertIcon.Error);
+                return;
+            }
+
+            modelo.Id = response.Response;
+            await CargarListado();
+            await sweetAlertService.FireAsync("Ok", "Plantilla guardada correctamente", SweetAlertIcon.Success);
+        }
+        finally
+        {
+            guardando = false;
+        }
+    }
+
+    private async Task PreviewAsync()
+    {
+        guardando = true;
+        errorPreview = null;
+        preview = null;
+
+        try
+        {
+            if (!TryBuildDatasets(out var datasets, out var datasetError))
+            {
+                errorPreview = datasetError;
+                return;
+            }
+
+            var request = new RemitoPlantillaPreviewRequestDto
+            {
+                LienzoJson = JsonSerializer.Serialize(design, jsonOptions),
+                Datasets = datasets,
+                Parameters = BuildParameters()
+            };
+
+            var response = await repository.Post<RemitoPlantillaPreviewRequestDto, RemitoPlantillaPreviewResultDto>(
+                "api/impresiones/remito-plantillas/preview",
+                request);
+
+            if (response.Error)
+            {
+                errorPreview = await response.GetErrorMessageAsync();
+                return;
+            }
+
+            preview = response.Response;
+        }
+        finally
+        {
+            guardando = false;
+        }
+    }
+
+    private async Task GenerarPdfAsync()
+    {
+        var (ok, response) = await ObtenerPdfResponseAsync();
+        if (!ok || response?.Response == null)
+        {
+            return;
+        }
+
+        var fileName = response.HttpResponseMessage.Content.Headers.ContentDisposition?.FileNameStar
+                       ?? response.HttpResponseMessage.Content.Headers.ContentDisposition?.FileName
+                       ?? $"Remito_{GetParameterValue("Doprilar") ?? "sin-numero"}.pdf";
+        fileName = fileName.Replace("\"", string.Empty);
+
+        var base64 = Convert.ToBase64String(response.Response);
+        var okJs = await JSRuntime.InvokeAsync<bool>("saveAsFile", fileName, base64);
+        if (!okJs)
+        {
+            await sweetAlertService.FireAsync("Atención", "No se pudo iniciar la descarga del PDF.", SweetAlertIcon.Warning);
+        }
+    }
+
+    private async Task VerPdfAsync()
+    {
+        var (ok, response) = await ObtenerPdfResponseAsync();
+        if (!ok || response?.Response == null)
+        {
+            return;
+        }
+
+        var base64 = Convert.ToBase64String(response.Response);
+        var okJs = await JSRuntime.InvokeAsync<bool>("openPdfInNewTab", base64);
+        if (!okJs)
+        {
+            await sweetAlertService.FireAsync("Atención", "No se pudo abrir el PDF en una nueva pestaña. Verificá el bloqueador de pop-ups.", SweetAlertIcon.Warning);
+        }
+    }
+
+    private async Task ImprimirPaginaMilimetradaAsync()
+    {
+        guardando = true;
+        try
+        {
+            var orientation = string.Equals(design.Orientation, "Landscape", StringComparison.OrdinalIgnoreCase)
+                ? "Landscape"
+                : "Portrait";
+
+            var response = await repository.GetBytes($"api/impresiones/remito-plantillas/pdf/milimetrada?orientation={Uri.EscapeDataString(orientation)}");
+            if (response.Error || response.Response == null)
+            {
+                var message = await response.GetErrorMessageAsync();
+                await sweetAlertService.FireAsync("Error", message, SweetAlertIcon.Error);
+                return;
+            }
+
+            var base64 = Convert.ToBase64String(response.Response);
+            var okJs = await JSRuntime.InvokeAsync<bool>("openPdfInNewTab", base64);
+            if (!okJs)
+            {
+                await sweetAlertService.FireAsync("Atención", "No se pudo abrir la página milimetrada. Verificá el bloqueador de pop-ups.", SweetAlertIcon.Warning);
+            }
+        }
+        finally
+        {
+            guardando = false;
+        }
+    }
+
+    private async Task<(bool Ok, HttpResponseWrapper<byte[]>? Response)> ObtenerPdfResponseAsync()
+    {
+        if (modelo.Id <= 0)
+        {
+            await sweetAlertService.FireAsync("Atención", "Primero debes guardar la plantilla.", SweetAlertIcon.Warning);
+            return (false, null);
+        }
+
+        var doprilar = GetParameterValue("Doprilar");
+        if (string.IsNullOrWhiteSpace(doprilar))
+        {
+            await sweetAlertService.FireAsync("Atención", "El parámetro Doprilar es obligatorio.", SweetAlertIcon.Warning);
+            return (false, null);
+        }
+
+        guardando = true;
+        try
+        {
+            var queryParams = BuildParameters();
+            var query = string.Join("&", queryParams
+                .Where(x => !string.IsNullOrWhiteSpace(x.Name))
+                .Select(x => $"{Uri.EscapeDataString(x.Name)}={Uri.EscapeDataString(x.Value ?? string.Empty)}"));
+
+            var url = $"api/impresiones/remito-plantillas/{modelo.Id}/pdf";
+            if (!string.IsNullOrWhiteSpace(query))
+            {
+                url += $"?{query}";
+            }
+
+            var response = await repository.GetBytes(url);
+            if (response.Error || response.Response == null)
+            {
+                var message = await response.GetErrorMessageAsync();
+                await sweetAlertService.FireAsync("Error", message, SweetAlertIcon.Error);
+                return (false, response);
+            }
+
+            return (true, response);
+        }
+        finally
+        {
+            guardando = false;
+        }
+    }
+
+    private bool TryBuildDatasets(out List<RemitoPlantillaDatasetDto> datasets, out string error)
+    {
+        // Reglas claras para evitar errores de backend:
+        // - al menos un dataset
+        // - key y sql obligatorios
+        // - key único (case-insensitive)
+        datasets = datasetItems
+            .Where(x => !string.IsNullOrWhiteSpace(x.Key) || !string.IsNullOrWhiteSpace(x.Sql))
+            .Select(x => new RemitoPlantillaDatasetDto
+            {
+                Key = x.Key.Trim(),
+                Sql = x.Sql,
+                MaxRows = x.MaxRows > 0 ? x.MaxRows : 500
+            })
+            .ToList();
+
+        if (datasets.Count == 0)
+        {
+            error = "Debes indicar al menos un dataset con Key y SQL.";
+            return false;
+        }
+
+        if (datasets.Any(x => string.IsNullOrWhiteSpace(x.Key) || string.IsNullOrWhiteSpace(x.Sql)))
+        {
+            error = "Todos los datasets deben tener Key y SQL.";
+            return false;
+        }
+
+        var duplicate = datasets
+            .GroupBy(x => x.Key, StringComparer.OrdinalIgnoreCase)
+            .FirstOrDefault(g => g.Count() > 1);
+
+        if (duplicate != null)
+        {
+            error = $"La Key '{duplicate.Key}' está repetida. Cada dataset debe tener una Key única.";
+            return false;
+        }
+
+        error = string.Empty;
+        return true;
+    }
+
+    private bool IsDatasetKeyDuplicated(DatasetItemDto current)
+    {
+        if (current == null || string.IsNullOrWhiteSpace(current.Key))
+        {
+            return false;
+        }
+
+        var normalized = current.Key.Trim();
+        return datasetItems.Count(x => string.Equals(x.Key?.Trim(), normalized, StringComparison.OrdinalIgnoreCase)) > 1;
+    }
+
+    private void AddDataset()
+    {
+        datasetItems.Add(new DatasetItemDto
+        {
+            Key = $"Dataset{datasetItems.Count + 1}",
+            Sql = "SELECT TOP 1 1 AS Valor",
+            MaxRows = 1
+        });
+    }
+
+    private void RemoveDataset(DatasetItemDto dataset)
+    {
+        if (dataset == null)
+        {
+            return;
+        }
+
+        datasetItems.Remove(dataset);
+        if (datasetItems.Count == 0)
+        {
+            datasetItems.Add(new DatasetItemDto { Key = string.Empty, Sql = string.Empty, MaxRows = 500 });
+        }
+    }
+
+    private static List<DatasetItemDto> CreateDefaultDatasetItems()
+    {
+        return new List<DatasetItemDto>
+        {
+            new()
+            {
+                Key = "HeaderMovisto",
+                Sql = "SELECT TOP 1 M.*, M.NUME_CLI FROM MOVISTO M WHERE M.DOPRILAR = @Doprilar",
+                MaxRows = 1
+            },
+            new()
+            {
+                Key = "HeaderCliente",
+                Sql = "SELECT TOP 1 D.* FROM DEUDOR12 D INNER JOIN MOVISTO M ON M.NUME_CLI = D.NUME_CLI WHERE M.DOPRILAR = @Doprilar",
+                MaxRows = 1
+            },
+            new()
+            {
+                Key = "DetalleMovisto",
+                Sql = "SELECT M.* FROM MOVISTO M WHERE M.DOPRILAR = @Doprilar ORDER BY M.Id",
+                MaxRows = 500
+            }
+        };
+    }
+
+    private static LienzoDesignDto CreateDefaultDesign()
+    {
+        return new LienzoDesignDto
+        {
+            Orientation = "Portrait",
+            MarginLeftMm = 0,
+            MarginTopMm = 0,
+            ShowPageNumbers = true,
+            PageNumberAlign = "Right",
+            Elements = new List<LienzoElementDto>
+            {
+                new() { Id = Guid.NewGuid().ToString("N"), Type = "field", Label = "{{HeaderMovisto.DOPRILAR}}", XMm = 8, YMm = 8, WidthMm = 70, HeightMm = 8 },
+                new() { Id = Guid.NewGuid().ToString("N"), Type = "field", Label = "{{HeaderCliente.RAZON_SOCIAL}}", XMm = 8, YMm = 18, WidthMm = 110, HeightMm = 8 }
+            }
+        };
+    }
+
+    private void LoadDesignFromModelo()
+    {
+        if (string.IsNullOrWhiteSpace(modelo.LienzoJson))
+        {
+            design = CreateDefaultDesign();
+            SelectOnly(design.Elements.FirstOrDefault()?.Id);
+            SyncModelLienzoJson();
+            return;
+        }
+
+        try
+        {
+            design = JsonSerializer.Deserialize<LienzoDesignDto>(modelo.LienzoJson, jsonOptions) ?? CreateDefaultDesign();
+            design.Elements ??= new List<LienzoElementDto>();
+            if (string.IsNullOrWhiteSpace(design.Orientation))
+            {
+                design.Orientation = "Portrait";
+            }
+
+            if (string.IsNullOrWhiteSpace(design.PageNumberAlign))
+            {
+                design.PageNumberAlign = "Right";
+            }
+
+            if (design.MarginLeftMm < 0)
+            {
+                design.MarginLeftMm = 0;
+            }
+
+            if (design.MarginTopMm < 0)
+            {
+                design.MarginTopMm = 0;
+            }
+
+            foreach (var el in design.Elements)
+            {
+                if (string.IsNullOrWhiteSpace(el.Id))
+                {
+                    el.Id = Guid.NewGuid().ToString("N");
+                }
+
+                if (el.WidthMm <= 0)
+                {
+                    el.WidthMm = 50;
+                }
+
+                if (el.HeightMm <= 0)
+                {
+                    el.HeightMm = 8;
+                }
+
+                if (el.DetailRowHeightMm <= 0)
+                {
+                    el.DetailRowHeightMm = 6;
+                }
+
+                if (el.DetailMaxRows <= 0)
+                {
+                    el.DetailMaxRows = 15;
+                }
+
+                if (el.StrokeWidth <= 0)
+                {
+                    el.StrokeWidth = 0.4;
+                }
+
+                if (string.IsNullOrWhiteSpace(el.StrokeStyle))
+                {
+                    el.StrokeStyle = "Solid";
+                }
+
+                if (string.IsNullOrWhiteSpace(el.StrokeColor))
+                {
+                    el.StrokeColor = "#000000";
+                }
+            }
+
+            SelectOnly(design.Elements.FirstOrDefault()?.Id);
+        }
+        catch
+        {
+            design = CreateDefaultDesign();
+            SelectOnly(design.Elements.FirstOrDefault()?.Id);
+            SyncModelLienzoJson();
+        }
+    }
+
+    private void SyncModelLienzoJson()
+    {
+        modelo.LienzoJson = JsonSerializer.Serialize(design, jsonOptions);
+    }
+
+    private void AddTexto()
+    {
+        var el = new LienzoElementDto
+        {
+            Id = Guid.NewGuid().ToString("N"),
+            Type = "text",
+            Label = "Texto",
+            XMm = 10,
+            YMm = 10,
+            WidthMm = 50,
+            HeightMm = 8,
+            FontName = "Arial",
+            FontSize = 9,
+            Align = "Left"
+        };
+
+        design.Elements.Add(el);
+        SelectOnly(el.Id);
+    }
+
+    private void ApplyCodePresetCodigoLoteVencimiento()
+    {
+        var current = SelectedElement;
+        if (current == null || !IsCodeElement(current))
+        {
+            return;
+        }
+
+        current.Label = CodePresetCodigoLoteVencimiento;
+        if (string.Equals(current.Type, "barcode", StringComparison.OrdinalIgnoreCase)
+            && string.IsNullOrWhiteSpace(current.BarcodeSymbology))
+        {
+            current.BarcodeSymbology = "Code128";
+        }
+    }
+
+    private void DuplicateSeleccionado()
+    {
+        var current = SelectedElement;
+        if (current == null)
+        {
+            return;
+        }
+
+        CopyToClipboard(current);
+        PasteFromClipboard();
+    }
+
+    private void BringSelectedToFront()
+    {
+        var current = SelectedElement;
+        if (current == null)
+        {
+            return;
+        }
+
+        design.Elements.Remove(current);
+        design.Elements.Add(current);
+    }
+
+    private void SendSelectedToBack()
+    {
+        var current = SelectedElement;
+        if (current == null)
+        {
+            return;
+        }
+
+        design.Elements.Remove(current);
+        design.Elements.Insert(0, current);
+    }
+
+    private void ResetMargins()
+    {
+        design.MarginLeftMm = 0;
+        design.MarginTopMm = 0;
+    }
+
+    private void ApplyMarginPreset(double marginMm)
+    {
+        var safeMargin = Math.Max(0, marginMm);
+        design.MarginLeftMm = safeMargin;
+        design.MarginTopMm = safeMargin;
+    }
+
+    private void OnLienzoKeyDown(Microsoft.AspNetCore.Components.Web.KeyboardEventArgs args)
+    {
+        if (args.ShiftKey)
+        {
+            var stepMm = 1d;
+            var key = args.Key ?? string.Empty;
+
+            if (string.Equals(key, "ArrowLeft", StringComparison.OrdinalIgnoreCase))
+            {
+                MoveSelectedElements(-stepMm, 0);
+                return;
+            }
+
+            if (string.Equals(key, "ArrowRight", StringComparison.OrdinalIgnoreCase))
+            {
+                MoveSelectedElements(stepMm, 0);
+                return;
+            }
+
+            if (string.Equals(key, "ArrowUp", StringComparison.OrdinalIgnoreCase))
+            {
+                MoveSelectedElements(0, -stepMm);
+                return;
+            }
+
+            if (string.Equals(key, "ArrowDown", StringComparison.OrdinalIgnoreCase))
+            {
+                MoveSelectedElements(0, stepMm);
+                return;
+            }
+        }
+
+        if (!args.CtrlKey && !args.MetaKey)
+        {
+            return;
+        }
+
+        if (string.Equals(args.Key, "c", StringComparison.OrdinalIgnoreCase))
+        {
+            var current = SelectedElement;
+            if (current != null)
+            {
+                CopyToClipboard(current);
+            }
+
+            return;
+        }
+
+        if (string.Equals(args.Key, "v", StringComparison.OrdinalIgnoreCase))
+        {
+            PasteFromClipboard();
+        }
+    }
+
+    private void CopyToClipboard(LienzoElementDto source)
+    {
+        copiedElement = CloneElement(source, 0, keepId: false);
+    }
+
+    private void PasteFromClipboard()
+    {
+        if (copiedElement == null)
+        {
+            return;
+        }
+
+        var paste = CloneElement(copiedElement, 5, keepId: false);
+        design.Elements.Add(paste);
+        SelectOnly(paste.Id);
+    }
+
+    private LienzoElementDto CloneElement(LienzoElementDto source, double offsetMm, bool keepId)
+    {
+        return new LienzoElementDto
+        {
+            Id = keepId ? source.Id : Guid.NewGuid().ToString("N"),
+            Type = source.Type,
+            Label = source.Label,
+            Binding = source.Binding,
+            SqlQuery = source.SqlQuery,
+            XMm = Math.Min(source.XMm + offsetMm, Math.Max(0, CanvasWidthMm - source.WidthMm - CanvasOffsetXMm)),
+            YMm = Math.Min(source.YMm + offsetMm, Math.Max(0, CanvasHeightMm - source.HeightMm - CanvasOffsetYMm)),
+            WidthMm = source.WidthMm,
+            HeightMm = source.HeightMm,
+            FontName = source.FontName,
+            FontSize = source.FontSize,
+            Align = source.Align,
+            MaxLength = source.MaxLength,
+            NumericOverflowAsterisks = source.NumericOverflowAsterisks,
+            DetailColumnsCsv = source.DetailColumnsCsv,
+            DetailRowHeightMm = source.DetailRowHeightMm,
+            DetailMaxRows = source.DetailMaxRows,
+            DetailShowHeader = source.DetailShowHeader,
+            DetailAutoAlign = source.DetailAutoAlign,
+            DetailRowLines = source.DetailRowLines,
+            DetailColumnLines = source.DetailColumnLines,
+            DetailColumnAlignCsv = source.DetailColumnAlignCsv,
+            DetailColumnWidthsCsv = source.DetailColumnWidthsCsv,
+            ImagePath = source.ImagePath,
+            BarcodeSymbology = source.BarcodeSymbology,
+            StrokeStyle = source.StrokeStyle,
+            StrokeWidth = source.StrokeWidth,
+            StrokeColor = source.StrokeColor
+        };
+    }
+
+    private void AddCodigoQr()
+    {
+        var el = new LienzoElementDto
+        {
+            Id = Guid.NewGuid().ToString("N"),
+            Type = "qrcode",
+            Label = "{{HeaderMovisto.DOPRILAR}}",
+            XMm = 10,
+            YMm = 10,
+            WidthMm = 28,
+            HeightMm = 28,
+            BarcodeSymbology = "Code128"
+        };
+
+        design.Elements.Add(el);
+        SelectOnly(el.Id);
+    }
+
+    private void AddCodigoBarra()
+    {
+        var el = new LienzoElementDto
+        {
+            Id = Guid.NewGuid().ToString("N"),
+            Type = "barcode",
+            Label = CodePresetCodigoLoteVencimiento,
+            XMm = 10,
+            YMm = 45,
+            WidthMm = 70,
+            HeightMm = 18,
+            BarcodeSymbology = "Code128"
+        };
+
+        design.Elements.Add(el);
+        SelectOnly(el.Id);
+    }
+
+    private void AddImagen()
+    {
+        var el = new LienzoElementDto
+        {
+            Id = Guid.NewGuid().ToString("N"),
+            Type = "image",
+            Label = "Logo",
+            ImagePath = "images/logo.png",
+            XMm = 10,
+            YMm = 30,
+            WidthMm = 35,
+            HeightMm = 20
+        };
+
+        design.Elements.Add(el);
+        SelectOnly(el.Id);
+    }
+
+    private void AddLineaHorizontal()
+    {
+        var el = new LienzoElementDto
+        {
+            Id = Guid.NewGuid().ToString("N"),
+            Type = "hline",
+            Label = "Línea H",
+            XMm = 10,
+            YMm = 70,
+            WidthMm = 80,
+            HeightMm = 1,
+            StrokeStyle = "Solid",
+            StrokeWidth = 0.4,
+            StrokeColor = "#000000"
+        };
+
+        design.Elements.Add(el);
+        SelectOnly(el.Id);
+    }
+
+    private void AddLineaVertical()
+    {
+        var el = new LienzoElementDto
+        {
+            Id = Guid.NewGuid().ToString("N"),
+            Type = "vline",
+            Label = "Línea V",
+            XMm = 95,
+            YMm = 70,
+            WidthMm = 1,
+            HeightMm = 40,
+            StrokeStyle = "Solid",
+            StrokeWidth = 0.4,
+            StrokeColor = "#000000"
+        };
+
+        design.Elements.Add(el);
+        SelectOnly(el.Id);
+    }
+
+    private void AddRectangulo()
+    {
+        var el = new LienzoElementDto
+        {
+            Id = Guid.NewGuid().ToString("N"),
+            Type = "rectangle",
+            Label = "Rectángulo",
+            XMm = 100,
+            YMm = 70,
+            WidthMm = 40,
+            HeightMm = 20,
+            StrokeStyle = "Solid",
+            StrokeWidth = 0.4,
+            StrokeColor = "#000000"
+        };
+
+        design.Elements.Add(el);
+        SelectOnly(el.Id);
+    }
+
+    private void AddDetalle()
+    {
+        var el = new LienzoElementDto
+        {
+            Id = Guid.NewGuid().ToString("N"),
+            Type = "detailTable",
+            Label = "Detalle",
+            XMm = 10,
+            YMm = 40,
+            WidthMm = 180,
+            HeightMm = 80,
+            FontName = "Arial",
+            FontSize = 8,
+            Align = "Left",
+            Binding = "DetalleMovisto",
+            DetailColumnsCsv = "CODI_ARTI,DESCRI_ARTI,CANTI",
+            DetailRowHeightMm = 6,
+            DetailMaxRows = 15,
+            DetailShowHeader = true,
+            DetailRowLines = false,
+            DetailColumnLines = false
+        };
+
+        design.Elements.Add(el);
+        SelectOnly(el.Id);
+    }
+
+    private void AddCampo()
+    {
+        var el = new LienzoElementDto
+        {
+            Id = Guid.NewGuid().ToString("N"),
+            Type = "field",
+            Label = "{{HeaderMovisto.CAMPO}}",
+            XMm = 10,
+            YMm = 20,
+            WidthMm = 60,
+            HeightMm = 8,
+            FontName = "Arial",
+            FontSize = 9,
+            Align = "Left",
+            Binding = "HeaderMovisto.CAMPO"
+        };
+
+        design.Elements.Add(el);
+        SelectOnly(el.Id);
+    }
+
+    private void RemoveSeleccionado()
+    {
+        var current = SelectedElement;
+        if (current == null)
+        {
+            return;
+        }
+
+        design.Elements.Remove(current);
+        selectedElementIds.Remove(current.Id);
+        SelectOnly(design.Elements.FirstOrDefault()?.Id);
+    }
+
+    private void StartDrag(LienzoElementDto element, Microsoft.AspNetCore.Components.Web.MouseEventArgs args)
+    {
+        if (args.Button != 0)
+        {
+            return;
+        }
+
+        if (args.CtrlKey || args.MetaKey)
+        {
+            ToggleSelection(element.Id);
+            isDragging = false;
+            dragSelectionIds.Clear();
+            showPropertiesModal = false;
+            return;
+        }
+
+        if (!IsElementSelected(element.Id))
+        {
+            SelectOnly(element.Id);
+        }
+
+        dragSelectionIds.Clear();
+        if (selectedElementIds.Count > 1)
+        {
+            foreach (var selectedId in selectedElementIds)
+            {
+                dragSelectionIds.Add(selectedId);
+            }
+        }
+        else
+        {
+            dragSelectionIds.Add(element.Id);
+        }
+
+        isDragging = true;
+        lastClientX = args.ClientX;
+        lastClientY = args.ClientY;
+        showPropertiesModal = false;
+    }
+
+    private void OpenElementProperties(LienzoElementDto element)
+    {
+        SelectOnly(element.Id);
+        showPropertiesModal = true;
+    }
+
+    private void CloseElementProperties()
+    {
+        showPropertiesModal = false;
+    }
+
+    private void OnCanvasMouseMove(Microsoft.AspNetCore.Components.Web.MouseEventArgs args)
+    {
+        if (!isDragging)
+        {
+            return;
+        }
+
+        var dragTargets = design.Elements
+            .Where(x => dragSelectionIds.Contains(x.Id))
+            .ToList();
+
+        if (dragTargets.Count == 0 && SelectedElement != null)
+        {
+            dragTargets.Add(SelectedElement);
+        }
+
+        if (dragTargets.Count == 0)
+        {
+            return;
+        }
+
+        var dxPx = args.ClientX - lastClientX;
+        var dyPx = args.ClientY - lastClientY;
+
+        lastClientX = args.ClientX;
+        lastClientY = args.ClientY;
+
+        var dxMm = dxPx / pxPerMm;
+        var dyMm = dyPx / pxPerMm;
+
+        var minDxAllowed = dragTargets.Max(x => -x.XMm);
+        var maxDxAllowed = dragTargets.Min(x => Math.Max(0, CanvasWidthMm - x.WidthMm - CanvasOffsetXMm) - x.XMm);
+        var minDyAllowed = dragTargets.Max(x => -x.YMm);
+        var maxDyAllowed = dragTargets.Min(x => Math.Max(0, CanvasHeightMm - x.HeightMm - CanvasOffsetYMm) - x.YMm);
+
+        var appliedDx = Math.Clamp(dxMm, minDxAllowed, maxDxAllowed);
+        var appliedDy = Math.Clamp(dyMm, minDyAllowed, maxDyAllowed);
+
+        foreach (var target in dragTargets)
+        {
+            target.XMm += appliedDx;
+            target.YMm += appliedDy;
+        }
+    }
+
+    private void StopDrag()
+    {
+        isDragging = false;
+        dragSelectionIds.Clear();
+    }
+
+    private void OnCanvasMouseDown(Microsoft.AspNetCore.Components.Web.MouseEventArgs args)
+    {
+        if (args.Button != 0)
+        {
+            return;
+        }
+
+        SelectOnly(null);
+        isDragging = false;
+        dragSelectionIds.Clear();
+    }
+
+    private void AddParameter()
+    {
+        parameters.Add(new ParameterItemDto { Name = string.Empty, Value = string.Empty });
+    }
+
+    private void RemoveParameter(ParameterItemDto parameter)
+    {
+        if (parameter == null)
+        {
+            return;
+        }
+
+        if (string.Equals(parameter.Name, "Doprilar", StringComparison.OrdinalIgnoreCase) && parameters.Count(x => string.Equals(x.Name, "Doprilar", StringComparison.OrdinalIgnoreCase)) <= 1)
+        {
+            return;
+        }
+
+        parameters.Remove(parameter);
+    }
+
+    private List<RemitoPlantillaParameterDto> BuildParameters()
+    {
+        return parameters
+            .Where(x => !string.IsNullOrWhiteSpace(x.Name))
+            .Select(x => new RemitoPlantillaParameterDto { Name = x.Name.Trim(), Value = x.Value })
+            .ToList();
+    }
+
+    private string? GetParameterValue(string name)
+    {
+        var param = parameters.FirstOrDefault(x => string.Equals(x.Name, name, StringComparison.OrdinalIgnoreCase));
+        return param?.Value;
+    }
+
+    private bool HasBindingValidationWarning => !string.IsNullOrWhiteSpace(BindingValidationWarning);
+
+    private string? BindingValidationWarning
+    {
+        get
+        {
+            var el = SelectedElement;
+            if (el == null || string.IsNullOrWhiteSpace(el.Binding))
+            {
+                return null;
+            }
+
+            if (preview?.Results == null || preview.Results.Count == 0)
+            {
+                return "No hay previsualización cargada. Ejecutá 'Previsualizar' para validar el binding.";
+            }
+
+            var binding = el.Binding.Trim();
+            var bindingParts = binding.Split('.', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+
+            if (bindingParts.Length >= 2)
+            {
+                var dataset = bindingParts[0];
+                var field = bindingParts[1];
+                if (!preview.Results.TryGetValue(dataset, out var rows) || rows == null || rows.Count == 0)
+                {
+                    return $"El dataset '{dataset}' no devolvió filas en la previsualización.";
+                }
+
+                return ExistsField(rows[0], field)
+                    ? null
+                    : $"El campo '{field}' no existe en el dataset '{dataset}'.";
+            }
+
+            if (!TryFindFieldInAnyDataset(preview.Results, binding, out var foundDataset))
+            {
+                return $"El campo '{binding}' no existe en ningún dataset previsualizado.";
+            }
+
+            return $"Binding corto válido en '{foundDataset}'. Si hay más de un dataset con ese campo, usá formato Dataset.Campo.";
+        }
+    }
+
+    private static bool TryFindFieldInAnyDataset(
+        Dictionary<string, List<Dictionary<string, object?>>> results,
+        string fieldName,
+        out string datasetName)
+    {
+        foreach (var item in results)
+        {
+            if (item.Value == null || item.Value.Count == 0)
+            {
+                continue;
+            }
+
+            if (ExistsField(item.Value[0], fieldName))
+            {
+                datasetName = item.Key;
+                return true;
+            }
+        }
+
+        datasetName = string.Empty;
+        return false;
+    }
+
+    private static bool ExistsField(Dictionary<string, object?> row, string fieldName)
+    {
+        return row.ContainsKey(fieldName)
+               || row.Keys.Any(k => string.Equals(k, fieldName, StringComparison.OrdinalIgnoreCase));
+    }
+
+    private void MoveSelectedElements(double dxMm, double dyMm)
+    {
+        var targets = design.Elements
+            .Where(x => selectedElementIds.Contains(x.Id))
+            .ToList();
+
+        if (targets.Count == 0 && SelectedElement != null)
+        {
+            targets.Add(SelectedElement);
+        }
+
+        if (targets.Count == 0)
+        {
+            return;
+        }
+
+        var minDxAllowed = targets.Max(x => -x.XMm);
+        var maxDxAllowed = targets.Min(x => Math.Max(0, CanvasWidthMm - x.WidthMm - CanvasOffsetXMm) - x.XMm);
+        var minDyAllowed = targets.Max(x => -x.YMm);
+        var maxDyAllowed = targets.Min(x => Math.Max(0, CanvasHeightMm - x.HeightMm - CanvasOffsetYMm) - x.YMm);
+
+        var appliedDx = Math.Clamp(dxMm, minDxAllowed, maxDxAllowed);
+        var appliedDy = Math.Clamp(dyMm, minDyAllowed, maxDyAllowed);
+
+        foreach (var target in targets)
+        {
+            target.XMm += appliedDx;
+            target.YMm += appliedDy;
+        }
+    }
+
+    private bool IsElementSelected(string? elementId)
+    {
+        return !string.IsNullOrWhiteSpace(elementId)
+               && selectedElementIds.Contains(elementId);
+    }
+
+    private void SelectOnly(string? elementId)
+    {
+        selectedElementIds.Clear();
+        selectedElementId = null;
+
+        if (string.IsNullOrWhiteSpace(elementId))
+        {
+            return;
+        }
+
+        selectedElementId = elementId;
+        selectedElementIds.Add(elementId);
+    }
+
+    private void ToggleSelection(string? elementId)
+    {
+        if (string.IsNullOrWhiteSpace(elementId))
+        {
+            return;
+        }
+
+        if (!selectedElementIds.Add(elementId))
+        {
+            selectedElementIds.Remove(elementId);
+        }
+
+        if (selectedElementIds.Count == 0)
+        {
+            selectedElementId = null;
+            return;
+        }
+
+        if (!string.IsNullOrWhiteSpace(selectedElementId) && selectedElementIds.Contains(selectedElementId))
+        {
+            return;
+        }
+
+        selectedElementId = selectedElementIds.First();
+    }
+
+    private LienzoElementDto? SelectedElement => design.Elements.FirstOrDefault(x => x.Id == selectedElementId);
+
+    private double CanvasWidthMm => string.Equals(design.Orientation, "Landscape", StringComparison.OrdinalIgnoreCase) ? 297 : 210;
+
+    private double CanvasHeightMm => string.Equals(design.Orientation, "Landscape", StringComparison.OrdinalIgnoreCase) ? 210 : 297;
+
+    private double CanvasOffsetXMm => Math.Max(0, design.MarginLeftMm);
+
+    private double CanvasOffsetYMm => Math.Max(0, design.MarginTopMm);
+
+    private string CanvasStyle => $"width: {CanvasWidthMm * pxPerMm:0}px; height: {CanvasHeightMm * pxPerMm:0}px;";
+
+    private string RulerTopStyle => BuildHorizontalRulerStyle(CanvasWidthMm, pxPerMm);
+
+    private string RulerLeftStyle => BuildVerticalRulerStyle(CanvasHeightMm, pxPerMm);
+
+    private string PdfRulerTopStyle => BuildHorizontalRulerStyle(CanvasWidthMm, pdfPreviewPxPerMm);
+
+    private string PdfRulerLeftStyle => BuildVerticalRulerStyle(CanvasHeightMm, pdfPreviewPxPerMm);
+
+    private string PdfPreviewPageStyle => $"width: {CanvasWidthMm * pdfPreviewPxPerMm:0}px; height: {CanvasHeightMm * pdfPreviewPxPerMm:0}px;";
+
+    private string PdfPreviewGridStyle => $"background-size: {pdfPreviewPxPerMm:0.###}px {pdfPreviewPxPerMm:0.###}px; background-image: linear-gradient(to right, rgba(108,117,125,0.16) 1px, transparent 1px), linear-gradient(to bottom, rgba(108,117,125,0.16) 1px, transparent 1px);";
+
+    private IEnumerable<int> HorizontalRuleTicks => Enumerable.Range(0, (int)(CanvasWidthMm / 10) + 1).Select(i => i * 10);
+
+    private IEnumerable<int> VerticalRuleTicks => Enumerable.Range(0, (int)(CanvasHeightMm / 10) + 1).Select(i => i * 10);
+
+    private IEnumerable<int> PdfHorizontalRuleTicks => Enumerable.Range(0, (int)(CanvasWidthMm / 10) + 1).Select(i => i * 10);
+
+    private IEnumerable<int> PdfVerticalRuleTicks => Enumerable.Range(0, (int)(CanvasHeightMm / 10) + 1).Select(i => i * 10);
+
+    private static string BuildHorizontalRulerStyle(double widthMm, double scalePxPerMm)
+    {
+        var widthPx = Math.Max(1, widthMm * scalePxPerMm);
+        var minorStepPx = Math.Max(1, scalePxPerMm);
+        var majorStepPx = Math.Max(minorStepPx, scalePxPerMm * 10);
+
+        var widthCss = widthPx.ToString("0.###", CultureInfo.InvariantCulture);
+        var minorStepCss = minorStepPx.ToString("0.###", CultureInfo.InvariantCulture);
+        var majorStepCss = majorStepPx.ToString("0.###", CultureInfo.InvariantCulture);
+
+        return $"width:{widthCss}px;background-image:repeating-linear-gradient(to right, rgba(108,117,125,0.16) 0, rgba(108,117,125,0.16) 1px, transparent 1px, transparent {minorStepCss}px),repeating-linear-gradient(to right, rgba(73,80,87,0.38) 0, rgba(73,80,87,0.38) 1.4px, transparent 1.4px, transparent {majorStepCss}px);";
+    }
+
+    private static string BuildVerticalRulerStyle(double heightMm, double scalePxPerMm)
+    {
+        var heightPx = Math.Max(1, heightMm * scalePxPerMm);
+        var minorStepPx = Math.Max(1, scalePxPerMm);
+        var majorStepPx = Math.Max(minorStepPx, scalePxPerMm * 10);
+
+        var heightCss = heightPx.ToString("0.###", CultureInfo.InvariantCulture);
+        var minorStepCss = minorStepPx.ToString("0.###", CultureInfo.InvariantCulture);
+        var majorStepCss = majorStepPx.ToString("0.###", CultureInfo.InvariantCulture);
+
+        return $"height:{heightCss}px;background-image:repeating-linear-gradient(to bottom, rgba(108,117,125,0.16) 0, rgba(108,117,125,0.16) 1px, transparent 1px, transparent {minorStepCss}px),repeating-linear-gradient(to bottom, rgba(73,80,87,0.38) 0, rgba(73,80,87,0.38) 1.4px, transparent 1.4px, transparent {majorStepCss}px);";
+    }
+
+    private string BuildElementStyle(LienzoElementDto element)
+    {
+        var style = $"left:{(element.XMm + CanvasOffsetXMm) * pxPerMm:0}px; top:{(element.YMm + CanvasOffsetYMm) * pxPerMm:0}px; width:{element.WidthMm * pxPerMm:0}px; height:{element.HeightMm * pxPerMm:0}px;";
+        style += $"z-index:{ResolveElementZIndex(element)};";
+        if (IsShapeElement(element))
+        {
+            var hitAreaMm = 2d;
+            if (string.Equals(element.Type, "hline", StringComparison.OrdinalIgnoreCase) && element.HeightMm < hitAreaMm)
+            {
+                style += $"height:{hitAreaMm * pxPerMm:0}px;";
+            }
+
+            if (string.Equals(element.Type, "vline", StringComparison.OrdinalIgnoreCase) && element.WidthMm < hitAreaMm)
+            {
+                style += $"width:{hitAreaMm * pxPerMm:0}px;";
+            }
+
+            style += "border:1px dashed rgba(13,110,253,0.45);background:rgba(13,110,253,0.05);padding:0;overflow:visible;";
+        }
+
+        if (IsElementSelected(element.Id))
+        {
+            style += "outline:2px solid #0d6efd;outline-offset:0;";
+        }
+
+        if (string.Equals(element.Type, "image", StringComparison.OrdinalIgnoreCase))
+        {
+            style += "border:1px solid #adb5bd;background:#fff;padding:0;";
+        }
+
+        if (IsCodeElement(element))
+        {
+            style += "border:1px dashed #198754;background:#f5fff8;color:#198754;display:flex;align-items:center;justify-content:center;text-align:center;padding:2px;";
+        }
+
+        return style;
+    }
+
+    private int ResolveElementZIndex(LienzoElementDto element)
+    {
+        if (IsElementSelected(element.Id))
+        {
+            return IsShapeElement(element) ? 10 : 30;
+        }
+
+        if (IsShapeElement(element))
+        {
+            return 5;
+        }
+
+        return 20;
+    }
+
+    private static bool IsShapeElement(LienzoElementDto element)
+    {
+        return string.Equals(element.Type, "hline", StringComparison.OrdinalIgnoreCase)
+               || string.Equals(element.Type, "vline", StringComparison.OrdinalIgnoreCase)
+               || string.Equals(element.Type, "rectangle", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool IsCodeElement(LienzoElementDto element)
+    {
+        return string.Equals(element.Type, "qrcode", StringComparison.OrdinalIgnoreCase)
+               || string.Equals(element.Type, "barcode", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static string GetCodePreviewLabel(LienzoElementDto element)
+    {
+        if (string.Equals(element.Type, "qrcode", StringComparison.OrdinalIgnoreCase))
+        {
+            return "QR";
+        }
+
+        var symbology = string.IsNullOrWhiteSpace(element.BarcodeSymbology)
+            ? "Code128"
+            : element.BarcodeSymbology;
+        return $"BAR ({symbology})";
+    }
+
+    private string BuildShapeInnerStyle(LienzoElementDto element)
+    {
+        var stroke = Math.Max(0.2, element.StrokeWidth);
+        var color = string.IsNullOrWhiteSpace(element.StrokeColor) ? "#000000" : element.StrokeColor;
+        var borderStyle = MapStrokeCss(element.StrokeStyle);
+
+        if (string.Equals(element.Type, "hline", StringComparison.OrdinalIgnoreCase))
+        {
+            return $"position:absolute;left:0;right:0;top:50%;transform:translateY(-50%);border-top:{stroke}mm {borderStyle} {color};";
+        }
+
+        if (string.Equals(element.Type, "vline", StringComparison.OrdinalIgnoreCase))
+        {
+            return $"position:absolute;top:0;bottom:0;left:50%;transform:translateX(-50%);border-left:{stroke}mm {borderStyle} {color};";
+        }
+
+        return $"width:100%;height:100%;border:{stroke}mm {borderStyle} {color};box-sizing:border-box;background:transparent;";
+    }
+
+    private static string MapStrokeCss(string? strokeStyle)
+    {
+        if (string.Equals(strokeStyle, "Dot", StringComparison.OrdinalIgnoreCase))
+        {
+            return "dotted";
+        }
+
+        if (string.Equals(strokeStyle, "Dash", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(strokeStyle, "DashDot", StringComparison.OrdinalIgnoreCase))
+        {
+            return "dashed";
+        }
+
+        return "solid";
+    }
+
+    private static string ResolveImageUrl(LienzoElementDto element)
+    {
+        if (string.IsNullOrWhiteSpace(element.ImagePath))
+        {
+            return string.Empty;
+        }
+
+        var raw = element.ImagePath.Trim().Replace('\\', '/');
+        var marker = "/wwwroot/";
+        var markerIndex = raw.LastIndexOf(marker, StringComparison.OrdinalIgnoreCase);
+        if (markerIndex >= 0)
+        {
+            return "/" + raw[(markerIndex + marker.Length)..].TrimStart('/');
+        }
+
+        if (raw.StartsWith("http://", StringComparison.OrdinalIgnoreCase)
+            || raw.StartsWith("https://", StringComparison.OrdinalIgnoreCase)
+            || raw.StartsWith("/", StringComparison.OrdinalIgnoreCase))
+        {
+            return raw;
+        }
+
+        return "/" + raw.TrimStart('/');
+    }
+
+    private sealed class LienzoDesignDto
+    {
+        public string Orientation { get; set; } = "Portrait";
+        public double MarginLeftMm { get; set; }
+        public double MarginTopMm { get; set; }
+        public bool ShowPageNumbers { get; set; } = true;
+        public string PageNumberAlign { get; set; } = "Right";
+        public List<LienzoElementDto> Elements { get; set; } = new();
+    }
+
+    private sealed class LienzoElementDto
+    {
+        public string Id { get; set; } = Guid.NewGuid().ToString("N");
+        public string Type { get; set; } = "text";
+        public string Label { get; set; } = string.Empty;
+        public string? Binding { get; set; }
+        public string? SqlQuery { get; set; }
+        public double XMm { get; set; }
+        public double YMm { get; set; }
+        public double WidthMm { get; set; } = 50;
+        public double HeightMm { get; set; } = 8;
+        public string FontName { get; set; } = "Arial";
+        public int FontSize { get; set; } = 9;
+        public string Align { get; set; } = "Left";
+        public int MaxLength { get; set; }
+        public bool NumericOverflowAsterisks { get; set; }
+        public string? DetailColumnsCsv { get; set; }
+        public int DetailRowHeightMm { get; set; } = 6;
+        public int DetailMaxRows { get; set; } = 15;
+        public bool DetailShowHeader { get; set; } = true;
+        public bool DetailAutoAlign { get; set; } = true;
+        public bool DetailRowLines { get; set; }
+        public bool DetailColumnLines { get; set; }
+        public string? DetailColumnAlignCsv { get; set; }
+        public string? DetailColumnWidthsCsv { get; set; }
+        public string? ImagePath { get; set; }
+        public string BarcodeSymbology { get; set; } = "Code128";
+        public string StrokeStyle { get; set; } = "Solid";
+        public double StrokeWidth { get; set; } = 0.4;
+        public string StrokeColor { get; set; } = "#000000";
+    }
+
+    private sealed class ParameterItemDto
+    {
+        public string Name { get; set; } = string.Empty;
+        public string? Value { get; set; }
+    }
+
+    private sealed class DatasetItemDto
+    {
+        public string Key { get; set; } = string.Empty;
+        public string Sql { get; set; } = string.Empty;
+        public int MaxRows { get; set; } = 500;
+    }
+}

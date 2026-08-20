@@ -40,11 +40,14 @@ builder.Services.AddScoped<AuthenticationStateProvider, AuthenticationService>()
 builder.Services.AddScoped<AuthenticationService>(sp => 
     (AuthenticationService)sp.GetRequiredService<AuthenticationStateProvider>());
 builder.Services.AddScoped<DependenciaService>();
+builder.Services.AddScoped<CurrentUserService>();
 builder.Services.AddScoped<InactivityService>();
+builder.Services.AddScoped<NotificationService>();
 builder.Services.AddSweetAlert2();
 builder.Services.AddBlazoredModal();
 builder.Services.AddBlazoredToast();
 builder.Services.AddScoped<FuncionesFechas>();
 builder.Services.AddScoped<DerechosUsuarioClientService>();
+builder.Services.AddScoped<PageAccessService>();
 
 await builder.Build().RunAsync();

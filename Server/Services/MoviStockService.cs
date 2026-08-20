@@ -17,17 +17,20 @@ namespace IMPLANPROD.Server.Services
         private readonly IUsuarioFlexoftService _usuarioFlexoftService;
         private readonly ICodiempresa _codiempresa;
         private readonly ILogger<MoviStockService> _logger;
+        private readonly ISyncService _syncService;
 
         public MoviStockService(
             DataContext context,
             IUsuarioFlexoftService usuarioFlexoftService,
             ICodiempresa codiempresa,
-            ILogger<MoviStockService> logger)
+            ILogger<MoviStockService> logger,
+            ISyncService syncService)
         {
             _context = context;
             _usuarioFlexoftService = usuarioFlexoftService;
             _codiempresa = codiempresa;
             _logger = logger;
+            _syncService = syncService;
         }
 
         /// <summary>
@@ -49,9 +52,10 @@ namespace IMPLANPROD.Server.Services
                 }
 
                 // Validaciones básicas
-                if (!await ValidarMovimientoAsync(movimiento))
+                var (isValid, errorMessage) = await ValidarMovimientoAsync(movimiento);
+                if (!isValid)
                 {
-                    return new BadRequestObjectResult("Los datos del movimiento no son válidos");
+                    return new BadRequestObjectResult(errorMessage);
                 }
 
                 // Determinar la tabla destino según el código de movimiento
@@ -212,11 +216,75 @@ namespace IMPLANPROD.Server.Services
 
                 _logger.LogInformation($"Movimiento de stock registrado exitosamente. ID: {nuevoMovimiento.Id}");
 
-                // Actualizar PEDDETA si el movimiento es un remito (RT) y tiene número de pedido
-                if (movimiento.CodigoMovimiento.ToUpper() == "RT" && nuPedCli > 0 && movimiento.Cantidad < 0)
+                // Generar archivo JSON de sincronización si es un remito (RT) y está configurado
+                if (movimiento.CodigoMovimiento.ToUpper() == "RT" && idFlexoft.HasValue)
                 {
-                    _logger.LogInformation("Actualizando PEDDETA para remito RT: NuPedCli={NuPedCli}, CodigoInterno={CodigoInterno}, NumeOrdPed={NumeOrdPed}", 
-                        nuPedCli, movimiento.CodigoInterno, numeOrdPed);
+                    try
+                    {
+                        // Buscar todos los movimientos del mismo remito en la base de datos
+                        // (incluyendo el que acabamos de insertar)
+                        var movimientosRemito = await _context.Movistos
+                            .Where(m => m.DoPriLar == doPriLar && m.CodiMovi == "RT")
+                            .OrderBy(m => m.Id)
+                            .ToListAsync();
+
+                        if (movimientosRemito.Any())
+                        {
+                            // Mapear todos los movimientos a RemitoItemDTO
+                            var remitoItems = movimientosRemito.Select(m => new RemitoItemDTO
+                            {
+                                CantIngre = m.CantIngre ?? 0,
+                                CantSalid = m.CantSalid ?? 0,
+                                CodExte = m.Cod_Exte,
+                                CodInte = m.Cod_Inte,
+                                DescriLar = m.Descri_Lar,
+                                DoPriCor = m.DoPriCor,
+                                DoPriLar = m.DoPriLar,
+                                DOPRINUM = m.DOPRINUM,
+                                Nume_Clie = m.Nume_Clie,
+                                NUMPVTA = m.NUMPVTA,
+                                NuorItem = m.NuorItem,
+                                ReferCor = m.ReferCor,
+                                FeReMovi = m.FeReMovi,
+                                TipoCam = m.TipoCam.HasValue ? (int?)m.TipoCam.Value : null,
+                                TipoTran = m.TipoTran,
+                                ValoUnit = m.ValoUnit,
+                                ValoUnitIva = m.ValoUnitIva,
+                                ValTotIt = m.ValTotIt,
+                                ValTotItIva = m.ValTotItIva,
+                                VerificadoPor = m.VerificadoPor,
+                                CantSaldo = m.CantSaldo,
+                                CodiEmpr = m.CodiEmpr,
+                                FechMov = m.FechMov,
+                                FHor_Verif = m.FHor_Verif,
+                                ID_OPERACION = m.ID_OPERACION,
+                                IdCalidad = m.IdCalidad,
+                                MoneVal = m.MoneVal,
+                                Nume_Prov = m.Nume_Prov,
+                                NumeOrdPed = m.NumeOrdPed,
+                                NuPedCli = m.NuPedCli,
+                                NumUsuar = m.NumUsuar ?? idFlexoft.Value,
+                                CodiMovi = m.CodiMovi,
+                                DepoMovi = m.DepoMovi
+                            }).ToList();
+
+                            var cantidadItems = remitoItems.Count;
+                            await _syncService.GenerarArchivoSyncRemitoDesdeDatosAsync(remitoItems, idFlexoft.Value);
+                            _logger.LogInformation($"Archivo JSON de sincronización generado para remito: {doPriLar} con {cantidadItems} items");
+                        }
+                    }
+                    catch (Exception syncEx)
+                    {
+                        _logger.LogWarning(syncEx, "No se pudo generar archivo JSON de sincronización para remito: {DoPriLar}", doPriLar);
+                        // No fallar el registro del movimiento si falla la generación del JSON
+                    }
+                }
+
+                // Actualizar PEDDETA si el movimiento es un remito (RT o RC) y tiene número de pedido
+                if ((movimiento.CodigoMovimiento.ToUpper() == "RT" || movimiento.CodigoMovimiento.ToUpper() == "RC") && nuPedCli > 0 && movimiento.Cantidad < 0)
+                {
+                    _logger.LogInformation("Actualizando PEDDETA para remito {CodigoMovimiento}: NuPedCli={NuPedCli}, CodigoInterno={CodigoInterno}, NumeOrdPed={NumeOrdPed}",
+                        movimiento.CodigoMovimiento.ToUpper(), nuPedCli, movimiento.CodigoInterno, numeOrdPed);
                     
                     await ActualizarCantidadEntregadaPedidoAsync(
                         nuPedCli, 
@@ -242,33 +310,29 @@ namespace IMPLANPROD.Server.Services
         /// <summary>
         /// Valida si un movimiento de stock es válido antes de registrarlo
         /// </summary>
-        public async Task<bool> ValidarMovimientoAsync(MoviStockDTO movimiento)
+        public async Task<(bool IsValid, string ErrorMessage)> ValidarMovimientoAsync(MoviStockDTO movimiento)
         {
             try
             {
                 // Validaciones básicas
                 if (movimiento.CodigoInterno <= 0)
                 {
-                    _logger.LogWarning("Código interno del producto inválido: {CodigoInterno}", movimiento.CodigoInterno);
-                    return false;
+                    return (false, $"Código interno del producto inválido: {movimiento.CodigoInterno}");
                 }
 
                 if (movimiento.Deposito <= 0)
                 {
-                    _logger.LogWarning("Depósito inválido: {Deposito}", movimiento.Deposito);
-                    return false;
+                    return (false, $"Depósito inválido: {movimiento.Deposito}");
                 }
 
                 if (string.IsNullOrEmpty(movimiento.CodigoMovimiento))
                 {
-                    _logger.LogWarning("Código de movimiento vacío");
-                    return false;
+                    return (false, "Código de movimiento vacío");
                 }
 
                 if (movimiento.Cantidad == 0)
                 {
-                    _logger.LogWarning("Cantidad de movimiento es cero");
-                    return false;
+                    return (false, "Cantidad de movimiento es cero");
                 }
 
                 // Verificar que el producto existe en la tabla Master
@@ -277,16 +341,15 @@ namespace IMPLANPROD.Server.Services
 
                 if (!productoExiste)
                 {
-                    _logger.LogWarning("El producto con código interno {CodigoInterno} no existe", movimiento.CodigoInterno);
-                    return false;
+                    return (false, $"El producto con código interno {movimiento.CodigoInterno} no existe en la tabla Master");
                 }
 
-                return true;
+                return (true, "");
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error al validar movimiento de stock");
-                return false;
+                return (false, $"Error al validar movimiento de stock: {ex.Message}");
             }
         }
 
@@ -445,45 +508,82 @@ namespace IMPLANPROD.Server.Services
                 }
 
                 var remitos = await query
-                    .GroupBy(m => new { m.DoPriCor, m.DoPriLar, m.Nume_Clie, m.FechMov, m.ReferCor })
-                    .Select(g => new
+                    .GroupBy(m => new { m.DoPriLar, m.Nume_Clie, m.FechMov })
+                    .Select(g => new RemitoAnularDTO
                     {
-                        DoPriCor = g.Key.DoPriCor,
-                        DoPriLar = g.Key.DoPriLar,
-                        NumeClie = g.Key.Nume_Clie,
-                        FechMov = g.Key.FechMov,
-                        ReferCor = g.Key.ReferCor
+                        DoPriLar = g.Key.DoPriLar ?? "",
+                        NumeClie = g.Key.Nume_Clie ?? 0,
+                        FechMov = g.Key.FechMov ?? DateTime.MinValue,
+                        ReferCor = g.FirstOrDefault().ReferCor ?? "",
+                        RazonSocial = _context.Set<Deudor12>()
+                            .Where(c => c.Nume_Cli == (g.Key.Nume_Clie ?? 0))
+                            .Select(c => c.Raso_Cli)
+                            .FirstOrDefault() ?? ""
                     })
                     .OrderBy(r => r.FechMov)
+                    .ThenBy(r => r.DoPriLar)
                     .ToListAsync();
 
-                _logger.LogInformation("Remitos (TODOS) encontrados: {Count}", remitos.Count);
-
-                var numerosClientes = remitos.Select(r => r.NumeClie).Distinct().ToList();
-                var clientes = await _context.Set<Deudor12>()
-                    .Where(d => numerosClientes.Contains(d.Nume_Cli))
-                    .Select(d => new { d.Nume_Cli, d.Raso_Cli })
-                    .ToListAsync();
-
-                var clientesDic = clientes.ToDictionary(c => c.Nume_Cli, c => c.Raso_Cli ?? $"CLIENTE Nro.{c.Nume_Cli}");
-
-                var resultado = remitos.Select(r => new RemitoAnularDTO
-                {
-                    DoPriCor = r.DoPriCor ?? string.Empty,
-                    DoPriLar = r.DoPriLar ?? string.Empty,
-                    NumeClie = r.NumeClie ?? 0,
-                    RazonSocial = clientesDic.ContainsKey(r.NumeClie ?? 0)
-                        ? clientesDic[r.NumeClie ?? 0]
-                        : $"CLIENTE Nro.{r.NumeClie}",
-                    FechMov = r.FechMov ?? DateTime.MinValue,
-                    ReferCor = r.ReferCor ?? string.Empty
-                }).ToList();
-
-                return resultado;
+                _logger.LogInformation("Se encontraron {Cantidad} remitos", remitos.Count);
+                return remitos;
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error al obtener TODOS los remitos del mes {Mes}/{Anio}", mes, anio);
+                _logger.LogError(ex, "Error al obtener remitos del mes {Mes}/{Anio}", mes, anio);
+                throw;
+            }
+        }
+
+        /// <summary>
+        /// Obtiene los remitos de traslado del mes (códigos RC y DV)
+        /// </summary>
+        public async Task<List<RemitoAnularDTO>> ObtenerRemitosTrasladoMesAsync(int anio, int mes, int? numeroCliente = null)
+        {
+            try
+            {
+                _logger.LogInformation("Obteniendo REMITOS DE TRASLADO del mes {Mes}/{Anio}, Cliente: {Cliente}",
+                    mes, anio, numeroCliente?.ToString() ?? "Todos");
+
+                var fechaInicio = new DateTime(anio, mes, 1);
+                var fechaFin = fechaInicio.AddMonths(1).AddDays(-1);
+
+                _logger.LogInformation("Buscando remitos de traslado entre {FechaInicio} y {FechaFin} con códigos RC y DV",
+                    fechaInicio, fechaFin);
+
+                var query = _context.Set<Movisto>()
+                    .Where(m => m.FechMov >= fechaInicio &&
+                               m.FechMov <= fechaFin &&
+                               (m.CodiMovi == "RC" || m.CodiMovi == "DV"));
+
+                if (numeroCliente.HasValue)
+                {
+                    query = query.Where(m => m.Nume_Clie == numeroCliente.Value);
+                    _logger.LogInformation("Aplicando filtro de cliente (TRASLADO): {NumeroCliente}", numeroCliente.Value);
+                }
+
+                var remitos = await query
+                    .GroupBy(m => new { m.DoPriLar, m.Nume_Clie, m.FechMov })
+                    .Select(g => new RemitoAnularDTO
+                    {
+                        DoPriLar = g.Key.DoPriLar ?? "",
+                        NumeClie = g.Key.Nume_Clie ?? 0,
+                        FechMov = g.Key.FechMov ?? DateTime.MinValue,
+                        ReferCor = g.FirstOrDefault().ReferCor ?? "",
+                        RazonSocial = _context.Set<Deudor12>()
+                            .Where(c => c.Nume_Cli == (g.Key.Nume_Clie ?? 0))
+                            .Select(c => c.Raso_Cli)
+                            .FirstOrDefault() ?? ""
+                    })
+                    .OrderBy(r => r.FechMov)
+                    .ThenBy(r => r.DoPriLar)
+                    .ToListAsync();
+
+                _logger.LogInformation("Se encontraron {Cantidad} remitos de traslado", remitos.Count);
+                return remitos;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error al obtener remitos de traslado del mes {Mes}/{Anio}", mes, anio);
                 throw;
             }
         }
@@ -496,6 +596,7 @@ namespace IMPLANPROD.Server.Services
             try
             {
                 var config = await _context.Set<FLEXCRL>()
+                    .AsNoTracking()
                     .FirstOrDefaultAsync(f => f.CLABUS == "" && f.PROBUS == "CODREFAC");
 
                 return config?.VALCONTROL ?? "RT";
@@ -824,29 +925,55 @@ namespace IMPLANPROD.Server.Services
 
         /// <summary>
         /// Obtiene el último número de remito registrado en MOVISTO
-        /// Filtra por código de movimiento RT y fecha mayor o igual a la fecha de nueva numeración
+        /// Filtra por código de movimiento y fecha y hora mayor o igual a la fecha de nueva numeración
+        /// Para remitos de traslado (RC), usa el campo DoPriLar con formato RC-XXXX o RC.XXXX
         /// </summary>
-        /// <param name="fechaNuevaNumeracion">Fecha desde la cual considerar los remitos (opcional, default 01/01/1980)</param>
+        /// <param name="fechaNuevaNumeracion">Fecha y hora desde la cual considerar los remitos (opcional, default 01/01/1980 00:00)</param>
+        /// <param name="codigoMovimiento">Código de movimiento a filtrar (opcional, default "RT" para remitos de cliente, usar "RC" para traslados)</param>
         /// <returns>Último número de remito</returns>
-        public async Task<int> ObtenerUltimoNumeroRemitoAsync(DateTime? fechaNuevaNumeracion = null)
+        public async Task<int> ObtenerUltimoNumeroRemitoAsync(DateTime? fechaNuevaNumeracion = null, string codigoMovimiento = "RT")
         {
             try
             {
-                // Si no se proporciona fecha, usar 01/01/1980 como default
-                DateTime fechaFiltro = fechaNuevaNumeracion ?? new DateTime(1980, 1, 1);
+                // Si no se proporciona fecha, usar 01/01/1980 00:00 como default
+                DateTime fechaFiltro = fechaNuevaNumeracion ?? new DateTime(1980, 1, 1, 0, 0, 0);
 
-                _logger.LogInformation("Obteniendo último número de remito desde fecha: {FechaFiltro:dd/MM/yyyy}", fechaFiltro);
+                _logger.LogInformation("Obteniendo último número de remito para código {CodigoMovimiento} desde fecha y hora: {FechaFiltro:dd/MM/yyyy HH:mm}", codigoMovimiento, fechaFiltro);
 
-                // Obtener el último número de remito de la tabla MOVISTO
-                // Filtrando por código de movimiento RT (Remito de Cliente) y fecha >= fechaFiltro
-                var ultimoRemito = await _context.Set<Movisto>()
-                    .Where(m => m.CodiMovi == "RT" && m.FechMov >= fechaFiltro)
-                    .OrderByDescending(m => m.DOPRINUM)
-                    .Select(m => m.DOPRINUM)
-                    .FirstOrDefaultAsync();
+                int resultado = 0;
 
-                int resultado = ultimoRemito ?? 0;
-                _logger.LogInformation("Último número de remito encontrado: {UltimoNumero}", resultado);
+                if (codigoMovimiento == "RC")
+                {
+                    // Para remitos de traslado, usar DoPriLar con formato RC-XXXX o RC.XXXX
+                    var remitosTraslado = await _context.Set<Movisto>()
+                        .Where(m => m.CodiMovi == codigoMovimiento && m.FeReMovi >= fechaFiltro && m.DoPriLar != null)
+                        .Select(m => m.DoPriLar)
+                        .ToListAsync();
+
+                    // Extraer el número de cada DoPriLar y encontrar el máximo
+                    foreach (var doprilar in remitosTraslado)
+                    {
+                        int numero = ExtraerNumeroDeDoprilar(doprilar);
+                        if (numero > resultado)
+                        {
+                            resultado = numero;
+                        }
+                    }
+
+                    _logger.LogInformation("Último número de remito encontrado para código {CodigoMovimiento} usando DoPriLar: {UltimoNumero}", codigoMovimiento, resultado);
+                }
+                else
+                {
+                    // Para remitos de cliente (RT), usar DOPRINUM
+                    var ultimoRemito = await _context.Set<Movisto>()
+                        .Where(m => m.CodiMovi == codigoMovimiento && m.FeReMovi >= fechaFiltro)
+                        .OrderByDescending(m => m.DOPRINUM)
+                        .Select(m => m.DOPRINUM)
+                        .FirstOrDefaultAsync();
+
+                    resultado = ultimoRemito ?? 0;
+                    _logger.LogInformation("Último número de remito encontrado para código {CodigoMovimiento} usando DOPRINUM: {UltimoNumero}", codigoMovimiento, resultado);
+                }
 
                 return resultado;
             }
@@ -855,6 +982,39 @@ namespace IMPLANPROD.Server.Services
                 _logger.LogError(ex, "Error al obtener último número de remito");
                 return 0;
             }
+        }
+
+        /// <summary>
+        /// Extrae el número de un campo DoPriLar con formato RC-XXXX o RC.XXXX
+        /// </summary>
+        private int ExtraerNumeroDeDoprilar(string doprilar)
+        {
+            if (string.IsNullOrWhiteSpace(doprilar))
+            {
+                return 0;
+            }
+
+            // Intentar formato RC-XXXX
+            if (doprilar.StartsWith("RC-"))
+            {
+                string numeroStr = doprilar.Substring(3);
+                if (int.TryParse(numeroStr, out int numero))
+                {
+                    return numero;
+                }
+            }
+
+            // Intentar formato RC.XXXX
+            if (doprilar.StartsWith("RC."))
+            {
+                string numeroStr = doprilar.Substring(3);
+                if (int.TryParse(numeroStr, out int numero))
+                {
+                    return numero;
+                }
+            }
+
+            return 0;
         }
     }
 }

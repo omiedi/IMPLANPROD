@@ -91,6 +91,49 @@ namespace IMPLANPROD.Server.Controllers
             }
         }
 
+        [HttpPost("bootstrap/promover-superadmin/{id:int}")]
+        [AllowAnonymous]
+        public async Task<ActionResult> BootstrapPromoverSuperAdmin(int id)
+        {
+            try
+            {
+                var totalSuperAdmins = await ContarSuperAdminsActivosAsync();
+                if (totalSuperAdmins > 0)
+                {
+                    return BadRequest("Ya existe al menos un SUPERADMIN activo. Este endpoint solo aplica al bootstrap inicial.");
+                }
+
+                var superAdminPerfilId = await ObtenerPerfilSuperAdminIdAsync();
+                if (superAdminPerfilId <= 0)
+                {
+                    return BadRequest("No existe el perfil SUPERADMIN configurado en Perfiles.");
+                }
+
+                var usuario = await _context.Usuarios.FirstOrDefaultAsync(u => u.Id == id && u.Activo);
+                if (usuario == null)
+                {
+                    return NotFound("Usuario no encontrado o inactivo.");
+                }
+
+                usuario.PerfilId = superAdminPerfilId;
+                await _context.SaveChangesAsync();
+
+                return Ok(new
+                {
+                    usuario.Id,
+                    usuario.NombreUsuario,
+                    usuario.Email,
+                    usuario.PerfilId,
+                    Mensaje = "Usuario promovido a SUPERADMIN para bootstrap inicial."
+                });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error en bootstrap de promoción a SUPERADMIN para usuario {UsuarioId}", id);
+                return StatusCode(500, "Error interno del servidor");
+            }
+        }
+
         /// <summary>
         /// Obtiene todos los usuarios activos
         /// </summary>
@@ -136,6 +179,18 @@ namespace IMPLANPROD.Server.Controllers
                 if (usuario == null)
                 {
                     return BadRequest("Datos de usuario inválidos");
+                }
+
+                var superAdminPerfilId = await ObtenerPerfilSuperAdminIdAsync();
+                if (superAdminPerfilId > 0 && usuario.PerfilId == superAdminPerfilId)
+                {
+                    var totalSuperAdmins = await ContarSuperAdminsActivosAsync();
+                    var currentIsSuperAdmin = await EsUsuarioActualSuperAdminAsync();
+
+                    if (totalSuperAdmins > 0 && !currentIsSuperAdmin)
+                    {
+                        return BadRequest("Solo un usuario SUPERADMIN puede asignar el perfil SUPERADMIN.");
+                    }
                 }
 
                 // Verificar si el correo ya está registrado
@@ -198,7 +253,7 @@ namespace IMPLANPROD.Server.Controllers
                 _context.Usuarios.Add(usuario);
                 await _context.SaveChangesAsync();
 
-                return Ok();
+                return Ok(new { id = usuario.Id });
             }
             catch (Exception ex)
             {
@@ -208,10 +263,19 @@ namespace IMPLANPROD.Server.Controllers
         }
 
         [HttpGet]
+        [Authorize]
         public async Task<ActionResult<List<Usuario>>> Get()
         {
             try
             {
+                var esSuperAdminActual    = User.IsInRole("SUPERADMIN");
+                var esAdministradorActual = User.IsInRole("ADMINISTRADOR") || User.IsInRole("ADMIN");
+
+                if (!esSuperAdminActual && !esAdministradorActual)
+                {
+                    return Forbid();
+                }
+
                 // Cargar usuarios con su perfil
                 var usuarios = await _context.Usuarios
                     .Include(u => u.Perfil)
@@ -257,10 +321,21 @@ namespace IMPLANPROD.Server.Controllers
         }
         // ******   ESTE SE USA PARA TRAER UN USUARIO POR SU ID (Usuario.Id)   *********
         [HttpGet("{id:int}")]
+        [Authorize]
         public async Task<ActionResult<Usuario>> Get(int id)
         {
             try
             {
+                var esSuperAdminActual    = User.IsInRole("SUPERADMIN");
+                var esAdministradorActual = User.IsInRole("ADMINISTRADOR") || User.IsInRole("ADMIN");
+                int.TryParse(User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value, out var currentUserId);
+                var esEdicionPropia = currentUserId == id;
+
+                if (!esSuperAdminActual && !esAdministradorActual && !esEdicionPropia)
+                {
+                    return Forbid();
+                }
+
                 var usuario = await _context.Usuarios
                     .Include(u => u.Perfil)
                     .Select(u => new Usuario
@@ -305,6 +380,24 @@ namespace IMPLANPROD.Server.Controllers
             var usuario = _context.Usuarios.FirstOrDefault(u =>
                 u.NombreUsuario == username && u.Email == email);
             return usuario?.IdFlexoft;
+        }
+
+        /// <summary>
+        /// Verifica si un email ya está registrado en otro usuario.
+        /// excludeId = 0 en alta (ninguno excluido), excludeId = id del usuario en edición.
+        /// </summary>
+        [HttpGet("check-email")]
+        [AllowAnonymous]
+        public async Task<IActionResult> CheckEmail([FromQuery] string email, [FromQuery] int excludeId = 0)
+        {
+            if (string.IsNullOrWhiteSpace(email))
+                return Ok(new { existe = false });
+
+            var existe = await _context.Usuarios
+                .AsNoTracking()
+                .AnyAsync(u => u.Email.ToLower() == email.ToLower() && u.Id != excludeId);
+
+            return Ok(new { existe });
         }
 
         /// <summary>
@@ -409,6 +502,7 @@ namespace IMPLANPROD.Server.Controllers
 
         //-----------------------------------------------------------------
         [HttpPut("{id}")]
+        [Authorize]
         public async Task<ActionResult> Put(int id, [FromForm] string usuarioJson, IFormFile? foto)
         {
             try
@@ -427,6 +521,93 @@ namespace IMPLANPROD.Server.Controllers
                 if (usuarioActualizado == null)
                 {
                     return BadRequest("Datos de usuario inválidos");
+                }
+
+                var usuarioActualId = _userContextService.GetCurrentUsuarioId();
+                if (!usuarioActualId.HasValue)
+                {
+                    return Unauthorized("No se pudo identificar el usuario autenticado.");
+                }
+
+                var usuarioAutenticado = await _context.Usuarios
+                    .AsNoTracking()
+                    .FirstOrDefaultAsync(u => u.Id == usuarioActualId.Value);
+
+                if (usuarioAutenticado == null)
+                {
+                    return Unauthorized("Usuario autenticado no encontrado.");
+                }
+
+                // Consulta separada para evitar bug de shadow property PerfilId1 de EF Core
+                // que causa que Include(u => u.Perfil) devuelva null aunque PerfilId tenga valor
+                var perfilAutenticado = usuarioAutenticado.PerfilId.HasValue
+                    ? await _context.Perfiles.AsNoTracking().FirstOrDefaultAsync(p => p.Id == usuarioAutenticado.PerfilId.Value)
+                    : null;
+
+                var perfilActualNombre = (perfilAutenticado?.Nombre ?? string.Empty).Trim();
+                var esSuperAdminActual = string.Equals(perfilActualNombre, "SUPERADMIN", StringComparison.OrdinalIgnoreCase);
+                var esAdministradorActual = string.Equals(perfilActualNombre, "ADMINISTRADOR", StringComparison.OrdinalIgnoreCase)
+                                          || string.Equals(perfilActualNombre, "ADMIN", StringComparison.OrdinalIgnoreCase);
+                var esUsuarioActual = string.Equals(perfilActualNombre, "USUARIO", StringComparison.OrdinalIgnoreCase);
+                var esEdicionPropia = usuarioActualId.Value == id;
+
+                _logger.LogInformation("PUT Usuario {Id} - UsuarioActualId:{ActualId} PerfilId:{PerfilId} PerfilNombre:'{PerfilNombre}' esSuperAdmin:{EsSA} esAdmin:{EsAdmin} esUsuario:{EsUser}",
+                    id, usuarioActualId.Value, usuarioAutenticado.PerfilId, perfilActualNombre, esSuperAdminActual, esAdministradorActual, esUsuarioActual);
+
+                if (!esSuperAdminActual && !esAdministradorActual && !esUsuarioActual)
+                {
+                    return Forbid();
+                }
+
+                if (esUsuarioActual && !esEdicionPropia)
+                {
+                    return Forbid();
+                }
+
+                if (esUsuarioActual && esEdicionPropia)
+                {
+                    usuarioActualizado.NombreUsuario = usuario.NombreUsuario;
+                    usuarioActualizado.IdFlexoft = usuario.IdFlexoft;
+                    usuarioActualizado.CountryId = usuario.CountryId;
+                    usuarioActualizado.StateId = usuario.StateId;
+                    usuarioActualizado.CityId = usuario.CityId;
+                    usuarioActualizado.EmpresaId = usuario.EmpresaId;
+                    usuarioActualizado.DependenciaId = usuario.DependenciaId;
+                    usuarioActualizado.SectorId = usuario.SectorId;
+                    usuarioActualizado.PerfilId = usuario.PerfilId;
+                    usuarioActualizado.Activo = usuario.Activo;
+                    usuarioActualizado.FechaRegistro = usuario.FechaRegistro;
+                }
+
+                var superAdminPerfilId = await ObtenerPerfilSuperAdminIdAsync();
+                var perfilActualEsSuperAdmin = superAdminPerfilId > 0 && usuario.PerfilId == superAdminPerfilId;
+                var perfilNuevoEsSuperAdmin = superAdminPerfilId > 0 && usuarioActualizado.PerfilId == superAdminPerfilId;
+
+                if (superAdminPerfilId > 0)
+                {
+                    var totalSuperAdmins = await ContarSuperAdminsActivosAsync();
+                    var currentIsSuperAdmin = esSuperAdminActual;
+
+                    if (!perfilActualEsSuperAdmin && perfilNuevoEsSuperAdmin)
+                    {
+                        if (totalSuperAdmins > 0 && !currentIsSuperAdmin)
+                        {
+                            return BadRequest("Solo un usuario SUPERADMIN puede promover otro usuario a SUPERADMIN.");
+                        }
+                    }
+
+                    if (perfilActualEsSuperAdmin && !perfilNuevoEsSuperAdmin)
+                    {
+                        if (!currentIsSuperAdmin)
+                        {
+                            return BadRequest("Solo un usuario SUPERADMIN puede quitar el perfil SUPERADMIN.");
+                        }
+
+                        if (totalSuperAdmins <= 1)
+                        {
+                            return BadRequest("No se puede quitar el perfil al último SUPERADMIN activo.");
+                        }
+                    }
                 }
 
                 // Verificar si el email ya está en uso por otro usuario
@@ -502,11 +683,83 @@ namespace IMPLANPROD.Server.Controllers
             return PasswordHasher.HashPassword(password);
         }
 
+        private async Task<int> ObtenerPerfilSuperAdminIdAsync()
+        {
+            return await _context.Perfiles
+                .AsNoTracking()
+                .Where(p => p.Nombre != null && p.Nombre.Trim().ToUpper() == "SUPERADMIN")
+                .Select(p => p.Id)
+                .FirstOrDefaultAsync();
+        }
+
+        private async Task<int> ContarSuperAdminsActivosAsync()
+        {
+            var superAdminPerfilId = await ObtenerPerfilSuperAdminIdAsync();
+            if (superAdminPerfilId <= 0)
+            {
+                return 0;
+            }
+
+            return await _context.Usuarios
+                .AsNoTracking()
+                .CountAsync(u => u.Activo && u.PerfilId == superAdminPerfilId);
+        }
+
+        private async Task<bool> EsUsuarioActualSuperAdminAsync()
+        {
+            var usuarioActualId = _userContextService.GetCurrentUsuarioId();
+            if (!usuarioActualId.HasValue)
+            {
+                return false;
+            }
+
+            var superAdminPerfilId = await ObtenerPerfilSuperAdminIdAsync();
+            if (superAdminPerfilId <= 0)
+            {
+                return false;
+            }
+
+            return await _context.Usuarios
+                .AsNoTracking()
+                .AnyAsync(u => u.Id == usuarioActualId.Value && u.Activo && u.PerfilId == superAdminPerfilId);
+        }
+
         [HttpPut("{id}/password")]
+        [Authorize]
         public async Task<ActionResult<Usuario>> UpdatePassword(int id, [FromBody] PasswordUpdateModel model)
         {
             try
             {
+                var usuarioActualId = _userContextService.GetCurrentUsuarioId();
+                if (!usuarioActualId.HasValue)
+                {
+                    return Unauthorized("No se pudo identificar el usuario autenticado.");
+                }
+
+                var usuarioAutenticado = await _context.Usuarios
+                    .AsNoTracking()
+                    .FirstOrDefaultAsync(u => u.Id == usuarioActualId.Value);
+
+                if (usuarioAutenticado == null)
+                {
+                    return Unauthorized("Usuario autenticado no encontrado.");
+                }
+
+                var perfilActual = usuarioAutenticado.PerfilId.HasValue
+                    ? await _context.Perfiles.AsNoTracking().FirstOrDefaultAsync(p => p.Id == usuarioAutenticado.PerfilId.Value)
+                    : null;
+
+                var perfilActualNombre = (perfilActual?.Nombre ?? string.Empty).Trim();
+                var esSuperAdminActual = string.Equals(perfilActualNombre, "SUPERADMIN", StringComparison.OrdinalIgnoreCase);
+                var esAdministradorActual = string.Equals(perfilActualNombre, "ADMINISTRADOR", StringComparison.OrdinalIgnoreCase)
+                                          || string.Equals(perfilActualNombre, "ADMIN", StringComparison.OrdinalIgnoreCase);
+                var esEdicionPropia = usuarioActualId.Value == id;
+
+                if (!esEdicionPropia && !esSuperAdminActual && !esAdministradorActual)
+                {
+                    return Forbid();
+                }
+
                 // Obtener el usuario de la base de datos
                 var usuario = await _context.Usuarios.FindAsync(id);
                 if (usuario == null)

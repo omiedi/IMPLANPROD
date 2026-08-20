@@ -105,4 +105,10 @@ CREATE INDEX IX_Usuarios_AddRecord ON Usuarios (AddRecord);
 
 -- 4. Crear índice para optimizar consultas por fecha de actualización
 CREATE INDEX IX_Usuarios_LastUpdate ON Usuarios (LastUpdate);
+
+-- 5. PARA CREAR QUE EL USUARIO POR EJEMPLO VICTOR TENGA UN PERFIL DE SUPERADMIN, PRIMERO SE DEBE CREAR EL PERFIL SUPERADMIN **** update  Usuarios set PerfilId = 3 where id = 6 ***
+(EN ESTE CASO EL ID 6 ES EL REGISTRO DE VICTOR Y EL ID 3 ES EL REGISTRO DEL PERFIL SUPERADMIN, ESTO ES SOLO UN EJEMPLO, LOS ID PUEDEN VARIAR SEGÚN LA BASE DE DATOS)
+
+
+
 */

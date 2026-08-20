@@ -1,17 +1,25 @@
 @page "/countries"
+@using IMPLANPROD.Client.Services
 @inject IRepository repository
 @inject NavigationManager navigationManager
 @inject SweetAlertService sweetAlertService
+@inject PageAccessService PageAccess
 
 <PageTitle>Países</PageTitle>
 
-@if (Countries is null)
+@if (validando)
 {
-    <div class="spinner" />
+    <p>Validando acceso...</p>
 }
 else
 {
-    <div class="card">
+    @if (Countries is null)
+    {
+        <div class="spinner" />
+    }
+    else
+    {
+        <div class="card">
         <div class="card-header">
             <span>
                 <i class="oi oi-globe"></i> Países
@@ -70,6 +78,7 @@ else
             </GenericList>
         </div>
     </div>
+    }
 }
 
 @code {
@@ -86,8 +95,12 @@ else
     [SupplyParameterFromQuery]
     public string Filter { get; set; } = string.Empty;
 
+    private bool validando = true;
+
     protected override async Task OnInitializedAsync()
     {
+        await PageAccess.RequiereAccesoAsync("/countries");
+        validando = false;
         await LoadAsync();
     }
 

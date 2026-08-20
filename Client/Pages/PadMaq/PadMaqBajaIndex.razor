@@ -1,12 +1,22 @@
 @page "/padmaq/Baja"
+@using IMPLANPROD.Client.Services
 @inject IRepository repository
 @inject NavigationManager navigationManager
 @inject SweetAlertService sweetAlertService
 @inject IJSRuntime JS
+@inject PageAccessService PageAccess
 
 @using System.Net.Http
 @using CurrieTechnologies.Razor.SweetAlert2
 
+<PageTitle>Máquinas productivas de Baja</PageTitle>
+
+@if (validando)
+{
+    <p>Validando acceso...</p>
+}
+else
+{
 <div class="bg-primary text-white text-center p-3 mb-4">
     <h1>Máquinas productivas de Baja</h1>
 </div>
@@ -60,9 +70,11 @@
         </table>
     </Body>
 </GenericList>
+}
 
 @code {
     public List<PADMAQ>? padmaq { get; set; }
+    private bool validando = true;
     
     [CascadingParameter]
     IModalService Modal { get; set; } = default!;
@@ -80,6 +92,10 @@
 
     protected async override Task OnInitializedAsync()
     {
+        // Validar que el usuario tenga permiso para acceder a esta página antes de mostrar el contenido
+        await PageAccess.RequiereAccesoAsync("/padmaq/Baja");
+        validando = false;
+        
         await LoadAsync();
     }
 

@@ -6,6 +6,9 @@ namespace IMPLANPROD.Shared.DTOs
     {
         public int CodigoInterno { get; set; }
         public int? NumeBore { get; set; } = 0;
+        public int? NumeroOrdenCompra { get; set; }
+        public DateTime? FechaEntregaSolicitada { get; set; }
+        public DateTime? FechaRecepcion { get; set; }
         public string CodigoExterno { get; set; }
         public string DescripcionItem { get; set; }
         public decimal CantidadNominal { get; set; }

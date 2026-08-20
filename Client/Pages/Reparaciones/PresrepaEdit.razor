@@ -5,9 +5,16 @@
 @inject IRepository repository
 @inject SweetAlertService sweetAlertService
 @inject NavigationManager navigationManager
+@inject PageAccessService PageAccess
 
 <PageTitle>Editar Presupuesto de Reparación</PageTitle>
 
+@if (validando)
+{
+    <p>Validando acceso...</p>
+}
+else
+{
 <div class="container-fluid">
     <div class="mb-4">
         <h2 class="text-center fw-bold text-primary">
@@ -43,15 +50,21 @@
                       OnCancel="@Cancel" />
     }
 </div>
+}
 
 @code {
     [Parameter] public int NumRepa { get; set; }
     
     private Repara? repara;
     private bool cargando = true;
+    private bool validando = true;
 
     protected override async Task OnInitializedAsync()
     {
+        // Validar que el usuario tenga permiso para acceder a esta página antes de mostrar el contenido
+        await PageAccess.RequiereAccesoAsync("/presupuesto-reparacion/editar");
+        validando = false;
+        
         await CargarPresupuesto();
     }
 

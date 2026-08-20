@@ -49,8 +49,38 @@ namespace IMPLANPROD.Client.Repositories
 
         public async Task<T?> GetUserInfoAsync<T>() where T : class
         {
-            var json = await _jsRuntime.InvokeAsync<string>("sessionStorage.getItem", "userInfo");
-            return string.IsNullOrEmpty(json) ? null : JsonSerializer.Deserialize<T>(json);
+            try
+            {
+                var json = await _jsRuntime.InvokeAsync<string>("sessionStorage.getItem", "userInfo");
+                
+                if (string.IsNullOrEmpty(json))
+                {
+                    Console.WriteLine("⚠️ GetUserInfoAsync: sessionStorage.userInfo está vacío o null");
+                    return null;
+                }
+                
+                Console.WriteLine($"📦 GetUserInfoAsync: JSON recuperado (primeros 100 chars): {json.Substring(0, Math.Min(100, json.Length))}...");
+                
+                var result = JsonSerializer.Deserialize<T>(json);
+                Console.WriteLine($"✅ GetUserInfoAsync: Deserialización exitosa - Tipo: {typeof(T).Name}");
+                
+                return result;
+            }
+            catch (JSException jsEx)
+            {
+                Console.WriteLine($"❌ GetUserInfoAsync - Error JavaScript: {jsEx.Message}");
+                throw new Exception($"Error al acceder a sessionStorage: {jsEx.Message}", jsEx);
+            }
+            catch (JsonException jsonEx)
+            {
+                Console.WriteLine($"❌ GetUserInfoAsync - Error de deserialización JSON: {jsonEx.Message}");
+                throw new Exception($"Error al deserializar UserInfo: {jsonEx.Message}", jsonEx);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"❌ GetUserInfoAsync - Error inesperado: {ex.GetType().Name} - {ex.Message}");
+                throw;
+            }
         }
 
         public async Task RemoveUserInfoAsync()
@@ -74,6 +104,24 @@ namespace IMPLANPROD.Client.Repositories
             }
 
             return new HttpResponseWrapper<T>(default, true, responseHTTP);
+        }
+
+        public async Task<HttpResponseWrapper<byte[]>> GetBytes(string url)
+        {
+            var token = await GetBearerTokenAsync();
+            if (!string.IsNullOrEmpty(token))
+            {
+                _httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+            }
+
+            var responseHTTP = await _httpClient.GetAsync(url);
+            if (responseHTTP.IsSuccessStatusCode)
+            {
+                var bytes = await responseHTTP.Content.ReadAsByteArrayAsync();
+                return new HttpResponseWrapper<byte[]>(bytes, false, responseHTTP);
+            }
+
+            return new HttpResponseWrapper<byte[]>(default, true, responseHTTP);
         }
 
         public async Task<HttpResponseWrapper<object>> Post<T>(string url, T model)
@@ -174,6 +222,29 @@ namespace IMPLANPROD.Client.Repositories
         private async Task<T> UnserializeAnswer<T>(HttpResponseMessage httpResponse)
         {
             var responseString = await httpResponse.Content.ReadAsStringAsync();
+
+            // Si el caller pidió string, devolvemos el texto tal cual (caso típico: endpoint que responde texto plano).
+            // Esto evita excepciones cuando el backend devuelve 3813 (sin comillas JSON).
+            if (typeof(T) == typeof(string))
+            {
+                object result = responseString;
+
+                // Si vino como string JSON ("3813"), intentamos deserializar para quitar comillas escapadas.
+                if (!string.IsNullOrWhiteSpace(responseString) && responseString.StartsWith("\"") && responseString.EndsWith("\""))
+                {
+                    try
+                    {
+                        result = JsonSerializer.Deserialize<string>(responseString) ?? string.Empty;
+                    }
+                    catch
+                    {
+                        result = responseString;
+                    }
+                }
+
+                return (T)result;
+            }
+
             return JsonSerializer.Deserialize<T>(responseString, new JsonSerializerOptions
             {
                 PropertyNameCaseInsensitive = true

@@ -43,13 +43,11 @@ namespace IMPLANPROD.Server.Controllers
             _moviStockService = moviStockService;
         }
         [HttpPost("pendientesAprobacion")]
-
-
-        public async Task<ActionResult<List<OrdeFabr>>> GetOFabricacionPendientes([FromBody] OFabricacionRequestDTO request)
+        public async Task<ActionResult<List<Orfapen>>> GetOFabricacionPendientes([FromBody] OFabricacionRequestDTO request)
         {
             try
             {
-                _logger.LogInformation($"Obteniendo órdenes pendientes de aprobación para usuario {request.IdFlexoftUsuario} con depósitos: {string.Join(", ", request.Depositos.Select(d => d.ToString()))}");
+                _logger.LogInformation($"Obteniendo órdenes pendientes de aprobación para usuario {request.IdFlexoftUsuario} con depósitos: {(request.Depositos != null ? string.Join(", ", request.Depositos.Select(d => d.ToString())) : "TODOS (SUPERADMIN)")}");
 
                 // Validar parámetros de entrada
                 if (request == null)
@@ -57,48 +55,89 @@ namespace IMPLANPROD.Server.Controllers
                     return BadRequest("Los parámetros de solicitud son requeridos");
                 }
 
-                if (request.IdFlexoftUsuario <= 0)
-                {
-                    return BadRequest("El ID del usuario es requerido");
-                }
+                // Si es SUPERADMIN (IdFlexoftUsuario null y Depositos null), no aplicar filtros
+                bool esSuperAdmin = request.IdFlexoftUsuario == null && (request.Depositos == null || !request.Depositos.Any());
 
-                if (request.Depositos == null || !request.Depositos.Any())
+                if (!esSuperAdmin)
                 {
-                    return BadRequest("Al menos un depósito es requerido");
+                    if (request.IdFlexoftUsuario <= 0)
+                    {
+                        return BadRequest("El ID del usuario es requerido");
+                    }
+
+                    if (request.Depositos == null || !request.Depositos.Any())
+                    {
+                        return BadRequest("Al menos un depósito es requerido");
+                    }
                 }
 
                 // Consultar órdenes de fabricación pendientes de aprobación
                 // Buscar órdenes que tengan movimientos en ORFAPEN con cantidades pendientes de aprobar
 
 
-                if (request == null || request.IdFlexoftUsuario <= 0 || request.Depositos == null || !request.Depositos.Any())
+                if (!esSuperAdmin && (request == null || request.IdFlexoftUsuario <= 0 || request.Depositos == null || !request.Depositos.Any()))
                     return BadRequest("Parámetros inválidos");
 
-                // Construir filtro de depósitos
-                var depositoFiltro = request.IdFlexoftUsuario == 14
-                    ? _context.Orfapens.Where(o => request.Depositos.Contains(o.DepoMovi!.Value) || o.DepoMovi.Value >= 30)
-                    : _context.Orfapens.Where(o => request.Depositos.Contains(o.DepoMovi!.Value));
+                // Construir filtro de depósitos (solo si no es SUPERADMIN)
+                var queryBase = esSuperAdmin
+                    ? _context.Orfapens
+                    : (request.IdFlexoftUsuario == 14
+                        ? _context.Orfapens.Where(o => request.Depositos.Contains(o.DepoMovi!.Value) || o.DepoMovi.Value >= 30)
+                        : _context.Orfapens.Where(o => request.Depositos.Contains(o.DepoMovi!.Value)));
 
-                var ordenesPendientes = await depositoFiltro
+                // Aplicar filtro de texto ANTES del GroupBy para mejorar rendimiento
+                if (!string.IsNullOrWhiteSpace(request.Filter))
+                {
+                    var terms = request.Filter
+                        .Split('+', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries)
+                        .Select(t => t.Trim().ToLower())
+                        .Where(t => !string.IsNullOrWhiteSpace(t))
+                        .ToList();
+
+                    foreach (var term in terms)
+                    {
+                        queryBase = queryBase.Where(x =>
+                            (x.DoPriCor ?? "").ToLower().Contains(term) ||
+                            (x.Cod_Exte ?? "").ToLower().Contains(term) ||
+                            (x.IDTEXT ?? "").ToLower().Contains(term) ||
+                            (x.Cod_Inte.HasValue && x.Cod_Inte.Value.ToString().Contains(term)) ||
+                            (x.DepoMovi.HasValue && x.DepoMovi.Value.ToString().Contains(term)) ||
+                            (x.FechMov.HasValue && x.FechMov.Value.ToString().ToLower().Contains(term))
+                        );
+                    }
+                }
+
+                var query = queryBase
                     .Where(o => o.CodiMovi == "OF")
-                    .GroupBy(o => new { o.Cod_Exte, o.DoPriCor, o.FechMov, o.Cod_Inte, o.IDTEXT, o.DepoMovi })
+                    .GroupBy(o => new { o.DoPriCor, o.IDTEXT })
                     .Where(g => g.Sum(x => x.CantIngre) > g.Sum(x => x.CantSalid))
-                    .OrderBy(g => g.Key.DoPriCor)
                     .Select(g => new Orfapen
                     {
-                        Cod_Inte = g.Key.Cod_Inte,
-                        Cod_Exte = g.Key.Cod_Exte,
+                        Cod_Inte = g.FirstOrDefault().Cod_Inte,
+                        Cod_Exte = g.FirstOrDefault().Cod_Exte,
                         CantIngre = g.Sum(x => x.CantIngre),
                         CantSalid = g.Sum(x => x.CantSalid),
                         DoPriCor = g.Key.DoPriCor,
-                        FechMov = g.Key.FechMov,
+                        FechMov = g.FirstOrDefault().FechMov,
                         IDTEXT = g.Key.IDTEXT,
-                        DepoMovi = g.Key.DepoMovi,
-                        Ajuste = g.Sum(x => x.CantIngre ?? 0) - g.Sum(x => x.CantSalid ?? 0) // ← nuevo campo agregado
-                    })
-                    .OrderBy(o => o.DoPriCor)
+                        DepoMovi = g.FirstOrDefault().DepoMovi,
+                        Ajuste = g.Sum(x => x.CantIngre ?? 0) - g.Sum(x => x.CantSalid ?? 0)
+                    });
+
+                var pagination = new PaginationDTO
+                {
+                    Page = request.Page <= 0 ? 1 : request.Page,
+                    RecordsNumber = request.RecordsNumber <= 0 ? 10 : request.RecordsNumber,
+                    Filter = request.Filter
+                };
+
+                var ordenesPendientes = await query
+                    .OrderByDescending(o => o.DoPriCor)
+                    .ThenByDescending(o => o.FechMov)
+                    .Paginate(pagination)
                     .ToListAsync();
-                _logger.LogInformation($"Se encontraron {ordenesPendientes.Count} órdenes pendientes de aprobación");
+
+                _logger.LogInformation($"Se encontraron {ordenesPendientes.Count} órdenes pendientes (página {pagination.Page}, records {pagination.RecordsNumber})");
 
                 return Ok(ordenesPendientes);
             }
@@ -106,6 +145,78 @@ namespace IMPLANPROD.Server.Controllers
             {
                 _logger.LogError(ex, "Error al obtener órdenes pendientes de aprobación");
                 return StatusCode(500, "Error interno del servidor al obtener las órdenes pendientes");
+            }
+        }
+
+        [HttpPost("totalPages")]
+        public async Task<ActionResult<int>> GetPagesPendientes([FromBody] OFabricacionRequestDTO request)
+        {
+            try
+            {
+                // Si es SUPERADMIN (IdFlexoftUsuario null y Depositos null), no aplicar filtros
+                bool esSuperAdmin = request.IdFlexoftUsuario == null && (request.Depositos == null || !request.Depositos.Any());
+
+                if (!esSuperAdmin && (request == null || request.IdFlexoftUsuario <= 0 || request.Depositos == null || !request.Depositos.Any()))
+                {
+                    return BadRequest("Parámetros inválidos");
+                }
+
+                var queryBase = esSuperAdmin
+                    ? _context.Orfapens
+                    : (request.IdFlexoftUsuario == 14
+                        ? _context.Orfapens.Where(o => request.Depositos.Contains(o.DepoMovi!.Value) || o.DepoMovi.Value >= 30)
+                        : _context.Orfapens.Where(o => request.Depositos.Contains(o.DepoMovi!.Value)));
+
+                // Aplicar filtro de texto ANTES del GroupBy para mejorar rendimiento
+                if (!string.IsNullOrWhiteSpace(request.Filter))
+                {
+                    var terms = request.Filter
+                        .Split('+', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries)
+                        .Select(t => t.Trim().ToLower())
+                        .Where(t => !string.IsNullOrWhiteSpace(t))
+                        .ToList();
+
+                    foreach (var term in terms)
+                    {
+                        queryBase = queryBase.Where(x =>
+                            (x.DoPriCor ?? "").ToLower().Contains(term) ||
+                            (x.Cod_Exte ?? "").ToLower().Contains(term) ||
+                            (x.IDTEXT ?? "").ToLower().Contains(term) ||
+                            (x.Cod_Inte.HasValue && x.Cod_Inte.Value.ToString().Contains(term)) ||
+                            (x.DepoMovi.HasValue && x.DepoMovi.Value.ToString().Contains(term)) ||
+                            (x.FechMov.HasValue && x.FechMov.Value.ToString().ToLower().Contains(term))
+                        );
+                    }
+                }
+
+                var query = queryBase
+                    .Where(o => o.CodiMovi == "OF")
+                    .GroupBy(o => new { o.DoPriCor, o.IDTEXT })
+                    .Where(g => g.Sum(x => x.CantIngre) > g.Sum(x => x.CantSalid))
+                    .Select(g => new Orfapen
+                    {
+                        Cod_Inte = g.FirstOrDefault().Cod_Inte,
+                        Cod_Exte = g.FirstOrDefault().Cod_Exte,
+                        CantIngre = g.Sum(x => x.CantIngre),
+                        CantSalid = g.Sum(x => x.CantSalid),
+                        DoPriCor = g.Key.DoPriCor,
+                        FechMov = g.FirstOrDefault().FechMov,
+                        IDTEXT = g.Key.IDTEXT,
+                        DepoMovi = g.FirstOrDefault().DepoMovi,
+                        Ajuste = g.Sum(x => x.CantIngre ?? 0) - g.Sum(x => x.CantSalid ?? 0)
+                    });
+
+                var recordsNumber = request.RecordsNumber <= 0 ? 10 : request.RecordsNumber;
+                var count = await query.CountAsync();
+                var totalPages = (int)Math.Ceiling(count / (double)recordsNumber);
+                if (totalPages <= 0) totalPages = 1;
+
+                return Ok(totalPages);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error al obtener totalPages de pendientes de aprobación");
+                return StatusCode(500, "Error interno del servidor al obtener totalPages");
             }
         }
 
@@ -165,7 +276,9 @@ namespace IMPLANPROD.Server.Controllers
                 await ProcesarMovimientoStock(datosOrfapen, cantidadFinal, request.DepositoEntrada);
 
                 // PASO 2: Procesar consumo de componentes (cada movimiento se guarda individualmente)
+                _logger.LogInformation($"Iniciando PASO 2: ProcesarConsumoComponentes para orden {request.IdSubOr}, IDTEXT: {request.IdText}, cantidad: {cantidadFinal}");
                 await ProcesarConsumoComponentes(request.IdSubOr, request.IdText, cantidadFinal);
+                _logger.LogInformation($"PASO 2 completado: ProcesarConsumoComponentes");
 
                 // PASO 3: Usar transacción solo para cambios en EF Core
                 using var transaction = await _context.Database.BeginTransactionAsync();
@@ -175,7 +288,7 @@ namespace IMPLANPROD.Server.Controllers
                     await AgregarRegistroOrfapenAprobacion(datosOrfapen, cantidadFinal, request.DepositoEntrada, request.IdText);
 
                     // Actualizar orden de fabricación
-                    bool ordenCerrada = await ActualizarOrdenFabricacion(ordenFabricacion, cantidadFinal);
+                    bool ordenCerrada = await ActualizarOrdenFabricacion(ordenFabricacion, cantidadFinal, request.IdText);
 
                     // Eliminar reservas si la orden se cerró completamente
                     if (ordenCerrada)
@@ -291,13 +404,18 @@ namespace IMPLANPROD.Server.Controllers
 
             // Procesar códigos para asegurar longitud de 11 caracteres
             string dopriProcesado = ProcesarCodigoLongitud(datosOrfapen.DoPriCor ?? "");
-            string dosecProcesado = ProcesarCodigoLongitud(datosOrfapen.DoSecCor ?? "");
+
+            // Generar DOSEC cambiando la 'O' por 'I' en la orden de fabricación
+            string ordenFabricacion = datosOrfapen.DoPriCor ?? "";
+            string dosecProcesado = ProcesarCodigoLongitud(ordenFabricacion.Replace("OF-", "IF-"));
 
             // Obtener código externo del producto
             var master = await _context.masters.FirstOrDefaultAsync(m => m.Codint == datosOrfapen.Cod_Inte);
             string codigoExterno = master?.Codigo ?? "";
 
             // Crear el nuevo registro ORFAPEN para aprobación
+            // Para AproCierre + OF: cantidad positiva en CantSalid (salida para compensar el ingreso del cierre)
+            // Para AproCierre + CF: cantidad positiva en CantIngre (ingreso para compensar la salida del cierre)
             var nuevoRegistro = new Orfapen
             {
                 FechMov = datosOrfapen.FechMov,
@@ -307,15 +425,15 @@ namespace IMPLANPROD.Server.Controllers
                 CodiMovi = datosOrfapen.CodiMovi ?? "OF",
                 DoPriCor = dopriProcesado,
                 DoPriLar = dopriProcesado,
-                DoSecCor = dosecProcesado,
-                DoSecLar = dosecProcesado,
-                ReferCor = datosOrfapen.ReferCor ?? "",
+                DoSecCor = dosecProcesado, // Cambiar PF- por IF-
+                DoSecLar = dosecProcesado, // Cambiar PF- por IF-
+                ReferCor = "Fabricación Propia", // Referencia fija para aprobación
                 ValoUnit = 0,
                 MoneVal = 1,
                 Nume_Clie = datosOrfapen.Nume_Clie ?? 0,
                 DepoMovi = depositoEntrada,
-                CantIngre = 0, // Para aprobación no hay ingreso
-                CantSalid = cantidad, // La cantidad aprobada sale del pendiente
+                CantIngre = 0, // Para aprobación OF: no hay ingreso
+                CantSalid = cantidad, // Para aprobación OF: cantidad positiva en CantSalid
                 FeReMovi = DateTime.Now,
                 NumUsuar = idFlexoft.Value % 100,
                 STATUS = 0,
@@ -336,6 +454,11 @@ namespace IMPLANPROD.Server.Controllers
             try
             {
                 _logger.LogInformation($"Iniciando procesamiento de consumo de componentes para orden {idSubOr}, IDTEXT: {idText}, cantidad: {cantidadAprobada}");
+
+                // Obtener código del producto terminado (padre) desde la orden de fabricación
+                var ordenFabricacion = await _context.Ordefabrs
+                    .FirstOrDefaultAsync(o => o.IdSubOr == idSubOr);
+                string codigoPadre = ordenFabricacion?.Cod_Exte ?? "";
 
                 // Construir condición base: DOPRICOR = 'NORFA$' AND IDTEXT = 'IDTX$' AND IDSITUACION = 'GenCierre'
                 var condicionBase = $"DoPriCor = '{idSubOr}' AND IDTEXT = '{idText}' AND IDSITUACION = 'GenCierre'";
@@ -420,8 +543,8 @@ namespace IMPLANPROD.Server.Controllers
                         // Preparar datos para movimiento
                         string codigoMovimiento = "CF";
                         string dopriMovimiento = idSubOr;
-                        string dosecMovimiento = "PF-" + idSubOr.Substring(3).Trim();
-                        string referenciaMovimiento = $"CONSUMO {master?.Codigo ?? ""}";
+                        string dosecMovimiento = "PF-" + idSubOr.Substring(3).Trim(); // PF- para movimientos CF
+                        string referenciaMovimiento = $"CONSUMO {codigoPadre}"; // CONSUMO + código padre
                         
                         // Determinar depósito: si DP2% = 99 usar depósito predeterminado del producto
                         int depositoFinal = depositoConsumo;
@@ -466,7 +589,7 @@ namespace IMPLANPROD.Server.Controllers
                                 dosecMovimiento, 
                                 referenciaMovimiento, 
                                 depositoFinal,
-                                -consumoProporcional, 
+                                consumoProporcional, 
                                 idText);
 
                             // Actualizar reserva del componente
@@ -507,8 +630,6 @@ namespace IMPLANPROD.Server.Controllers
         {
             try
             {
-                _logger.LogInformation($"Preparando movimiento stock - Componente: {codigoInterno}, Depósito: {deposito}, Cantidad: {cantidad}, Lote: {lote}");
-
                 var movimientoStock = new MoviStockDTO
                 {
                     Fecha = fecha,
@@ -529,22 +650,14 @@ namespace IMPLANPROD.Server.Controllers
                     TipoTransferencia = null
                 };
 
-                _logger.LogInformation($"Llamando MoviStockService para componente {codigoInterno}...");
                 var resultado = await _moviStockService.RegistrarMovimientoAsync(movimientoStock, User);
                 
                 if (resultado is BadRequestObjectResult badRequest)
                 {
                     var errorMessage = badRequest.Value?.ToString() ?? "Error desconocido";
                     _logger.LogError($"MoviStockService retornó BadRequest para componente {codigoInterno}: {errorMessage}");
+                    _logger.LogError($"Datos enviados al servicio - CodigoInterno: {codigoInterno}, Deposito: {deposito}, Cantidad: {cantidad}, CodigoMovimiento: '{codigoMovimiento}', Lote: '{lote}'");
                     throw new Exception($"Error al procesar movimiento de stock para componente {codigoInterno}: {errorMessage}");
-                }
-                else if (resultado is OkObjectResult okResult)
-                {
-                    _logger.LogInformation($"Movimiento de stock registrado exitosamente para componente {codigoInterno}");
-                }
-                else
-                {
-                    _logger.LogWarning($"MoviStockService retornó resultado inesperado para componente {codigoInterno}: {resultado?.GetType().Name}");
                 }
             }
             catch (Exception ex)
@@ -573,6 +686,7 @@ namespace IMPLANPROD.Server.Controllers
             string codigoExterno = master?.Codigo ?? "";
 
             // Crear el registro ORFAPEN para consumo de componente
+            // Para AproCierre + CF: cantidad positiva en CantIngre (ingreso para compensar la salida del cierre)
             var registroConsumo = new Orfapen
             {
                 FechMov = fecha,
@@ -589,8 +703,8 @@ namespace IMPLANPROD.Server.Controllers
                 MoneVal = 1,
                 Nume_Clie = 0,
                 DepoMovi = (short?)0, // Para consumo no hay depósito de movimiento
-                CantIngre = 0, // Para consumo no hay ingreso
-                CantSalid = Math.Abs(cantidad), // Cantidad consumida (siempre positiva en CANTSALID)
+                CantIngre = Math.Abs(cantidad), // Para aprobación CF: cantidad positiva en CantIngre
+                CantSalid = 0, // Para consumo no hay salida
                 FeReMovi = DateTime.Now,
                 NumUsuar = idFlexoft.Value % 100,
                 STATUS = 0,
@@ -679,7 +793,7 @@ namespace IMPLANPROD.Server.Controllers
         /// Actualiza la orden de fabricación con las cantidades aprobadas
         /// Equivalente a la lógica VB6 de actualización de ORDEFABR
         /// </summary>
-        private Task<bool> ActualizarOrdenFabricacion(OrdeFabr orden, decimal cantidadAprobada)
+        private Task<bool> ActualizarOrdenFabricacion(OrdeFabr orden, decimal cantidadAprobada, string? idText)
         {
             decimal cantidadFinProceso = orden.Canti_Fin_Proceso ?? 0;
             decimal aprobadoTotal = (orden.CanApro ?? 0) + cantidadAprobada;
@@ -704,8 +818,84 @@ namespace IMPLANPROD.Server.Controllers
 
             orden.FechCierr = DateTime.Now;
 
+            // Agregar anotación en AnotaOrf
+            string nombreUsuario = ObtenerNombreUsuario();
+            string anotacionAprobacion = FormatearNuevaAnotacion($"Aprobacion de cierre id: {idText}   -- Cantidad: {cantidadAprobada:F1}", nombreUsuario);
+
+            if (string.IsNullOrEmpty(orden.AnotaOrf))
+            {
+                orden.AnotaOrf = anotacionAprobacion;
+            }
+            else
+            {
+                orden.AnotaOrf += "\r\n" + anotacionAprobacion;
+            }
+
             _context.Ordefabrs.Update(orden);
             return Task.FromResult(ordenCerrada);
+        }
+
+        /// <summary>
+        /// Obtiene el nombre del usuario actual desde el ClaimsPrincipal
+        /// </summary>
+        /// <returns>Nombre del usuario o "Usuario" si no se puede obtener</returns>
+        private string ObtenerNombreUsuario()
+        {
+            try
+            {
+                var user = _userContextService.GetCurrentUser();
+                if (user == null) return "Usuario";
+
+                var nombreClaim = user.FindFirst(ClaimTypes.Name)?.Value;
+                if (!string.IsNullOrEmpty(nombreClaim))
+                    return nombreClaim;
+
+                var usernameClaim = user.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+                if (!string.IsNullOrEmpty(usernameClaim))
+                    return usernameClaim;
+
+                return "Usuario";
+            }
+            catch
+            {
+                return "Usuario";
+            }
+        }
+
+        /// <summary>
+        /// Formatea una nueva anotación para agregarla al campo AnotaOrf
+        /// </summary>
+        /// <param name="textoAnotacion">Texto de la anotación</param>
+        /// <param name="nombreUsuario">Nombre del usuario que registra la anotación</param>
+        /// <returns>Texto formateado para el campo AnotaOrf</returns>
+        private string FormatearNuevaAnotacion(string textoAnotacion, string nombreUsuario)
+        {
+            string ttxyz = new string(' ', 76);
+            string hos = DateTime.Now.ToString("dd/MM/yy");
+            ttxyz = Repla(ttxyz, hos, 1, 8);
+            ttxyz = Repla(ttxyz, textoAnotacion, 11, 56);
+            ttxyz = Repla(ttxyz, nombreUsuario, 69, 24);
+            return ttxyz;
+        }
+
+        /// <summary>
+        /// Reemplaza una porción de texto en una cadena
+        /// Equivalente a la función REPLA de VB6
+        /// </summary>
+        private string Repla(string target, string replacement, int start, int length)
+        {
+            if (string.IsNullOrEmpty(target))
+                target = new string(' ', Math.Max(start + length, 76));
+
+            if (target.Length < start + length)
+                target = target.PadRight(start + length);
+
+            char[] chars = target.ToCharArray();
+            for (int i = 0; i < Math.Min(replacement.Length, length); i++)
+            {
+                chars[start - 1 + i] = replacement[i];
+            }
+            return new string(chars);
         }
 
         /// <summary>

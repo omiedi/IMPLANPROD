@@ -1,7 +1,9 @@
 ﻿@using IMPLANPROD.Shared.Entities
 @using IMPLANPROD.Shared.DTOs
+@using IMPLANPROD.Client.Services
 @inject IRepository repository
 @inject SweetAlertService sweetAlertService
+@inject DerechosUsuarioClientService derechosService
 
 @if (Visible)
 {
@@ -106,6 +108,26 @@
         {
             await sweetAlertService.FireAsync("Error", "Debe ingresar cantidad de ingreso o salida", SweetAlertIcon.Error);
             return;
+        }
+
+        // Validar derechos de ajuste de ingreso
+        if (ajuste.Ingreso > 0)
+        {
+            var nivelIngreso = await derechosService.VerificarDerechoAsync("AJUAUSTO", "Aumento de Stocks");
+            if (nivelIngreso < 2)
+            {
+                return;
+            }
+        }
+
+        // Validar derechos de ajuste de salida
+        if (ajuste.Salida > 0)
+        {
+            var nivelSalida = await derechosService.VerificarDerechoAsync("AJUDISTO", "Disminución de Stocks");
+            if (nivelSalida < 2)
+            {
+                return;
+            }
         }
 
         // Acá podés validar stockResultante de ese lote en particular si querés

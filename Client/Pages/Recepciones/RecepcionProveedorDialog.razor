@@ -1,27 +1,37 @@
 @page "/recepcion/selproveedor"
 
 @using IMPLANPROD.Shared.DTOs
-@using IMPLANPROD.Shared.Entities
-@using Microsoft.AspNetCore.Components.Web
 @using Blazored.Modal
 @using Blazored.Modal.Services
+@using CurrieTechnologies.Razor.SweetAlert2
+@inject NavigationManager Navigation
 @using IMPLANPROD.Client.Pages.OrdenesCompra
 @using IMPLANPROD.Client.Shared.Components
+@using IMPLANPROD.Client.Services
 
 @inject IRepository repository
 @inject IModalService modalService
 @inject SweetAlertService sweetAlertService
 @inject IJSRuntime JSRuntime
+@inject PageAccessService PageAccess
 
 <PageTitle>Recepción de Proveedores</PageTitle>
 
-<div class="container">
+@* @if (validando)
+{
+    <p>Validando acceso...</p>
+}
+else
+{
+ *@<div class="container">
     <!-- Título de la página -->
     <div class="mb-4">
-        <h2 class="text-center fw-bold text-primary">
-            <i class="fas fa-box-open me-2"></i>
-            RECEPCIÓN DE PROVEEDORES
-        </h2>
+        <div class="d-flex align-items-center justify-content-center position-relative">
+            <h2 class="text-center fw-bold text-primary mb-0">
+                <i class="fas fa-box-open me-2"></i>
+                RECEPCIÓN DE PROVEEDORES
+            </h2>
+        </div>
         <hr class="border-primary border-2 opacity-50" />
     </div>
 
@@ -36,8 +46,17 @@
                 @onclick='() => CambiarAPendientes()'
                 style="transition: all 0.3s ease;">
             <i class="oi oi-task me-2"></i>
-            <strong>Recepciones Pendientes de Aprobación</strong>
+            <strong>Aprueba Calidad</strong>
         </button>
+        @if (apruebaCalidadHabilitado)
+        {
+            <button class="btn @(activeTab == "aprobacionCalidad" ? "btn-primary" : "btn-outline-primary") flex-fill py-3 rounded-3 shadow-sm" 
+                    @onclick='() => CambiarAAprobacionCalidad()'
+                    style="transition: all 0.3s ease;">
+                <i class="oi oi-check me-2"></i>
+                <strong>Aprueba Almacén</strong>
+            </button>
+        }
         <button class="btn @(activeTab == "reportes" ? "btn-primary" : "btn-outline-primary") flex-fill py-3 rounded-3 shadow-sm" 
                 @onclick='() => CambiarAReportes()'
                 style="transition: all 0.3s ease;">
@@ -45,7 +64,9 @@
             <strong>Reportes</strong>
         </button>
     </div>
-
+    <div style="text-align:center;">
+        <strong>**** Atención: Las recepciones pendientes de aprobación deberán pasarse manualmente. Avisar a Implanprod. ****</strong>
+    </div>
     @if (activeTab == "busqueda")
     {
         <div class="row mb-3">
@@ -160,8 +181,11 @@
                                 <td style="border-right: 1px solid #dee2e6;">@recepcion.RazonSocial</td>
                                 <td class="text-center">
                                     <div class="btn-group">
-                                        <button class="btn btn-sm btn-primary" @onclick="() => VerDetalleRecepcion(recepcion.NumeroRecepcion)">
-                                            <i class="oi oi-list"></i> Detalle
+                                        <button class="btn btn-sm btn-primary" @onclick="() => VerDetalleRecepcion(recepcion.NumeroRecepcion, recepcion.NumeroOrdenCompra)">
+                                            <i class="oi oi-list"></i> Aprobar
+                                        </button>
+                                        <button class="btn btn-sm btn-success ms-1" @onclick="() => ImprimirRecepcionPendienteAsync(recepcion.NumeroRecepcion)">
+                                            <i class="fas fa-print"></i> Imprimir
                                         </button>
                                         <button class="btn btn-sm btn-danger ms-1" @onclick="() => ConfirmarBorrarRecepcion(recepcion.NumeroRecepcion)">
                                             <i class="oi oi-trash"></i> Borrar
@@ -174,6 +198,75 @@
                 </table>
             </div>
         }
+    }
+    else if (activeTab == "aprobacionCalidad")
+    {
+        @* Esta solapa solo se muestra si la configuración FLEXCRL (PROBUS=RECEPCIO, CLABUS=APRUCALI) está activa *@
+        <div class="card shadow-sm">
+            <div class="card-header bg-primary text-white">
+                <strong>Aprobación de Almacén</strong>
+            </div>
+            <div class="card-body">
+                @if (cargandoPendientesCalidad)
+                {
+                    <div class="text-center">
+                        <div class="spinner-border text-primary" role="status">
+                            <span class="visually-hidden">Cargando...</span>
+                        </div>
+                    </div>
+                }
+                else if (pendientesCalidad == null || !pendientesCalidad.Any())
+                {
+                    <div class="alert alert-info mb-0">
+                        No hay recepciones pendientes de aprobación de calidad.
+                    </div>
+                }
+                else
+                {
+                    <div class="table-responsive" style="max-height: 40vh; overflow-y: auto;">
+                        <table class="table table-sm table-hover align-middle mb-0">
+                            <thead class="table-dark sticky-top">
+                                <tr>
+                                    <th style="width: 18%;">Recepción</th>
+                                    <th style="width: 18%;">Código</th>
+                                    <th>Descripción</th>
+                                    <th class="text-end" style="width: 18%;">Pendiente</th>
+                                    <th class="text-end" style="width: 18%;">Aprobar</th>
+                                    <th style="width: 10%;"></th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var row in pendientesCalidad)
+                                {
+                                    var key = GetPendienteCalidadKey(row);
+                                    <tr>
+                                        <td>@row.Doprilar</td>
+                                        <td>@row.Codigo</td>
+                                        <td>@row.Descripcion</td>
+                                        <td class="text-end"><strong>@row.CantidadPendiente</strong></td>
+                                        <td class="text-end">
+                                            <input type="number"
+                                                   class="form-control form-control-sm text-end no-spinner"
+                                                   @bind-value="cantidadAprobarPorFila[key]"
+                                                   @bind-value:event="oninput"
+                                                   min="0"
+                                                   step="0.0001" />
+                                        </td>
+                                        <td class="text-center">
+                                            <button class="btn btn-sm btn-success"
+                                                    title="Aprobar"
+                                                    @onclick="() => ConfirmarYAprobarPendienteCalidad(row)">
+                                                Aprobar
+                                            </button>
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                }
+            </div>
+        </div>
     }
     else if (activeTab == "reportes")
     {
@@ -249,12 +342,12 @@
                 <div class="card">
                     <div class="card-header bg-warning text-dark">
                         <i class="fas fa-calendar-alt me-2"></i>
-                        <strong>Recepciones por Rango de Fechas</strong>
+                        <strong>Recepciones por Rango de Fechas y Reimpresion</strong>
                     </div>
                     <div class="card-body">
                         <p class="text-muted">Reporte de recepciones filtradas por rango de fechas y códigos de productos.</p>
                         <button class="btn btn-sm btn-outline-warning" @onclick="AbrirModalRecepcionesRango">
-                            <i class="oi oi-document me-1"></i> Generar Reporte
+                            <i class="oi oi-document me-1"></i> Seleccionar Recepciónes
                         </button>
                     </div>
                 </div>
@@ -342,7 +435,7 @@
                                         <td>@item.Unidad</td>
                                         <td>
                                             <input type="number" 
-                                                   class="form-control form-control-sm" 
+                                                   class="form-control form-control-sm no-spinner" 
                                                    @bind-value="item.CanToApro"
                                                    @bind-value:event="oninput"
                                                    @onchange="() => ValidarCantidades(item)"
@@ -351,7 +444,7 @@
                                         </td>
                                         <td>
                                             <input type="number" 
-                                                   class="form-control form-control-sm" 
+                                                   class="form-control form-control-sm no-spinner" 
                                                    @bind-value="item.CantidadRechazada"
                                                    @bind-value:event="oninput"
                                                    @onchange="() => ValidarCantidades(item)"
@@ -360,7 +453,7 @@
                                         </td>
                                         <td>
                                             <input type="number" 
-                                                   class="form-control form-control-sm" 
+                                                   class="form-control form-control-sm no-spinner" 
                                                    @bind-value="item.CantidadFaltante"
                                                    @bind-value:event="oninput"
                                                    @onchange="() => ValidarCantidades(item)"
@@ -567,6 +660,100 @@
     <RecepcionesSinOCModal OnCerrar="@CerrarModalRecepcionesSinOC" />
 }
 
+<div id="@idElementoImpresionRecepcion" style="display: none;">
+    <div class="container" style="font-family: Arial, sans-serif; font-size: 12px;">
+        <div class="row mb-2">
+            <div class="col-6">
+                <img src="@(new Uri(new Uri(Navigation.BaseUri), "images/logo.png").ToString())" alt="Logo" style="max-height: 60px;" />
+            </div>
+            <div class="col-6 text-end">
+                <div><strong>NOTA DE RECEPCION</strong></div>
+                @if (recepcionParaImprimir != null)
+                {
+                    <div><strong>NR-</strong> @recepcionParaImprimir.NumeroRecepcion</div>
+                    <div>Fecha: @recepcionParaImprimir.FechaRecepcion.ToString("dd/MM/yyyy")</div>
+                }
+            </div>
+        </div>
+
+        @if (recepcionParaImprimir != null)
+        {
+            <div class="row mb-2">
+                <div class="col-12">
+                    <div><strong>Proveedor:</strong> @recepcionParaImprimir.RazonSocial (@recepcionParaImprimir.NumeroProveedor)</div>
+                    <div><strong>RTO N°:</strong> @recepcionParaImprimir.NumeroRemito</div>
+                </div>
+            </div>
+        }
+
+        <table class="table table-bordered table-sm" style="border: 1px solid #000;">
+            <thead>
+                <tr>
+                    <th style="width: 12%;">CANTIDAD</th>
+                    <th style="width: 18%;">CODIGO</th>
+                    <th>DESCRIPCION</th>
+                    <th style="width: 10%;">UM</th>
+                    <th style="width: 10%;">O.C</th>
+                    <th style="width: 12%;">F.Entrega</th>
+                    <th style="width: 10%;">OBS</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var item in itemsRecepcionParaImprimir)
+                {
+                    <tr>
+                        <td class="text-end">@item.CantidadNominal.ToString("N2")</td>
+                        <td>@item.CodigoInterno</td>
+                        <td>@item.DescripcionItem</td>
+                        <td>@item.Unidad</td>
+                        <td class="text-end">@((item.NumeroOrdenCompra.HasValue && item.NumeroOrdenCompra.Value > 0) ? item.NumeroOrdenCompra.Value.ToString() : "")</td>
+                        <td class="text-center">@(item.FechaEntregaSolicitada.HasValue ? item.FechaEntregaSolicitada.Value.ToString("dd/MM/yy") : "")</td>
+                        <td></td>
+                    </tr>
+                }
+
+                @{
+                    var totalFilasObjetivo = 22;
+                    var filasVacias = Math.Max(0, totalFilasObjetivo - (itemsRecepcionParaImprimir?.Count ?? 0));
+                }
+
+                @for (var i = 0; i < filasVacias; i++)
+                {
+                    <tr>
+                        <td>&nbsp;</td>
+                        <td></td>
+                        <td></td>
+                        <td></td>
+                        <td></td>
+                        <td></td>
+                        <td></td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+
+        <div class="row mt-3">
+            <div class="col-6">
+                <div style="border: 1px solid #000; height: 3cm; padding: 6px;">
+                    <div><strong>Obs:</strong></div>
+                </div>
+            </div>
+            <div class="col-6">
+                <div style="border: 1px solid #000; height: 3cm; padding: 6px;">
+                    <div><strong>Conforme</strong></div>
+                    <div style="margin-top: 2.2cm; border-top: 1px dotted #000;"></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="row mt-2">
+            <div class="col-12">
+                <div style="border: 1px solid #000; height: 3cm;"></div>
+            </div>
+        </div>
+    </div>
+</div>
+
 <!-- Componente selector de proveedores para filtro de órdenes -->
 <SelectorProveedores @ref="selectorProveedoresOrdenes" OnProveedorSeleccionado="OnProveedorSeleccionadoOrdenes" />
 
@@ -581,9 +768,14 @@
     private bool tieneOrdenesPendientes;
     private bool mostrarBotonesRecepcion;
     private List<RecepcionPendienteAprobacionDTO> recepcionesPendientes;
+    // private bool validando = true;
 
     private bool mostrarModalItems = false;
     private int numeroRecepcionSeleccionada;
+    // Orden de compra seleccionada al abrir el modal de items.
+    // Se usa para que el modal solo traiga los items de la recepción Y de esa OC en particular,
+    // ya que la grilla de pendientes agrupa por (recepción + orden de compra).
+    private int numeroOrdenCompraSeleccionada;
     private List<RecepcionItemDTO> itemsRecepcion;
 
     private List<dynamic> depositos;
@@ -616,10 +808,49 @@
     // Variables para modal de recepciones sin orden de compra
     private bool mostrarModalRecepcionesSinOC = false;
 
+    private string idElementoImpresionRecepcion = $"nota-recepcion-{Guid.NewGuid()}";
+    private RecepcionPendienteAprobacionDTO? recepcionParaImprimir;
+    private List<RecepcionItemDTO> itemsRecepcionParaImprimir = new();
+
+    // Modal de configuración (FLEXCRL): Aprueba Calidad
+    private bool apruebaCalidadHabilitado = false;
+
+    // Datos de la grilla de "Aprobación de Calidad" (solo visible si APRUCALI está habilitado)
+    private List<BrecepenPendienteCalidadDTO>? pendientesCalidad;
+    private bool cargandoPendientesCalidad = false;
+    private Dictionary<string, decimal> cantidadAprobarPorFila = new();
+
+    private const string PROBUS_RECEPCION = "RECEPCIO";
+    private const string CLABUS_APRUEBA_CALIDAD = "APRUCALI";
+
     protected override async Task OnInitializedAsync()
     {
+        // Validar que el usuario tenga permiso para acceder a esta página antes de mostrar el contenido
+        // await PageAccess.RequiereAccesoAsync("/recepcion/selproveedor");
+        // validando = false;
+        
         await base.OnInitializedAsync();
         await CargarDepositos();
+        await CargarConfiguracionApruebaCalidad();
+    }
+
+    private async Task CargarConfiguracionApruebaCalidad()
+    {
+        var response = await repository.Get<FLEXCRL>($"api/flexcrl/{CLABUS_APRUEBA_CALIDAD}/{PROBUS_RECEPCION}");
+        if (response.Error)
+        {
+            apruebaCalidadHabilitado = false;
+            return;
+        }
+
+        var val = (response.Response?.VALCONTROL ?? string.Empty).Trim();
+        apruebaCalidadHabilitado = val == "1" || (bool.TryParse(val, out var parsed) && parsed);
+    }
+
+    private Task CerrarModalItems()
+    {
+        mostrarModalItems = false;
+        return Task.CompletedTask;
     }
 
     private async Task CargarDepositos()
@@ -809,6 +1040,131 @@
         StateHasChanged();
     }
 
+    private void CambiarAAprobacionCalidad()
+    {
+        activeTab = "aprobacionCalidad";
+        mostrarBotonesRecepcion = false;
+        proveedorSeleccionado = null;
+        _ = CargarPendientesCalidad();
+        StateHasChanged();
+    }
+
+    // Carga la grilla de la solapa "Aprueba Almacén": trae los pendientes desde el backend
+    // (agrupados por LOTE + producto) e inicializa el input de cada fila con el pendiente actual.
+    private async Task CargarPendientesCalidad()
+    {
+        cargandoPendientesCalidad = true;
+        try
+        {
+            // Pedimos al backend los grupos pendientes (SUM(CANTINGRE) - SUM(CANTSALID de 'AP') > 0).
+            var response = await repository.Get<List<BrecepenPendienteCalidadDTO>>("api/brecepen/pendientes-calidad");
+            if (response.Error)
+            {
+                // Ante error dejamos la grilla vacía para no romper el render.
+                pendientesCalidad = new List<BrecepenPendienteCalidadDTO>();
+                cantidadAprobarPorFila = new Dictionary<string, decimal>();
+                return;
+            }
+
+            pendientesCalidad = response.Response ?? new List<BrecepenPendienteCalidadDTO>();
+            // Precargamos, por cada fila, la cantidad a aprobar = pendiente completo (el usuario puede editarlo).
+            // La clave del diccionario es LOTE|COD_INTE (ver GetPendienteCalidadKey).
+            cantidadAprobarPorFila = pendientesCalidad.ToDictionary(
+                x => GetPendienteCalidadKey(x),
+                x => x.CantidadPendiente);
+        }
+        finally
+        {
+            // Pase lo que pase apagamos el spinner y refrescamos la UI.
+            cargandoPendientesCalidad = false;
+            StateHasChanged();
+        }
+    }
+
+    // Clave única de cada fila de la grilla = LOTE + producto.
+    // Se usa para mapear la fila con su cantidad a aprobar en el diccionario cantidadAprobarPorFila.
+    private static string GetPendienteCalidadKey(BrecepenPendienteCalidadDTO row)
+    {
+        return $"{row.Idenlote}|{row.CodInte}";
+    }
+
+    // Confirma y ejecuta la aprobación de una fila de la solapa "Aprueba Almacén".
+    // Valida la cantidad, pide confirmación al usuario y llama al endpoint POST api/brecepen/aprobar.
+    private async Task ConfirmarYAprobarPendienteCalidad(BrecepenPendienteCalidadDTO row)
+    {//SOLAPA APRUEBA ALMACEN
+        // Validar tolerancia de días para aprobar recepción
+        if (row.NumeroRecepcion.HasValue && row.NumeroRecepcion.Value > 0)
+        {
+            var validacionResponse = await repository.Get<ValidacionToleranciaDTO>($"api/bolrecep/validar-tolerancia-aprobacion/{row.NumeroRecepcion.Value}");
+            if (!validacionResponse.Error && validacionResponse.Response != null)
+            {
+                if (!validacionResponse.Response.PuedeAprobar)
+                {
+                    await sweetAlertService.FireAsync("Atención", validacionResponse.Response.Mensaje, SweetAlertIcon.Warning);
+                    return;
+                }
+            }
+        }
+
+        // Recuperamos la cantidad que el usuario cargó para esta fila (clave LOTE|COD_INTE).
+        var key = GetPendienteCalidadKey(row);
+        if (!cantidadAprobarPorFila.TryGetValue(key, out var cantidad))
+        {
+            await sweetAlertService.FireAsync("Error", "No se encontró la cantidad a aprobar", SweetAlertIcon.Error);
+            return;
+        }
+
+        // No permitimos aprobar cantidades cero o negativas.
+        if (cantidad <= 0)
+        {
+            await sweetAlertService.FireAsync("Atención", "La cantidad a aprobar debe ser mayor a 0", SweetAlertIcon.Warning);
+            return;
+        }
+
+        // Ni más de lo que realmente está pendiente para esa fila.
+        if (cantidad > row.CantidadPendiente)
+        {
+            await sweetAlertService.FireAsync("Atención", $"La cantidad a aprobar no puede superar el pendiente ({row.CantidadPendiente})", SweetAlertIcon.Warning);
+            return;
+        }
+
+        var confirm = await sweetAlertService.FireAsync(new SweetAlertOptions
+        {
+            Title = "Confirmar",
+            Text = $"¿Aprobar {cantidad} del pendiente {row.CantidadPendiente}?",
+            Icon = SweetAlertIcon.Question,
+            ShowCancelButton = true,
+            ConfirmButtonText = "Sí, aprobar",
+            CancelButtonText = "Cancelar"
+        });
+
+        if (confirm == null || !confirm.IsConfirmed)
+        {
+            return;
+        }
+
+        // Armamos el request identificando el grupo por LOTE + producto y la cantidad a aprobar.
+        var request = new BrecepenAprobarRequestDTO
+        {
+            Idenlote = row.Idenlote,   // Lote de la recepción (clave principal del grupo)
+            Doprilar = row.Doprilar,   // Documento (informativo; el backend copia datos del original)
+            CodInte = row.CodInte,     // Producto (código interno)
+            CantidadAprobar = cantidad // Cantidad que se aprueba en esta operación
+        };
+
+        // Llamamos al backend: genera el registro de aprobación 'AP' y ajusta stock/OC.
+        var response = await repository.Post("api/brecepen/aprobar", request);
+        if (response.Error)
+        {
+            var mensaje = await response.GetErrorMessageAsync();
+            await sweetAlertService.FireAsync("Error", mensaje, SweetAlertIcon.Error);
+            return;
+        }
+
+        await sweetAlertService.FireAsync("OK", "Aprobado", SweetAlertIcon.Success);
+        await CargarPendientesCalidad();
+    }
+
     private async Task CargarRecepcionesPendientes()
     {
         var responseHttp = await repository.Get<List<RecepcionPendienteAprobacionDTO>>("api/bolrecep/pendientes-aprobacion");
@@ -822,12 +1178,15 @@
         recepcionesPendientes = responseHttp.Response;
     }
 
-    private async Task VerDetalleRecepcion(int numeroRecepcion)
+    private async Task VerDetalleRecepcion(int numeroRecepcion, int numeroOrdenCompra)
     {
         try
         {
             numeroRecepcionSeleccionada = numeroRecepcion;
-            var response = await repository.Get<List<RecepcionItemDTO>>($"api/bolrecep/items/{numeroRecepcion}");
+            numeroOrdenCompraSeleccionada = numeroOrdenCompra;
+            // Se envía el numeroOrdenCompra para que el backend traiga SOLO los items de esta recepción
+            // que corresponden a la orden de compra seleccionada en la grilla (que agrupa por recepción + OC)
+            var response = await repository.Get<List<RecepcionItemDTO>>($"api/bolrecep/items/{numeroRecepcion}?numeroOrdenCompra={numeroOrdenCompra}");
             if (response.Error)
             {
                 await sweetAlertService.FireAsync("Error", response.HttpResponseMessage.ToString(), SweetAlertIcon.Error);
@@ -850,11 +1209,6 @@
         }
     }
 
-    private void CerrarModalItems()
-    {
-        mostrarModalItems = false;
-    }
-
     private void ValidarCantidades(RecepcionItemDTO item)
     {
         // Forzar actualización visual
@@ -865,6 +1219,17 @@
     {
         try
         {
+            // Validar tolerancia de días para aprobar recepción
+            var validacionResponse = await repository.Get<ValidacionToleranciaDTO>($"api/bolrecep/validar-tolerancia-aprobacion/{numeroRecepcionSeleccionada}");
+            if (!validacionResponse.Error && validacionResponse.Response != null)
+            {
+                if (!validacionResponse.Response.PuedeAprobar)
+                {
+                    await sweetAlertService.FireAsync("Atención", validacionResponse.Response.Mensaje, SweetAlertIcon.Warning);
+                    return;
+                }
+            }
+
             // Filtrar solo los items de la recepción seleccionada
             var itemsAEnviar = itemsRecepcion
                 .Where(item => item.NumeBore == numeroRecepcionSeleccionada)
@@ -939,7 +1304,7 @@
 
             Console.WriteLine($"[RecepcionProveedorDialog] Aprobando recepción {numeroRecepcionSeleccionada} con {itemsAEnviar.Count} items");
 
-            var response = await repository.Post($"api/BolrecepMovisto/aprobarRecepcionEingresoMovisto/{numeroRecepcionSeleccionada}", itemsAEnviar);
+            var response = await repository.Post($"api/BolrecepMovisto/aprobarRecepcionEingresoMovisto/{numeroRecepcionSeleccionada}?numeroOrdenCompra={numeroOrdenCompraSeleccionada}", itemsAEnviar);
             if (response.Error)
             {
                 var errorMsg = await response.GetErrorMessageAsync();
@@ -950,6 +1315,9 @@
 
             await sweetAlertService.FireAsync("Éxito", "La recepción se aprobó correctamente", SweetAlertIcon.Success);
             await CargarRecepcionesPendientes();
+            CerrarModalItems();
+            numeroRecepcionSeleccionada = 0;
+            numeroOrdenCompraSeleccionada = 0;
         }
         catch (Exception ex)
         {
@@ -1251,6 +1619,37 @@
         {
             Console.WriteLine($"Error al imprimir reporte: {ex.Message}");
             await sweetAlertService.FireAsync("Error", "Error al imprimir el reporte", SweetAlertIcon.Error);
+        }
+    }
+
+    private async Task ImprimirRecepcionPendienteAsync(int numeroRecepcion)
+    {
+        try
+        {
+            recepcionParaImprimir = recepcionesPendientes?.FirstOrDefault(r => r.NumeroRecepcion == numeroRecepcion);
+            if (recepcionParaImprimir == null)
+            {
+                await sweetAlertService.FireAsync("Error", "No se encontró la recepción.", SweetAlertIcon.Error);
+                return;
+            }
+
+            var response = await repository.Get<List<RecepcionItemDTO>>($"api/bolrecep/items/{numeroRecepcion}");
+            if (response.Error)
+            {
+                var mensaje = await response.GetErrorMessageAsync();
+                await sweetAlertService.FireAsync("Error", mensaje, SweetAlertIcon.Error);
+                return;
+            }
+
+            itemsRecepcionParaImprimir = response.Response ?? new List<RecepcionItemDTO>();
+            StateHasChanged();
+            await Task.Delay(50);
+
+            await JSRuntime.InvokeVoidAsync("imprimirElemento", idElementoImpresionRecepcion);
+        }
+        catch (Exception ex)
+        {
+            await sweetAlertService.FireAsync("Error", ex.Message, SweetAlertIcon.Error);
         }
     }
 }

@@ -1,4 +1,5 @@
 @using IMPLANPROD.Shared.DTOs
+@using Microsoft.AspNetCore.Components.Web
 
 @inject IRepository repository
 @inject SweetAlertService sweetAlertService
@@ -11,14 +12,14 @@
                 <button type="button" class="btn-close" @onclick="Cancel"></button>
             </div>
 
-            <EditForm Model="Detalle" OnValidSubmit="Submit">
+            <EditForm EditContext="editContext" OnSubmit="HandleSubmitAsync">
                 <DataAnnotationsValidator />
 
                 <div class="modal-body">
                     <div class="form-group mb-3">
                         <label>Búsqueda:</label>
                         <div class="input-group">
-                            <input type="text" class="form-control" @bind-value="terminoBusqueda" @bind-value:event="oninput" placeholder="Buscar por código o descripción..." />
+                            <input type="text" class="form-control" @bind-value="terminoBusqueda" @bind-value:event="oninput" @onkeydown="OnSearchKeyDown" placeholder="Buscar por código o descripción..." />
                             <button class="btn btn-primary" type="button" @onclick="BuscarRepuesto">
                                 <i class="oi oi-magnifying-glass"></i>
                             </button>
@@ -112,7 +113,7 @@
 
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" @onclick="Cancel">Cancelar</button>
-                    <button type="submit" class="btn btn-primary">Aceptar</button>
+                    <button type="button" class="btn btn-primary" @onclick="AceptarAsync">Aceptar</button>
                 </div>
             </EditForm>
         </div>
@@ -124,9 +125,15 @@
     [Parameter] public RecepcionItemDTO Detalle { get; set; } = new();
     [Parameter] public string Title { get; set; } = "Agregar Repuesto";
 
+    private EditContext editContext = default!;
     private string terminoBusqueda = "";
     private List<RepuestoDTO> repuestosEncontrados = new();
     private bool repuestoSeleccionado = false;
+
+    protected override void OnInitialized()
+    {
+        editContext = new EditContext(Detalle);
+    }
 
     private async Task BuscarRepuesto()
     {
@@ -150,12 +157,25 @@
                 return;
             }
 
-            repuestosEncontrados = response.Response;
+            repuestosEncontrados = response.Response ?? new List<RepuestoDTO>();
         }
         catch (Exception ex)
         {
             await sweetAlertService.FireAsync("Error", ex.Message, SweetAlertIcon.Error);
         }
+    }
+
+    private async Task OnSearchKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+        {
+            await BuscarRepuesto();
+        }
+    }
+
+    private Task HandleSubmitAsync(EditContext _)
+    {
+        return Task.CompletedTask;
     }
 
     private void SeleccionarRepuesto(RepuestoDTO repuesto)
@@ -186,5 +206,15 @@
         Detalle.CanToApro = Detalle.CantidadNominal;
         
         await BlazoredModal.CloseAsync(ModalResult.Ok(Detalle));
+    }
+
+    private async Task AceptarAsync()
+    {
+        if (!editContext.Validate())
+        {
+            return;
+        }
+
+        await Submit();
     }
 }

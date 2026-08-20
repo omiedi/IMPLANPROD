@@ -1,4 +1,6 @@
 @page "/configuracion/migracion"
+@using Microsoft.AspNetCore.Authorization
+@attribute [Authorize(Roles = "SUPERADMIN")]
 @inject IMPLANPROD.Client.Repositories.IRepository Repository
 @inject IJSRuntime JS
 
@@ -165,7 +167,238 @@
 
             </div>
 
+            <div class="row mt-3">
+                <!-- Card Migración PLAINSP -->
+                <div class="col-md-6">
+                    <div class="card">
+                        <div class="card-body">
+                            <h5 class="card-title">Tabla PLAINSP</h5>
+                            <p class="card-text">Migrar datos desde el archivo legacy <code>PLAINSP.DAT</code> a la tabla SQL <code>PLAINSP</code>.</p>
+                            <p class="card-text text-muted small">
+                                <strong>Archivo plano:</strong> 128 bytes por registro &mdash;
+                                Contiene las dimensiones según plano, instrumento de medición y observaciones
+                                de cada ítem de inspección, agrupados por código interno (<code>Cod_Inte</code>).
+                            </p>
+                            <p class="text-muted small">Nota: La migración solo se realizará si la tabla destino está vacía.</p>
+
+                            @if (loadingPlainsp)
+                            {
+                                <div class="spinner-border text-primary" role="status">
+                                    <span class="visually-hidden">Cargando...</span>
+                                </div>
+                            }
+                            else
+                            {
+                                <button class="btn btn-primary" @onclick="MigratePlainsp">
+                                    <i class="fas fa-database me-2"></i> Iniciar Migración
+                                </button>
+                            }
+
+                            @if (!string.IsNullOrEmpty(messagePlainsp))
+                            {
+                                <div class="alert @alertClassPlainsp mt-3" role="alert">
+                                    @messagePlainsp
+                                </div>
+                            }
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Card Migración CODIPROC -->
+                <div class="col-md-6">
+                    <div class="card">
+                        <div class="card-body">
+                            <h5 class="card-title">Tabla CODIPROC</h5>
+                            <p class="card-text">Migrar datos desde el archivo legacy <code>CODIPROC.DAT</code> a la tabla SQL <code>CODIPROC</code>.</p>
+                            <p class="card-text text-muted small">
+                                <strong>Archivo plano:</strong> 512 bytes por registro &mdash;
+                                Contiene códigos de proceso de inspección con AQL, nivel %, frecuencia,
+                                puntos de detención y trazabilidad de preparación/aprobación.
+                            </p>
+                            <p class="text-muted small">Nota: La migración solo se realizará si la tabla destino está vacía.</p>
+
+                            @if (loadingCodiproc)
+                            {
+                                <div class="spinner-border text-primary" role="status">
+                                    <span class="visually-hidden">Cargando...</span>
+                                </div>
+                            }
+                            else
+                            {
+                                <button class="btn btn-primary" @onclick="MigrateCodiproc">
+                                    <i class="fas fa-database me-2"></i> Iniciar Migración
+                                </button>
+                            }
+
+                            @if (!string.IsNullOrEmpty(messageCodiproc))
+                            {
+                                <div class="alert @alertClassCodiproc mt-3" role="alert">
+                                    @messageCodiproc
+                                </div>
+                            }
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="row mt-3">
+                <!-- Card Migración INSTRUCI -->
+                <div class="col-md-6">
+                    <div class="card">
+                        <div class="card-body">
+                            <h5 class="card-title">Tabla INSTRUCI</h5>
+                            <p class="card-text">Migrar datos desde el archivo legacy <code>INSTRUCI.DAT</code> a la tabla SQL <code>INSTRUCI</code>.</p>
+                            <p class="card-text text-muted small">
+                                <strong>Archivo plano:</strong> 128 bytes por registro &mdash;
+                                Contiene instrucciones de proceso de inspección con código, descripción,
+                                revisión y trazabilidad de preparación/aprobación. 31 registros.
+                            </p>
+                            <p class="text-muted small">Nota: La migración solo se realizará si la tabla destino está vacía.</p>
+
+                            @if (loadingInstruci)
+                            {
+                                <div class="spinner-border text-primary" role="status">
+                                    <span class="visually-hidden">Cargando...</span>
+                                </div>
+                            }
+                            else
+                            {
+                                <button class="btn btn-primary" @onclick="MigrateInstruci">
+                                    <i class="fas fa-database me-2"></i> Iniciar Migración
+                                </button>
+                            }
+
+                            @if (!string.IsNullOrEmpty(messageInstruci))
+                            {
+                                <div class="alert @alertClassInstruci mt-3" role="alert">
+                                    @messageInstruci
+                                </div>
+                            }
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Card Actualizar Observaciones desde INSTRUCD -->
+                <div class="col-md-6">
+                    <div class="card border-warning">
+                        <div class="card-body">
+                            <h5 class="card-title">Actualizar Observaciones desde INSTRUCD</h5>
+                            <p class="card-text">Carga el cuerpo de texto de cada instrucción desde <code>INSTRUCD.DAT</code> y lo almacena en <code>INSTRUCI.Observaciones</code>.</p>
+                            <p class="card-text text-muted small">
+                                <strong>Archivo plano:</strong> 128 bytes por registro &mdash;
+                                2 bytes <code>Cod_Inte</code> (CVI) + 126 bytes de texto. 2.514 líneas en 29 documentos.
+                            </p>
+                            <p class="text-warning small"><strong>Orden de ejecución: ejecutar DESPUÉS de migrar INSTRUCI.</strong></p>
+
+                            @if (loadingInstrucd)
+                            {
+                                <div class="spinner-border text-warning" role="status">
+                                    <span class="visually-hidden">Cargando...</span>
+                                </div>
+                            }
+                            else
+                            {
+                                <button class="btn btn-warning" @onclick="MigrateInstrucd">
+                                    <i class="fas fa-sync-alt me-2"></i> Actualizar Observaciones
+                                </button>
+                            }
+
+                            @if (!string.IsNullOrEmpty(messageInstrucd))
+                            {
+                                <div class="alert @alertClassInstrucd mt-3" role="alert">
+                                    @messageInstrucd
+                                </div>
+                            }
+                        </div>
+                    </div>
+                </div>
+            </div>
+
             <div class="row">
+                <!-- Card Migración INSTRUME -->
+                <div class="col-xl-6 col-md-6 mb-4">
+                    <div class="card border-left-primary shadow h-100 py-2">
+                        <div class="card-body">
+                            <div class="row no-gutters align-items-center">
+                                <div class="col mr-2">
+                                    <div class="text-xs font-weight-bold text-primary text-uppercase mb-1">
+                                        Tabla INSTRUME (Instrumentos)
+                                    </div>
+                                    <div class="h5 mb-0 font-weight-bold text-gray-800">
+                                        Migrar Instrumentos
+                                    </div>
+                                    <p class="text-muted small mt-2">Migra datos desde <code>INSTRUME.DAT</code> a la tabla <code>INSTRUME</code>. Incluye código, descripción, marca, modelo, serie, rango, ubicación e intervalos de calibración.</p>
+
+                                    @if (loadingInstrume)
+                                    {
+                                        <div class="spinner-border text-primary" role="status">
+                                            <span class="visually-hidden">Cargando...</span>
+                                        </div>
+                                    }
+                                    else
+                                    {
+                                        <button class="btn btn-primary" @onclick="MigrateInstrume">
+                                            <i class="fas fa-tools me-2"></i> Iniciar Migración
+                                        </button>
+                                    }
+
+                                    @if (!string.IsNullOrEmpty(messageInstrume))
+                                    {
+                                        <div class="alert @alertClassInstrume mt-3" role="alert">
+                                            @messageInstrume
+                                        </div>
+                                    }
+                                </div>
+                                <div class="col-auto">
+                                    <i class="fas fa-ruler-combined fa-2x text-gray-300"></i>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Card Migración OBINSTRU (Observaciones de Instrumentos) -->
+                <div class="col-xl-6 col-md-6 mb-4">
+                    <div class="card border-left-warning shadow h-100 py-2">
+                        <div class="card-body">
+                            <div class="row no-gutters align-items-center">
+                                <div class="col mr-2">
+                                    <div class="text-xs font-weight-bold text-warning text-uppercase mb-1">
+                                        Tabla INSTRUME - Observaciones
+                                    </div>
+                                    <div class="h5 mb-0 font-weight-bold text-gray-800">
+                                        Actualizar Observaciones de Instrumentos
+                                    </div>
+                                    <p class="text-muted small mt-2">Migra observaciones desde <code>OBINSTRU.DAT</code> y las asigna a los registros de <code>INSTRUME</code> según <code>CodIntMedIdent</code>. Ejecutar después de migrar INSTRUME.</p>
+
+                                    @if (loadingObInstru)
+                                    {
+                                        <div class="spinner-border text-warning" role="status">
+                                            <span class="visually-hidden">Cargando...</span>
+                                        </div>
+                                    }
+                                    else
+                                    {
+                                        <button class="btn btn-warning" @onclick="MigrateObInstru">
+                                            <i class="fas fa-sync-alt me-2"></i> Actualizar Observaciones
+                                        </button>
+                                    }
+
+                                    @if (!string.IsNullOrEmpty(messageObInstru))
+                                    {
+                                        <div class="alert @alertClassObInstru mt-3" role="alert">
+                                            @messageObInstru
+                                        </div>
+                                    }
+                                </div>
+                                <div class="col-auto">
+                                    <i class="fas fa-comment-alt fa-2x text-gray-300"></i>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
                 <!-- Card Migración DESCREP -->
                 <div class="col-xl-6 col-md-6 mb-4">
                     <div class="card border-left-info shadow h-100 py-2">
@@ -207,6 +440,116 @@
                         </div>
                     </div>
                 </div>
+
+                <!-- Card Migración BRECEPEN -->
+                <div class="col-12 mb-4">
+                    <div class="card shadow">
+                        <div class="card-header bg-success text-white">
+                            <h6 class="mb-0"><i class="fas fa-boxes me-2"></i>Tabla BRECEPEN (Stock Recepción Pendiente)</h6>
+                        </div>
+                        <div class="card-body">
+                            <p class="text-muted small">Migra datos desde <code>BRECEPEN.DAT</code> a la tabla <code>BRECEPEN</code>. Solo migra registros con saldo pendiente > 0.05.</p>
+                            <p class="text-muted small">Nota: La migración solo se realizará si la tabla destino está vacía.</p>
+                            
+                            <div class="mb-3">
+                                @if (loadingPreviewBrecepen)
+                                {
+                                    <button class="btn btn-info" disabled>
+                                        <span class="spinner-border spinner-border-sm me-2"></span>
+                                        Cargando datos...
+                                    </button>
+                                }
+                                else
+                                {
+                                    <button class="btn btn-info" @onclick="PreviewBrecepen">
+                                        <i class="fas fa-eye me-2"></i> Mostrar datos a migrar
+                                    </button>
+                                }
+                            </div>
+
+                            @if (brecepenPreviewData != null && brecepenPreviewData.Any())
+                            {
+                                <div class="table-responsive" style="max-height: 400px; overflow-y: auto;">
+                                    <table class="table table-striped table-sm table-bordered">
+                                        <thead class="table-dark sticky-top">
+                                            <tr>
+                                                <th>Fecha</th>
+                                                <th>CodInte</th>
+                                                <th>IdLote</th>
+                                                <th>CodMovi</th>
+                                                <th>DopriCor</th>
+                                                <th>DoseCor</th>
+                                                <th>ReferCor</th>
+                                                <th>Depo</th>
+                                                <th>Prov</th>
+                                                <th>Ingreso</th>
+                                                <th>Salida</th>
+                                                <th>Saldo</th>
+                                                <th>Migrar</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            @foreach (var item in brecepenPreviewData)
+                                            {
+                                                <tr class="@(item.Migrar ? "table-success" : "table-secondary")">
+                                                    <td>@item.Fecha</td>
+                                                    <td>@item.CodInte</td>
+                                                    <td>@item.IdLote</td>
+                                                    <td>@item.CodMovi</td>
+                                                    <td>@item.DopriCor</td>
+                                                    <td>@item.DoseCor</td>
+                                                    <td>@item.ReferCor</td>
+                                                    <td>@item.DepoMovi</td>
+                                                    <td>@item.NumeProv</td>
+                                                    <td>@item.CantIngre</td>
+                                                    <td>@item.CantSalid</td>
+                                                    <td>@item.Saldo</td>
+                                                    <td>
+                                                        @if (item.Migrar)
+                                                        {
+                                                            <i class="fas fa-check text-success"></i>
+                                                        }
+                                                        else
+                                                        {
+                                                            <i class="fas fa-times text-danger"></i>
+                                                        }
+                                                    </td>
+                                                </tr>
+                                            }
+                                        </tbody>
+                                    </table>
+                                </div>
+                                <p class="text-muted small mt-2">
+                                    <strong>Total registros:</strong> @brecepenPreviewData.Count() | 
+                                    <strong>A migrar:</strong> @brecepenPreviewData.Count(x => x.Migrar)
+                                </p>
+                            }
+
+                            <div class="mt-3">
+                                @if (loadingBrecepen)
+                                {
+                                    <button class="btn btn-success" disabled>
+                                        <span class="spinner-border spinner-border-sm me-2"></span>
+                                        Migrando...
+                                    </button>
+                                }
+                                else
+                                {
+                                    <button class="btn btn-success" @onclick="MigrateBrecepen">
+                                        <i class="fas fa-database me-2"></i> Iniciar Migración
+                                    </button>
+                                }
+
+                                @if (!string.IsNullOrEmpty(messageBrecepen))
+                                {
+                                    <div class="alert @alertClassBrecepen mt-3" role="alert">
+                                        @messageBrecepen
+                                    </div>
+                                }
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
@@ -232,6 +575,37 @@
     private bool loadingDescrep = false;
     private string messageDescrep = "";
     private string alertClassDescrep = "alert-info";
+
+    private bool loadingCodiproc = false;
+    private string messageCodiproc = "";
+    private string alertClassCodiproc = "alert-info";
+
+    private bool loadingPlainsp = false;
+    private string messagePlainsp = "";
+    private string alertClassPlainsp = "alert-info";
+
+    private bool loadingInstruci = false;
+    private string messageInstruci = "";
+    private string alertClassInstruci = "alert-info";
+
+    private bool loadingInstrucd = false;
+    private string messageInstrucd = "";
+    private string alertClassInstrucd = "alert-info";
+
+    private bool loadingInstrume = false;
+    private string messageInstrume = "";
+    private string alertClassInstrume = "alert-info";
+
+    private bool loadingObInstru = false;
+    private string messageObInstru = "";
+    private string alertClassObInstru = "alert-info";
+
+    private bool loadingBrecepen = false;
+    private string messageBrecepen = "";
+    private string alertClassBrecepen = "alert-info";
+
+    private bool loadingPreviewBrecepen = false;
+    private List<IMPLANPROD.Shared.DTOs.BrecepenPreviewDTO> brecepenPreviewData = new List<IMPLANPROD.Shared.DTOs.BrecepenPreviewDTO>();
 
     // Ruta base para archivos de migración
     private string migrationBasePath = @"C:\Users\Omar\source\repos\omardemaio\IMPLANPROD\Legacy_VB6\ArchivosDat";
@@ -403,6 +777,275 @@
         }
     }
 
+    private async Task MigratePlainsp()
+    {
+        try
+        {
+            loadingPlainsp = true;
+            messagePlainsp = "";
+            StateHasChanged();
+
+            var response = await Repository.Post<object>($"api/Migration/plainsp?basePath={Uri.EscapeDataString(migrationBasePath)}", new { });
+
+            if (!response.Error)
+            {
+                var content = await response.HttpResponseMessage.Content.ReadAsStringAsync();
+                alertClassPlainsp = "alert-success";
+                messagePlainsp = content;
+            }
+            else
+            {
+                var content = await response.HttpResponseMessage.Content.ReadAsStringAsync();
+                alertClassPlainsp = "alert-danger";
+                messagePlainsp = $"Error: {content}";
+            }
+        }
+        catch (Exception ex)
+        {
+            alertClassPlainsp = "alert-danger";
+            messagePlainsp = $"Error de conexión: {ex.Message}";
+        }
+        finally
+        {
+            loadingPlainsp = false;
+        }
+    }
+
+    private async Task MigrateCodiproc()
+    {
+        try
+        {
+            loadingCodiproc = true;
+            messageCodiproc = "";
+            StateHasChanged();
+
+            var response = await Repository.Post<object>($"api/Migration/codiproc?basePath={Uri.EscapeDataString(migrationBasePath)}", new { });
+
+            if (!response.Error)
+            {
+                var content = await response.HttpResponseMessage.Content.ReadAsStringAsync();
+                alertClassCodiproc = "alert-success";
+                messageCodiproc = content;
+            }
+            else
+            {
+                var content = await response.HttpResponseMessage.Content.ReadAsStringAsync();
+                alertClassCodiproc = "alert-danger";
+                messageCodiproc = $"Error: {content}";
+            }
+        }
+        catch (Exception ex)
+        {
+            alertClassCodiproc = "alert-danger";
+            messageCodiproc = $"Error de conexión: {ex.Message}";
+        }
+        finally
+        {
+            loadingCodiproc = false;
+        }
+    }
+
+    private async Task MigrateInstrucd()
+    {
+        try
+        {
+            loadingInstrucd = true;
+            messageInstrucd = "";
+            StateHasChanged();
+
+            var response = await Repository.Post<object>($"api/Migration/instrucd?basePath={Uri.EscapeDataString(migrationBasePath)}", new { });
+
+            if (!response.Error)
+            {
+                var content = await response.HttpResponseMessage.Content.ReadAsStringAsync();
+                alertClassInstrucd = "alert-success";
+                messageInstrucd = content;
+            }
+            else
+            {
+                var content = await response.HttpResponseMessage.Content.ReadAsStringAsync();
+                alertClassInstrucd = "alert-danger";
+                messageInstrucd = $"Error: {content}";
+            }
+        }
+        catch (Exception ex)
+        {
+            alertClassInstrucd = "alert-danger";
+            messageInstrucd = $"Error de conexión: {ex.Message}";
+        }
+        finally
+        {
+            loadingInstrucd = false;
+        }
+    }
+
+    private async Task MigrateInstruci()
+    {
+        try
+        {
+            loadingInstruci = true;
+            messageInstruci = "";
+            StateHasChanged();
+
+            var response = await Repository.Post<object>($"api/Migration/instruci?basePath={Uri.EscapeDataString(migrationBasePath)}", new { });
+
+            if (!response.Error)
+            {
+                var content = await response.HttpResponseMessage.Content.ReadAsStringAsync();
+                alertClassInstruci = "alert-success";
+                messageInstruci = content;
+            }
+            else
+            {
+                var content = await response.HttpResponseMessage.Content.ReadAsStringAsync();
+                alertClassInstruci = "alert-danger";
+                messageInstruci = $"Error: {content}";
+            }
+        }
+        catch (Exception ex)
+        {
+            alertClassInstruci = "alert-danger";
+            messageInstruci = $"Error de conexión: {ex.Message}";
+        }
+        finally
+        {
+            loadingInstruci = false;
+        }
+    }
+
+    private async Task MigrateObInstru()
+    {
+        try
+        {
+            loadingObInstru = true;
+            messageObInstru = "";
+            StateHasChanged();
+
+            var response = await Repository.Post<object>($"api/Migration/obinstru?basePath={Uri.EscapeDataString(migrationBasePath)}", new { });
+
+            if (!response.Error)
+            {
+                var content = await response.HttpResponseMessage.Content.ReadAsStringAsync();
+                alertClassObInstru = "alert-success";
+                messageObInstru = content;
+            }
+            else
+            {
+                var content = await response.HttpResponseMessage.Content.ReadAsStringAsync();
+                alertClassObInstru = "alert-danger";
+                messageObInstru = $"Error: {content}";
+            }
+        }
+        catch (Exception ex)
+        {
+            alertClassObInstru = "alert-danger";
+            messageObInstru = $"Error de conexión: {ex.Message}";
+        }
+        finally
+        {
+            loadingObInstru = false;
+        }
+    }
+
+    private async Task MigrateBrecepen()
+    {
+        try
+        {
+            loadingBrecepen = true;
+            messageBrecepen = "";
+            StateHasChanged();
+
+            var response = await Repository.Post<object>($"api/Migration/brecepen?basePath={Uri.EscapeDataString(migrationBasePath)}", new { });
+
+            if (!response.Error)
+            {
+                var content = await response.HttpResponseMessage.Content.ReadAsStringAsync();
+                alertClassBrecepen = "alert-success";
+                messageBrecepen = content;
+            }
+            else
+            {
+                var content = await response.HttpResponseMessage.Content.ReadAsStringAsync();
+                alertClassBrecepen = "alert-danger";
+                messageBrecepen = $"Error: {content}";
+            }
+        }
+        catch (Exception ex)
+        {
+            alertClassBrecepen = "alert-danger";
+            messageBrecepen = $"Error de conexión: {ex.Message}";
+        }
+        finally
+        {
+            loadingBrecepen = false;
+        }
+    }
+
+    private async Task PreviewBrecepen()
+    {
+        try
+        {
+            loadingPreviewBrecepen = true;
+            brecepenPreviewData = new List<IMPLANPROD.Shared.DTOs.BrecepenPreviewDTO>();
+            StateHasChanged();
+
+            var response = await Repository.Get<List<IMPLANPROD.Shared.DTOs.BrecepenPreviewDTO>>($"api/Migration/brecepen/preview?basePath={Uri.EscapeDataString(migrationBasePath)}");
+
+            if (!response.Error && response.Response != null)
+            {
+                brecepenPreviewData = response.Response;
+            }
+            else
+            {
+                var content = await response.HttpResponseMessage.Content.ReadAsStringAsync();
+                await JS.InvokeVoidAsync("alert", $"Error: {content}");
+            }
+        }
+        catch (Exception ex)
+        {
+            await JS.InvokeVoidAsync("alert", $"Error de conexión: {ex.Message}");
+        }
+        finally
+        {
+            loadingPreviewBrecepen = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task MigrateInstrume()
+    {
+        try
+        {
+            loadingInstrume = true;
+            messageInstrume = "";
+            StateHasChanged();
+
+            var response = await Repository.Post<object>($"api/Migration/instrume?basePath={Uri.EscapeDataString(migrationBasePath)}", new { });
+
+            if (!response.Error)
+            {
+                var content = await response.HttpResponseMessage.Content.ReadAsStringAsync();
+                alertClassInstrume = "alert-success";
+                messageInstrume = content;
+            }
+            else
+            {
+                var content = await response.HttpResponseMessage.Content.ReadAsStringAsync();
+                alertClassInstrume = "alert-danger";
+                messageInstrume = $"Error: {content}";
+            }
+        }
+        catch (Exception ex)
+        {
+            alertClassInstrume = "alert-danger";
+            messageInstrume = $"Error de conexión: {ex.Message}";
+        }
+        finally
+        {
+            loadingInstrume = false;
+        }
+    }
+
     private async Task MigrateDescrep()
     {
         try
@@ -436,4 +1079,5 @@
             loadingDescrep = false;
         }
     }
+
 }

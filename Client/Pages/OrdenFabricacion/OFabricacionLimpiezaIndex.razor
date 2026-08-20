@@ -1,5 +1,6 @@
 @page "/ofabricacion-limpieza"
 @page "/ofabricacion-limpieza/{Page:int?}"
+@using IMPLANPROD.Client.Services
 @using IMPLANPROD.Shared.DTOs
 @using IMPLANPROD.Shared.Entities
 @using IMPLANPROD.Client.Shared.Components
@@ -7,9 +8,16 @@
 @inject IRepository repository
 @inject SweetAlertService sweetAlertService
 @inject NavigationManager navigationManager
+@inject PageAccessService PageAccess
 
 <PageTitle>O. Fabricación - Limpieza</PageTitle>
 
+@if (validando)
+{
+    <p>Validando acceso...</p>
+}
+else
+{
 <div class="container-fluid">
     <div class="mb-4">
         <h2 class="text-center fw-bold text-primary">
@@ -341,6 +349,7 @@
         </div>
     }
 </div>
+}
 
 @code {
 
@@ -353,6 +362,7 @@
     private List<OrdefabrIndexDTO>? ordenes;
     private string filter = string.Empty;
     private bool isLoading = true;
+    private bool validando = true;
 
     private bool detalleVisible;
     private bool detalleLoading;
@@ -423,6 +433,10 @@
 
     protected override async Task OnInitializedAsync()
     {
+        // Validar que el usuario tenga permiso para acceder a esta página antes de mostrar el contenido
+        await PageAccess.RequiereAccesoAsync("/ofabricacion-limpieza");
+        validando = false;
+        
         await LoadAsync();
     }
 

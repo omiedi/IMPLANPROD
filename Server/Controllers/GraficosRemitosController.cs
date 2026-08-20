@@ -109,6 +109,7 @@ namespace IMPLANPROD.Server.Controllers
             try
             {
                 var config = await _context.Set<FLEXCRL>()
+                    .AsNoTracking()
                     .FirstOrDefaultAsync(f => f.CLABUS == "" && f.PROBUS == "CODREFAC");
 
                 return config?.VALCONTROL ?? "RT";

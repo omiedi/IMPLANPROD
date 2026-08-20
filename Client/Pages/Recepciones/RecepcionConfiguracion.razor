@@ -1,0 +1,244 @@
+@page "/recepcion/configuracion"
+@using IMPLANPROD.Shared.Entities
+@using IMPLANPROD.Client.Services
+@using IMPLANPROD.Client.Shared.Components
+@inject IRepository repository
+@inject SweetAlertService sweetAlertService
+@inject NavigationManager navigationManager
+@inject PageAccessService PageAccess
+
+<PageTitle>Configuración de Recepciones</PageTitle>
+
+@if (validando)
+{
+    <p>Validando acceso...</p>
+}
+else
+{
+    <div class="container-fluid">
+        <div class="mb-4">
+            <h2 class="fw-bold text-primary mb-0">
+                <i class="fas fa-cogs me-2"></i>Configuración de Recepciones
+            </h2>
+        </div>
+        <hr class="border-primary border-2 opacity-50" />
+
+        @if (cargandoConfiguracion)
+        {
+            <div class="d-flex justify-content-center align-items-center" style="min-height: 300px;">
+                <div class="spinner-border text-primary" role="status">
+                    <span class="visually-hidden">Cargando configuración...</span>
+                </div>
+            </div>
+        }
+        else
+        {
+            <div class="row">
+                <div class="col-md-6">
+                    <div class="card h-100">
+                        <div class="card-header bg-info text-white">
+                            <h6 class="card-title mb-0">
+                                <i class="fas fa-check-double me-2"></i>Aprobación de Calidad
+                            </h6>
+                        </div>
+                        <div class="card-body">
+                            <div class="form-check form-switch">
+                                <input class="form-check-input" type="checkbox" id="apruebaCalidad" @bind="apruebaCalidad" />
+                                <label class="form-check-label" for="apruebaCalidad">
+                                    <strong>Aprueba Calidad</strong>
+                                </label>
+                            </div>
+
+                            <div class="form-text mt-2">
+                                Si está activado, el circuito de recepción considerará que existe instancia de aprobación de calidad.
+                            </div>
+
+                            <div class="alert @(apruebaCalidad ? "alert-success" : "alert-secondary") mt-3 mb-0 p-2">
+                                <strong>Estado:</strong>
+                                <span class="badge bg-@(apruebaCalidad ? "success" : "secondary") ms-2">
+                                    @(apruebaCalidad ? "ACTIVADO" : "DESACTIVADO")
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="card h-100">
+                        <div class="card-header bg-warning text-dark">
+                            <h6 class="card-title mb-0">
+                                <i class="fas fa-clock me-2"></i>Tolerancia de Aprobación
+                            </h6>
+                        </div>
+                        <div class="card-body">
+                            <label class="form-label fw-bold">
+                                Tolerancia máxima (días) entre la fecha de recepción y la fecha de aprobación
+                            </label>
+                            <InputNumeroLimpio @bind-Value="toleranciaDias" TValue="int?" Placeholder="Ingrese días de tolerancia" />
+                            <div class="form-text mt-2">
+                                Cantidad de días de tolerancia para aprobar recepción.
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="mt-3">
+                <button class="btn btn-success" @onclick="GuardarConfiguracion" disabled="@(guardandoConfiguracion)">
+                    @if (guardandoConfiguracion)
+                    {
+                        <span class="spinner-border spinner-border-sm me-2" role="status"></span>
+                    }
+                    else
+                    {
+                        <i class="fas fa-save me-1"></i>
+                    }
+                    Guardar
+                </button>
+            </div>
+        }
+    </div>
+}
+
+@code {
+    private bool validando = true;
+    private bool cargandoConfiguracion;
+    private bool guardandoConfiguracion;
+
+    // Claves FLEXCRL requeridas por negocio
+    private const string PROBUS_RECEPCION = "BOLRECEP";
+    private const string CLABUS_APRUEBA_CALIDAD = "APRUCALI";
+    private const string CLABUS_TOLERANCIA = "TOLEAPRO";
+
+    // Valor lógico que se persiste como "1" (true) / "0" (false) en VALCONTROL.
+    private bool apruebaCalidad;
+
+    // Tolerancia en días para aprobar recepción
+    private int? toleranciaDias;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await PageAccess.RequiereAccesoAsync("/recepcion/configuracion");
+        validando = false;
+        await CargarConfiguracion();
+    }
+
+    private async Task CargarConfiguracion()
+    {
+        try
+        {
+            cargandoConfiguracion = true;
+            StateHasChanged();
+
+            // Cargar Aprueba Calidad
+            var responseAprueba = await repository.Get<FLEXCRL>($"api/flexcrl/{CLABUS_APRUEBA_CALIDAD}/{PROBUS_RECEPCION}");
+            if (responseAprueba.Error || responseAprueba.Response == null)
+            {
+                apruebaCalidad = false;
+            }
+            else
+            {
+                var valor = (responseAprueba.Response.VALCONTROL ?? string.Empty).Trim();
+                apruebaCalidad = valor == "1" || valor.Equals("true", StringComparison.OrdinalIgnoreCase);
+            }
+
+            // Cargar Tolerancia de Días
+            var responseTolerancia = await repository.Get<FLEXCRL>($"api/flexcrl/{CLABUS_TOLERANCIA}/{PROBUS_RECEPCION}");
+            if (responseTolerancia.Error || responseTolerancia.Response == null)
+            {
+                toleranciaDias = null;
+            }
+            else
+            {
+                var valor = (responseTolerancia.Response.VALCONTROL ?? string.Empty).Trim();
+                if (int.TryParse(valor, out int dias))
+                {
+                    toleranciaDias = dias;
+                }
+                else
+                {
+                    toleranciaDias = null;
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            apruebaCalidad = false;
+            toleranciaDias = null;
+            await sweetAlertService.FireAsync("Error", $"No se pudo cargar la configuración: {ex.Message}", SweetAlertIcon.Error);
+        }
+        finally
+        {
+            cargandoConfiguracion = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task GuardarConfiguracion()
+    {
+        try
+        {
+            guardandoConfiguracion = true;
+            StateHasChanged();
+
+            var valorAprueba = apruebaCalidad ? "1" : "0";
+            var valorTolerancia = toleranciaDias?.ToString() ?? "0";
+
+            var result = await sweetAlertService.FireAsync(new SweetAlertOptions
+            {
+                Title = "Confirmar",
+                Text = $"¿Deseas guardar la configuración?\n\nAprueba Calidad: {(apruebaCalidad ? "ACTIVADO" : "DESACTIVADO")}\nTolerancia: {valorTolerancia} días",
+                Icon = SweetAlertIcon.Question,
+                ShowCancelButton = true,
+                ConfirmButtonText = "Sí, guardar",
+                CancelButtonText = "Cancelar"
+            });
+
+            if (!result.IsConfirmed)
+            {
+                return;
+            }
+
+            // Guardar Aprueba Calidad
+            var configAprueba = new
+            {
+                clabus = CLABUS_APRUEBA_CALIDAD,
+                probus = PROBUS_RECEPCION,
+                valcontrol = valorAprueba
+            };
+
+            var responseAprueba = await repository.Put("api/flexcrl", configAprueba);
+            if (responseAprueba.Error)
+            {
+                var errorMessage = await responseAprueba.GetErrorMessageAsync();
+                await sweetAlertService.FireAsync("Error", $"Error al guardar Aprueba Calidad: {errorMessage}", SweetAlertIcon.Error);
+                return;
+            }
+
+            // Guardar Tolerancia de Días
+            var configTolerancia = new
+            {
+                clabus = CLABUS_TOLERANCIA,
+                probus = PROBUS_RECEPCION,
+                valcontrol = valorTolerancia
+            };
+
+            var responseTolerancia = await repository.Put("api/flexcrl", configTolerancia);
+            if (responseTolerancia.Error)
+            {
+                var errorMessage = await responseTolerancia.GetErrorMessageAsync();
+                await sweetAlertService.FireAsync("Error", $"Error al guardar Tolerancia: {errorMessage}", SweetAlertIcon.Error);
+                return;
+            }
+
+            await sweetAlertService.FireAsync("Éxito", "Configuración guardada.", SweetAlertIcon.Success);
+        }
+        catch (Exception ex)
+        {
+            await sweetAlertService.FireAsync("Error", $"Error inesperado al guardar: {ex.Message}", SweetAlertIcon.Error);
+        }
+        finally
+        {
+            guardandoConfiguracion = false;
+            StateHasChanged();
+        }
+    }
+}

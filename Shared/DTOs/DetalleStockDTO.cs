@@ -15,6 +15,10 @@ namespace IMPLANPROD.Shared.DTOs
         public decimal Uso { get; set; }
         public decimal CantSimulada { get; set; }
         public decimal StAcumulado { get; set; }
+        public decimal StDepSeleccionados { get; set; }
+        public decimal Saldo { get; set; }
+        public string ItemJerarquico { get; set; } = string.Empty;
+        public int Nivel { get; set; }
         public Dictionary<string, decimal> StockPorDeposito { get; set; } = new Dictionary<string, decimal>();
     }
 }

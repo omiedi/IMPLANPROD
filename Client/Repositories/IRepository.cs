@@ -6,6 +6,7 @@ namespace IMPLANPROD.Client.Repositories
     public interface IRepository
     {
         Task<HttpResponseWrapper<T>> Get<T>(string url);
+        Task<HttpResponseWrapper<byte[]>> GetBytes(string url);
         Task<HttpResponseWrapper<object>> Post<T>(string url, T model);
         Task<HttpResponseWrapper<TResponse>> Post<T, TResponse>(string url, T model);
         Task<HttpResponseWrapper<TResponse>> PostFormData<TResponse>(string url, MultipartFormDataContent content);

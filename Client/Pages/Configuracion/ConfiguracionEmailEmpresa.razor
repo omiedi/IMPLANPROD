@@ -1,0 +1,297 @@
+@page "/configuracion/email-empresa"
+@using Microsoft.AspNetCore.Authorization
+@attribute [Authorize(Roles = "SUPERADMIN")]
+@using IMPLANPROD.Shared.DTOs
+@using Microsoft.AspNetCore.Components.Forms
+@inject IRepository repository
+@inject SweetAlertService sweetAlertService
+
+<div class="container mt-4">
+
+    <div class="d-flex align-items-center mb-3 gap-2">
+        <i class="fas fa-envelope-open-text fa-2x text-primary"></i>
+        <div>
+            <h4 class="mb-0">Configuración de Correo Corporativo</h4>
+            <small class="text-muted">Cuenta de empresa para envío de correos via MailKit/SMTP</small>
+        </div>
+    </div>
+
+    <div class="card border-primary">
+        <div class="card-header bg-primary text-white">
+            <i class="fas fa-server me-2"></i> Parámetros SMTP
+        </div>
+        <div class="card-body">
+
+            @if (tieneConfigGuardada)
+            {
+                <div class="alert alert-success py-2 small mb-3">
+                    <i class="fas fa-check-circle me-1"></i>
+                    Hay una configuración guardada. La contraseña se mantiene si dejás el campo en blanco.
+                </div>
+            }
+
+            <EditForm Model="@config" OnValidSubmit="GuardarConfiguracion">
+                <DataAnnotationsValidator />
+
+                <div class="row g-3">
+
+                    <div class="col-md-8">
+                        <label class="form-label fw-semibold">Servidor SMTP <span class="text-danger">*</span></label>
+                        <InputText class="form-control" @bind-Value="config.SmtpHost"
+                                   placeholder="mail.miempresa.com.ar" />
+                        <small class="text-muted">Servidor SMTP provisto por el hosting/proveedor de email</small>
+                        <ValidationMessage For="@(() => config.SmtpHost)" />
+                    </div>
+
+                    <div class="col-md-4">
+                        <label class="form-label fw-semibold">Puerto <span class="text-danger">*</span></label>
+                        <InputNumber class="form-control" @bind-Value="config.SmtpPort" />
+                        <small class="text-muted">587 (STARTTLS) · 465 (SSL) · 25 (sin cifrado)</small>
+                        <ValidationMessage For="@(() => config.SmtpPort)" />
+                    </div>
+
+                    <div class="col-12">
+                        <label class="form-label fw-semibold">Tipo de cifrado</label>
+                        <InputRadioGroup @bind-Value="ModoSsl" class="d-flex gap-4 mt-1">
+                            <div class="form-check">
+                                <InputRadio class="form-check-input" id="opStartTls" Value="@("starttls")" />
+                                <label class="form-check-label" for="opStartTls">
+                                    <strong>STARTTLS</strong> <span class="text-muted">(puerto 587 — recomendado)</span>
+                                </label>
+                            </div>
+                            <div class="form-check">
+                                <InputRadio class="form-check-input" id="opSsl" Value="@("ssl")" />
+                                <label class="form-check-label" for="opSsl">
+                                    <strong>SSL/TLS</strong> <span class="text-muted">(puerto 465)</span>
+                                </label>
+                            </div>
+                            <div class="form-check">
+                                <InputRadio class="form-check-input" id="opNone" Value="@("none")" />
+                                <label class="form-check-label" for="opNone">
+                                    <strong>Sin cifrado</strong> <span class="text-muted">(puerto 25)</span>
+                                </label>
+                            </div>
+                        </InputRadioGroup>
+                    </div>
+
+                    <div class="col-md-6">
+                        <label class="form-label fw-semibold">Usuario SMTP <span class="text-danger">*</span></label>
+                        <InputText class="form-control" @bind-Value="config.UsuarioSmtp"
+                                   placeholder="info@miempresa.com.ar" />
+                        <small class="text-muted">Nombre de usuario para autenticarse en el servidor SMTP (generalmente el email)</small>
+                        <ValidationMessage For="@(() => config.UsuarioSmtp)" />
+                    </div>
+
+                    <div class="col-md-6">
+                        <label class="form-label fw-semibold">
+                            Contraseña SMTP
+                            @if (tieneConfigGuardada)
+                            {
+                                <span class="text-muted fw-normal small">(dejar en blanco para conservar la guardada)</span>
+                            }
+                            else
+                            {
+                                <span class="text-danger">*</span>
+                            }
+                        </label>
+                        <InputText type="password" class="form-control" @bind-Value="config.Contrasena"
+                                   placeholder="@(tieneConfigGuardada ? "••••••••  (conservar actual)" : "Contraseña SMTP")" />
+                        <ValidationMessage For="@(() => config.Contrasena)" />
+                    </div>
+
+                    <div class="col-md-6">
+                        <label class="form-label fw-semibold">Email remitente <span class="text-danger">*</span></label>
+                        <InputText class="form-control" @bind-Value="config.EmailDesde"
+                                   placeholder="info@miempresa.com.ar" />
+                        <small class="text-muted">Dirección que aparecerá como "De:" en los correos enviados</small>
+                        <ValidationMessage For="@(() => config.EmailDesde)" />
+                    </div>
+
+                    <div class="col-md-6">
+                        <label class="form-label fw-semibold">Nombre para mostrar <span class="text-danger">*</span></label>
+                        <InputText class="form-control" @bind-Value="config.NombreDesde"
+                                   placeholder="IMPLANSOFT S.A." />
+                        <small class="text-muted">Nombre del remitente visible en el cliente de correo del destinatario</small>
+                        <ValidationMessage For="@(() => config.NombreDesde)" />
+                    </div>
+
+                    <div class="col-12">
+                        <hr class="my-1" />
+                    </div>
+
+                    <div class="col-md-6">
+                        <label class="form-label fw-semibold">Email destinatario de prueba</label>
+                        <InputText class="form-control" @bind-Value="config.DestinatarioPrueba"
+                                   placeholder="tecnico@miempresa.com.ar" />
+                        <small class="text-muted">Correo al que se enviará el mensaje de prueba</small>
+                        <ValidationMessage For="@(() => config.DestinatarioPrueba)" />
+                    </div>
+
+                </div>
+
+                <div class="mt-4 d-flex gap-2 flex-wrap">
+                    <button type="submit" class="btn btn-primary" disabled="@guardando">
+                        @if (guardando)
+                        {
+                            <span class="spinner-border spinner-border-sm me-1"></span>
+                        }
+                        <i class="fas fa-save me-1"></i> Guardar Configuración
+                    </button>
+                    <button type="button" class="btn btn-success"
+                            @onclick="EnviarMailPrueba"
+                            disabled="@(enviandoPrueba || string.IsNullOrWhiteSpace(config.DestinatarioPrueba))">
+                        @if (enviandoPrueba)
+                        {
+                            <span class="spinner-border spinner-border-sm me-1"></span>
+                        }
+                        <i class="fas fa-paper-plane me-1"></i> Enviar Correo de Prueba
+                    </button>
+                </div>
+
+            </EditForm>
+        </div>
+    </div>
+
+    <div class="card mt-3 border-warning">
+        <div class="card-header bg-warning text-dark py-2">
+            <i class="fas fa-info-circle me-1"></i> Referencia rápida de puertos y cifrado
+        </div>
+        <div class="card-body small">
+            <table class="table table-sm table-bordered mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th>Puerto</th>
+                        <th>Cifrado</th>
+                        <th>Configuración</th>
+                        <th>Uso típico</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><strong>587</strong></td>
+                        <td>STARTTLS</td>
+                        <td>UsarStartTls = <code>true</code></td>
+                        <td>Hosting compartido, cPanel, Plesk — <span class="text-success fw-bold">Recomendado</span></td>
+                    </tr>
+                    <tr>
+                        <td><strong>465</strong></td>
+                        <td>SSL/TLS</td>
+                        <td>UsarSsl = <code>true</code></td>
+                        <td>Servidores que exigen conexión SSL directa</td>
+                    </tr>
+                    <tr>
+                        <td><strong>25</strong></td>
+                        <td>Ninguno</td>
+                        <td>Ambos = <code>false</code></td>
+                        <td>Redes internas / relay SMTP local (no recomendado)</td>
+                    </tr>
+                </tbody>
+            </table>
+            <p class="mt-2 mb-0 text-muted">
+                <strong>Usuario SMTP</strong>: generalmente es el mismo email completo (info@miempresa.com.ar).<br/>
+                <strong>Contraseña SMTP</strong>: la contraseña de la casilla de correo, NO una contraseña de aplicación de Google.
+            </p>
+        </div>
+    </div>
+
+</div>
+
+@code {
+    private EmailConfigEmpresaDto config = new();
+    private bool guardando = false;
+    private bool enviandoPrueba = false;
+    private bool tieneConfigGuardada = false;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await CargarConfiguracion();
+    }
+
+    private async Task CargarConfiguracion()
+    {
+        var response = await repository.Get<EmailConfigEmpresaDto>("api/email-empresa");
+        if (!response.Error && response.Response != null)
+        {
+            config = response.Response;
+            tieneConfigGuardada = config.TieneContrasenaGuardada;
+            config.TieneContrasenaGuardada = tieneConfigGuardada;
+        }
+    }
+
+    private string ModoSsl
+    {
+        get
+        {
+            if (config.UsarSsl)      return "ssl";
+            if (config.UsarStartTls) return "starttls";
+            return "none";
+        }
+        set
+        {
+            config.UsarSsl      = value == "ssl";
+            config.UsarStartTls = value == "starttls";
+        }
+    }
+
+    private async Task GuardarConfiguracion()
+    {
+        if (!tieneConfigGuardada && string.IsNullOrWhiteSpace(config.Contrasena))
+        {
+            await sweetAlertService.FireAsync("Atención", "Debe ingresar la contraseña SMTP la primera vez que configura la cuenta.", SweetAlertIcon.Warning);
+            return;
+        }
+
+        guardando = true;
+        config.TieneContrasenaGuardada = tieneConfigGuardada;
+
+        var response = await repository.Post("api/email-empresa", config);
+        guardando = false;
+
+        if (response.Error)
+        {
+            var msg = await response.GetErrorMessageAsync();
+            await sweetAlertService.FireAsync("Error", msg, SweetAlertIcon.Error);
+            return;
+        }
+
+        tieneConfigGuardada = true;
+        await sweetAlertService.FireAsync(new SweetAlertOptions
+        {
+            Icon  = SweetAlertIcon.Success,
+            Title = "Configuración guardada",
+            Timer = 1800,
+            ShowConfirmButton = false
+        });
+    }
+
+    private async Task EnviarMailPrueba()
+    {
+        if (string.IsNullOrWhiteSpace(config.DestinatarioPrueba))
+        {
+            await sweetAlertService.FireAsync("Atención", "Ingresá el email destinatario de prueba.", SweetAlertIcon.Warning);
+            return;
+        }
+
+        enviandoPrueba = true;
+        config.TieneContrasenaGuardada = tieneConfigGuardada;
+
+        var response = await repository.Post("api/email-empresa/test", config);
+        enviandoPrueba = false;
+
+        if (response.Error)
+        {
+            var msg = await response.GetErrorMessageAsync();
+            await sweetAlertService.FireAsync("Error al enviar", msg, SweetAlertIcon.Error);
+            return;
+        }
+
+        await sweetAlertService.FireAsync(new SweetAlertOptions
+        {
+            Icon  = SweetAlertIcon.Success,
+            Title = "Correo de prueba enviado",
+            Text  = $"Revisá la bandeja de {config.DestinatarioPrueba}",
+            Timer = 3000,
+            ShowConfirmButton = false
+        });
+    }
+}

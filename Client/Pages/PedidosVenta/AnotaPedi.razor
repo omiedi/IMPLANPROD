@@ -5,7 +5,16 @@
 @inject IRepository repository
 @inject NavigationManager NavigationManager
 @inject AnotacionesParserService anotacionesParser
+@inject PageAccessService PageAccess
 
+<PageTitle>Anotaciones del Pedido</PageTitle>
+
+@if (validando)
+{
+    <p>Validando acceso...</p>
+}
+else
+{
 <style>
     .anotaciones-container {
         font-family: 'Courier New', monospace;
@@ -236,16 +245,22 @@
         </div>
     </div>
 </div>
+}
 
 @code {
     [Parameter] public int NroPedido { get; set; }
 
     private List<AnotacionPedidoDTO>? anotaciones;
     private bool cargando = true;
+    private bool validando = true;
     private HashSet<AnotacionPedidoDTO> mostrarTextoOriginal = new();
 
     protected override async Task OnInitializedAsync()
     {
+        // Validar que el usuario tenga permiso para acceder a esta página antes de mostrar el contenido
+        await PageAccess.RequiereAccesoAsync("/anotaciones-pedido/{NroPedido}");
+        validando = false;
+        
         await CargarAnotaciones();
     }
 

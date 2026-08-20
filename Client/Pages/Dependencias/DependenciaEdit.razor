@@ -1,28 +1,44 @@
 ﻿@page "/dependencias/edit/{DependenciaId:int}"
+@using IMPLANPROD.Client.Services
 @inject IRepository repository
 @inject NavigationManager navigationManager
 @inject SweetAlertService sweetAlertService
+@inject PageAccessService PageAccess
+
+<PageTitle>Editar Filial</PageTitle>
 
 <h3>Editar Filial</h3>
 
-@if (dependencia is null)
+@if (validando)
 {
-    <div class="spinner" />
+    <p>Validando acceso...</p>
 }
 else
 {
-    <DependenciaForm @ref="dependenciaForm" Dependencia="dependencia" OnValidSubmit="EditAsync" ReturnAction="Return" />
+    @if (dependencia is null)
+    {
+        <div class="spinner" />
+    }
+    else
+    {
+        <DependenciaForm @ref="dependenciaForm" Dependencia="dependencia" OnValidSubmit="EditAsync" ReturnAction="Return" />
+    }
 }
 
 @code {
     private Dependencia? dependencia;
     private DependenciaForm? dependenciaForm;
+    private bool validando = true;
 
     [Parameter]
     public int DependenciaId { get; set; }
 
+    // Validar que el usuario tenga permiso para acceder a esta página antes de mostrar el contenido
     protected override async Task OnInitializedAsync()
     {
+        await PageAccess.RequiereAccesoAsync("/dependencias/edit");
+        validando = false;
+        
         var responseHttp = await repository.Get<Dependencia>($"/api/dependencias/{DependenciaId}");
         if (responseHttp.Error)
         {

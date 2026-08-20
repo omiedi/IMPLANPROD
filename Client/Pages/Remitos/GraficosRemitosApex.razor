@@ -3,11 +3,19 @@
 @using ApexCharts
 @using IMPLANPROD.Shared.DTOs
 @using IMPLANPROD.Client.Repositories
+@using IMPLANPROD.Client.Services
 @inject IJSRuntime JSRuntime
 @inject IRepository repository
+@inject PageAccessService PageAccess
 
 <PageTitle>Gráficos de Remitos</PageTitle>
 
+@if (validando)
+{
+    <p>Validando acceso...</p>
+}
+else
+{
 <div class="container-fluid">
     <div class="row">
         <div class="col-12">
@@ -230,12 +238,14 @@
         </div>
     </div>
 </div>
+}
 
 @code {
     private DateTime fechaDesde = DateTime.Now.AddMonths(-6);
     private DateTime fechaHasta = DateTime.Now;
     private bool cargando = false;
     private bool graficosGenerados = false;
+    private bool validando = true;
 
     private int totalRemitos = 0;
     private int totalProductosDistintos = 0;
@@ -255,8 +265,12 @@
     private ApexChartOptions<DatoEstadoRemitoDTO> opcionesPie = new();
     private ApexChartOptions<DatoProductoRemitoDTO> opcionesProductos = new();
 
-    protected override void OnInitialized()
+    protected override async Task OnInitializedAsync()
     {
+        // Validar que el usuario tenga permiso para acceder a esta página antes de mostrar el contenido
+        await PageAccess.RequiereAccesoAsync("/remitos/graficos");
+        validando = false;
+        
         ConfigurarOpcionesGraficos();
     }
 

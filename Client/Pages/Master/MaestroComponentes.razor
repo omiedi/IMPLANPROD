@@ -1,26 +1,128 @@
 @page "/master/componentes/{Id}"
+@using IMPLANPROD.Client.Services
 @using IMPLANPROD.Shared.Entities
+@using IMPLANPROD.Shared.DTOs
 @using IMPLANPROD.Client.Shared.Components
+@using Microsoft.AspNetCore.Components.Authorization
 @inject IRepository repository
 @inject HttpClient Http
 @inject NavigationManager navigation
 @inject SweetAlertService sweetAlertService
+@inject PageAccessService PageAccess
+@inject AuthenticationStateProvider AuthenticationStateProvider
+@inject IJSRuntime JSRuntime
+
+<PageTitle>Componentes del Producto</PageTitle>
 
 
-<h3 style="background-color: #217346; color: white; padding: 10px; margin-bottom: 20px; border-radius: 4px;">Componentes del Producto: @resultado</h3>
-
-<div class="card">
-    <div class="card-header bg-light">
-        <div class="d-flex justify-content-between align-items-center">
-            <h5 class="mb-0">Gestión de Componentes</h5>
-            <button class="btn btn-success" @onclick="ReturnAction">Regresar</button>
+@if (validando)
+{
+    <p>Validando acceso...</p>
+}
+else
+{
+    <div class="card" @onkeydown="OnKeyDown" tabindex="0">
+        <div class="card-header bg-light" style="background-color: #217346; color: white; padding: 10px; margin-bottom: 20px; border-radius: 4px;">
+            <h5 class="mb-0">Componentes del Producto: @resultado</h5>
         </div>
-    </div>
-    <div class="card-body">
         @if (productoTerminado != null)
         {
-            <div class="mb-3 d-flex justify-content-end">
-                <button class="btn btn-primary" @onclick="() => mostrarBuscador = !mostrarBuscador">
+            <fieldset class="border rounded p-3 mb-3 mx-3">
+                <legend class="float-none w-auto px-2 fs-6 fw-bold text-muted">Producto padre</legend>
+                <div class="row g-2">
+                    <div class="col-md-4">
+                        <label class="form-label mb-1 fw-bold">Código externo</label>
+                        <input type="text" class="form-control form-control-sm" value="@productoTerminado.Codigo" readonly />
+                    </div>
+                    <div class="col-md-8">
+                        <label class="form-label mb-1 fw-bold">Descripción</label>
+                        <input type="text" class="form-control form-control-sm" value="@productoTerminado.Descripcion" readonly />
+                    </div>
+                </div>
+            </fieldset>
+        }
+
+        <div class="card-header bg-light">
+            <div class="d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">Gestión de Componentes</h5>
+                <button class="btn btn-success" @onclick="ReturnAction">Regresar</button>
+            </div>
+        </div>
+        <div class="card-body">
+        @if (formulaBloqueada)
+        {
+            <div class="alert alert-warning border-warning" role="alert">
+                <h6 class="alert-heading">
+                    <i class="fas fa-lock me-2"></i>Fórmula bloqueada: solo lectura
+                </h6>
+                <p class="mb-2">@mensajeBloqueo</p>
+                @if (resultadoValidacion != null)
+                {
+                    <hr />
+                    <div class="row g-2 mb-0">
+                        @if (!string.IsNullOrEmpty(resultadoValidacion.CodigoPadre))
+                        {
+                            <div class="col-md-6">
+                                <strong>Producto padre:</strong>
+                                @resultadoValidacion.CodigoPadre - @resultadoValidacion.DescripcionPadre
+                            </div>
+                        }
+                        @if (resultadoValidacion.NroPedido.HasValue)
+                        {
+                            <div class="col-md-3">
+                                <strong>Nro. de pedido:</strong> @resultadoValidacion.NroPedido
+                            </div>
+                        }
+                        @if (resultadoValidacion.FechaUltimoPedido.HasValue)
+                        {
+                            <div class="col-md-3">
+                                <strong>Fecha último pedido:</strong>
+                                @resultadoValidacion.FechaUltimoPedido.Value.ToString("dd/MM/yyyy")
+                            </div>
+                        }
+                        @if (resultadoValidacion.NroCliente.HasValue)
+                        {
+                            <div class="col-md-3">
+                                <strong>Nro. de cliente:</strong> @resultadoValidacion.NroCliente
+                            </div>
+                        }
+                        @if (!string.IsNullOrWhiteSpace(resultadoValidacion.RazonSocial))
+                        {
+                            <div class="col-md-9">
+                                <strong>Razón social:</strong> @resultadoValidacion.RazonSocial
+                            </div>
+                        }
+                        @if (!string.IsNullOrWhiteSpace(resultadoValidacion.EstructuraFormula))
+                        {
+                            <div class="col-12">
+                                <strong>Estructura de fórmula:</strong>
+                                <div class="mt-1 ps-3 border-start border-2 border-warning">
+                                    <small class="text-muted">@resultadoValidacion.EstructuraFormula</small>
+                                </div>
+                            </div>
+                        }
+                    </div>
+                }
+            </div>
+        }
+        @if (productoTerminado != null)
+        {
+            <div class="mb-3 d-flex justify-content-between align-items-center">
+                <div class="d-flex align-items-center gap-2">
+                    <label class="mb-0">Ir a componente:</label>
+                    <select class="form-select" style="width: 300px;" @bind="componenteSeleccionado" @bind:after="OnComponenteSeleccionado">
+                        <option value="">-- Seleccionar --</option>
+                        @foreach (var item in componentesSelector)
+                        {
+                            <option value="@item.Value">@item.Text</option>
+                        }
+                    </select>
+                    @if (!string.IsNullOrEmpty(componenteSeleccionado))
+                    {
+                        <span class="badge bg-info">@coincidencias coincidencia@(coincidencias == 1 ? "" : "s")@(coincidencias > 1 ? " (F3 para navegar)" : "")</span>
+                    }
+                </div>
+                <button class="btn btn-primary" @onclick="() => mostrarBuscador = !mostrarBuscador" disabled="@formulaBloqueada">
                     <i class="fas fa-plus-circle me-2"></i>Agregar Componente
                 </button>
             </div>
@@ -63,20 +165,20 @@
                             </tr>
                         </thead>
                         <tbody>
-                            @foreach (var componente in componentesAsignados)
+                            @for (var indice = 0; indice < componentesAsignados.Count; indice++)
                             {
-                                <tr>
+                                var componente = componentesAsignados[indice];
+                                <tr id="@ObtenerIdFila(indice)" class="@GetFilaClass(indice)">
                                     <td>@componente.CodiElem</td>
                                     <td>@componente.CodXElem</td>
                                     <td>@componente.MasterDescripcion</td>
 
                                     <td>
-                                        <input type="number" class="form-control form-control-sm" style="width: 100px"
-                                            @bind="componente.Unis_Form" @bind:event="oninput" />
+                                        <InputNumeroLimpio @bind-Value="componente.UsoBruto" Class="form-control form-control-sm" Placeholder="" style="width: 100px;" disabled="@formulaBloqueada" />
                                     </td>
                                     <td>@componente.UMED_FORM</td>
                                     <td>
-                                        <button class="btn btn-danger btn-sm" @onclick="() => EliminarComponente(componente)">
+                                        <button class="btn btn-danger btn-sm" @onclick="() => EliminarComponente(componente)" disabled="@formulaBloqueada">
                                             <i class="fas fa-trash"></i>
                                         </button>
                                     </td>
@@ -87,7 +189,7 @@
                 </div>
 
                 <div class="mt-3">
-                    <button class="btn btn-primary" @onclick="GuardarCambios">Guardar Cambios</button>
+                    <button class="btn btn-primary" @onclick="GuardarCambios" disabled="@formulaBloqueada">Guardar Cambios</button>
                 </div>
             }
         }
@@ -96,23 +198,45 @@
             <div class="alert alert-info">Cargando información del producto...</div>
         }
     </div>
-</div>
+    </div>
+}
+
+@implements IAsyncDisposable
 
 @code {
     [Parameter]
     public string? Id { get; set; }
 
+    // Módulo JS con el helper de scroll (se importa bajo demanda, sin depender de scripts globales)
+    private IJSObjectReference? scrollModule;
+
     private Master? productoTerminado;
     private List<Formulas> componentesAsignados = new();
     private string resultado = string.Empty;
     private bool mostrarBuscador = false;
+    private bool validando = true;
+    private bool formulaBloqueada = false;
+    private string mensajeBloqueo = string.Empty;
+    private FormulaValidationResultDTO? resultadoValidacion;
 
+    // Variables para el selector de componentes
+    private string componenteSeleccionado = string.Empty;
+    private List<(string Value, string Text)> componentesSelector = new();
+    private int indiceCoincidenciaActual = 0;
+    private int coincidencias = 0;
+    private int? filaResaltada = null;
+
+    // Validar que el usuario tenga permiso para acceder a esta página antes de mostrar el contenido
     protected override async Task OnInitializedAsync()
     {
+        await PageAccess.RequiereAccesoAsync("/master/componentes/{Id}");
+        validando = false;
+
         await CargarProductoTerminado();
         if (productoTerminado != null)
         {
             await CargarComponentes();
+            await ValidarBloqueoFormula();
         }
     }
     private async Task<string> ObtenerDescripcion(int codielem)
@@ -177,10 +301,143 @@
                     componente.MasterDescripcion = await ObtenerDescripcion(componente.CodiElem.Value);
                 }
             }
+            
+            // Cargar el selector de componentes
+            CargarSelectorComponentes();
         }
         else
         {
             componentesAsignados = new List<Formulas>();
+            componentesSelector = new List<(string, string)>();
+        }
+    }
+
+    private void CargarSelectorComponentes()
+    {
+        componentesSelector = new List<(string, string)>();
+        
+        if (componentesAsignados == null || !componentesAsignados.Any())
+        {
+            return;
+        }
+
+        // Agrupar por código externo para mostrar los valores posibles
+        var agrupados = componentesAsignados
+            .Where(c => !string.IsNullOrEmpty(c.CodXElem))
+            .GroupBy(c => c.CodXElem)
+            .OrderBy(g => g.Key);
+
+        foreach (var grupo in agrupados)
+        {
+            var primerComponente = grupo.First();
+            var texto = $"{grupo.Key} - {primerComponente.MasterDescripcion ?? "Sin descripción"}";
+            componentesSelector.Add((grupo.Key, texto));
+        }
+    }
+
+    private async Task OnComponenteSeleccionado()
+    {
+        if (string.IsNullOrEmpty(componenteSeleccionado))
+        {
+            filaResaltada = null;
+            coincidencias = 0;
+            indiceCoincidenciaActual = 0;
+            return;
+        }
+
+        // Buscar los índices de fila que coinciden con el código seleccionado
+        var indicesCoincidentes = ObtenerIndicesCoincidentes();
+
+        coincidencias = indicesCoincidentes.Count;
+        indiceCoincidenciaActual = 0;
+
+        if (coincidencias > 0)
+        {
+            await ResaltarFilaAsync(indicesCoincidentes[0]);
+        }
+    }
+
+    private List<int> ObtenerIndicesCoincidentes()
+    {
+        var indices = new List<int>();
+
+        for (var i = 0; i < componentesAsignados.Count; i++)
+        {
+            if (componentesAsignados[i].CodXElem == componenteSeleccionado)
+            {
+                indices.Add(i);
+            }
+        }
+
+        return indices;
+    }
+
+    /// <summary>
+    /// Resalta la fila indicada y la desplaza a la vista para que quede visible en pantalla
+    /// </summary>
+    private async Task ResaltarFilaAsync(int indiceFila)
+    {
+        filaResaltada = indiceFila;
+        StateHasChanged();
+
+        // Esperar a que Blazor renderice la clase de resaltado antes de hacer el scroll
+        await Task.Yield();
+
+        try
+        {
+            scrollModule ??= await JSRuntime.InvokeAsync<IJSObjectReference>("import", "./js/scrollHelper.js");
+            await scrollModule.InvokeVoidAsync("scrollToElementById", ObtenerIdFila(indiceFila));
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[MaestroComponentes] No se pudo hacer scroll a la fila {indiceFila}: {ex.Message}");
+        }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (scrollModule is not null)
+        {
+            try
+            {
+                await scrollModule.DisposeAsync();
+            }
+            catch (JSDisconnectedException)
+            {
+                // La conexión JS ya no está disponible, no hay nada que liberar
+            }
+        }
+    }
+
+    private async Task NavegarSiguienteCoincidencia()
+    {
+        if (string.IsNullOrEmpty(componenteSeleccionado) || coincidencias <= 1)
+        {
+            return;
+        }
+
+        var indicesCoincidentes = ObtenerIndicesCoincidentes();
+        if (indicesCoincidentes.Count == 0)
+        {
+            return;
+        }
+
+        indiceCoincidenciaActual = (indiceCoincidenciaActual + 1) % indicesCoincidentes.Count;
+        await ResaltarFilaAsync(indicesCoincidentes[indiceCoincidenciaActual]);
+    }
+
+    private string ObtenerIdFila(int indiceFila) => $"fila-componente-{indiceFila}";
+
+    private string GetFilaClass(int indiceFila)
+    {
+        return filaResaltada.HasValue && filaResaltada.Value == indiceFila ? "table-warning" : "";
+    }
+
+    private async Task OnKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "F3")
+        {
+            await NavegarSiguienteCoincidencia();
         }
     }
 
@@ -224,6 +481,9 @@
 
         componentesAsignados.Remove(componente);
         ReordenarComponentes();
+
+        // Los índices de fila cambiaron, se limpia el resaltado para no marcar una fila equivocada
+        filaResaltada = null;
         StateHasChanged();
     }
 
@@ -262,6 +522,50 @@
     private void ReturnAction()
     {
         navigation.NavigateTo($"/master/edit/{Id}");
+    }
+
+    /// <summary>
+    /// Valida si se debe bloquear la modificación de la fórmula
+    /// </summary>
+    private async Task ValidarBloqueoFormula()
+    {
+        if (productoTerminado == null) return;
+
+        try
+        {
+            // Obtener el IdFlexoft del usuario actual
+            var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+            var user = authState.User;
+            var idFlexoftClaim = user.FindFirst("IdFlexoft")?.Value;
+            int? numUsuar = null;
+            if (int.TryParse(idFlexoftClaim, out int idFlexoft))
+            {
+                numUsuar = idFlexoft;
+            }
+
+            // Llamar al endpoint de validación
+            var url = $"api/formulas/validar-bloqueo/{productoTerminado.Codint}";
+            if (numUsuar.HasValue)
+            {
+                url += $"?numUsuar={numUsuar.Value}";
+            }
+
+            var response = await repository.Get<FormulaValidationResultDTO>(url);
+
+            if (!response.Error && response.Response != null)
+            {
+                formulaBloqueada = response.Response.DebeBloquear;
+                mensajeBloqueo = response.Response.Mensaje ?? string.Empty;
+                resultadoValidacion = formulaBloqueada ? response.Response : null;
+            }
+        }
+        catch (Exception)
+        {
+            // Si hay error en la validación, no bloqueamos para no impedir la operatoria
+            formulaBloqueada = false;
+            mensajeBloqueo = string.Empty;
+            resultadoValidacion = null;
+        }
     }
 }
 

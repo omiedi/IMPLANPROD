@@ -1,4 +1,5 @@
 @using Microsoft.AspNetCore.Components.Authorization
+@using System.Security.Claims
 @inject AuthenticationStateProvider AuthStateProvider
 
  @inject NavigationManager NavigationManager
@@ -20,7 +21,9 @@
 <div class="@NavMenuCssClass nav-scrollable" @onclick="ToggleNavMenu">
     <nav class="flex-column">
         <AuthorizeView>
-            <Authorized>
+            <Authorized Context="authContext">
+                @{ var rolActual = (authContext.User.FindFirst(System.Security.Claims.ClaimTypes.Role)?.Value ?? "").Trim().ToUpperInvariant();
+                   var esAdmin = rolActual == "SUPERADMIN" || rolActual == "ADMINISTRADOR" || rolActual == "ADMIN"; }
                 <!-- Información del usuario: Empresa y Dependencia -->
                 <div class="px-3 py-2">
                     <UserInfoDisplay />
@@ -30,6 +33,11 @@
                 <div class="nav-item px-3">
                     <NavLink class="nav-link text-white" href="" Match="NavLinkMatch.All">
                         <i class="fas fa-home" aria-hidden="true"></i> Inicio
+                    </NavLink>
+                </div>
+                <div class="nav-item px-3">
+                    <NavLink class="nav-link text-white" href="/mi-perfil">
+                        <i class="fas fa-user" aria-hidden="true"></i> Mi Perfil
                     </NavLink>
                 </div>
                 <div class="nav-item px-3">
@@ -47,6 +55,11 @@
                         <i class="fas fa-user-tie" aria-hidden="true"></i> Ficha Productos
                     </NavLink>
                 </div>
+                <div class="nav-item px-3">
+                    <NavLink class="nav-link text-white" href="/master-baja">
+                        <i class="fas fa-trash" aria-hidden="true"></i> Productos Baja
+                    </NavLink>
+                </div>
         <div class="nav-item px-3">
             <NavLink class="nav-link text-white" href="/Stock-index">
                 <i class="fas fa-user-tie" aria-hidden="true"></i> Stocks
@@ -56,6 +69,28 @@
             <NavLink class="nav-link text-white" href="/ordenfabricacion">
                 <i class="fas fa-cogs" aria-hidden="true"></i> Fabricación
             </NavLink>
+        </div>
+        <div class="nav-item px-3">
+            <NavLink class="nav-link text-white" href="/trazabilidad-of-serie">
+                <i class="fas fa-project-diagram" aria-hidden="true"></i> Trazabilidad O.F.-Serie
+            </NavLink>
+        </div>
+        <div class="nav-item px-3">
+            <button class="nav-link text-white w-100 text-start border-0 bg-transparent" @onclick="ToggleIngenieriaMenu">
+                <i class="fas fa-drafting-compass" aria-hidden="true"></i> Ingeniería
+                <i class="fas @(ingenieriaMenuExpanded ? "fa-chevron-up" : "fa-chevron-down") float-end"></i>
+            </button>
+            @if (ingenieriaMenuExpanded)
+            {
+                <div class="submenu ps-4">
+                    <NavLink class="nav-link text-white" href="/ingenieria/documentos" title="Documentos de Ingeniería">
+                        <i class="fas fa-file-alt" aria-hidden="true"></i> Documentos
+                    </NavLink>
+                    <NavLink class="nav-link text-white" href="/ficha-calibracion" title="Instrumentos de Medición y Ensayo">
+                        <i class="fas fa-ruler-combined" aria-hidden="true"></i> I. Medición/Ensayo
+                    </NavLink>
+                </div>
+            }
         </div>
         <div class="nav-item px-3">
             <NavLink class="nav-link text-white" href="/capacidad-planeamiento">
@@ -78,6 +113,11 @@
             </NavLink>
         </div>
         <div class="nav-item px-3">
+            <NavLink class="nav-link text-white" href="/oc-sucursal">
+                <i class="fas fa-truck" aria-hidden="true"></i> OC Sucursal
+            </NavLink>
+        </div>
+        <div class="nav-item px-3">
             <NavLink class="nav-link text-white" href="/recepcion/selproveedor">
                 <i class="fas fa-box-open" aria-hidden="true"></i> Recepción
             </NavLink>
@@ -95,8 +135,17 @@
             @if (remitosMenuExpanded)
             {
                 <div class="submenu ps-4">
+                    <NavLink class="nav-link text-white" href="/remitos">
+                        <i class="fas fa-list" aria-hidden="true"></i> Ver Remitos
+                    </NavLink>
                     <NavLink class="nav-link text-white" href="/remitos/cliente">
                         <i class="fas fa-plus-circle" aria-hidden="true"></i> Nuevo Remito
+                    </NavLink>
+                    <NavLink class="nav-link text-white" href="/remitos/traslado">
+                        <i class="fas fa-exchange-alt" aria-hidden="true"></i> Remito Traslado
+                    </NavLink>
+                    <NavLink class="nav-link text-white" href="/remitos/traslado-index">
+                        <i class="fas fa-list-alt" aria-hidden="true"></i> Ver Traslados
                     </NavLink>
                     <NavLink class="nav-link text-white" href="/remitos/anular">
                         <i class="fas fa-ban" aria-hidden="true"></i> Anulación de Remito
@@ -130,13 +179,13 @@
                     <NavLink class="nav-link text-white" href="/entrega-orden-reparacion" title="Entrega de Orden de Reparación">
                         <i class="fas fa-shipping-fast" aria-hidden="true"></i> Entrega
                     </NavLink>
-                    <NavLink class="nav-link text-white" href="/material-suministrado-cliente" title="Material Suministrado por el Cliente">
+                    @* Acceso oculto temporalmente (no eliminar): Material Suministrado por el Cliente *@
+                    @* <NavLink class="nav-link text-white" href="/material-suministrado-cliente" title="Material Suministrado por el Cliente">
                         <i class="fas fa-box" aria-hidden="true"></i> Mat.Sum.Cte.
-                    </NavLink>
+                    </NavLink> *@
                 </div>
             }
         </div>
-
                 <div class="nav-category text-white px-3 py-2">Reportes</div>
                 <div class="nav-item px-3">
                     <NavLink class="nav-link text-white" href="/materiales-consignacion">
@@ -156,60 +205,102 @@
                     </NavLink>
                 </div> *@
 
-                <div class="nav-category text-white px-3 py-2 d-flex justify-content-between align-items-center" @onclick="ToggleConfigMenu" style="cursor: pointer">
-                    Configuración
-                    <i class="fas @(configMenuCollapsed ? "fa-chevron-down" : "fa-chevron-up")" aria-hidden="true"></i>
-                </div>
-                <div class="config-submenu @(configMenuCollapsed ? "d-none" : "")">
-                    <div class="nav-item px-3">
-                        <NavLink class="nav-link text-white" href="countries">
-                            <i class="fas fa-globe" aria-hidden="true"></i> Países
-                        </NavLink>
-                    </div>
-                    <div class="nav-item px-3">
-                        <NavLink class="nav-link text-white" href="empresas">
-                            <i class="fas fa-building" aria-hidden="true"></i> Empresa
-                        </NavLink>
-                    </div>
-                    <div class="nav-item px-3">
-                        <NavLink class="nav-link text-white" href="/configuracion/email">
-                            <i class="fas fa-envelope" aria-hidden="true"></i> Mail Saliente
-                        </NavLink>
-                    </div>
-                    <div class="nav-item px-3">
-                        <NavLink class="nav-link text-white" href="/configuracion/migracion">
-                            <i class="fas fa-database" aria-hidden="true"></i> Migración Datos
-                        </NavLink>
-                    </div>
-                    <div class="nav-item px-3">
-                        <div class="submenu-title text-white d-flex justify-content-between align-items-center" @onclick="ToggleUsuariosMenu" style="cursor: pointer">
-                            <span><i class="fas fa-users me-2" aria-hidden="true"></i> Usuarios</span>
-                            <i class="fas @(usuariosMenuCollapsed ? "fa-chevron-down" : "fa-chevron-up")" aria-hidden="true"></i>
+                @if (esAdmin)
+                {
+                        <div class="nav-category text-white px-3 py-2 d-flex justify-content-between align-items-center" @onclick="ToggleConfigMenu" style="cursor: pointer">
+                            Configuración
+                            <i class="fas @(configMenuCollapsed ? "fa-chevron-down" : "fa-chevron-up")" aria-hidden="true"></i>
                         </div>
-                        <div class="usuarios-submenu ms-3 @(usuariosMenuCollapsed ? "d-none" : "")">
-                            <div class="nav-item">
-                                <NavLink class="nav-link text-white" href="usuarios">
-                                    <i class="fas fa-user-cog" aria-hidden="true"></i> Gestión Usuarios
+                        <div class="config-submenu @(configMenuCollapsed ? "d-none" : "")">
+                            <div class="nav-item px-3">
+                                <NavLink class="nav-link text-white" href="countries">
+                                    <i class="fas fa-globe" aria-hidden="true"></i> Países
                                 </NavLink>
                             </div>
-                            <div class="nav-item">
-                                <NavLink class="nav-link text-white" href="derechos-usuarios/lista">
-                                    <i class="fas fa-user-shield" aria-hidden="true"></i> Der. Usuarios
+                            <div class="nav-item px-3">
+                                <NavLink class="nav-link text-white" href="empresas">
+                                    <i class="fas fa-building" aria-hidden="true"></i> Empresa
                                 </NavLink>
                             </div>
-                        </div>
-                    </div>
-                    <div class="nav-item px-3">
-                        <NavLink class="nav-link text-white" href="perfiles">
-                            <i class="fas fa-key" aria-hidden="true"></i> Perfiles
-                        </NavLink>
-                    </div>
-                    <div class="nav-item px-3">
-                        <div class="submenu-title text-white d-flex justify-content-between align-items-center" @onclick="ToggleAuxTablesMenu" style="cursor: pointer">
-                            <span><i class="fas fa-table me-2" aria-hidden="true"></i> Tablas Auxiliares</span>
-                            <i class="fas @(auxTablesMenuCollapsed ? "fa-chevron-down" : "fa-chevron-up")" aria-hidden="true"></i>
-                        </div>
-                        <div class="aux-tables-submenu ms-3 @(auxTablesMenuCollapsed ? "d-none" : "")">
+                            <div class="nav-item px-3">
+                                <NavLink class="nav-link text-white" href="/configuracion/email">
+                                    <i class="fab fa-google" aria-hidden="true"></i> Mail Saliente (Gmail)
+                                </NavLink>
+                            </div>
+                            <div class="nav-item px-3">
+                                <NavLink class="nav-link text-white" href="/configuracion/email-empresa">
+                                    <i class="fas fa-envelope-open-text" aria-hidden="true"></i> Mail Corporativo
+                                </NavLink>
+                            </div>
+                            <div class="nav-item px-3">
+                                <NavLink class="nav-link text-white" href="/configuracion/migracion">
+                                    <i class="fas fa-database" aria-hidden="true"></i> Migración Datos
+                                </NavLink>
+                            </div>
+                            <div class="nav-item px-3">
+                                <NavLink class="nav-link text-white" href="/impresiones/remitos/disenador">
+                                    <i class="fas fa-pencil-ruler" aria-hidden="true"></i> Plantillas Impresión
+                                </NavLink>
+                            </div>
+                            <div class="nav-item px-3">
+                                <div class="submenu-title text-white d-flex justify-content-between align-items-center" @onclick="ToggleUsuariosMenu" style="cursor: pointer">
+                                    <span><i class="fas fa-users me-2" aria-hidden="true"></i> Usuarios</span>
+                                    <i class="fas @(usuariosMenuCollapsed ? "fa-chevron-down" : "fa-chevron-up")" aria-hidden="true"></i>
+                                </div>
+                                <div class="usuarios-submenu ms-3 @(usuariosMenuCollapsed ? "d-none" : "")">
+                                    <div class="nav-item">
+                                        <NavLink class="nav-link text-white" href="usuarios">
+                                            <i class="fas fa-user-cog" aria-hidden="true"></i> Gestión Usuarios
+                                        </NavLink>
+                                    </div>
+                                    <div class="nav-item">
+                                        <NavLink class="nav-link text-white" href="derechos-usuarios/lista">
+                                            <i class="fas fa-user-shield" aria-hidden="true"></i> Der. Usuarios
+                                        </NavLink>
+                                    </div>
+                                    <div class="nav-item">
+                                        <NavLink class="nav-link text-white" href="/notificaciones/admin">
+                                            <i class="fas fa-bell" aria-hidden="true"></i> Notificaciones (Admin)
+                                        </NavLink>
+                                    </div>
+                                    <div class="nav-item">
+                                        <NavLink class="nav-link text-white" href="/notificaciones/reglas-sql">
+                                            <i class="fas fa-bell" aria-hidden="true"></i> Reglas SQL (Notif.)
+                                        </NavLink>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="nav-item px-3">
+                                <NavLink class="nav-link text-white" href="perfiles">
+                                    <i class="fas fa-key" aria-hidden="true"></i> Perfiles
+                                </NavLink>
+                            </div>
+                            <div class="nav-item px-3">
+                                <NavLink class="nav-link text-white" href="/seg-modulos">
+                                    <i class="fas fa-cubes" aria-hidden="true"></i> Módulos RBAC
+                                </NavLink>
+                            </div>
+                            <div class="nav-item px-3">
+                                <NavLink class="nav-link text-white" href="/seg-paginas">
+                                    <i class="fas fa-file-alt" aria-hidden="true"></i> Páginas RBAC
+                                </NavLink>
+                            </div>
+                            <div class="nav-item px-3">
+                                <NavLink class="nav-link text-white" href="/pedidos-venta/configuracion">
+                                    <i class="fas fa-cog" aria-hidden="true"></i> Cfg. Pedidos
+                                </NavLink>
+                            </div>
+                            <div class="nav-item px-3">
+                                <NavLink class="nav-link text-white" href="/recepcion/configuracion">
+                                    <i class="fas fa-cog" aria-hidden="true"></i> Cfg. Recepciones
+                                </NavLink>
+                            </div>
+                            <div class="nav-item px-3">
+                                <div class="submenu-title text-white d-flex justify-content-between align-items-center" @onclick="ToggleAuxTablesMenu" style="cursor: pointer">
+                                    <span><i class="fas fa-table me-2" aria-hidden="true"></i> Tablas Auxiliares</span>
+                                    <i class="fas @(auxTablesMenuCollapsed ? "fa-chevron-down" : "fa-chevron-up")" aria-hidden="true"></i>
+                                </div>
+                                <div class="aux-tables-submenu ms-3 @(auxTablesMenuCollapsed ? "d-none" : "")">
                             <div class="nav-item">
                                 <NavLink class="nav-link text-white" href="/TablasAuxiliares/Depositos/Tadeposi">
                                     <i class="fas fa-warehouse" aria-hidden="true"></i> Depósitos
@@ -302,10 +393,17 @@
                                     <i class="fas fa-exclamation-triangle" aria-hidden="true"></i> Motivos Rechazo
                                 </NavLink>
                             </div>
+
+                            <div class="nav-item" title="Codigos Equivalentes de Proveedor">
+                                <NavLink class="nav-link text-white" href="/TablasAuxiliares/ReplacoProv">
+                                    <i class="fas fa-exchange-alt" aria-hidden="true"></i> Codigos Eq. x Pr.
+                                </NavLink>
+                            </div>
                             
+                                </div>
+                            </div>
                         </div>
-                    </div>
-                </div>
+                }
                 <div class="nav-item px-3">
                     <NavLink class="nav-link text-white" href="javascript:void(0)" @onclick="CerrarSesion">
                         <i class="fas fa-sign-out-alt" aria-hidden="true"></i> Cerrar Sesión
@@ -380,6 +478,7 @@
     private bool usuariosMenuCollapsed = true;
     private bool remitosMenuExpanded = false;
     private bool reparacionesMenuExpanded = false;
+    private bool ingenieriaMenuExpanded = false;
     private string? NavMenuCssClass => collapseNavMenu ? "collapse" : null;
     private System.Threading.Timer? refreshTimer;
 
@@ -388,14 +487,7 @@
     /// </summary>
     protected override void OnInitialized()
     {
-        // // Suscribirse a los cambios de estado de autenticación
         ((AuthenticationStateProvider)AuthStateProvider).AuthenticationStateChanged += AuthenticationStateChanged;
-
-        // // Configurar un temporizador para forzar la actualización periódica
-        // refreshTimer = new System.Threading.Timer(_ =>
-        // {
-        //     InvokeAsync(StateHasChanged);
-        // }, null, 0, 5000); // Actualizar cada 5 segundos
     }
 
     /// <summary>
@@ -403,7 +495,6 @@
     /// </summary>
     private void AuthenticationStateChanged(Task<AuthenticationState> task)
     {
-        // Forzar la actualización del componente cuando cambia el estado de autenticación
         InvokeAsync(StateHasChanged);
     }
 
@@ -438,6 +529,11 @@
     private void ToggleReparacionesMenu()
     {
         reparacionesMenuExpanded = !reparacionesMenuExpanded;
+    }
+
+    private void ToggleIngenieriaMenu()
+    {
+        ingenieriaMenuExpanded = !ingenieriaMenuExpanded;
     }
 
     /// <summary>

@@ -48,7 +48,20 @@ namespace IMPLANPROD.Server.Controllers
 
             if (!string.IsNullOrWhiteSpace(pagination.Filter))
             {
-                queryable = queryable.Where(x => x.Raso_Cli.ToLower().Contains(pagination.Filter.ToLower()));
+                var terms = pagination.Filter
+                    .Split('+', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries)
+                    .Select(t => t.Trim().ToLower())
+                    .Where(t => !string.IsNullOrWhiteSpace(t))
+                    .ToList();
+
+                foreach (var term in terms)
+                {
+                    var like = $"%{term}%";
+                    queryable = queryable.Where(x =>
+                        EF.Functions.Like((x.Raso_Cli ?? string.Empty).ToLower(), like) ||
+                        EF.Functions.Like(x.Nume_Cli.ToString(), like)
+                    );
+                }
             }
             if (stat_Cli == 0 || stat_Cli == 1)
             {
@@ -76,7 +89,20 @@ namespace IMPLANPROD.Server.Controllers
 
             if (!string.IsNullOrWhiteSpace(pagination.Filter))
             {
-                queryable = queryable.Where(x => x.Raso_Cli.ToLower().Contains(pagination.Filter.ToLower()));
+                var terms = pagination.Filter
+                    .Split('+', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries)
+                    .Select(t => t.Trim().ToLower())
+                    .Where(t => !string.IsNullOrWhiteSpace(t))
+                    .ToList();
+
+                foreach (var term in terms)
+                {
+                    var like = $"%{term}%";
+                    queryable = queryable.Where(x =>
+                        EF.Functions.Like((x.Raso_Cli ?? string.Empty).ToLower(), like) ||
+                        EF.Functions.Like(x.Nume_Cli.ToString(), like)
+                    );
+                }
             }
             if (stat_Cli == 0 || stat_Cli == 1)
             {
@@ -87,7 +113,13 @@ namespace IMPLANPROD.Server.Controllers
                 queryable = queryable.Where(x => x.Stat_Cli == stat_Cli);
             }
             double count = await queryable.CountAsync();
+            if (count == 0)
+            {
+                return Ok(1);
+            }
+
             double totalPages = Math.Ceiling(count / pagination.RecordsNumber);
+            totalPages = Math.Max(1, totalPages);
             return Ok(totalPages);
         }
 
@@ -130,6 +162,13 @@ namespace IMPLANPROD.Server.Controllers
                         model.Nume_Cli = maxNumeCli + 1;
                         model.Stat_Cli = 0;//si es nuevo proveedor 
                     }
+
+                    if (string.IsNullOrWhiteSpace(model.Codi_Cli))
+                    {
+                        model.Codi_Cli = $"PRO-{model.Nume_Cli:000}";
+                    }
+
+                    model.CodiEmpr ??= 0;
 
                     _context.Proveedores.Add(model);
                     await _context.SaveChangesAsync();
@@ -241,7 +280,7 @@ namespace IMPLANPROD.Server.Controllers
 
             var proveedores = await _context.Proveedores
                 .Where(x => (x.Id.ToString() == termino) ||
-                           x.Raso_Cli.ToLower().Contains(termino.ToLower()))
+                           (x.Raso_Cli ?? string.Empty).ToLower().Contains(termino.ToLower()))
                 .Take(10)
                 .ToListAsync();
 
@@ -253,7 +292,7 @@ namespace IMPLANPROD.Server.Controllers
             {
                 Id = proveedor.Id,
                 NumeCli = proveedor.Nume_Cli,
-                RazonSocial = proveedor.Raso_Cli,
+                RazonSocial = proveedor.Raso_Cli ?? string.Empty,
                 Cuit = proveedor.Cuit_Cli ?? "",
                 Telefono = proveedor.Tele_Cli ?? "",
                 Domicilio = $"{proveedor.Domi_Cli} {proveedor.Loca_Cli} {proveedor.Prov_Cli}".Trim(),

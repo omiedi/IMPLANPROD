@@ -1,5 +1,6 @@
 using IMPLANPROD.Server.Services;
 using Microsoft.AspNetCore.Http;
+using Microsoft.Extensions.Logging;
 using System.Threading.Tasks;
 
 namespace IMPLANPROD.Server.Middleware
@@ -14,14 +15,16 @@ namespace IMPLANPROD.Server.Middleware
     public class UserContextMiddleware
     {
         private readonly RequestDelegate _next;
+        private readonly ILogger<UserContextMiddleware> _logger;
 
         /// <summary>
         /// Constructor del middleware de contexto de usuario
         /// </summary>
         /// <param name="next">Siguiente middleware en la pipeline</param>
-        public UserContextMiddleware(RequestDelegate next)
+        public UserContextMiddleware(RequestDelegate next, ILogger<UserContextMiddleware> logger)
         {
             _next = next;
+            _logger = logger;
         }
 
         /// <summary>
@@ -44,15 +47,22 @@ namespace IMPLANPROD.Server.Middleware
                 // Verificar si el usuario está autenticado
                 if (user?.Identity?.IsAuthenticated == true)
                 {
-                    // Obtener y almacenar en el contexto HTTP para uso posterior
-                    var idFlexoft = usuarioFlexoftService.InterObtenerIdFlexoft(user);
-                    var codigoEmpresa = codiempresa.IObtenerCodiempresa(user);
-                    
-                    if (idFlexoft.HasValue && codigoEmpresa.HasValue)
+                    try
                     {
-                        // Guardar en los Items del contexto para acceso en controladores
-                        context.Items["UsuarioId"] = idFlexoft.Value;
-                        context.Items["CodigoEmpresa"] = codigoEmpresa.Value;
+                        var idFlexoft = usuarioFlexoftService.InterObtenerIdFlexoft(user);
+                        var codigoEmpresa = codiempresa.IObtenerCodiempresa(user);
+
+                        if (idFlexoft.HasValue && codigoEmpresa.HasValue)
+                        {
+                            context.Items["UsuarioId"] = idFlexoft.Value;
+                            context.Items["CodigoEmpresa"] = codigoEmpresa.Value;
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogWarning(ex,
+                            "[UserContextMiddleware] No se pudo establecer el contexto para {Path}. Continúa la request sin contexto enriquecido.",
+                            context.Request.Path);
                     }
                 }
             }

@@ -1,0 +1,177 @@
+@page "/master-baja"
+@using IMPLANPROD.Client.Services
+@using IMPLANPROD.Shared.Entities
+@inject IRepository repository
+@using IMPLANPROD.Shared.DTOs
+@inject NavigationManager NavigationManager
+@inject SweetAlertService sweetAlertService
+@inject PageAccessService PageAccess
+
+<PageTitle>Productos dados de baja</PageTitle>
+
+<!--
+    Componente: MasterBajaIndex.razor
+    Descripción: Listado paginado de productos dados de baja (Status = -1) con opción de restaurar (Status = 0).
+    Autor: IA Cascade (solicitud de Omar)
+    Fecha: 02/07/2026
+    Este componente sigue el estándar de páginas ABM definido en el proyecto.
+    Se muestran las columnas: Cód.Interno, Código, Descripción, U.Med., T.Material.
+    Incluye paginación y botón para restaurar productos.
+-->
+
+@if (validando)
+{
+    <p>Validando acceso...</p>
+}
+else
+{
+    <h3>Productos dados de baja</h3>
+    <div class="mb-3">
+        <button class="btn btn-secondary" @onclick="VolverListado">
+            <i class="fas fa-arrow-left"></i> Volver al listado
+        </button>
+    </div>
+
+    <div class="row mb-3">
+        <div class="col-md-4">
+            <input class="form-control" placeholder="Buscar por código o descripción..." @bind="Filter" @bind:event="oninput" />
+        </div>
+        <div class="col-md-2">
+            <button class="btn btn-outline-secondary" @onclick="()=>LoadAsync(1)"><i class="fas fa-search"></i> Buscar</button>
+        </div>
+    </div>
+
+    @if (isLoading)
+    {
+        <p>Cargando...</p>
+    }
+    else
+    {
+        <table class="table table-striped">
+            <thead>
+                <tr>
+                    <th>Cód.Interno</th>
+                    <th>Código</th>
+                    <th>Descripción</th>
+                    <th>U.Med.</th>
+                    <th>T.Material</th>
+                    <th>Acciones</th>
+                </tr>
+            </thead>
+            <tbody>
+                @if (Productos != null && Productos.Count > 0)
+                {
+                    @foreach (var producto in Productos)
+                    {
+                        <tr>
+                            <td>@producto.Codint</td>
+                            <td>@producto.Codigo</td>
+                            <td>@producto.Descripcion</td>
+                            <td>@producto.Umedida</td>
+                            <td>@(TiposMaterial.FirstOrDefault(t => t.CodigoTatimat == producto.Timate)?.Descripcion ?? "-")</td>
+                            <td>
+                                <button class="btn btn-sm btn-outline-success" @onclick="() => RestaurarProducto(producto.Id)"><i class="fas fa-undo"></i> Restaurar</button>
+                            </td>
+                        </tr>
+                    }
+                }
+                else
+                {
+                    <tr><td colspan="6">No hay productos dados de baja para mostrar.</td></tr>
+                }
+            </tbody>
+        </table>
+        <div class="d-flex justify-content-between align-items-center">
+            <button class="btn btn-outline-secondary" @onclick="()=>LoadAsync(PaginaActual-1)" disabled="@(PaginaActual == 1)">Anterior</button>
+            <span>Página @PaginaActual de @TotalPaginas</span>
+            <button class="btn btn-outline-secondary" @onclick="()=>LoadAsync(PaginaActual+1)" disabled="@(PaginaActual == TotalPaginas)">Siguiente</button>
+        </div>
+    }
+}
+
+@code {
+    // Lista de productos dados de baja
+    private List<Master> Productos = new();
+    private List<Tatimat> TiposMaterial = new();
+    private int PaginaActual = 1;
+    private int TotalPaginas = 1;
+    private int RegistrosPorPagina = 10;
+    private bool isLoading = true;
+    private bool validando = true;
+    private string? Filter = string.Empty;
+    private string? Page = string.Empty;
+
+    // Validar que el usuario tenga permiso para acceder a esta página antes de mostrar el contenido
+    protected override async Task OnInitializedAsync()
+    {
+        await PageAccess.RequiereAccesoAsync("/master-baja");
+        validando = false;
+        
+        // Cargar tipos de material
+        var responseTatimat = await repository.Get<List<Tatimat>>("api/tipomaterial");
+        if (responseTatimat.Response != null)
+        {
+            TiposMaterial = responseTatimat.Response;
+        }
+        
+        await LoadAsync();
+    }
+
+    /// <summary>
+    /// Carga los productos dados de baja (Status = -1) paginados desde el backend
+    /// </summary>
+    private async Task LoadAsync(int page = 1)
+    {
+        if (!string.IsNullOrWhiteSpace(Page))
+        {
+            page = Convert.ToInt32(Page);
+        }
+        PaginaActual = page;
+        string url1 = string.Empty;
+        string url2 = string.Empty;
+        if (string.IsNullOrEmpty(Filter))
+        {
+            url1 = $"api/master?page={page}&recordsNumber={RegistrosPorPagina}&status=-1";
+            url2 = $"api/master/totalPages?recordsNumber={RegistrosPorPagina}&status=-1";
+        }
+        else
+        {
+            var encodedFilter = Uri.EscapeDataString(Filter);
+            url1 = $"api/master?page={page}&recordsNumber={RegistrosPorPagina}&filter={encodedFilter}&status=-1";
+            url2 = $"api/master/totalPages?recordsNumber={RegistrosPorPagina}&filter={encodedFilter}&status=-1";
+        }
+        try
+        {
+            isLoading = true;
+            var responseHttp = await repository.Get<List<Master>>(url1);
+            var responseHttp2 = await repository.Get<int>(url2);
+            Productos = responseHttp.Response!;
+            TotalPaginas = responseHttp2.Response!;
+        }
+        catch (Exception ex)
+        {
+            await sweetAlertService.FireAsync("Error", ex.Message, SweetAlertIcon.Error);
+        }
+        isLoading = false;
+        StateHasChanged();
+    }
+
+    /// <summary>
+    /// Restaura un producto cambiando su Status a 0
+    /// </summary>
+    private async Task RestaurarProducto(int id)
+    {
+        var producto = await repository.Get<Master>($"/api/master/{id}");
+        if (producto.Response != null)
+        {
+            producto.Response.Status = 0;
+            await repository.Put("/api/master", producto.Response);
+            await LoadAsync(PaginaActual);
+        }
+    }
+
+    private void VolverListado()
+    {
+        NavigationManager.NavigateTo("/master-index");
+    }
+}
