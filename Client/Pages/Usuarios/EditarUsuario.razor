@@ -46,7 +46,17 @@
     }
 </style>
 
-<h3>Editar Usuario</h3>
+@if (validandoAcceso)
+{
+    <p>Validando acceso...</p>
+}
+else if (!accesoPermitido)
+{
+    <AccesoDenegado />
+}
+else
+{
+<h3>@(modoMiPerfil ? "Mi Perfil" : "Editar Usuario")</h3>
 
 @if (cargando)
 {
@@ -248,6 +258,7 @@ else
         </div>
     }
 }
+}
 
 @code {
     [Parameter]
@@ -284,6 +295,9 @@ else
     private bool emailDuplicado = false;
     private int usuarioAutenticadoId;
     private string perfilAutenticado = string.Empty;
+    private bool validandoAcceso = true;
+    private bool accesoPermitido = false;
+    private bool modoMiPerfil = false;
     private AsignadorPermisosPaginas? asignadorPermisos;
     private bool modoPerfilUsuario =>
         usuarioAutenticadoId > 0 &&
@@ -315,6 +329,13 @@ else
     protected override async Task OnInitializedAsync()
     {
         await CargarContextoUsuarioAsync();
+
+        await ValidarAccesoAsync();
+        if (!accesoPermitido)
+        {
+            return;
+        }
+
         await CargarDatos();
         // Cargar lista de países y perfiles (solo generales, dependientes se cargan en CargarDatos)
         countries = await Http.GetFromJsonAsync<List<Country>>("api/countries") ?? new List<Country>();
@@ -324,7 +345,49 @@ else
 
     protected override async Task OnParametersSetAsync()
     {
+        if (validandoAcceso || !accesoPermitido)
+        {
+            return;
+        }
+
         await CargarDatos();
+    }
+
+    /// <summary>
+    /// Controla el acceso a la pantalla.
+    /// - Usuario no autenticado: se deriva a /acceso-denegado.
+    /// - /mi-perfil: habilitado para el usuario autenticado (puede cambiar su contraseña).
+    /// - /usuarios/editar/{id} de otro usuario: sólo perfiles administradores; en caso contrario
+    ///   (por ejemplo ingresando la URL a mano) se deriva a /acceso-denegado.
+    /// </summary>
+    private async Task ValidarAccesoAsync()
+    {
+        validandoAcceso = true;
+
+        var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+        var user = authState.User;
+
+        if (user?.Identity?.IsAuthenticated != true || usuarioAutenticadoId <= 0)
+        {
+            accesoPermitido = false;
+            validandoAcceso = false;
+            NavigationManager.NavigateTo("/acceso-denegado", replace: true);
+            return;
+        }
+
+        modoMiPerfil = Id <= 0 || Id == usuarioAutenticadoId;
+
+        var esAdministrador = user.IsInRole("SUPERADMIN")
+            || user.IsInRole("ADMINISTRADOR")
+            || user.IsInRole("ADMIN");
+
+        accesoPermitido = modoMiPerfil || esAdministrador;
+        validandoAcceso = false;
+
+        if (!accesoPermitido)
+        {
+            NavigationManager.NavigateTo("/acceso-denegado", replace: true);
+        }
     }
 
     private async Task CargarDatos()
