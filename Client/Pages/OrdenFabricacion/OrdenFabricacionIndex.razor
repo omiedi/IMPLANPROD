@@ -4,6 +4,7 @@
 @using IMPLANPROD.Shared.DTOs
 @using IMPLANPROD.Shared.Entities
 @using System.Globalization
+@using System.Text.Json
 @using System.Web
 @using IMPLANPROD.Client.Pages.Reportes
 @using IMPLANPROD.Client.Shared.Components
@@ -900,6 +901,8 @@ else
     private const string COD_APLI_ANUCIEOF = "ANUCIEOF";
     private const string DES_APLI_ANUCIEOF = "Anulación Cierre Parcial de O/F";
 
+    private const string FiltrosStorageKey = "ordenfabricacion_filtros";
+
     protected override async Task OnInitializedAsync()
     {
         // Paso 1: Validar que el usuario tenga permiso para acceder a esta página
@@ -939,6 +942,9 @@ else
 
         verificandoPermisos = false;
 
+        // Restaurar filtros y página guardados al volver desde otra pantalla
+        await RestaurarFiltrosAsync();
+
         // Leer parámetros de la URL
         var uri = new Uri(navigationManager.Uri);
         var queryParams = System.Web.HttpUtility.ParseQueryString(uri.Query);
@@ -958,7 +964,7 @@ else
         {
             fechaDesde = fDesde;
         }
-        else
+        else if (!fechaDesde.HasValue)
         {
             ConfigurarFechasIniciales();
         }
@@ -977,7 +983,93 @@ else
             filter = filtroParam;
         }
         
-        await LoadAsync();
+        await LoadAsync(currentPage);
+    }
+
+    /// <summary>
+    /// Guarda los filtros y la página actual en sessionStorage para mantenerlos al volver de otra pantalla
+    /// </summary>
+    private async Task GuardarFiltrosAsync()
+    {
+        try
+        {
+            var filtros = new
+            {
+                filter,
+                estadoSeleccionado,
+                fechaDesde,
+                fechaHasta,
+                currentPage
+            };
+
+            var filtrosJson = JsonSerializer.Serialize(filtros);
+            await JS.InvokeVoidAsync("sessionStorage.setItem", FiltrosStorageKey, filtrosJson);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error al guardar filtros: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// Restaura los filtros y la página guardados en sessionStorage
+    /// </summary>
+    private async Task RestaurarFiltrosAsync()
+    {
+        try
+        {
+            var filtrosJson = await JS.InvokeAsync<string>("sessionStorage.getItem", FiltrosStorageKey);
+
+            if (!string.IsNullOrEmpty(filtrosJson))
+            {
+                var filtrosGuardados = JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(filtrosJson);
+
+                if (filtrosGuardados != null)
+                {
+                    if (filtrosGuardados.TryGetValue("filter", out var filtroGuardado)
+                        && filtroGuardado.ValueKind == JsonValueKind.String)
+                    {
+                        filter = filtroGuardado.GetString() ?? string.Empty;
+                    }
+
+                    if (filtrosGuardados.TryGetValue("estadoSeleccionado", out var estadoGuardado)
+                        && estadoGuardado.ValueKind == JsonValueKind.Number)
+                    {
+                        estadoSeleccionado = estadoGuardado.GetInt32();
+                    }
+
+                    if (filtrosGuardados.TryGetValue("fechaDesde", out var desdeGuardada)
+                        && desdeGuardada.ValueKind == JsonValueKind.String
+                        && DateTime.TryParse(desdeGuardada.GetString(), out var desde))
+                    {
+                        fechaDesde = desde;
+                    }
+
+                    if (filtrosGuardados.TryGetValue("fechaHasta", out var hastaGuardada)
+                        && hastaGuardada.ValueKind == JsonValueKind.String
+                        && DateTime.TryParse(hastaGuardada.GetString(), out var hasta))
+                    {
+                        fechaHasta = hasta;
+                    }
+
+                    if (string.IsNullOrEmpty(Page)
+                        && filtrosGuardados.TryGetValue("currentPage", out var paginaGuardada)
+                        && paginaGuardada.ValueKind == JsonValueKind.Number)
+                    {
+                        currentPage = paginaGuardada.GetInt32();
+                    }
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error al restaurar filtros: {ex.Message}");
+        }
+
+        if (currentPage <= 0)
+        {
+            currentPage = 1;
+        }
     }
 
     /// <summary>
@@ -1095,6 +1187,7 @@ else
         finally
         {
             isLoading = false;
+            await GuardarFiltrosAsync();
         }
     }
     /// <summary>
@@ -1252,6 +1345,7 @@ else
     /// </summary>
     private async Task SelectedPageAsync(int page)
     {
+        Page = string.Empty;
         await LoadAsync(page);
     }
 
@@ -1260,6 +1354,7 @@ else
     /// </summary>
     private async Task ApplyFilterAsync()
     {
+        Page = string.Empty;
         await LoadAsync(1);
     }
 
@@ -1269,6 +1364,7 @@ else
     private async Task CleanFilterAsync()
     {
         filter = string.Empty;
+        Page = string.Empty;
         await LoadAsync(1);
     }
 
@@ -1277,6 +1373,7 @@ else
     /// </summary>
     private async Task ConsultarAsync()
     {
+        Page = string.Empty;
         await LoadAsync(1);
     }
 
