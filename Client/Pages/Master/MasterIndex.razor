@@ -6,6 +6,7 @@
 @using Microsoft.AspNetCore.Components.Web
 @inject IRepository repository
 @using IMPLANPROD.Shared.DTOs
+@using System.Text.Json
 @inject NavigationManager NavigationManager
 @inject SweetAlertService sweetAlertService
 @inject IJSRuntime JS
@@ -210,8 +211,74 @@ else
     {
         await PageAccess.RequiereAccesoAsync("/master-index");
         validando = false;
-        
-        await LoadAsync();
+
+        await RestaurarFiltros();
+
+        await LoadAsync(currentPage);
+    }
+
+    /// <summary>
+    /// Guarda el filtro y la página actual en sessionStorage para mantenerlos al volver de otra pantalla
+    /// </summary>
+    private async Task GuardarFiltros()
+    {
+        try
+        {
+            var filtros = new
+            {
+                Filter,
+                currentPage
+            };
+
+            var filtrosJson = JsonSerializer.Serialize(filtros);
+            await JS.InvokeVoidAsync("sessionStorage.setItem", FiltrosStorageKey, filtrosJson);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error al guardar filtros: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// Restaura el filtro y la página guardados en sessionStorage
+    /// </summary>
+    private async Task RestaurarFiltros()
+    {
+        try
+        {
+            var filtrosJson = await JS.InvokeAsync<string>("sessionStorage.getItem", FiltrosStorageKey);
+
+            if (!string.IsNullOrEmpty(filtrosJson))
+            {
+                var filtrosGuardados = JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(filtrosJson);
+
+                if (filtrosGuardados != null)
+                {
+                    if (string.IsNullOrEmpty(Filter)
+                        && filtrosGuardados.TryGetValue("Filter", out var filtroGuardado)
+                        && filtroGuardado.ValueKind == JsonValueKind.String)
+                    {
+                        Filter = filtroGuardado.GetString() ?? string.Empty;
+                    }
+
+                    if (string.IsNullOrEmpty(Page)
+                        && filtrosGuardados.TryGetValue("currentPage", out var paginaGuardada)
+                        && paginaGuardada.ValueKind == JsonValueKind.Number)
+                    {
+                        currentPage = paginaGuardada.GetInt32();
+                    }
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error al restaurar filtros: {ex.Message}");
+        }
+
+        if (currentPage <= 0)
+        {
+            currentPage = 1;
+        }
     }
 
     private async Task LoadAsync(int page = 1)
@@ -279,6 +346,8 @@ else
         await ApplyFilterAsync();
     }
 
+    private const string FiltrosStorageKey = "master_filtros";
+
     private void ProductosBaja()
     {
         NavigationManager.NavigateTo("/master-baja");
@@ -287,22 +356,28 @@ else
     private async Task ApplyFilterAsync()
     {
         currentPage = 1;
+        Page = string.Empty;
+        await GuardarFiltros();
         await LoadAsync(currentPage);
     }
 
     private async Task SelectedPageAsync(int page)
     {
         currentPage = page;
+        Page = string.Empty;
+        await GuardarFiltros();
         await LoadAsync(page);
     }
 
-    private void NuevoProducto()
+    private async Task NuevoProducto()
     {
+        await GuardarFiltros();
         NavigationManager.NavigateTo("/master-create");
     }
 
-    private void EditarProducto(int id)
+    private async Task EditarProducto(int id)
     {
+        await GuardarFiltros();
         NavigationManager.NavigateTo($"/master/edit/{id}");
     }
 
