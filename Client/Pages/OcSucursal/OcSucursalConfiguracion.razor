@@ -1,0 +1,196 @@
+@page "/oc-sucursal/configuracion"
+@using IMPLANPROD.Shared.DTOs
+@using IMPLANPROD.Client.Repositories
+@using IMPLANPROD.Client.Services
+@inject IRepository repository
+@inject SweetAlertService sweetAlertService
+@inject NavigationManager navigationManager
+@inject PageAccessService PageAccess
+
+<PageTitle>Cfg.OC Sucursal</PageTitle>
+
+@if (validando)
+{
+    <p>Validando acceso...</p>
+}
+else if (cargando)
+{
+    <div class="text-center my-5">
+        <div class="spinner-border text-primary" role="status">
+            <span class="visually-hidden">Cargando...</span>
+        </div>
+        <p class="mt-3 text-muted">Cargando configuración...</p>
+    </div>
+}
+else
+{
+    <div class="container-fluid">
+        <div class="mb-4">
+            <h2 class="text-center fw-bold text-primary">
+                <i class="fas fa-cog me-2"></i>
+                Cfg.OC Sucursal
+            </h2>
+            <hr class="border-primary border-2 opacity-50" />
+        </div>
+
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title mb-3 text-primary">
+                    <i class="fas fa-sync-alt me-2"></i>
+                    Configuración de Sincronización Central-Sucursal
+                </h5>
+
+                <div class="mb-3">
+                    <label class="form-label fw-bold">
+                        <i class="fas fa-folder-open me-1"></i>
+                        Ruta de carpeta compartida (Intercambio) para sincronizar Pedidos de reposición de sucursal
+                    </label>
+                    <div class="input-group">
+                        <input type="text" class="form-control" @bind="syncConfig.RutaIntercambioPedidosReposicion" placeholder="Ej: \\servidor\carpeta\intercambio" />
+                        <button class="btn btn-outline-primary" type="button" @onclick="ValidarRuta">
+                            <i class="fas fa-check"></i> Validar
+                        </button>
+                    </div>
+                </div>
+
+                <div class="mb-3">
+                    <div class="form-check mb-2">
+                        <input class="form-check-input" type="checkbox" id="checkGenerar" @bind="syncConfig.GeneraPedidosReposicion" />
+                        <label class="form-check-label" for="checkGenerar">
+                            <strong>Generar archivos de Pedidos de Reposición (Sucursal)</strong>
+                            <br />
+                            <small class="text-muted">Al activar, este equipo generará archivos txt con los p.reposicion</small>
+                        </label>
+                    </div>
+
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" id="checkProcesar" @bind="syncConfig.ProcesaPedidosReposicion" />
+                        <label class="form-check-label" for="checkProcesar">
+                            <strong>Procesar archivos de Pedidos de Reposición (Central)</strong>
+                            <br />
+                            <small class="text-muted">Al activar, este equipo procesará archivos txt generados por la sucursal</small>
+                        </label>
+                    </div>
+                </div>
+
+                <div class="alert alert-info">
+                    <small>
+                        <i class="fas fa-info-circle me-1"></i>
+                        Configure la ruta y seleccione el modo de operación según el rol de este equipo (Central o Sucursal).
+                    </small>
+                </div>
+
+                <div class="d-flex gap-2 mt-3">
+                    <button class="btn btn-primary" @onclick="GuardarConfiguracionSincronizacion">
+                        <i class="fas fa-save me-1"></i> Guardar Configuración
+                    </button>
+                    <button class="btn btn-secondary" @onclick="Volver">
+                        <i class="fas fa-arrow-left me-1"></i> Volver
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private bool validando = true;
+    private bool cargando = true;
+    private SyncConfigDTO syncConfig = new SyncConfigDTO();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await PageAccess.RequiereAccesoAsync("/oc-sucursal/configuracion");
+        validando = false;
+        await CargarConfiguracionSincronizacion();
+    }
+
+    private async Task CargarConfiguracionSincronizacion()
+    {
+        try
+        {
+            var response = await repository.Get<SyncConfigDTO>("api/sync/config");
+            if (!response.Error && response.Response != null)
+            {
+                syncConfig = response.Response;
+            }
+            else
+            {
+                syncConfig = new SyncConfigDTO();
+            }
+        }
+        catch
+        {
+            syncConfig = new SyncConfigDTO();
+        }
+        finally
+        {
+            cargando = false;
+        }
+    }
+
+    private async Task ValidarRuta()
+    {
+        if (string.IsNullOrWhiteSpace(syncConfig.RutaIntercambioPedidosReposicion))
+        {
+            await sweetAlertService.FireAsync("Advertencia", "Por favor ingrese una ruta válida", SweetAlertIcon.Warning);
+            return;
+        }
+
+        if (!syncConfig.RutaIntercambioPedidosReposicion.StartsWith(@"\\"))
+        {
+            await sweetAlertService.FireAsync("Advertencia", "La ruta debe ser una ruta UNC (ej: \\\\servidor\\carpeta)", SweetAlertIcon.Warning);
+            return;
+        }
+
+        await sweetAlertService.FireAsync("Éxito", $"Ruta validada: {syncConfig.RutaIntercambioPedidosReposicion}", SweetAlertIcon.Success);
+    }
+
+    private async Task GuardarConfiguracionSincronizacion()
+    {
+        if (string.IsNullOrWhiteSpace(syncConfig.RutaIntercambioPedidosReposicion))
+        {
+            await sweetAlertService.FireAsync("Advertencia", "Por favor ingrese una ruta válida antes de guardar", SweetAlertIcon.Warning);
+            return;
+        }
+
+        if (!syncConfig.GeneraPedidosReposicion && !syncConfig.ProcesaPedidosReposicion)
+        {
+            await sweetAlertService.FireAsync("Advertencia", "Por favor seleccione al menos un modo de operación (Generar o Procesar)", SweetAlertIcon.Warning);
+            return;
+        }
+
+        try
+        {
+            var response = await repository.Post<SyncConfigDTO, object>("api/sync/config", syncConfig);
+
+            if (response.Error)
+            {
+                var mensajeError = await response.GetErrorMessageAsync();
+                await sweetAlertService.FireAsync("Error", $"No se pudo guardar la configuración: {mensajeError}", SweetAlertIcon.Error);
+                return;
+            }
+
+            var modoOperacion = syncConfig.GeneraPedidosReposicion ? "Generar archivos (Sucursal)" : "Procesar archivos (Central)";
+            if (syncConfig.GeneraPedidosReposicion && syncConfig.ProcesaPedidosReposicion)
+            {
+                modoOperacion = "Generar y Procesar archivos (Ambos modos)";
+            }
+
+            await sweetAlertService.FireAsync(
+                "Configuración Guardada",
+                $"Ruta: {syncConfig.RutaIntercambioPedidosReposicion}\nModo: {modoOperacion}",
+                SweetAlertIcon.Success
+            );
+        }
+        catch (Exception ex)
+        {
+            await sweetAlertService.FireAsync("Error", $"Error inesperado: {ex.Message}", SweetAlertIcon.Error);
+        }
+    }
+
+    private void Volver()
+    {
+        navigationManager.NavigateTo("/oc-sucursal");
+    }
+}

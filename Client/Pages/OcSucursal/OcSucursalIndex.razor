@@ -41,11 +41,6 @@
                     </button>
                 </div>
                 <div class="col-md-3 d-flex align-items-end">
-                    <button class="btn btn-info w-100" @onclick="MostrarModalSincronizacion">
-                        <i class="fas fa-sync-alt me-2"></i> Configuración
-                    </button>
-                </div>
-                <div class="col-md-3 d-flex align-items-end">
                     <button class="btn btn-success w-100" @onclick="ProcesarArchivosSincronizacion" disabled="@procesandoSincronizacion">
                         @if (procesandoSincronizacion)
                         {
@@ -238,83 +233,7 @@
     </div>
 }
 
-<!-- Modal de Configuración de Sincronización -->
-@if (mostrarModalSincronizacion)
-{
-    <div class="modal fade show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5);">
-        <div class="modal-dialog modal-lg">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h5 class="modal-title">
-                        <i class="fas fa-sync-alt me-2"></i>
-                        Configuración de Sincronización Central-Sucursal
-                    </h5>
-                    <button type="button" class="btn-close" @onclick="CerrarModalSincronizacion"></button>
-                </div>
-                <div class="modal-body">
-                    <div class="card border-primary">
-                        <div class="card-body">
-                            <!-- Sector: Sincronización de Pedidos de Reposición -->
-                            <h6 class="mb-3 text-primary">
-                                <i class="fas fa-exchange-alt me-1"></i>
-                                Sincronización de Pedidos de Reposición u Órdenes de Compra de Sucursal
-                            </h6>
 
-                            <!-- Input de ruta de carpeta compartida -->
-                            <div class="mb-3">
-                                <label class="form-label fw-bold">
-                                    <i class="fas fa-folder-open me-1"></i>
-                                    Ruta de carpeta compartida (Intercambio) para sincronizar Pedidos de reposición de sucursal
-                                </label>
-                                <div class="input-group">
-                                    <input type="text" class="form-control" @bind="syncConfig.RutaIntercambioPedidosReposicion" placeholder="Ej: \\servidor\carpeta\intercambio" />
-                                    <button class="btn btn-outline-primary" type="button" @onclick="ValidarRuta">
-                                        <i class="fas fa-check"></i> Validar
-                                    </button>
-                                </div>
-                            </div>
-
-                            <!-- Checkboxes para modo de operación -->
-                            <div class="mb-3">
-                                <div class="form-check mb-2">
-                                    <input class="form-check-input" type="checkbox" id="checkGenerar" @bind="syncConfig.GeneraPedidosReposicion" />
-                                    <label class="form-check-label" for="checkGenerar">
-                                        <strong>Generar archivos de Pedidos de Reposición (Sucursal)</strong>
-                                        <br />
-                                        <small class="text-muted">Al activar, este equipo generará archivos txt con los p.reposicion</small>
-                                    </label>
-                                </div>
-
-                                <div class="form-check">
-                                    <input class="form-check-input" type="checkbox" id="checkProcesar" @bind="syncConfig.ProcesaPedidosReposicion" />
-                                    <label class="form-check-label" for="checkProcesar">
-                                        <strong>Procesar archivos de Pedidos de Reposición (Central)</strong>
-                                        <br />
-                                        <small class="text-muted">Al activar, este equipo procesará archivos txt generados por la sucursal</small>
-                                    </label>
-                                </div>
-                            </div>
-
-                            <!-- Información adicional -->
-                            <div class="alert alert-info mt-3">
-                                <small>
-                                    <i class="fas fa-info-circle me-1"></i>
-                                    Configure la ruta y seleccione el modo de operación según el rol de este equipo (Central o Sucursal).
-                                </small>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-primary" @onclick="GuardarConfiguracionSincronizacion">
-                        <i class="fas fa-save me-1"></i> Guardar Configuración
-                    </button>
-                    <button type="button" class="btn btn-secondary" @onclick="CerrarModalSincronizacion">Cerrar</button>
-                </div>
-            </div>
-        </div>
-    </div>
-}
 
 @code {
     private List<OcSucursalConsultaDTO>? datos;
@@ -331,7 +250,6 @@
     private OcSucursalConsultaDTO? itemSeleccionado;
 
     // Variables para la configuración de sincronización
-    private bool mostrarModalSincronizacion = false;
     private SyncConfigDTO? syncConfig;
     private bool procesandoSincronizacion = false;
 
@@ -494,105 +412,7 @@
         }
     }
 
-    /// <summary>
-    /// Muestra el modal de configuración de sincronización
-    /// Este método se llama al hacer clic en el botón "Configuración de Sincronización"
-    /// </summary>
-    private void MostrarModalSincronizacion()
-    {
-        mostrarModalSincronizacion = true;
-    }
 
-    /// <summary>
-    /// Cierra el modal de configuración de sincronización
-    /// Limpia las variables relacionadas con el modal
-    /// </summary>
-    private void CerrarModalSincronizacion()
-    {
-        mostrarModalSincronizacion = false;
-    }
-
-    /// <summary>
-    /// Valida la ruta de intercambio ingresada por el usuario
-    /// Este método verifica si la ruta existe y es accesible
-    /// Realiza validaciones básicas de formato (ruta UNC)
-    /// </summary>
-    private async Task ValidarRuta()
-    {
-        // Verificar que la ruta no esté vacía
-        if (string.IsNullOrWhiteSpace(syncConfig?.RutaIntercambioPedidosReposicion))
-        {
-            await sweetAlertService.FireAsync("Advertencia", "Por favor ingrese una ruta válida", SweetAlertIcon.Warning);
-            return;
-        }
-
-        // Validación básica de formato de ruta UNC (Universal Naming Convention)
-        // Las rutas UNC deben comenzar con \\ (doble barra invertida)
-        if (!syncConfig.RutaIntercambioPedidosReposicion.StartsWith(@"\\"))
-        {
-            await sweetAlertService.FireAsync("Advertencia", "La ruta debe ser una ruta UNC (ej: \\\\servidor\\carpeta)", SweetAlertIcon.Warning);
-            return;
-        }
-
-        // Aquí se podría agregar una llamada al backend para validar la ruta
-        // Por ahora mostramos un mensaje de éxito simulado
-        // En el futuro, se podría implementar un endpoint en el servidor
-        // que verifique si la ruta existe y es accesible desde el servidor
-        await sweetAlertService.FireAsync("Éxito", $"Ruta validada: {syncConfig.RutaIntercambioPedidosReposicion}", SweetAlertIcon.Success);
-    }
-
-    /// <summary>
-    /// Guarda la configuración de sincronización
-    /// Este método persiste la configuración en la tabla SyncConfig
-    /// </summary>
-    private async Task GuardarConfiguracionSincronizacion()
-    {
-        // Validar que se haya ingresado una ruta
-        if (string.IsNullOrWhiteSpace(syncConfig?.RutaIntercambioPedidosReposicion))
-        {
-            await sweetAlertService.FireAsync("Advertencia", "Por favor ingrese una ruta válida antes de guardar", SweetAlertIcon.Warning);
-            return;
-        }
-
-        // Validar que se haya seleccionado al menos un modo de operación
-        if (!syncConfig.GeneraPedidosReposicion && !syncConfig.ProcesaPedidosReposicion)
-        {
-            await sweetAlertService.FireAsync("Advertencia", "Por favor seleccione al menos un modo de operación (Generar o Procesar)", SweetAlertIcon.Warning);
-            return;
-        }
-
-        try
-        {
-            // Guardar la configuración en el backend
-            var response = await repository.Post<SyncConfigDTO, object>("api/sync/config", syncConfig);
-
-            if (response.Error)
-            {
-                var mensajeError = await response.GetErrorMessageAsync();
-                await sweetAlertService.FireAsync("Error", $"No se pudo guardar la configuración: {mensajeError}", SweetAlertIcon.Error);
-                return;
-            }
-
-            var modoOperacion = syncConfig.GeneraPedidosReposicion ? "Generar archivos (Sucursal)" : "Procesar archivos (Central)";
-            if (syncConfig.GeneraPedidosReposicion && syncConfig.ProcesaPedidosReposicion)
-            {
-                modoOperacion = "Generar y Procesar archivos (Ambos modos)";
-            }
-
-            await sweetAlertService.FireAsync(
-                "Configuración Guardada",
-                $"Ruta: {syncConfig.RutaIntercambioPedidosReposicion}\nModo: {modoOperacion}",
-                SweetAlertIcon.Success
-            );
-
-            // Cerrar el modal después de guardar
-            CerrarModalSincronizacion();
-        }
-        catch (Exception ex)
-        {
-            await sweetAlertService.FireAsync("Error", $"Error inesperado: {ex.Message}", SweetAlertIcon.Error);
-        }
-    }
 
     // ========================================================================
     // MÉTODOS DE PROCESAMIENTO DE SINCRONIZACIÓN
