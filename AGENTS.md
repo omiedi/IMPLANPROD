@@ -108,6 +108,14 @@ Cuando se pide crear un ABM de una tabla en IMPLANPROD, usar la estructura míni
 
 ---
 
+## 11. Documentación de Reglas de Negocio
+
+- Toda modificación o nueva funcionalidad debe incluir comentarios claros que expliquen las reglas de negocio, el circuito y las decisiones del código.
+- El objetivo es que un desarrollador junior (y una IA) pueda seguir el circuito sin tener que adivinar las reglas de negocio.
+- Usar `<summary>` en métodos, comentarios en bloques críticos del markup y notas en puntos donde se permite comportamientos no obvios (por ejemplo, transferir sin stock).
+
+---
+
 ## 10. Workflows Disponibles
 
 Los siguientes procedimientos están documentados en `.devin/workflows/`:

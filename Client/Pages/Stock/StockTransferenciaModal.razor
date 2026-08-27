@@ -78,10 +78,6 @@
                                 <label class="form-label">Cantidad a Transferir</label>
                                 <InputNumber class="form-control" @bind-Value="transferencia.CantidadTransferir" />
                                 <ValidationMessage For="@(() => transferencia.CantidadTransferir)" />
-                                @if (transferencia.CantidadTransferir > transferencia.StockOrigen)
-                                {
-                                    <div class="text-danger">La cantidad a transferir no puede ser mayor al stock disponible (@transferencia.StockOrigen.ToString("N2"))</div>
-                                }
                             </div>
 
                             <div class="mb-3">
@@ -107,7 +103,7 @@
                             <div class="modal-footer">
                                 <button type="button" class="btn btn-secondary" @onclick="OnClose" disabled="@procesando">Cancelar</button>
                                 <button type="submit" class="btn btn-primary"
-                                disabled="@(procesando || transferencia.CantidadTransferir > transferencia.StockOrigen)">
+                                disabled="@procesando">
                                     @if (procesando)
                                     {
                                         <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
@@ -254,6 +250,10 @@
                    PermitirPrecio="false"
                    OnProductoSeleccionadoCantidad="OnProductoSeleccionado" />
 
+<ValeTransferenciaModal Vale="valeTransferencia"
+                         @bind-Mostrar="mostrarVale"
+                         OnCerrar="() => mostrarVale = false" />
+
 @code {
     private StockTransferenciaDTO transferencia = new();
     private StockTransferenciaMultipleDTO transferenciaMultiple = new() { Fecha = DateTime.Today };
@@ -267,6 +267,9 @@
     [Parameter] public EventCallback OnClose { get; set; }
     [Parameter] public EventCallback OnSave { get; set; }
     [Parameter] public bool Visible { get; set; }
+
+    private ValeTransferenciaDTO? valeTransferencia;
+    private bool mostrarVale = false;
 
     protected override async Task OnInitializedAsync()
     {
@@ -371,13 +374,6 @@
     {
         if (procesando) return;
         procesando = true;
-        
-        if (transferencia.CantidadTransferir > transferencia.StockOrigen)
-        {
-            await sweetAlertService.FireAsync("Error", "La cantidad a transferir no puede ser mayor al stock disponible", SweetAlertIcon.Error);
-            procesando = false;
-            return;
-        }
 
         if (transferencia.DepositoOrigen == transferencia.DepositoDestino)
         {
@@ -388,14 +384,17 @@
 
         try
         {
-            var response = await repository.Post("api/stockTransferencia/transferencia", transferencia);
+            var response = await repository.Post<StockTransferenciaDTO, ValeTransferenciaDTO>("api/stockTransferencia/transferencia", transferencia);
             if (response.Error)
             {
                 var mensaje = await response.HttpResponseMessage.Content.ReadAsStringAsync();
                 await sweetAlertService.FireAsync("Error", mensaje, SweetAlertIcon.Error);
+                procesando = false;
                 return;
             }
 
+            valeTransferencia = response.Response;
+            mostrarVale = true;
             await sweetAlertService.FireAsync("Éxito", "Transferencia realizada correctamente", SweetAlertIcon.Success);
             await OnSave.InvokeAsync();
             procesando = false;
@@ -428,7 +427,7 @@
 
         try
         {
-            var response = await repository.Post("api/stockTransferencia/transferencia-multiple", transferenciaMultiple);
+            var response = await repository.Post<StockTransferenciaMultipleDTO, ValeTransferenciaDTO>("api/stockTransferencia/transferencia-multiple", transferenciaMultiple);
             if (response.Error)
             {
                 var mensaje = await response.HttpResponseMessage.Content.ReadAsStringAsync();
@@ -437,6 +436,8 @@
                 return;
             }
 
+            valeTransferencia = response.Response;
+            mostrarVale = true;
             await sweetAlertService.FireAsync("Éxito", "Transferencia múltiple realizada correctamente", SweetAlertIcon.Success);
             await OnSave.InvokeAsync();
             procesando = false;

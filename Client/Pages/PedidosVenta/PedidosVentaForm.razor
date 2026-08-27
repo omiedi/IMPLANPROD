@@ -9,6 +9,7 @@
 @inject SweetAlertService sweetAlertService
 @inject CambiosNoGuardadosService cambiosService
 @inject FiltrosPedidosService filtrosService
+@inject DerechosUsuarioClientService derechosService
 
 
 <div class="container-fluid">
@@ -299,7 +300,7 @@
                         <!-- Campo de descuento en texto -->
                         <div class="mb-3">
                             <label class="form-label">Descuento (texto)</label>
-                            <input type="text" class="form-control" @bind="DescuentoTexto" @bind:event="oninput" placeholder="Ej: 10 o 10 + 5" />
+                            <input type="text" class="form-control" @bind="DescuentoTexto" @bind:event="oninput" placeholder="Ej: 10 o 10 + 5" readonly="@(!puedeModificarDescuento)" />
                             <small class="text-muted">Ingrese número o expresiones como "10 + 5" para descuentos sucesivos.</small>
                         </div>
 
@@ -621,6 +622,7 @@ OnClose="TerminarCicloSeleccionProductos" />
     // Monto de descuento editable en $ y % (sincronizados)
     private decimal descuentoMonto = 0m;
     private decimal descuentoPorcentaje = 0m;
+    private bool puedeModificarDescuento = false;
 
     // Total Neto calculado como suma(Cantidad * Precio)
     private decimal TotalNeto => productosPedido.Sum(p => p.Cantidad * p.Precio);
@@ -999,6 +1001,13 @@ OnClose="TerminarCicloSeleccionProductos" />
     {
         // Limpiar estado de cambios al inicializar
         cambiosService.LimpiarEstado();
+
+        // Verificar derecho MODIDESC para habilitar/deshabilitar el campo de descuento (NOMESS = sin mensaje)
+        var nivelDescuento = await derechosService.VerificarDerechoAsync(
+            "MODIDESC",
+            "MODIFICAR DESCUENTO EN PANTALLA",
+            mostrarMensaje: false);
+        puedeModificarDescuento = nivelDescuento >= 2;
 
         // Cargar condiciones de pago y vendedores
         await CargarCondicionesPago();

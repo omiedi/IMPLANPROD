@@ -101,6 +101,84 @@ window.imprimirElemento = function (elementId) {
     }, 500);
 };
 
+/**
+ * Imprime el Vale de Transferencias de Stock en una ventana aparte,
+ * ocupando una sola hoja A4, centrado por los márgenes de @page.
+ * Se usa una ventana nueva (en lugar del truco visibility:hidden sobre
+ * el propio modal) porque los contenedores de Bootstrap (.modal, .modal-dialog,
+ * .modal-content) generan contextos de posicionamiento/scroll que rompían el
+ * cálculo de una sola página al imprimir directamente desde el modal.
+ * @param {string} elementId - ID del elemento que contiene el vale (areaImpresionVale)
+ */
+window.imprimirValeTransferencia = function (elementId) {
+    const elemento = document.getElementById(elementId);
+    if (!elemento) {
+        console.error('No se encontró el elemento con ID:', elementId);
+        return;
+    }
+
+    const contenido = elemento.innerHTML;
+    const ventanaImpresion = window.open('', '_blank', 'width=900,height=700');
+
+    if (!ventanaImpresion) {
+        alert('No se pudo abrir la ventana de impresión. Por favor, permita las ventanas emergentes para este sitio.');
+        return;
+    }
+
+    ventanaImpresion.document.write(`
+        <!DOCTYPE html>
+        <html>
+            <head>
+                <meta charset="UTF-8">
+                <title>Vale de Transferencias de Stock</title>
+                <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+                <style>
+                    @page {
+                        size: A4;
+                        margin: 10mm;
+                    }
+                    html, body {
+                        margin: 0;
+                        padding: 0;
+                    }
+                    body {
+                        font-family: 'Times New Roman', Times, serif;
+                        font-size: 11pt;
+                    }
+                    .vale-transferencia {
+                        border: 1px solid #000;
+                        min-height: 277mm;
+                        box-sizing: border-box;
+                        padding: 5mm;
+                        display: flex;
+                        flex-direction: column;
+                    }
+                    .vale-detalle {
+                        flex: 1 1 auto;
+                    }
+                    .table {
+                        font-size: 12pt;
+                    }
+                </style>
+            </head>
+            <body>
+                ${contenido}
+            </body>
+        </html>
+    `);
+
+    ventanaImpresion.document.close();
+
+    setTimeout(function () {
+        try {
+            ventanaImpresion.focus();
+            ventanaImpresion.print();
+        } catch (error) {
+            console.error('Error al intentar imprimir el vale:', error);
+        }
+    }, 500);
+};
+
 window.habilitarBotonMasterIndex = function () {
     const botonMaster = document.getElementById('btnImprimirMaster');
     if (botonMaster) {

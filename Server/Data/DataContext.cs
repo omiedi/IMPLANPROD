@@ -537,6 +537,16 @@ namespace IMPLANPROD.Server.Data
         /// </summary>
         public required DbSet<Trazarec> Trazarecs { get; set; }
 
+        /// <summary>
+        /// Tabla SOLICITUDES - Seguimiento de solicitudes de usuarios/clientes
+        /// </summary>
+        public required DbSet<Solicitud> Solicitudes { get; set; }
+
+        /// <summary>
+        /// Tabla SOLICITUDES_AVANCES - Historial de avances de solicitudes
+        /// </summary>
+        public required DbSet<SolicitudAvance> SolicitudesAvances { get; set; }
+
         #endregion
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)

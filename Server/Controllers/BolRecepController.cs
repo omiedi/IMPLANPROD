@@ -119,7 +119,7 @@ namespace MantenimientoImp.Server.Controllers
                         // 1. Actualizar la cantidad recibida en la orden de compra
                         var ordenCompraDetalle = await _context.Ocomdetas
                             .FirstOrDefaultAsync(o => o.NumeOcom == material.NumeroOrdenCompra
-                                                 && o.StatOcom == 0 // para que busque en las activas
+                                                 && o.StatOcom != -1 && o.StatOcom < 8 // para que busque en las activas
                                                  && o.NuOrdItem == material.NumeroOrdenItem);
 
                         if (ordenCompraDetalle != null)

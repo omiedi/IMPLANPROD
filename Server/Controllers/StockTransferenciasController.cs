@@ -39,7 +39,7 @@ namespace IMPLANPROD.Server.Controllers
         }
 
         [HttpPost("transferencia")]
-        public async Task<ActionResult> RealizarTransferencia([FromBody] StockTransferenciaDTO transferencia)
+        public async Task<ActionResult<ValeTransferenciaDTO>> RealizarTransferencia([FromBody] StockTransferenciaDTO transferencia)
         {
             if (!ModelState.IsValid)
             {
@@ -58,8 +58,9 @@ namespace IMPLANPROD.Server.Controllers
                 var secuencialCompleto = await _documentNumberGenerator.GenerateNextDocumentNumberAsync("TR");
                 // Extraer solo el número del formato "TR.000000"
                 var numeroSecuencial = int.Parse(secuencialCompleto.Split('.').Last());
-                // Formato YMMDD: año 1 dígito (últimos 2 dígitos del año % 10) + mes + día
-                var seccion = $"{fecha.Year % 10}{fecha:MMdd}";
+                // Formato YYMMDD: año 2 dígitos (últimos 2 dígitos del año) + mes + día
+                var anioCorto = fecha.Year % 100;
+                var seccion = $"{anioCorto:D2}{fecha:MMdd}";
                 
                 // TODO: CENTRALIZACIÓN_CONTEXTO_USUARIO - Uso del servicio centralizado para obtener información del usuario
                 int? idFlexoft = _userContextService.GetCurrentUserId();
@@ -74,7 +75,7 @@ namespace IMPLANPROD.Server.Controllers
                 // Validar trazabilidad y lote antes de procesar
                 var producto = await _context.masters
                     .Where(m => m.Codint == transferencia.CodigoRepuesto)
-                    .Select(m => new { m.Codint, m.Codigo, m.Trazable })
+                    .Select(m => new { m.Codint, m.Codigo, m.Trazable, m.Umedida })
                     .FirstOrDefaultAsync();
 
                 if (producto == null)
@@ -140,8 +141,8 @@ namespace IMPLANPROD.Server.Controllers
                     Descrip = transferencia.Descripcion,
                     DoPriCor = $"TR.{numeroSecuencial}",
                     DoPriLar = $"TR.{numeroSecuencial}",
-                    DoSecCor = seccion,
-                    DoSecLar = seccion,
+                    DoSecCor = $"TR.{seccion}",
+                    DoSecLar = $"TR.{seccion}",
                     NumUsuar = idFlexoft,
                     CodiEmpr = codigoEmpresa,
                     ReferCor = referenciaCompleta,
@@ -160,8 +161,8 @@ namespace IMPLANPROD.Server.Controllers
                     Descrip = transferencia.Descripcion,
                     DoPriCor = $"TR.{numeroSecuencial}",
                     DoPriLar = $"TR.{numeroSecuencial}",
-                    DoSecCor = seccion,
-                    DoSecLar = seccion,
+                    DoSecCor = $"TR.{seccion}",
+                    DoSecLar = $"TR.{seccion}",
                     NumUsuar = idFlexoft,
                     CodiEmpr = codigoEmpresa,
                     ReferCor = referenciaCompleta,
@@ -173,7 +174,42 @@ namespace IMPLANPROD.Server.Controllers
                 await _context.SaveChangesAsync();
                 await transaction.CommitAsync();
 
-                return Ok(new { Message = "Transferencia realizada con éxito" });
+                var origen = await _context.Tadeposi
+                    .AsNoTracking()
+                    .Where(d => d.CodigoDepo == transferencia.DepositoOrigen)
+                    .Select(d => d.Descripcion)
+                    .FirstOrDefaultAsync();
+
+                var destino = await _context.Tadeposi
+                    .AsNoTracking()
+                    .Where(d => d.CodigoDepo == transferencia.DepositoDestino)
+                    .Select(d => d.Descripcion)
+                    .FirstOrDefaultAsync();
+
+                var vale = new ValeTransferenciaDTO
+                {
+                    Numero = $"TR.{numeroSecuencial}",
+                    DoSecCor = $"TR.{seccion}",
+                    Fecha = fecha,
+                    DepositoOrigen = transferencia.DepositoOrigen,
+                    DepositoOrigenNombre = origen ?? transferencia.DepositoOrigen.ToString(),
+                    DepositoDestino = transferencia.DepositoDestino,
+                    DepositoDestinoNombre = destino ?? transferencia.DepositoDestino.ToString(),
+                    Motivo = referenciaCompleta,
+                    Items = new List<ValeTransferenciaItemDTO>
+                    {
+                        new ValeTransferenciaItemDTO
+                        {
+                            CodigoExterno = transferencia.CodExt ?? string.Empty,
+                            Descripcion = transferencia.Descripcion ?? string.Empty,
+                            UnidadMedida = producto?.Umedida ?? string.Empty,
+                            Cantidad = transferencia.CantidadTransferir,
+                            Lote = transferencia.Lote
+                        }
+                    }
+                };
+
+                return Ok(vale);
             }
             catch (Exception ex)
             {
@@ -183,7 +219,7 @@ namespace IMPLANPROD.Server.Controllers
         }
 
         [HttpPost("transferencia-multiple")]
-        public async Task<ActionResult> RealizarTransferenciaMultiple([FromBody] StockTransferenciaMultipleDTO transferenciaMultiple)
+        public async Task<ActionResult<ValeTransferenciaDTO>> RealizarTransferenciaMultiple([FromBody] StockTransferenciaMultipleDTO transferenciaMultiple)
         {
             if (!ModelState.IsValid)
             {
@@ -207,7 +243,8 @@ namespace IMPLANPROD.Server.Controllers
                 var secuencialCompleto = await _documentNumberGenerator.GenerateNextDocumentNumberAsync("TR");
                 // Extraer solo el número del formato "TR.000000"
                 var numeroSecuencial = int.Parse(secuencialCompleto.Split('.').Last());
-                var seccion = $"{fecha.Year % 10}{fecha:MMdd}";
+                var anioCorto = fecha.Year % 100;
+                var seccion = $"{anioCorto:D2}{fecha:MMdd}";
                 
                 int? idFlexoft = _userContextService.GetCurrentUserId();
                 short? codigoEmpresa = _userContextService.GetCurrentCodigoEmpresa();
@@ -271,6 +308,19 @@ namespace IMPLANPROD.Server.Controllers
                     }
                 }
 
+                // Cargar unidades de medida de los productos transferidos
+                var codigosInternos = transferenciaMultiple.Items
+                    .Select(i => i.CodigoInterno)
+                    .Distinct()
+                    .ToList();
+
+                var umedidas = await _context.masters
+                    .AsNoTracking()
+                    .Where(m => codigosInternos.Contains(m.Codint))
+                    .ToDictionaryAsync(
+                        m => m.Codint,
+                        m => m.Umedida ?? string.Empty);
+
                 // Procesar cada item de la transferencia
                 foreach (var item in transferenciaMultiple.Items)
                 {
@@ -328,7 +378,39 @@ namespace IMPLANPROD.Server.Controllers
                 await _context.SaveChangesAsync();
                 await transaction.CommitAsync();
 
-                return Ok(new { Message = $"Transferencia múltiple realizada con éxito. {transferenciaMultiple.Items.Count} producto(s) transferido(s)." });
+                var origenMultiple = await _context.Tadeposi
+                    .AsNoTracking()
+                    .Where(d => d.CodigoDepo == transferenciaMultiple.DepositoOrigen)
+                    .Select(d => d.Descripcion)
+                    .FirstOrDefaultAsync();
+
+                var destinoMultiple = await _context.Tadeposi
+                    .AsNoTracking()
+                    .Where(d => d.CodigoDepo == transferenciaMultiple.DepositoDestino)
+                    .Select(d => d.Descripcion)
+                    .FirstOrDefaultAsync();
+
+                var vale = new ValeTransferenciaDTO
+                {
+                    Numero = $"TR.{numeroSecuencial}",
+                    DoSecCor = $"TR.{seccion}",
+                    Fecha = fecha,
+                    DepositoOrigen = transferenciaMultiple.DepositoOrigen,
+                    DepositoOrigenNombre = origenMultiple ?? transferenciaMultiple.DepositoOrigen.ToString(),
+                    DepositoDestino = transferenciaMultiple.DepositoDestino,
+                    DepositoDestinoNombre = destinoMultiple ?? transferenciaMultiple.DepositoDestino.ToString(),
+                    Motivo = transferenciaMultiple.Referencia,
+                    Items = transferenciaMultiple.Items.Select(i => new ValeTransferenciaItemDTO
+                    {
+                        CodigoExterno = i.CodigoExterno,
+                        Descripcion = i.Descripcion,
+                        UnidadMedida = umedidas.GetValueOrDefault(i.CodigoInterno),
+                        Cantidad = i.Cantidad,
+                        Lote = i.Lote
+                    }).ToList()
+                };
+
+                return Ok(vale);
             }
             catch (Exception ex)
             {

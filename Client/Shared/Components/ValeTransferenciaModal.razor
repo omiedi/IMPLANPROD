@@ -1,0 +1,174 @@
+@using IMPLANPROD.Shared.DTOs
+@using System.Globalization
+@inject IJSRuntime jsRuntime
+
+<!--
+    Componente: ValeTransferenciaModal
+    Muestra el Vale de Transferencias de Stock en formato A4 y permite imprimirlo o guardarlo como PDF.
+    El diseño se ajusta a la impresión mediante @media print.
+-->
+@if (Mostrar && Vale != null)
+{
+    <div class="modal fade show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5);" id="modalValeTransferencia">
+        <div class="modal-dialog modal-xl modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header no-print">
+                    <h5 class="modal-title">Vale de Transferencias de Stock</h5>
+                    <button type="button" class="btn-close" @onclick="Cerrar"></button>
+                </div>
+                <div class="modal-body p-4" id="areaImpresionVale">
+                    <div class="vale-transferencia">
+                        <div class="row mb-3 border-bottom pb-2 vale-cabecera">
+                            <div class="col-8">
+                                <h4 class="fw-bold mb-0">METALURGICASIAM S.A.</h4>
+                                <h5 class="fw-bold">Vale de Transferencias de Stock</h5>
+                            </div>
+                            <div class="col-4">
+                                <table class="table table-sm table-borderless mb-0">
+                                    <tbody>
+                                        <tr>
+                                            <td class="fw-bold">NÚMERO:</td>
+                                            <td class="text-end border border-dark px-2">@ObtenerNumeroSinPrefijo()</td>
+                                        </tr>
+                                        <tr>
+                                            <td class="fw-bold">FECHA:</td>
+                                            <td class="text-end border border-dark px-2">@Vale.Fecha.ToString("dd/MM/yy", CultureInfo.InvariantCulture)</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+
+                        <div class="row mb-3 vale-filtros">
+                            <div class="col-6">
+                                <div class="d-flex border border-dark p-1">
+                                    <span class="fw-bold me-2">Dep. Origen:</span>
+                                    <span>@Vale.DepositoOrigenNombre</span>
+                                </div>
+                            </div>
+                            <div class="col-6">
+                                <div class="d-flex border border-dark p-1">
+                                    <span class="fw-bold me-2">Dep. Destino:</span>
+                                    <span>@Vale.DepositoDestinoNombre</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="row mb-3 vale-filtros">
+                            <div class="col-12">
+                                <div class="d-flex border border-dark p-1">
+                                    <span class="fw-bold me-2">MOTIVO:</span>
+                                    <span>@Vale.Motivo</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="vale-detalle">
+                            <table class="table table-bordered table-sm mt-3">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th class="text-start">Código</th>
+                                        <th class="text-start">Descripción</th>
+                                        <th class="text-center" style="width: 80px;">N-Ped</th>
+                                        <th class="text-center" style="width: 60px;">U-M</th>
+                                        <th class="text-end" style="width: 90px;">Cant.</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var item in Vale.Items)
+                                    {
+                                        <tr>
+                                            <td>@item.CodigoExterno</td>
+                                            <td>@item.Descripcion</td>
+                                            <td class="text-center">@(item.NroPed.HasValue ? item.NroPed.Value.ToString() : "-")</td>
+                                            <td class="text-center">@item.UnidadMedida</td>
+                                            <td class="text-end">@item.Cantidad.ToString("N1", CultureInfo.InvariantCulture)</td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <div class="row mt-4 vale-observaciones">
+                            <div class="col-12">
+                                <p class="fw-bold mb-1">Observaciones:</p>
+                                <div class="border border-dark" style="height: 80px;"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer no-print">
+                    <button type="button" class="btn btn-primary" @onclick="Imprimir">
+                        <i class="fas fa-print"></i> Imprimir / PDF
+                    </button>
+                    <button type="button" class="btn btn-secondary" @onclick="Cerrar">Cerrar</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <style>
+        /*
+            La impresión real del vale no usa window.print() sobre este modal:
+            se delega a la función JS "imprimirValeTransferencia", que abre una
+            ventana nueva con solo el contenido del vale y su propia regla de página A4.
+            Esto evita que los contenedores de Bootstrap (.modal, .modal-dialog,
+            .modal-content, con position/overflow propios) interfieran con la
+            paginación, que era la causa de que el vale saliera desplazado y
+            ocupando dos hojas.
+        */
+        .vale-transferencia {
+            font-family: 'Times New Roman', Times, serif;
+            font-size: 11pt;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .vale-cabecera,
+        .vale-filtros,
+        .vale-detalle,
+        .vale-observaciones {
+            padding-left: 5mm;
+            padding-right: 5mm;
+        }
+
+        .vale-detalle {
+            flex: 1 1 auto;
+        }
+    </style>
+}
+
+@code {
+    [Parameter]
+    public ValeTransferenciaDTO? Vale { get; set; }
+
+    [Parameter]
+    public bool Mostrar { get; set; }
+
+    [Parameter]
+    public EventCallback<bool> MostrarChanged { get; set; }
+
+    [Parameter]
+    public EventCallback OnCerrar { get; set; }
+
+    private async Task Cerrar()
+    {
+        Mostrar = false;
+        await MostrarChanged.InvokeAsync(Mostrar);
+        await OnCerrar.InvokeAsync();
+    }
+
+    private async Task Imprimir()
+    {
+        await jsRuntime.InvokeVoidAsync("imprimirValeTransferencia", "areaImpresionVale");
+    }
+
+    private string ObtenerNumeroSinPrefijo()
+    {
+        if (Vale == null || string.IsNullOrWhiteSpace(Vale.Numero))
+            return string.Empty;
+
+        var partes = Vale.Numero.Split('.');
+        return partes.Length > 1 ? partes[1] : Vale.Numero;
+    }
+}

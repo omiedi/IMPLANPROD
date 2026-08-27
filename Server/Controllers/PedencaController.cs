@@ -848,7 +848,7 @@ namespace IMPLANPROD.Server.Controllers
         /// Transfiere productos de un pedido entre depósitos
         /// </summary>
         [HttpPost("transferir-por-pedido")]
-        public async Task<ActionResult> TransferirPorPedido([FromBody] TransferenciaPorPedidoDTO transferencia)
+        public async Task<ActionResult<ValeTransferenciaDTO>> TransferirPorPedido([FromBody] TransferenciaPorPedidoDTO transferencia)
         {
             if (transferencia == null || !transferencia.Items.Any())
             {
@@ -866,7 +866,8 @@ namespace IMPLANPROD.Server.Controllers
                 var fecha = DateTime.Now;
                 var secuencialCompleto = await _documentNumberGenerator.GenerateNextDocumentNumberAsync("TR");
                 var numeroSecuencial = int.Parse(secuencialCompleto.Split('.').Last());
-                var seccion = $"{fecha.Year % 10}{fecha:MMdd}";
+                var anioCorto = fecha.Year % 100;
+                var seccion = $"{anioCorto:D2}{fecha:MMdd}";
                 
                 int? idFlexoft = _userContextService.GetCurrentUserId();
                 short? codigoEmpresa = _userContextService.GetCurrentCodigoEmpresa();
@@ -906,6 +907,19 @@ namespace IMPLANPROD.Server.Controllers
                         return BadRequest($"El producto '{item.CodigoExterno}' tiene trazabilidad nivel 2 y no puede ser transferido.");
                     }
                 }
+
+                // Cargar unidades de medida de los productos transferidos
+                var codigosInternos = transferencia.Items
+                    .Select(i => i.CodigoInterno)
+                    .Distinct()
+                    .ToList();
+
+                var umedidas = await _context.masters
+                    .AsNoTracking()
+                    .Where(m => codigosInternos.Contains(m.Codint))
+                    .ToDictionaryAsync(
+                        m => m.Codint,
+                        m => m.Umedida ?? string.Empty);
 
                 // Construir referencia con número de pedido
                 var referenciaCompleta = $"TR. Asig. Pedido {transferencia.NumeroPedido}";
@@ -964,10 +978,40 @@ namespace IMPLANPROD.Server.Controllers
                 await _context.SaveChangesAsync();
                 await transaction.CommitAsync();
 
-                return Ok(new { 
-                    Message = $"Transferencia realizada con éxito. {transferencia.Items.Count} producto(s) transferido(s).",
-                    NumeroTransferencia = $"TR.{numeroSecuencial}"
-                });
+                var origen = await _context.Tadeposi
+                    .AsNoTracking()
+                    .Where(d => d.CodigoDepo == transferencia.DepositoOrigen)
+                    .Select(d => d.Descripcion)
+                    .FirstOrDefaultAsync();
+
+                var destino = await _context.Tadeposi
+                    .AsNoTracking()
+                    .Where(d => d.CodigoDepo == transferencia.DepositoDestino)
+                    .Select(d => d.Descripcion)
+                    .FirstOrDefaultAsync();
+
+                var vale = new ValeTransferenciaDTO
+                {
+                    Numero = $"TR.{numeroSecuencial}",
+                    DoSecCor = $"TR.{seccion}",
+                    Fecha = fecha,
+                    DepositoOrigen = transferencia.DepositoOrigen,
+                    DepositoOrigenNombre = origen ?? transferencia.DepositoOrigen.ToString(),
+                    DepositoDestino = transferencia.DepositoDestino,
+                    DepositoDestinoNombre = destino ?? transferencia.DepositoDestino.ToString(),
+                    Motivo = referenciaCompleta,
+                    Items = transferencia.Items.Select(i => new ValeTransferenciaItemDTO
+                    {
+                        CodigoExterno = i.CodigoExterno,
+                        Descripcion = i.Descripcion,
+                        UnidadMedida = umedidas.GetValueOrDefault(i.CodigoInterno),
+                        NroPed = transferencia.NumeroPedido,
+                        Cantidad = i.Cantidad,
+                        Lote = i.Lote
+                    }).ToList()
+                };
+
+                return Ok(vale);
             }
             catch (Exception ex)
             {

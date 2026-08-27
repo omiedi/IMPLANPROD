@@ -323,7 +323,9 @@ else
                                                     <th>Descripción</th>
                                                     <th class="text-end">Falta Entregar</th>
                                                     <th class="text-end">Stock Depósito</th>
+                                                    <th class="text-center" style="width:40px;"></th>
                                                     <th class="text-end">Cant. a Entregar</th>
+                                                    <th class="text-center" style="width:50px;"></th>
                                                 </tr>
                                             </thead>
                                             <tbody>
@@ -333,20 +335,32 @@ else
                                                         <td>@item.OCompra</td>
                                                         <td>@item.CodExte</td>
                                                         <td>@item.Descripcion</td>
-                                                        <td class="text-end">@item.FaltaEntregar.ToString("N2")</td>
-                                                        <td class="text-end">@item.StockDeposito.ToString("N2")</td>
+                                                        <td class="text-end">@item.FaltaEntregar.ToString("N1")</td>
+                                                        <td class="text-end">@item.StockDeposito.ToString("N1")</td>
+                                                        <td class="text-center">
+                                                            <span style="width: 12px; height: 12px; border-radius: 50%; display: inline-block;
+                                                                         background-color: @(item.StockDeposito >= item.CantidadEntregar ? "#28a745" : "#dc3545");"
+                                                                  title="@(item.StockDeposito >= item.CantidadEntregar ? "Stock suficiente" : "Stock insuficiente")">
+                                                            </span>
+                                                        </td>
                                                         <td style="max-width:140px;">
                                                             <input type="number" class="form-control form-control-sm text-end"
-                                                                   min="0" step="0.01"
+                                                                   min="0" step="0.1"
                                                                    @bind="item.CantidadEntregar" />
+                                                        </td>
+                                                        <td class="text-center">
+                                                            <button type="button" class="btn btn-sm btn-outline-danger" @onclick="() => LimpiarCantidadEntregar(item)" title="Limpiar cantidad">
+                                                                <i class="fas fa-times"></i>
+                                                            </button>
                                                         </td>
                                                     </tr>
                                                 }
                                             </tbody>
                                             <tfoot>
                                                 <tr class="table-secondary">
-                                                    <th colspan="5" class="text-end">Total a remitir:</th>
-                                                    <th class="text-end">@pendientesRemision.Sum(x => x.CantidadEntregar).ToString("N2")</th>
+                                                    <th colspan="6" class="text-end">Total a remitir:</th>
+                                                    <th class="text-end">@pendientesRemision.Sum(x => x.CantidadEntregar).ToString("N1")</th>
+                                                    <th></th>
                                                 </tr>
                                             </tfoot>
                                         </table>
@@ -704,43 +718,7 @@ else
         try
         {
             imprimiendoRemitoRc = true;
-
-            if (string.IsNullOrWhiteSpace(remito.DoPriCor))
-            {
-                await sweetAlertService.FireAsync("Atención", "El remito no tiene número para imprimir.", SweetAlertIcon.Warning);
-                return;
-            }
-
-            var plantillaId = await GetPlantillaRemitoConsignacionIdAsync();
-            if (!plantillaId.HasValue)
-            {
-                return;
-            }
-
-            var doprilar = Uri.EscapeDataString(remito.DoPriCor.Trim());
-            var endpoint = $"api/impresiones/remito-plantillas/{plantillaId.Value}/pdf?Doprilar={doprilar}";
-            var responsePdf = await Http.GetAsync(endpoint);
-
-            if (!responsePdf.IsSuccessStatusCode)
-            {
-                var message = await responsePdf.Content.ReadAsStringAsync();
-                await sweetAlertService.FireAsync("Error", $"No se pudo generar el PDF del remito: {message}", SweetAlertIcon.Error);
-                return;
-            }
-
-            var pdfBytes = await responsePdf.Content.ReadAsByteArrayAsync();
-            if (pdfBytes.Length == 0)
-            {
-                await sweetAlertService.FireAsync("Error", "El PDF generado está vacío.", SweetAlertIcon.Error);
-                return;
-            }
-
-            var base64 = Convert.ToBase64String(pdfBytes);
-            var opened = await JS.InvokeAsync<bool>("openPdfInNewTab", base64);
-            if (!opened)
-            {
-                await sweetAlertService.FireAsync("Atención", "No se pudo abrir el PDF en una nueva pestaña. Verificá el bloqueador de pop-ups.", SweetAlertIcon.Warning);
-            }
+            await ImprimirRemitoConsignacionPorPlantillaAsync(remito.DoPriCor);
         }
         catch (Exception ex)
         {
@@ -750,6 +728,46 @@ else
         {
             imprimiendoRemitoRc = false;
             StateHasChanged();
+        }
+    }
+
+    private async Task ImprimirRemitoConsignacionPorPlantillaAsync(string? doPriCor)
+    {
+        if (string.IsNullOrWhiteSpace(doPriCor))
+        {
+            await sweetAlertService.FireAsync("Atención", "El remito no tiene número para imprimir.", SweetAlertIcon.Warning);
+            return;
+        }
+
+        var plantillaId = await GetPlantillaRemitoConsignacionIdAsync();
+        if (!plantillaId.HasValue)
+        {
+            return;
+        }
+
+        var doprilar = Uri.EscapeDataString(doPriCor.Trim());
+        var endpoint = $"api/impresiones/remito-plantillas/{plantillaId.Value}/pdf?Doprilar={doprilar}";
+        var responsePdf = await Http.GetAsync(endpoint);
+
+        if (!responsePdf.IsSuccessStatusCode)
+        {
+            var message = await responsePdf.Content.ReadAsStringAsync();
+            await sweetAlertService.FireAsync("Error", $"No se pudo generar el PDF del remito: {message}", SweetAlertIcon.Error);
+            return;
+        }
+
+        var pdfBytes = await responsePdf.Content.ReadAsByteArrayAsync();
+        if (pdfBytes.Length == 0)
+        {
+            await sweetAlertService.FireAsync("Error", "El PDF generado está vacío.", SweetAlertIcon.Error);
+            return;
+        }
+
+        var base64 = Convert.ToBase64String(pdfBytes);
+        var opened = await JS.InvokeAsync<bool>("openPdfInNewTab", base64);
+        if (!opened)
+        {
+            await sweetAlertService.FireAsync("Atención", "No se pudo abrir el PDF en una nueva pestaña. Verificá el bloqueador de pop-ups.", SweetAlertIcon.Warning);
         }
     }
 
@@ -787,7 +805,17 @@ else
         {
             LimpiarVariablesImpresionRemito();
 
-            numeroRemitoImpresion = response.DoPriCor ?? string.Empty;
+            // Formatear el número de remito igual que el remito de cliente:
+            // {codigoMovimiento}-X-{prefijo}-{número:00000000}
+            // DoPriCor viene como "RC-12345" (o "RC-00012345"); forzamos el formato estándar.
+            var partesDoPriCor = (response.DoPriCor ?? string.Empty).Split('-');
+            var codigoMovimientoImpresion = partesDoPriCor.Length > 0 ? partesDoPriCor[0] : "RC";
+            var numeroRemitoFormateado = partesDoPriCor.Length > 1 && int.TryParse(partesDoPriCor[^1], out int numeroRemito)
+                ? numeroRemito.ToString("D8")
+                : partesDoPriCor[^1].PadLeft(8, '0');
+            var prefijoImpresion = partesDoPriCor.Length > 2 ? partesDoPriCor[1] : "0001";
+            numeroRemitoImpresion = $"{codigoMovimientoImpresion}-X-{prefijoImpresion}-{numeroRemitoFormateado}";
+
             fechaImpresion = (request.FechaRemito ?? DateTime.Today).ToString("dd/MM/yy");
             razonSocialImpresion = request.RazonSocialProveedor ?? string.Empty;
 
@@ -806,7 +834,7 @@ else
 
             ordenCompraImpresion = request.NumeroOrdenCompra ?? string.Empty;
             ordenVentaImpresion = string.Empty;
-            observacionesImpresion = "REMITO CONSIGNACION";
+            observacionesImpresion = string.Empty;
             valorDeclaradoImpresion = string.Empty;
             bultosImpresion = 1;
             nciImpresion = string.Empty;
@@ -969,6 +997,11 @@ else
         mostrarModalRemito = false;
         transporteRemitoId = 0;
         transporteRemitoSeleccionado = null;
+    }
+
+    private void LimpiarCantidadEntregar(ConsignacionPendienteRemisionDto item)
+    {
+        item.CantidadEntregar = 0;
     }
 
     private async Task CargarTransportesRemitoAsync()
@@ -1278,7 +1311,7 @@ else
                 $"Remito generado: {response.Response.DoPriCor}. Ítems procesados: {response.Response.ItemsProcesados}.",
                 SweetAlertIcon.Success);
 
-            await PrepararImpresionRemitoConsignacionAsync(request, response.Response);
+            await ImprimirRemitoConsignacionPorPlantillaAsync(response.Response.DoPriCor);
 
             await CargarDatosAsync(currentPage);
             await AbrirModalConfigRemitoAsync();

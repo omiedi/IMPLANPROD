@@ -41,13 +41,18 @@
     </div>
     <div class="dropdown">
         <button class="btn btn-sm btn-primary dropdown-toggle" type="button" data-bs-toggle="dropdown">
-            Informes
+            + Utilidades
         </button>
         <ul class="dropdown-menu dropdown-menu-end">
             <li>
                 <NavLink class="dropdown-item" href="/stock/consultaStockComponentes">
                     Consulta de Stocks de Componentes
                 </NavLink>
+            </li>
+            <li>
+                <button type="button" class="dropdown-item" @onclick="AbrirReimpresionesTransferencias">
+                    Re-Impresiones de Transferencias
+                </button>
             </li>
         </ul>
     </div>
@@ -128,6 +133,15 @@ SelectedPage="SelectedPageAsync" />
     OnClose="CerrarTransferenciaMultiple" />
 }
 
+<!--
+    Modal Asignado a Pedidos
+    Circuito: El usuario elige un cliente, un pedido pendiente y un depósito origen.
+    La grilla muestra los ítems del pedido. La columna "Cant. a Remitir" se precarga
+    con el stock disponible (del depósito origen si está seleccionado, o el total de
+    todos los depósitos si no). El operador puede editar el valor e incluso superar el
+    stock, generando saldo negativo en el origen según la regla de negocio vigente.
+    Las cantidades se expresan con un decimal para homogeneidad con el resto del sistema.
+-->
 <!-- Modal Asignado a Pedidos -->
 @if (mostrarModalAsignadoPedidos)
 {
@@ -169,7 +183,7 @@ SelectedPage="SelectedPageAsync" />
                     <div class="row mb-3">
                         <div class="col-md-6">
                             <label class="form-label fw-bold">Depósito Origen:</label>
-                            <select class="form-select" @bind="depositoOrigenSeleccionado">
+                            <select class="form-select" value="@depositoOrigenSeleccionado" @onchange="OnDepositoOrigenChanged">
                                 <option value="0">-- Seleccione Depósito Origen --</option>
                                 @foreach (var deposito in depositos)
                                 {
@@ -202,6 +216,8 @@ SelectedPage="SelectedPageAsync" />
                                         <th class="text-end">Cant. Pedida</th>
                                         <th class="text-end">Cant. Entregada</th>
                                         <th class="text-end">Pend. Remitir</th>
+                                        <th class="text-end">Stock</th>
+                                        <th class="text-center" style="width: 30px;"></th>
                                         <th>Fecha Solicitada</th>
                                         <th class="text-end">Atraso (días)</th>
                                         <th class="text-end" style="min-width: 120px;">Cant. a Remitir</th>
@@ -217,9 +233,27 @@ SelectedPage="SelectedPageAsync" />
                                             <td>@item.NroPed</td>
                                             <td>@item.CodiExt</td>
                                             <td>@item.Descrip</td>
-                                            <td class="text-end">@item.CanPed.ToString("N2")</td>
-                                            <td class="text-end">@item.CantEnt.ToString("N2")</td>
-                                            <td class="text-end">@item.PendienteRemitir.ToString("N2")</td>
+                                            <td class="text-end">@item.CanPed.ToString("N1")</td>
+                                            <td class="text-end">@item.CantEnt.ToString("N1")</td>
+                                            <td class="text-end">@item.PendienteRemitir.ToString("N1")</td>
+                                            <td class="text-end">
+                                                @if (stockProductos.ContainsKey(item.CodiInt))
+                                                {
+                                                    @stockProductos[item.CodiInt].ToString("N1")
+                                                }
+                                                else
+                                                {
+                                                    <span class="text-muted">-</span>
+                                                }
+                                            </td>
+                                            <td class="text-center">
+                                                @if (stockProductos.ContainsKey(item.CodiInt))
+                                                {
+                                                    var stock = stockProductos[item.CodiInt];
+                                                    var color = stock >= item.CantidadARemitir ? "bg-success" : "bg-danger";
+                                                    <span class="badge rounded-circle @color" style="width: 10px; height: 10px; display: inline-block;" title="Stock: @stock.ToString("N1")"></span>
+                                                }
+                                            </td>
                                             <td>@(item.FeSolEnt?.ToString("dd/MM/yyyy") ?? "")</td>
                                             <td class="text-end">
                                                 @if (item.Atraso > 0)
@@ -232,11 +266,15 @@ SelectedPage="SelectedPageAsync" />
                                                 }
                                             </td>
                                             <td>
-                                                <input type="number" 
-                                                class="form-control form-control-sm text-end" 
-                                                step="0.01"
+                                                <!--
+                                                    Cantidad editable a remitir.
+                                                    Se precarga con la cantidad pendiente del pedido (Pend. Remitir).
+                                                    El operador puede ingresar un mayor valor; el indicador verde/rojo informa la cobertura de stock.
+                                                -->
+                                                <input type="number"
+                                                class="form-control form-control-sm text-end"
+                                                step="0.1"
                                                 min="0"
-                                                max="@item.PendienteRemitir"
                                                 @bind="item.CantidadARemitir"
                                                 @bind:event="oninput"
                                                 style="width: 100px;" />
@@ -266,7 +304,7 @@ SelectedPage="SelectedPageAsync" />
                                                         {
                                                             @foreach (var lote in lotesDisponibles[item.CodiInt])
                                                             {
-                                                                <option value="@lote.Lote">@lote.Lote (Stock: @lote.Saldo.ToString("N2"))</option>
+                                                                <option value="@lote.Lote">@lote.Lote (Stock: @lote.Saldo.ToString("N1"))</option>
                                                             }
                                                         }
                                                     </select>
@@ -353,6 +391,15 @@ SelectedPage="SelectedPageAsync" />
 
     // Variables para Asignado a Pedidos
     private bool mostrarModalAsignadoPedidos = false;
+    private ValeTransferenciaDTO? valeTransferencia;
+    private bool mostrarValeTransferencia = false;
+
+    // Variables para Re-Impresiones de Transferencias
+    private bool mostrarModalReimpresiones = false;
+    private List<TransferenciaResumenDTO> transferencias = new();
+    private TransferenciaResumenDTO? reimpresionSeleccionada;
+    private DateTime? fechaDesde;
+    private DateTime? fechaHasta;
     private List<Deudor12> clientes = new();
     private List<PedidoPendienteClienteDTO> pedidosPendientes = new();
     private List<DetallePedidoPendienteDTO> detallePedido = new();
@@ -362,6 +409,7 @@ SelectedPage="SelectedPageAsync" />
     private int depositoOrigenSeleccionado = 0;
     private int depositoDestinoSeleccionado = 0;
     private Dictionary<int, List<LoteDisponibleDTO>> lotesDisponibles = new();
+    private Dictionary<int, decimal> stockProductos = new();
 
     [Parameter]
     [SupplyParameterFromQuery]
@@ -520,6 +568,131 @@ SelectedPage="SelectedPageAsync" />
         depositoDestinoSeleccionado = 0;
         pedidosPendientes.Clear();
         detallePedido.Clear();
+        stockProductos.Clear();
+    }
+
+    private void AbrirReimpresionesTransferencias()
+    {
+        mostrarModalReimpresiones = true;
+        transferencias.Clear();
+        reimpresionSeleccionada = null;
+        fechaDesde = null;
+        fechaHasta = null;
+    }
+
+    private void CerrarReimpresionesTransferencias()
+    {
+        mostrarModalReimpresiones = false;
+        reimpresionSeleccionada = null;
+        transferencias.Clear();
+        fechaDesde = null;
+        fechaHasta = null;
+    }
+
+    private async Task BuscarTransferencias()
+    {
+        if (!fechaDesde.HasValue || !fechaHasta.HasValue)
+        {
+            await sweetAlertService.FireAsync("Atención", "Debe seleccionar fecha desde y fecha hasta", SweetAlertIcon.Warning);
+            return;
+        }
+
+        try
+        {
+            var desde = Uri.EscapeDataString(fechaDesde.Value.ToString("yyyy-MM-dd"));
+            var hasta = Uri.EscapeDataString(fechaHasta.Value.ToString("yyyy-MM-dd"));
+            var url = $"api/movisto/transferencias?desde={desde}&hasta={hasta}";
+            var response = await repository.Get<List<TransferenciaResumenDTO>>(url);
+
+            if (!response.Error && response.Response != null)
+            {
+                transferencias = response.Response;
+            }
+            else
+            {
+                transferencias = new List<TransferenciaResumenDTO>();
+                await sweetAlertService.FireAsync("Atención", "No se encontraron transferencias en el rango seleccionado", SweetAlertIcon.Info);
+            }
+        }
+        catch (Exception ex)
+        {
+            await sweetAlertService.FireAsync("Error", $"Error al cargar transferencias: {ex.Message}", SweetAlertIcon.Error);
+            transferencias = new List<TransferenciaResumenDTO>();
+        }
+    }
+
+    private void SeleccionarTransferencia(TransferenciaResumenDTO item)
+    {
+        reimpresionSeleccionada = item;
+    }
+
+    private async Task ReimprimirTransferencia(TransferenciaResumenDTO item)
+    {
+        try
+        {
+            var url = $"api/movisto/transferencia?numero={Uri.EscapeDataString(item.Numero)}";
+            var response = await repository.Get<ValeTransferenciaDTO>(url);
+
+            if (response.Error || response.Response == null)
+            {
+                var detalle = response.HttpResponseMessage != null
+                    ? await response.HttpResponseMessage.Content.ReadAsStringAsync()
+                    : string.Empty;
+                var mensaje = string.IsNullOrWhiteSpace(detalle)
+                    ? "No se pudo cargar la transferencia para reimprimir"
+                    : $"No se pudo cargar la transferencia para reimprimir: {detalle}";
+                await sweetAlertService.FireAsync("Error", mensaje, SweetAlertIcon.Error);
+                return;
+            }
+
+            reimpresionSeleccionada = item;
+            valeTransferencia = response.Response;
+            mostrarValeTransferencia = true;
+            // No cerrar el modal de reimpresiones: al salir de la vista previa
+            // el usuario debe volver a la tabla con la selección activa.
+        }
+        catch (Exception ex)
+        {
+            await sweetAlertService.FireAsync("Error", $"Error al reimprimir: {ex.Message}", SweetAlertIcon.Error);
+        }
+    }
+
+    private async Task AnularTransferencia(TransferenciaResumenDTO item)
+    {
+        var confirm = await sweetAlertService.FireAsync(new SweetAlertOptions
+        {
+            Title = "Anular transferencia",
+            Text = $"¿Confirma que desea anular la transferencia {item.Numero}? Se eliminarán el movimiento de entrada y el de salida.",
+            Icon = SweetAlertIcon.Warning,
+            ShowCancelButton = true,
+            ConfirmButtonText = "Sí, anular",
+            CancelButtonText = "Cancelar"
+        });
+
+        if (confirm.IsDismissed)
+        {
+            return;
+        }
+
+        try
+        {
+            var url = $"api/movisto/transferencia?numero={Uri.EscapeDataString(item.Numero)}";
+            var response = await repository.Delete(url);
+
+            if (response.Error)
+            {
+                var mensaje = await response.HttpResponseMessage.Content.ReadAsStringAsync();
+                await sweetAlertService.FireAsync("Error", mensaje, SweetAlertIcon.Error);
+                return;
+            }
+
+            await sweetAlertService.FireAsync("Éxito", "Transferencia anulada correctamente", SweetAlertIcon.Success);
+            await BuscarTransferencias();
+        }
+        catch (Exception ex)
+        {
+            await sweetAlertService.FireAsync("Error", $"Error al anular: {ex.Message}", SweetAlertIcon.Error);
+        }
     }
 
     private async Task OnClienteChanged(ChangeEventArgs e)
@@ -569,6 +742,7 @@ SelectedPage="SelectedPageAsync" />
         {
             pedidoSeleccionado = nroPed;
             await CargarDetallePedido(nroPed);
+            await ActualizarStockPorProducto();
         }
     }
 
@@ -599,6 +773,74 @@ SelectedPage="SelectedPageAsync" />
             await sweetAlertService.FireAsync("Error", $"Error al cargar detalle del pedido: {ex.Message}", SweetAlertIcon.Error);
             detallePedido = new List<DetallePedidoPendienteDTO>();
         }
+    }
+
+    /// <summary>
+    /// Evento ejecutado al cambiar el depósito origen.
+    /// Regla de negocio: al cambiar el depósito se debe recalcular el stock mostrado
+    /// de cada ítem, ya que el stock disponible depende del depósito elegido.
+    /// También se limpian los lotes cargados para evitar datos obsoletos.
+    /// La cantidad a remitir no se modifica: se mantiene la cantidad pendiente del pedido.
+    /// </summary>
+    private async Task OnDepositoOrigenChanged(ChangeEventArgs e)
+    {
+        if (int.TryParse(e.Value?.ToString(), out int deposito))
+        {
+            depositoOrigenSeleccionado = deposito;
+        }
+        else
+        {
+            depositoOrigenSeleccionado = 0;
+        }
+
+        // Limpieza de lotes: cada depósito puede tener lotes distintos para el mismo producto.
+        lotesDisponibles.Clear();
+        await ActualizarStockPorProducto();
+    }
+
+    /// <summary>
+    /// Consulta y almacena el stock de cada producto para mostrarlo en la grilla.
+    /// Reglas:
+    ///  - Si hay un depósito origen seleccionado, toma el stock de ese depósito.
+    ///  - Si no hay depósito seleccionado, suma el stock de todos los depósitos.
+    ///  - El stock se redondea a 1 decimal.
+    ///  - La cantidad a remitir se establece igual a la cantidad pendiente del pedido (editable).
+    /// </summary>
+    private async Task ActualizarStockPorProducto()
+    {
+        if (!detallePedido.Any()) return;
+
+        // Se consulta el stock por producto en paralelo para reducir latencia.
+        var tareas = detallePedido.Select(async item =>
+        {
+            try
+            {
+                var response = await repository.Get<List<StockDepositoDTO>>($"api/movisto/stock/{item.CodiInt}");
+                if (!response.Error && response.Response != null)
+                {
+                    decimal stock;
+                    if (depositoOrigenSeleccionado > 0)
+                    {
+                        // Stock específico del depósito origen seleccionado.
+                        var stockDeposito = response.Response
+                            .FirstOrDefault(s => s.Deposito.GetValueOrDefault() == depositoOrigenSeleccionado);
+                        stock = stockDeposito?.Stock ?? 0;
+                    }
+                    else
+                    {
+                        // Sin depósito origen: stock total consolidado de todos los depósitos.
+                        stock = response.Response.Sum(s => s.Stock);
+                    }
+
+                    stockProductos[item.CodiInt] = Math.Round(stock, 1, MidpointRounding.AwayFromZero);
+                    item.CantidadARemitir = Math.Round(item.PendienteRemitir, 1, MidpointRounding.AwayFromZero);
+                }
+            }
+            catch { }
+        });
+
+        await Task.WhenAll(tareas);
+        await InvokeAsync(StateHasChanged);
     }
 
     private void EliminarFilaDetalle(DetallePedidoPendienteDTO item)
@@ -717,50 +959,13 @@ SelectedPage="SelectedPageAsync" />
                 return;
             }
 
+            // NOTA: no se valida stock disponible. El negocio permite transferir sin stock,
+            // dejando el saldo del depósito origen en negativo si corresponde.
             // Validar que todos los productos tengan cantidad a remitir > 0
             var productosSinCantidad = detallePedido.Where(d => d.CantidadARemitir <= 0).ToList();
             if (productosSinCantidad.Any())
             {
                 await sweetAlertService.FireAsync("Validación", "Todos los productos deben tener una cantidad a remitir mayor a 0", SweetAlertIcon.Warning);
-                return;
-            }
-
-            // Validar que haya stock disponible en el depósito origen para cada producto
-            bool stockInsuficiente = false;
-            foreach (var item in detallePedido)
-            {
-                var urlStock = $"api/movisto/stock/{item.CodiInt}";
-                var responseStock = await repository.Get<List<StockDepositoDTO>>(urlStock);
-                
-                if (responseStock.Error || responseStock.Response == null)
-                {
-                    await sweetAlertService.FireAsync(
-                        "Error", 
-                        $"No se pudo obtener el stock del producto {item.CodiExt}", 
-                        SweetAlertIcon.Error);
-                    stockInsuficiente = true;
-                    break;
-                }
-
-                // Buscar el stock en el depósito origen
-                var stockEnDeposito = responseStock.Response
-                    .FirstOrDefault(s => s.Deposito == depositoOrigenSeleccionado);
-                
-                var stockDisponible = stockEnDeposito?.Stock ?? 0;
-
-                if (stockDisponible < item.CantidadARemitir)
-                {
-                    await sweetAlertService.FireAsync(
-                        "Stock Insuficiente", 
-                        $"El producto {item.CodiExt} no tiene stock suficiente en el depósito origen.\nStock disponible: {stockDisponible:N2}\nCantidad solicitada: {item.CantidadARemitir:N2}", 
-                        SweetAlertIcon.Error);
-                    stockInsuficiente = true;
-                    break;
-                }
-            }
-
-            if (stockInsuficiente)
-            {
                 return;
             }
 
@@ -785,17 +990,20 @@ SelectedPage="SelectedPageAsync" />
             };
 
             // Realizar la transferencia
-            var response = await repository.Post("api/Pedenca/transferir-por-pedido", transferencia);
-            
+            var response = await repository.Post<TransferenciaPorPedidoDTO, ValeTransferenciaDTO>("api/Pedenca/transferir-por-pedido", transferencia);
+
             if (response.Error)
             {
                 await sweetAlertService.FireAsync("Error", "Error al realizar la transferencia. Verifique los datos e intente nuevamente.", SweetAlertIcon.Error);
                 return;
             }
 
+            valeTransferencia = response.Response;
+            mostrarValeTransferencia = true;
+
             // Mostrar mensaje de éxito
             await sweetAlertService.FireAsync("Éxito", "Transferencia realizada con éxito", SweetAlertIcon.Success);
-            
+
             // Cerrar el modal y limpiar
             CerrarAsignadoPedidos();
         }
@@ -808,3 +1016,100 @@ SelectedPage="SelectedPageAsync" />
 
 <!-- La lógica de sincronización está en StockIndex.razor.cs -->
 <SyncModal MostrarModal="mostrarModalSync" OnCerrar="CerrarModalSync" />
+
+@if (mostrarModalReimpresiones)
+{
+    <div class="modal fade show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5);">
+        <div class="modal-dialog modal-xl modal-dialog-centered" style="max-width: 90%;">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Re-Impresiones de Transferencias</h5>
+                    <button type="button" class="btn-close" @onclick="CerrarReimpresionesTransferencias"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="row g-3 align-items-end mb-3">
+                        <div class="col-md-3">
+                            <label class="form-label">Desde</label>
+                            <input type="date" class="form-control" @bind="fechaDesde" />
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">Hasta</label>
+                            <input type="date" class="form-control" @bind="fechaHasta" />
+                        </div>
+                        <div class="col-md-3">
+                            <button type="button" class="btn btn-primary" @onclick="BuscarTransferencias">
+                                <i class="fas fa-search"></i> Ver
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="table-responsive" style="max-height: 500px; overflow-y: auto;">
+                        <table class="table table-striped table-hover table-sm">
+                            <thead class="table-primary sticky-top">
+                                <tr>
+                                    <th>Nro. Transferencia</th>
+                                    <th>Fecha</th>
+                                    <th>Producto</th>
+                                    <th>Dep. Origen</th>
+                                    <th>Dep. Ingreso</th>
+                                    <th>Usuario</th>
+                                    <th>Acciones</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @if (transferencias.Any())
+                                {
+                                    @foreach (var item in transferencias)
+                                    {
+                                        <tr>
+                                            <td>@item.Numero</td>
+                                            <td>@item.Fecha.ToString("dd/MM/yy")</td>
+                                            <td>
+                                                @if (item.EsMultiple)
+                                                {
+                                                    <span class="badge bg-info text-dark">Múltiple</span>
+                                                }
+                                                else
+                                                {
+                                                    <span>@item.CodigoExterno - @item.Descripcion</span>
+                                                }
+                                            </td>
+                                            <td>@item.DepositoOrigenNombre</td>
+                                            <td>@item.DepositoDestinoNombre</td>
+                                            <td>@item.UsuarioNombre</td>
+                                            <td>
+                                                <div class="d-flex gap-2">
+                                                    <button type="button" class="btn btn-sm btn-primary" @onclick="() => ReimprimirTransferencia(item)">
+                                                        <i class="fas fa-print"></i> Re-imprimir
+                                                    </button>
+                                                    <button type="button" class="btn btn-sm btn-danger" @onclick="() => AnularTransferencia(item)">
+                                                        <i class="fas fa-trash"></i> Anular
+                                                    </button>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    }
+                                }
+                                else
+                                {
+                                    <tr>
+                                        <td colspan="7" class="text-center text-muted">
+                                            Seleccione un rango de fechas y presione Ver para buscar transferencias.
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" @onclick="CerrarReimpresionesTransferencias">Cerrar</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+<ValeTransferenciaModal Vale="valeTransferencia"
+                         @bind-Mostrar="mostrarValeTransferencia"
+                         OnCerrar="() => mostrarValeTransferencia = false" />
