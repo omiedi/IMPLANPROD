@@ -1348,6 +1348,179 @@ namespace IMPLANPROD.Server.Controllers
             }
         }
 
+        /// <summary>
+        /// Recupera los datos completos necesarios para imprimir una Orden de Fabricación recién creada.
+        /// Combina la orden, el nombre del usuario, la fecha de revisión del master y las operaciones (SECOPER).
+        /// Ruta: GET /api/ordefabr/{id}/datos-impresion-orden-fabricacion
+        /// </summary>
+        /// <param name="id">Id interno de la orden de fabricación (PK Id de la tabla Ordefabr).</param>
+        /// <returns>DTO OrdenFabricacionImpresionDTO listo para consumir desde el cliente.</returns>
+        [HttpGet("{id:int}/datos-impresion-orden-fabricacion")]
+        public async Task<IActionResult> ObtenerDatosImpresionOrdenFabricacion(int id)
+        {
+            // Buscar la orden de fabricación por su Id interno. No se modifica, por eso AsNoTracking.
+            var orden = await _context.Ordefabrs
+                .AsNoTracking()
+                .FirstOrDefaultAsync(o => o.Id == id);
+
+            if (orden == null)
+            {
+                return NotFound("No se encontró la orden de fabricación solicitada.");
+            }
+
+            // Nombre del usuario que lanzó la orden (Usuarios.IdFlexoft == Ordefabr.NumUsuar).
+            string? nombreUsuario = null;
+            if (orden.NumUsuar.HasValue)
+            {
+                nombreUsuario = await _context.Usuarios
+                    .AsNoTracking()
+                    .Where(u => u.IdFlexoft == orden.NumUsuar.Value)
+                    .Select(u => u.NombreUsuario)
+                    .FirstOrDefaultAsync();
+            }
+
+            // Fecha de revisión del master para el Cod_Inte de la orden.
+            // Master.Codint equivale al Id lógico del producto.
+            DateTime? ferevis = null;
+            if (orden.Cod_Inte.HasValue)
+            {
+                ferevis = await _context.masters
+                    .AsNoTracking()
+                    .Where(m => m.Codint == orden.Cod_Inte.Value)
+                    .Select(m => m.Ferevis)
+                    .FirstOrDefaultAsync();
+            }
+
+            // Operaciones de la ruta de fabricación: SECOPER del conjunto (CodIConj = Cod_Inte), activas (StatOper = 1), ordenadas por NumeOper.
+            var operaciones = new List<OrdenFabricacionOperacionDTO>();
+            if (orden.Cod_Inte.HasValue)
+            {
+                operaciones = await _context.Secopers
+                    .AsNoTracking()
+                    .Where(s => s.CodIConj == orden.Cod_Inte.Value && s.StatOper == 1)
+                    .OrderBy(s => s.NumeOper)
+                    .Select(s => new OrdenFabricacionOperacionDTO
+                    {
+                        NumeOper = s.NumeOper,
+                        DescOper = s.DescOper,
+                        ObseOper = s.ObseOper
+                    })
+                    .ToListAsync();
+            }
+
+            // Armar el DTO con todos los datos que necesita el formulario A4 en el cliente.
+            // Las propiedades "...Formateada" son textos listos para insertar en el HTML,
+            // de modo que JavaScript no tenga que formatear fechas/decimal y se eviten
+            // problemas de zona horaria o cultura en el navegador.
+            var dto = new OrdenFabricacionImpresionDTO
+            {
+                NumeOrFa = orden.NumeOrFa,
+                IdSubOr = orden.IdSubOr,
+                FechGen = orden.FechGen,
+                FechGenFormateada = orden.FechGen?.ToString("dd/MM/yyyy") ?? string.Empty,
+                Cod_Exte = orden.Cod_Exte,
+                Descrip = orden.Descrip,
+                CanProy = orden.CanProy,
+                CanProyFormateada = orden.CanProy?.ToString("0.00") ?? string.Empty,
+                Cod_Inte = orden.Cod_Inte,
+                Unidad = orden.Unidad,
+                NumUsuar = orden.NumUsuar,
+                NombreUsuario = nombreUsuario ?? orden.NumUsuar?.ToString() ?? "Usuario",
+                Ferevis = ferevis,
+                FerevisFormateada = ferevis?.ToString("dd/MM/yyyy") ?? string.Empty,
+                Operaciones = operaciones
+            };
+
+            return Ok(dto);
+        }
+
+        /// <summary>
+        /// Recupera los datos necesarios para imprimir el Vale de Materiales de una Orden de Fabricación.
+        /// Mantiene el mismo encabezado que la OF y lista los materiales reservados con CantRes > 0.
+        /// La unidad de medida se obtiene de Master.Umedida según Master.Codint = Reserva.Cod_Inte.
+        /// Ruta: GET /api/ordefabr/{id}/datos-impresion-consumo-materiales
+        /// </summary>
+        /// <param name="id">Id interno de la orden de fabricación (PK Id de la tabla Ordefabr).</param>
+        /// <returns>DTO OrdenFabricacionConsumoImpresionDTO listo para consumir desde el cliente.</returns>
+        [HttpGet("{id:int}/datos-impresion-consumo-materiales")]
+        public async Task<IActionResult> ObtenerDatosImpresionConsumoMateriales(int id)
+        {
+            // Buscar la orden de fabricación por su Id interno. No se modifica, por eso AsNoTracking.
+            var orden = await _context.Ordefabrs
+                .AsNoTracking()
+                .FirstOrDefaultAsync(o => o.Id == id);
+
+            if (orden == null)
+            {
+                return NotFound("No se encontró la orden de fabricación solicitada.");
+            }
+
+            // Nombre del usuario que lanzó la orden (Usuarios.IdFlexoft == Ordefabr.NumUsuar).
+            string? nombreUsuario = null;
+            if (orden.NumUsuar.HasValue)
+            {
+                nombreUsuario = await _context.Usuarios
+                    .AsNoTracking()
+                    .Where(u => u.IdFlexoft == orden.NumUsuar.Value)
+                    .Select(u => u.NombreUsuario)
+                    .FirstOrDefaultAsync();
+            }
+
+            // Fecha de revisión del master para el Cod_Inte de la orden.
+            DateTime? ferevis = null;
+            if (orden.Cod_Inte.HasValue)
+            {
+                ferevis = await _context.masters
+                    .AsNoTracking()
+                    .Where(m => m.Codint == orden.Cod_Inte.Value)
+                    .Select(m => m.Ferevis)
+                    .FirstOrDefaultAsync();
+            }
+
+            // Materiales reservados para la OF: Reserva.IdSubOr = orden.IdSubOr, CantRes > 0.
+            // Se une con Master para traer la unidad de medida (Master.Umedida).
+            var materiales = new List<OrdenFabricacionMaterialConsumoDTO>();
+            if (!string.IsNullOrWhiteSpace(orden.IdSubOr))
+            {
+                materiales = await (from r in _context.Reservas
+                                    join m in _context.masters on r.Cod_Inte equals m.Codint
+                                    where r.IdSubOr == orden.IdSubOr && r.CantRes > 0
+                                    orderby r.Cod_Exte
+                                    select new OrdenFabricacionMaterialConsumoDTO
+                                    {
+                                        Cod_Exte = r.Cod_Exte,
+                                        Descrip = r.Descrip,
+                                        Umedida = m.Umedida,
+                                        UsoUnit = r.UsoUnit,
+                                        UsoUnitFormateada = r.UsoUnit.HasValue ? r.UsoUnit.Value.ToString("0.0000") : string.Empty,
+                                        CantRes = r.CantRes,
+                                        CantResFormateada = r.CantRes.HasValue ? r.CantRes.Value.ToString("0.00") : string.Empty
+                                    })
+                                    .ToListAsync();
+            }
+
+            var dto = new OrdenFabricacionConsumoImpresionDTO
+            {
+                NumeOrFa = orden.NumeOrFa,
+                IdSubOr = orden.IdSubOr,
+                FechGen = orden.FechGen,
+                FechGenFormateada = orden.FechGen?.ToString("dd/MM/yyyy") ?? string.Empty,
+                Cod_Exte = orden.Cod_Exte,
+                Descrip = orden.Descrip,
+                CanProy = orden.CanProy,
+                CanProyFormateada = orden.CanProy?.ToString("0.00") ?? string.Empty,
+                Cod_Inte = orden.Cod_Inte,
+                Unidad = orden.Unidad,
+                NumUsuar = orden.NumUsuar,
+                NombreUsuario = nombreUsuario ?? orden.NumUsuar?.ToString() ?? "Usuario",
+                Ferevis = ferevis,
+                FerevisFormateada = ferevis?.ToString("dd/MM/yyyy") ?? string.Empty,
+                Materiales = materiales
+            };
+
+            return Ok(dto);
+        }
+
         private static string Safe(string? value) => value ?? string.Empty;
 
         private static string Limit(string value, int maxLen)

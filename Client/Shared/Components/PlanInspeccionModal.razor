@@ -29,7 +29,9 @@
 *@
 @inject IRepository Repository
 @inject SweetAlertService SweetAlertService
+@inject IJSRuntime JSRuntime
 @using IMPLANPROD.Shared.Entities
+@using IMPLANPROD.Shared.DTOs
 @using System.Globalization
 
 @if (IsVisible)
@@ -266,6 +268,14 @@
                     <button type="button" class="btn btn-secondary btn-sm" @onclick="Cerrar">
                         <i class="fas fa-times me-1"></i>Cancelar
                     </button>
+                    <button type="button" class="btn btn-outline-primary btn-sm"
+                            @onclick="Imprimir" disabled="@(isGuardando || isImprimiendo || CodInte == null)">
+                        @if (isImprimiendo)
+                        { <span class="spinner-border spinner-border-sm me-1"></span> }
+                        else
+                        { <i class="fas fa-print me-1"></i> }
+                        Imprimir
+                    </button>
                     <button type="button" class="btn btn-success btn-sm"
                             @onclick="Guardar" disabled="@isGuardando">
                         @if (isGuardando)
@@ -310,6 +320,7 @@
     private Codiproc?     planCodiproc;                // datos originales del plan (referencia para carga inicial)
     private bool          isLoading         = false;   // spinner de carga inicial
     private bool          isGuardando       = false;   // spinner del botón Guardar
+    private bool          isImprimiendo     = false;   // spinner del botón Imprimir
 
     // ── Campos para agregar una nueva fila ────────────────────────────────────
     private string        nuevaDim          = string.Empty;
@@ -466,6 +477,49 @@
     }
 
     private async Task Cerrar() => await OnCloseRequested.InvokeAsync();
+
+    /// <summary>
+    /// Imprime el "Plan de Inspección y Ensayo" en formato A4 reproduciendo el formulario
+    /// en papel (encabezado del producto/plan + detalle PLAINSP). Sigue el mismo patrón que
+    /// la impresión de la Orden de Fabricación: abrir la ventana ANTES del await de la API
+    /// para que el navegador no bloquee el pop-up por falta de "user activation".
+    /// </summary>
+    private async Task Imprimir()
+    {
+        if (CodInte == null) return;
+
+        isImprimiendo = true;
+        StateHasChanged();
+
+        try
+        {
+            // PASO 1: Abrir la ventana de impresión ANTES del await de la API.
+            var ventanaPreparada = await JSRuntime.InvokeAsync<bool>("prepararVentanaImpresionPlanInspeccion");
+            if (!ventanaPreparada)
+            {
+                return;
+            }
+
+            // PASO 2: Consultar los datos de impresión (encabezado Codiproc/Master + detalle Plainsp).
+            var respuesta = await Repository.Get<PlanInspeccionImpresionDTO>(
+                $"api/codiproc/{CodInte}/datos-impresion-plan-inspeccion");
+
+            if (respuesta.Error)
+            {
+                var mensaje = await respuesta.HttpResponseMessage.Content.ReadAsStringAsync();
+                await SweetAlertService.FireAsync("Error", $"No se pudieron cargar los datos de impresión: {mensaje}", SweetAlertIcon.Error);
+                return;
+            }
+
+            // PASO 3: Escribir el HTML en la ventana ya abierta y disparar window.print().
+            await JSRuntime.InvokeVoidAsync("imprimirPlanInspeccionEnVentanaPreparada", respuesta.Response);
+        }
+        finally
+        {
+            isImprimiendo = false;
+            StateHasChanged();
+        }
+    }
 
     /// <summary>
     /// Envuelve un Plainsp con un identificador Guid inmutable.

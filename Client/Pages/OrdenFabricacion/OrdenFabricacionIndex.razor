@@ -300,6 +300,12 @@ else
                                         title="Anulación x Cierre">
                                     <i class="fas fa-list-check"></i>
                                 </button>
+                                @* Botón de impresión de orden de fabricación: abre el mismo modal de 3 opciones. *@
+                                <button class="btn btn-primary btn-sm ms-1"
+                                        @onclick="() => AbrirModalImpresion(orden.Id, orden.IdSubOr, orden.Cod_Inte)"
+                                        title="Imprimir Orden de Fabricación">
+                                    <i class="fas fa-print"></i>
+                                </button>
                             </div>
                         </div>
                     </td>
@@ -857,6 +863,51 @@ else
                     MostrarModal="mostrarModalImpresion"
                     OnCerrar="ResetearImpresion" />
 }
+
+@* Modal de impresión de una orden de fabricación específica (por fila). *@
+@if (mostrarModalImprimirOrden)
+{
+    <div class="modal show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5);">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Imprimir Orden @IdOrdenSeleccionada</h5>
+                    <button type="button" class="btn-close" @onclick="CerrarModalImpresionOrden" aria-label="Cerrar" disabled="@imprimiendoOrden"></button>
+                </div>
+                <div class="modal-body">
+                    <p>Seleccione los documentos que desea imprimir:</p>
+
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" @bind="imprimirOrdenSeleccionada" id="chkOrdenFila" disabled="@imprimiendoOrden" />
+                        <label class="form-check-label" for="chkOrdenFila">Orden de Fabricación</label>
+                    </div>
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" @bind="imprimirConsumoSeleccionada" id="chkConsumoFila" disabled="@imprimiendoOrden" />
+                        <label class="form-check-label" for="chkConsumoFila">Consumo de materiales</label>
+                    </div>
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" @bind="imprimirPlanSeleccionada" id="chkPlanFila" disabled="@imprimiendoOrden" />
+                        <label class="form-check-label" for="chkPlanFila">Plan de Inspección</label>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-secondary" @onclick="CerrarModalImpresionOrden" disabled="@imprimiendoOrden">Cerrar</button>
+                    <button class="btn btn-primary" @onclick="ImprimirOrdenSeleccionadaAsync" disabled="@imprimiendoOrden">
+                        @if (imprimiendoOrden)
+                        {
+                            <span class="spinner-border spinner-border-sm" aria-hidden="true"></span>
+                            <span> Imprimiendo...</span>
+                        }
+                        else
+                        {
+                            <span>Imprimir</span>
+                        }
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
 </div>
 }
 
@@ -902,6 +953,18 @@ else
     private const string DES_APLI_ANUCIEOF = "Anulación Cierre Parcial de O/F";
 
     private const string FiltrosStorageKey = "ordenfabricacion_filtros";
+
+    // -------------------------------------------------------------------------
+    // ESTADO DEL MODAL DE IMPRESIÓN DE UNA ORDEN DESDE EL LISTADO
+    // -------------------------------------------------------------------------
+    private bool mostrarModalImprimirOrden = false;
+    private string? IdOrdenSeleccionada;
+    private int idOrdenSeleccionada;
+    private int? codInteOrdenSeleccionada;                // Cod_Inte del producto (para imprimir el Plan de Inspección)
+    private bool imprimirOrdenSeleccionada = true;       // Opción 1: Orden de Fabricación (implementada)
+    private bool imprimirConsumoSeleccionada = true;     // Opción 2: Consumo de materiales (implementada)
+    private bool imprimirPlanSeleccionada = true;        // Opción 3: Plan de Inspección (implementada)
+    private bool imprimiendoOrden = false;
 
     protected override async Task OnInitializedAsync()
     {
@@ -1204,6 +1267,219 @@ else
     private void NuevoOrdenFabricacion()
     {
         navigationManager.NavigateTo("/orden-fabricacion-create");
+    }
+
+    /// <summary>
+    /// Abre el modal de impresión para la orden de la fila seleccionada.
+    /// Las tres opciones se inicializan marcadas por defecto.
+    /// </summary>
+    /// <param name="id">Id interno de la orden.</param>
+    /// <param name="idSubOr">Número visible de la orden (para el título del modal).</param>
+    /// <param name="codInte">Código interno del producto de la orden (para imprimir el Plan de Inspección).</param>
+    private void AbrirModalImpresion(int id, string? idSubOr, int? codInte)
+    {
+        idOrdenSeleccionada = id;
+        IdOrdenSeleccionada = idSubOr;
+        codInteOrdenSeleccionada = codInte;
+        imprimirOrdenSeleccionada = true;
+        imprimirConsumoSeleccionada = true;
+        imprimirPlanSeleccionada = true;
+        mostrarModalImprimirOrden = true;
+    }
+
+    /// <summary>
+    /// Cierra el modal de impresión sin redirigir (se mantiene en el listado).
+    /// </summary>
+    private void CerrarModalImpresionOrden()
+    {
+        mostrarModalImprimirOrden = false;
+    }
+
+    /// <summary>
+    /// Evalúa las opciones seleccionadas en el modal del listado.
+    /// Solo la Orden de Fabricación está implementada; las otras se informan como pendientes.
+    /// </summary>
+    private async Task ImprimirOrdenSeleccionadaAsync()
+    {
+        if (idOrdenSeleccionada <= 0)
+        {
+            await sweetAlertService.FireAsync("Error", "No hay una orden seleccionada para imprimir.", SweetAlertIcon.Error);
+            return;
+        }
+
+        if (!imprimirOrdenSeleccionada && !imprimirConsumoSeleccionada && !imprimirPlanSeleccionada)
+        {
+            await sweetAlertService.FireAsync("Atención", "Debe seleccionar al menos una opción de impresión.", SweetAlertIcon.Warning);
+            return;
+        }
+
+        imprimiendoOrden = true;
+        StateHasChanged();
+
+        try
+        {
+            // PASO 1: Abrir una única ventana de impresión ANTES de cualquier await.
+            var ventanaPreparada = await JS.InvokeAsync<bool>("prepararVentanaImpresionOrden");
+            if (!ventanaPreparada)
+            {
+                return;
+            }
+
+            var documentos = new List<Dictionary<string, object>>();
+
+            // PASO 2: Consultar los datos de cada documento seleccionado y acumularlos.
+            if (imprimirOrdenSeleccionada)
+            {
+                var respuestaOrden = await repository.Get<OrdenFabricacionImpresionDTO>(
+                    $"api/ordefabr/{idOrdenSeleccionada}/datos-impresion-orden-fabricacion");
+
+                if (respuestaOrden.Error)
+                {
+                    var mensaje = await respuestaOrden.HttpResponseMessage.Content.ReadAsStringAsync();
+                    await sweetAlertService.FireAsync("Error", $"No se pudieron cargar los datos de la OF: {mensaje}", SweetAlertIcon.Error);
+                    return;
+                }
+
+                documentos.Add(new Dictionary<string, object>
+                {
+                    { "tipo", "orden-fabricacion" },
+                    { "datos", respuestaOrden.Response }
+                });
+            }
+
+            if (imprimirConsumoSeleccionada)
+            {
+                var respuestaConsumo = await repository.Get<OrdenFabricacionConsumoImpresionDTO>(
+                    $"api/ordefabr/{idOrdenSeleccionada}/datos-impresion-consumo-materiales");
+
+                if (respuestaConsumo.Error)
+                {
+                    var mensaje = await respuestaConsumo.HttpResponseMessage.Content.ReadAsStringAsync();
+                    await sweetAlertService.FireAsync("Error", $"No se pudieron cargar los datos de consumo: {mensaje}", SweetAlertIcon.Error);
+                    return;
+                }
+
+                documentos.Add(new Dictionary<string, object>
+                {
+                    { "tipo", "consumo-materiales" },
+                    { "datos", respuestaConsumo.Response }
+                });
+            }
+
+            // Opción 3: Plan de Inspección y Ensayo (mismo formulario que /ingenieria/documentos,
+            // pero con el campo Origen completado con el IdSubOr de esta Orden de Fabricación).
+            if (imprimirPlanSeleccionada)
+            {
+                if (codInteOrdenSeleccionada == null)
+                {
+                    await sweetAlertService.FireAsync("Atención", "La orden no tiene un producto asociado; no se puede imprimir el Plan de Inspección.", SweetAlertIcon.Warning);
+                }
+                else
+                {
+                    var respuestaPlan = await repository.Get<PlanInspeccionImpresionDTO>(
+                        $"api/codiproc/{codInteOrdenSeleccionada}/datos-impresion-plan-inspeccion?origen={Uri.EscapeDataString(IdOrdenSeleccionada ?? string.Empty)}");
+
+                    if (respuestaPlan.Error)
+                    {
+                        var mensaje = await respuestaPlan.HttpResponseMessage.Content.ReadAsStringAsync();
+                        await sweetAlertService.FireAsync("Error", $"No se pudieron cargar los datos del Plan de Inspección: {mensaje}", SweetAlertIcon.Error);
+                        return;
+                    }
+
+                    documentos.Add(new Dictionary<string, object>
+                    {
+                        { "tipo", "plan-inspeccion" },
+                        { "datos", respuestaPlan.Response }
+                    });
+                }
+            }
+
+            // PASO 3: Escribir todos los documentos en la misma ventana e imprimir.
+            await JS.InvokeVoidAsync("escribirDocumentosEnVentanaPreparada", documentos);
+        }
+        finally
+        {
+            imprimiendoOrden = false;
+            StateHasChanged();
+        }
+    }
+
+    /// <summary>
+    /// Obtiene los datos del formulario A4 para la orden seleccionada y dispara la impresión JS.
+    /// </summary>
+    private async Task ImprimirOrdenFabricacionDesdeListadoAsync()
+    {
+        imprimiendoOrden = true;
+        StateHasChanged();
+
+        try
+        {
+            // PASO 1: Abrir la ventana de impresión ANTES del await de la API.
+            // Esto evita que el navegador bloquee el pop-up por falta de "user activation"
+            // cuando entre el click y la apertura transcurre el await de la consulta HTTP.
+            var ventanaPreparada = await JS.InvokeAsync<bool>("prepararVentanaImpresionOrden");
+            if (!ventanaPreparada)
+            {
+                return;
+            }
+
+            // PASO 2: Consultar los datos de impresión que requiere el formulario A4.
+            var respuestaImpresion = await repository.Get<OrdenFabricacionImpresionDTO>(
+                $"api/ordefabr/{idOrdenSeleccionada}/datos-impresion-orden-fabricacion");
+
+            if (respuestaImpresion.Error)
+            {
+                var mensaje = await respuestaImpresion.HttpResponseMessage.Content.ReadAsStringAsync();
+                await sweetAlertService.FireAsync("Error", $"No se pudieron cargar los datos de impresión: {mensaje}", SweetAlertIcon.Error);
+                return;
+            }
+
+            // PASO 3: Escribir el HTML en la ventana ya abierta y disparar window.print().
+            await JS.InvokeVoidAsync("imprimirOrdenFabricacionEnVentanaPreparada", respuestaImpresion.Response);
+        }
+        finally
+        {
+            imprimiendoOrden = false;
+            StateHasChanged();
+        }
+    }
+
+    /// <summary>
+    /// Obtiene los datos del Vale de Materiales para la orden seleccionada y dispara la impresión JS.
+    /// </summary>
+    private async Task ImprimirConsumoMaterialesDesdeListadoAsync()
+    {
+        imprimiendoOrden = true;
+        StateHasChanged();
+
+        try
+        {
+            // PASO 1: Abrir la ventana de impresión ANTES del await de la API.
+            var ventanaPreparada = await JS.InvokeAsync<bool>("prepararVentanaImpresionOrden");
+            if (!ventanaPreparada)
+            {
+                return;
+            }
+
+            // PASO 2: Consultar los datos del Vale de Materiales que requiere el formulario A4.
+            var respuestaImpresion = await repository.Get<OrdenFabricacionConsumoImpresionDTO>(
+                $"api/ordefabr/{idOrdenSeleccionada}/datos-impresion-consumo-materiales");
+
+            if (respuestaImpresion.Error)
+            {
+                var mensaje = await respuestaImpresion.HttpResponseMessage.Content.ReadAsStringAsync();
+                await sweetAlertService.FireAsync("Error", $"No se pudieron cargar los datos de impresión: {mensaje}", SweetAlertIcon.Error);
+                return;
+            }
+
+            // PASO 3: Escribir el HTML en la ventana ya abierta y disparar window.print().
+            await JS.InvokeVoidAsync("imprimirConsumoMaterialesEnVentanaPreparada", respuestaImpresion.Response);
+        }
+        finally
+        {
+            imprimiendoOrden = false;
+            StateHasChanged();
+        }
     }
 
     /// <summary>

@@ -1,4 +1,5 @@
 using IMPLANPROD.Server.Data;
+using IMPLANPROD.Shared.DTOs;
 using IMPLANPROD.Shared.Entities;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -78,6 +79,79 @@ namespace IMPLANPROD.Server.Controllers
 
             await _context.SaveChangesAsync();
             return Ok(new { updated = true });
+        }
+
+        /// <summary>
+        /// Recupera los datos necesarios para imprimir el "Plan de Inspección y Ensayo" en formato A4.
+        /// Combina el producto (Master), el encabezado del plan (Codiproc) y el detalle (Plainsp).
+        /// Se usa desde el botón "Imprimir" del modal PlanInspeccionModal (/ingenieria/documentos).
+        /// GET /api/codiproc/{codInte}/datos-impresion-plan-inspeccion
+        /// </summary>
+        /// <param name="codInte">Código interno del producto (Master.Codint / Codiproc.Cod_Inte).</param>
+        /// <param name="origen">
+        /// Origen opcional del plan (por ejemplo "OF-000123-1") cuando se imprime desde el
+        /// contexto de una Orden de Fabricación. Si no se envía, queda vacío (impresión
+        /// desde /ingenieria/documentos, donde el plan no está atado a ninguna OF puntual).
+        /// </param>
+        [HttpGet("{codInte:int}/datos-impresion-plan-inspeccion")]
+        public async Task<IActionResult> ObtenerDatosImpresionPlanInspeccion(int codInte, [FromQuery] string? origen = null)
+        {
+            // Datos del producto (encabezado: Código, Denominación, Revisión).
+            var master = await _context.masters
+                .AsNoTracking()
+                .Where(m => m.Codint == codInte)
+                .FirstOrDefaultAsync();
+
+            if (master == null)
+            {
+                return NotFound("No se encontró el producto solicitado.");
+            }
+
+            // Encabezado del plan de inspección (AQL, Nivel, Frecuencia, Puntos de Detención, Preparó/Aprobó).
+            var plan = await _context.Codiprocs
+                .AsNoTracking()
+                .Where(x => x.Cod_Inte == codInte)
+                .FirstOrDefaultAsync();
+
+            // Detalle de PLAINSP ordenado por NroOrden, tal como lo definió el usuario en el modal.
+            // No se filtran filas vacías: pueden ser separadores visuales intencionales entre bloques.
+            var items = await _context.Plainsps
+                .AsNoTracking()
+                .Where(x => x.Cod_Inte == codInte)
+                .OrderBy(x => x.NroOrden)
+                .ThenBy(x => x.Id)
+                .Select(x => new PlanInspeccionItemImpresionDTO
+                {
+                    DimSegunPlano = x.DimSegunPlano,
+                    Instrumento = x.Instrumento,
+                    Observaciones = x.Observaciones
+                })
+                .ToListAsync();
+
+            var dto = new PlanInspeccionImpresionDTO
+            {
+                CodInte = master.Codint,
+                Codigo = master.Codigo,
+                Denominacion = master.Descripcion,
+                Revision = master.Revision,
+                // Cuando se imprime desde la Orden de Fabricación se recibe el IdSubOr (p.ej.
+                // "OF-000123-1") por query string. Desde /ingenieria/documentos no se envía
+                // y queda vacío, porque el plan no está atado a ninguna OF puntual.
+                Origen = origen ?? string.Empty,
+                FechaImpresionFormateada = DateTime.Now.ToString("dd/MM/yyyy"),
+                AQL = plan?.AQL,
+                NivelPct = plan?.NivelPct,
+                FrecInspeccion = plan?.FrecInspeccion,
+                PuntoDetencion = plan?.PuntoDetencion,
+                NombrePreparo = plan?.NombrePreparo,
+                FechaPreparoFormateada = plan?.FechaPreparo?.ToString("dd/MM/yyyy") ?? string.Empty,
+                NombreAprobo = plan?.NombreAprobo,
+                FechaAproboFormateada = plan?.FechaAprobo?.ToString("dd/MM/yyyy") ?? string.Empty,
+                Observaciones = plan?.Observaciones,
+                Items = items
+            };
+
+            return Ok(dto);
         }
     }
 
