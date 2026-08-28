@@ -319,8 +319,10 @@ namespace MantenimientoImp.Server.Controllers
                         FechaRecepcion = g.Key.FEYHORecep ?? DateTime.MinValue,
                         NumeroRemito = g.Key.NumRemProv,
                         NumeroProveedor = g.Key.NumProv ?? 0,
+                        // El número de proveedor de BOLRECEP (NumProv) es Proved12.Nume_Cli,
+                        // no la clave primaria Id. Buscar por Nume_Cli para obtener la Razón Social.
                         RazonSocial = _context.Proveedores
-                            .Where(p => p.Id == g.Key.NumProv)
+                            .Where(p => p.Nume_Cli == g.Key.NumProv)
                             .Select(p => p.Raso_Cli)
                             .FirstOrDefault() ?? string.Empty
                     })
@@ -328,6 +330,52 @@ namespace MantenimientoImp.Server.Controllers
                     .ToListAsync();
 
                 return Ok(recepcionesPendientes);
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(ex.Message);
+            }
+        }
+
+        /// <summary>
+        /// Devuelve el detalle por lote de las recepciones pendientes de aprobación.
+        /// A diferencia de "pendientes-aprobacion" (que agrupa por recepción), aquí se
+        /// devuelve una fila por cada registro de BOLRECEP: una misma recepción puede
+        /// aparecer varias veces, una por cada lote (BOLRECEP.IdenLote).
+        /// Se usa en el modal "Detalle por Lote" de /recepcion/selproveedor.
+        /// GET /api/bolrecep/pendientes-aprobacion-detalle
+        /// </summary>
+        [HttpGet("pendientes-aprobacion-detalle")]
+        public async Task<ActionResult<List<RecepcionPendienteAprobacionDetalleDTO>>> GetRecepcionesPendientesAprobacionDetalle()
+        {
+            try
+            {
+                var detalle = await _context.Bolreceps
+                    .Where(b => b.Status == 0 && b.NumeBoRe != null)
+                    .Select(b => new RecepcionPendienteAprobacionDetalleDTO
+                    {
+                        NumeroRecepcion = (int)(b.NumeBoRe ?? 0),
+                        NumeroOrdenCompra = b.NumOC ?? 0,
+                        FechaRecepcion = b.FEYHORecep ?? DateTime.MinValue,
+                        NumeroRemito = b.NumRemProv,
+                        NumeroProveedor = b.NumProv ?? 0,
+                        // Mismo criterio que en GetRecepcionesPendientesAprobacion: el número de
+                        // proveedor de BOLRECEP (NumProv) es Proved12.Nume_Cli, no la clave Id.
+                        RazonSocial = _context.Proveedores
+                            .Where(p => p.Nume_Cli == b.NumProv)
+                            .Select(p => p.Raso_Cli)
+                            .FirstOrDefault() ?? string.Empty,
+                        IdenLote = b.IdenLote ?? string.Empty,
+                        Codigo = b.CodExte ?? string.Empty,
+                        Descripcion = b.DescripItem ?? string.Empty,
+                        CantidadNominal = b.CantNom ?? 0
+                    })
+                    .OrderByDescending(r => r.FechaRecepcion)
+                    .ThenBy(r => r.NumeroRecepcion)
+                    .ThenBy(r => r.IdenLote)
+                    .ToListAsync();
+
+                return Ok(detalle);
             }
             catch (Exception ex)
             {

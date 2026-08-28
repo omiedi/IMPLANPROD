@@ -6,6 +6,7 @@
 @using CurrieTechnologies.Razor.SweetAlert2
 @inject NavigationManager Navigation
 @using IMPLANPROD.Client.Pages.OrdenesCompra
+@using IMPLANPROD.Client.Pages.Reportes
 @using IMPLANPROD.Client.Shared.Components
 @using IMPLANPROD.Client.Services
 
@@ -142,6 +143,57 @@ else
         }
         else
         {
+            <div class="row g-2 mb-2">
+                <div class="col-md-2">
+                    <label class="form-label small mb-0">Nro. Recepción</label>
+                    <input type="text" class="form-control form-control-sm"
+                           @bind-value="filtroNroRecepcion" @bind-value:event="oninput" placeholder="Nro. Recepción" />
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label small mb-0">Nro. OC</label>
+                    <input type="text" class="form-control form-control-sm"
+                           @bind-value="filtroNroOC" @bind-value:event="oninput" placeholder="Nro. OC" />
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label small mb-0">Remito</label>
+                    <input type="text" class="form-control form-control-sm"
+                           @bind-value="filtroRemito" @bind-value:event="oninput" placeholder="Remito" />
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label small mb-0">N. Proveedor</label>
+                    <input type="text" class="form-control form-control-sm"
+                           @bind-value="filtroNroProveedor" @bind-value:event="oninput" placeholder="N. Proveedor" />
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label small mb-0">R. Social</label>
+                    <input type="text" class="form-control form-control-sm"
+                           @bind-value="filtroRazonSocial" @bind-value:event="oninput" placeholder="R. Social" />
+                </div>
+                <div class="col-md-1 d-flex align-items-end">
+                    <button type="button" class="btn btn-outline-secondary btn-sm w-100" @onclick="LimpiarFiltrosPendientes" title="Limpiar filtros">
+                        <i class="oi oi-x"></i>
+                    </button>
+                </div>
+            </div>
+
+            <div class="mb-2 text-end">
+                <button type="button" class="btn btn-outline-primary btn-sm" @onclick="AbrirModalDetalleLotes" disabled="@cargandoDetalleLotes">
+                    @if (cargandoDetalleLotes)
+                    { <span class="spinner-border spinner-border-sm me-1"></span> }
+                    else
+                    { <i class="oi oi-list-rich me-1"></i> }
+                    Ver Detalle por Lote
+                </button>
+            </div>
+
+            @if (!RecepcionesPendientesFiltradas.Any())
+            {
+                <div class="alert alert-info">
+                    No hay recepciones que coincidan con los filtros aplicados.
+                </div>
+            }
+            else
+            {
             <div class="table-responsive">
                 <table class="table table-sm table-hover">
                     <thead>
@@ -170,7 +222,7 @@ else
                         </tr>
                     </thead>
                     <tbody>
-                        @foreach (var recepcion in recepcionesPendientes)
+                        @foreach (var recepcion in RecepcionesPendientesFiltradas)
                         {
                             <tr>
                                 <td class="text-center" style="border-right: 1px solid #dee2e6;">@recepcion.NumeroRecepcion</td>
@@ -197,6 +249,7 @@ else
                     </tbody>
                 </table>
             </div>
+            }
         }
     }
     else if (activeTab == "aprobacionCalidad")
@@ -275,7 +328,7 @@ else
             <div class="col-12">
                 <div class="card shadow-sm">
                     <div class="card-body text-center py-4">
-                        <img src="/Images/logoempresa.png" alt="Logo Empresa" style="max-height: 80px; margin-bottom: 15px;" />
+                        <img src="/images/logoempresa.png" alt="Logo Empresa" style="max-height: 80px; margin-bottom: 15px;" />
                         <h4 class="mb-2">Reportes de Recepciones</h4>
                         <p class="text-muted mb-0">Seleccione el tipo de reporte que desea generar</p>
                     </div>
@@ -386,6 +439,95 @@ else
         </div>
     }
 </div>
+
+@* ═══════════════════════════════════════════════════════════════════════
+   Modal "Detalle por Lote" (solapa Aprueba Calidad)
+   ───────────────────────────────────────────────────────────────────────
+   Muestra una fila por cada registro de BOLRECEP (no agrupado): una misma
+   recepción puede aparecer varias veces, una por cada lote (IdenLote).
+   Respeta los mismos 5 filtros de la grilla agrupada (RecepcionesDetalleFiltradas
+   reutiliza los mismos campos de filtro). No tiene columna de Acción; solo
+   es informativo. Incluye el botón "Imprimir/Excel" con el componente
+   ImpresionLista (mismo patrón que el resto del sistema) para exportar
+   exactamente la lista ya filtrada.
+   ═══════════════════════════════════════════════════════════════════════ *@
+<div class="modal fade @(mostrarModalDetalleLotes ? "show" : "")" style="display: @(mostrarModalDetalleLotes ? "block" : "none")" tabindex="-1">
+    <div class="modal-dialog" style="max-width: 95vw;">
+        <div class="modal-content">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title"><i class="oi oi-list-rich me-2"></i>Detalle por Lote - Recepciones Pendientes</h5>
+                <button type="button" class="btn-close btn-close-white" @onclick="CerrarModalDetalleLotes"></button>
+            </div>
+            <div class="modal-body">
+                @if (!RecepcionesDetalleFiltradas.Any())
+                {
+                    <div class="alert alert-info mb-0">
+                        No hay lotes que coincidan con los filtros aplicados.
+                    </div>
+                }
+                else
+                {
+                    <div class="table-responsive" style="max-height: 65vh; overflow-y: auto;">
+                        <table class="table table-sm table-hover table-bordered mb-0">
+                            <thead class="table-dark sticky-top">
+                                <tr>
+                                    <th class="text-center">Nro. Recepción</th>
+                                    <th class="text-center">Fecha</th>
+                                    <th class="text-center">Nro. OC</th>
+                                    <th>Remito</th>
+                                    <th class="text-center">N. Proveedor</th>
+                                    <th>R. Social</th>
+                                    <th>Lote</th>
+                                    <th>Código</th>
+                                    <th>Descripción</th>
+                                    <th class="text-end">Cantidad</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var item in RecepcionesDetalleFiltradas)
+                                {
+                                    <tr>
+                                        <td class="text-center">@item.NumeroRecepcion</td>
+                                        <td class="text-center">@item.FechaRecepcion.ToString("dd/MM/yyyy HH:mm")</td>
+                                        <td class="text-center">@(item.NumeroOrdenCompra == 0 ? "-" : item.NumeroOrdenCompra.ToString())</td>
+                                        <td>@item.NumeroRemito</td>
+                                        <td class="text-center">@item.NumeroProveedor</td>
+                                        <td>@item.RazonSocial</td>
+                                        <td>@item.IdenLote</td>
+                                        <td>@item.Codigo</td>
+                                        <td>@item.Descripcion</td>
+                                        <td class="text-end">@item.CantidadNominal.ToString("N2")</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                }
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline-success" @onclick="@(() => mostrarModalImpresionDetalleLotes = true)"
+                        disabled="@(!RecepcionesDetalleFiltradas.Any())">
+                    <i class="fas fa-file-excel me-1"></i>Imprimir/Excel
+                </button>
+                <button type="button" class="btn btn-secondary" @onclick="CerrarModalDetalleLotes">Cerrar</button>
+            </div>
+        </div>
+    </div>
+</div>
+@if (mostrarModalDetalleLotes)
+{
+    <div class="modal-backdrop fade show"></div>
+}
+
+@* Componente estándar de impresión/exportación a Excel, reutilizando la misma lista filtrada. *@
+<ImpresionLista TItem="RecepcionPendienteAprobacionDetalleDTO"
+                Datos="@RecepcionesDetalleFiltradas.ToList()"
+                Titulo="Detalle de Recepciones Pendientes por Lote"
+                UrlExportarExcel="api/excel/exportar-recepciones-pendientes-detalle"
+                Encabezados="encabezadosDetalleLotes"
+                ModoDirecto="false"
+                MostrarModal="mostrarModalImpresionDetalleLotes"
+                OnCerrar="@(() => mostrarModalImpresionDetalleLotes = false)" />
 
 @* Modal de Items de Recepción *@
 <div class="modal fade @(mostrarModalItems ? "show" : "")" style="display: @(mostrarModalItems ? "block" : "none")" tabindex="-1">
@@ -512,7 +654,7 @@ else
             <div class="modal-body">
                 <!-- Encabezado con logo para impresión -->
                 <div class="text-center mb-3 reporte-header">
-                    <img src="/Images/logoempresa.png" alt="Logo Empresa" style="max-height: 60px; margin-bottom: 10px;" />
+                    <img src="/images/logoempresa.png" alt="Logo Empresa" style="max-height: 60px; margin-bottom: 10px;" />
                     <h5 class="mb-1">Reporte de Órdenes de Compra Pendientes</h5>
                     @if (!string.IsNullOrEmpty(proveedorFiltroOrdenes))
                     {
@@ -664,7 +806,7 @@ else
     <div class="container" style="font-family: Arial, sans-serif; font-size: 12px;">
         <div class="row mb-2">
             <div class="col-6">
-                <img src="@(new Uri(new Uri(Navigation.BaseUri), "images/logo.png").ToString())" alt="Logo" style="max-height: 60px;" />
+                <img src="@(new Uri(new Uri(Navigation.BaseUri), "images/logoempresa.png").ToString())" alt="Logo" style="max-height: 60px;" />
             </div>
             <div class="col-6 text-end">
                 <div><strong>NOTA DE RECEPCION</strong></div>
@@ -769,6 +911,96 @@ else
     private bool mostrarBotonesRecepcion;
     private List<RecepcionPendienteAprobacionDTO> recepcionesPendientes;
     // private bool validando = true;
+
+    // ── Filtros de la solapa "Aprueba Calidad" ──────────────────────────────
+    private string filtroNroRecepcion = string.Empty;
+    private string filtroNroOC = string.Empty;
+    private string filtroRemito = string.Empty;
+    private string filtroNroProveedor = string.Empty;
+    private string filtroRazonSocial = string.Empty;
+
+    /// <summary>
+    /// Aplica los filtros de texto (Nro. Recepción, Nro. OC, Remito, N. Proveedor y R. Social)
+    /// sobre la lista de recepciones pendientes cargada desde el servidor. Es un filtro
+    /// puramente en el cliente porque la lista completa ya está en memoria.
+    /// </summary>
+    private IEnumerable<RecepcionPendienteAprobacionDTO> RecepcionesPendientesFiltradas =>
+        (recepcionesPendientes ?? new List<RecepcionPendienteAprobacionDTO>())
+            .Where(r => string.IsNullOrWhiteSpace(filtroNroRecepcion) || r.NumeroRecepcion.ToString().Contains(filtroNroRecepcion.Trim()))
+            .Where(r => string.IsNullOrWhiteSpace(filtroNroOC) || r.NumeroOrdenCompra.ToString().Contains(filtroNroOC.Trim()))
+            .Where(r => string.IsNullOrWhiteSpace(filtroRemito) || (r.NumeroRemito ?? string.Empty).Contains(filtroRemito.Trim(), StringComparison.OrdinalIgnoreCase))
+            .Where(r => string.IsNullOrWhiteSpace(filtroNroProveedor) || r.NumeroProveedor.ToString().Contains(filtroNroProveedor.Trim()))
+            .Where(r => string.IsNullOrWhiteSpace(filtroRazonSocial) || (r.RazonSocial ?? string.Empty).Contains(filtroRazonSocial.Trim(), StringComparison.OrdinalIgnoreCase));
+
+    /// <summary>Limpia los filtros de la grilla de recepciones pendientes ("Aprueba Calidad").</summary>
+    private void LimpiarFiltrosPendientes()
+    {
+        filtroNroRecepcion = string.Empty;
+        filtroNroOC = string.Empty;
+        filtroRemito = string.Empty;
+        filtroNroProveedor = string.Empty;
+        filtroRazonSocial = string.Empty;
+    }
+
+    // ── Modal "Detalle por Lote" (una fila por BOLRECEP, no agrupado) ───────
+    private bool mostrarModalDetalleLotes = false;
+    private bool mostrarModalImpresionDetalleLotes = false;
+    private bool cargandoDetalleLotes = false;
+    private List<RecepcionPendienteAprobacionDetalleDTO> recepcionesPendientesDetalle = new();
+
+    private Dictionary<string, string> encabezadosDetalleLotes = new()
+    {
+        { "NumeroRecepcion", "Nro. Recepción" },
+        { "FechaRecepcion", "Fecha" },
+        { "NumeroOrdenCompra", "Nro. OC" },
+        { "NumeroRemito", "Remito" },
+        { "NumeroProveedor", "N. Proveedor" },
+        { "RazonSocial", "R. Social" },
+        { "IdenLote", "Lote" },
+        { "Codigo", "Código" },
+        { "Descripcion", "Descripción" },
+        { "CantidadNominal", "Cantidad" }
+    };
+
+    /// <summary>
+    /// Aplica los mismos 5 filtros de la grilla agrupada (Nro. Recepción, Nro. OC, Remito,
+    /// N. Proveedor y R. Social) sobre el detalle por lote, para que el modal "Detalle por
+    /// Lote" respete el filtro activo en la solapa "Aprueba Calidad".
+    /// </summary>
+    private IEnumerable<RecepcionPendienteAprobacionDetalleDTO> RecepcionesDetalleFiltradas =>
+        recepcionesPendientesDetalle
+            .Where(r => string.IsNullOrWhiteSpace(filtroNroRecepcion) || r.NumeroRecepcion.ToString().Contains(filtroNroRecepcion.Trim()))
+            .Where(r => string.IsNullOrWhiteSpace(filtroNroOC) || r.NumeroOrdenCompra.ToString().Contains(filtroNroOC.Trim()))
+            .Where(r => string.IsNullOrWhiteSpace(filtroRemito) || (r.NumeroRemito ?? string.Empty).Contains(filtroRemito.Trim(), StringComparison.OrdinalIgnoreCase))
+            .Where(r => string.IsNullOrWhiteSpace(filtroNroProveedor) || r.NumeroProveedor.ToString().Contains(filtroNroProveedor.Trim()))
+            .Where(r => string.IsNullOrWhiteSpace(filtroRazonSocial) || (r.RazonSocial ?? string.Empty).Contains(filtroRazonSocial.Trim(), StringComparison.OrdinalIgnoreCase));
+
+    /// <summary>Carga el detalle por lote desde el servidor y abre el modal.</summary>
+    private async Task AbrirModalDetalleLotes()
+    {
+        cargandoDetalleLotes = true;
+        StateHasChanged();
+        try
+        {
+            var response = await repository.Get<List<RecepcionPendienteAprobacionDetalleDTO>>("api/bolrecep/pendientes-aprobacion-detalle");
+            if (response.Error)
+            {
+                var mensaje = await response.GetErrorMessageAsync();
+                await sweetAlertService.FireAsync("Error", mensaje, SweetAlertIcon.Error);
+                return;
+            }
+
+            recepcionesPendientesDetalle = response.Response ?? new List<RecepcionPendienteAprobacionDetalleDTO>();
+            mostrarModalDetalleLotes = true;
+        }
+        finally
+        {
+            cargandoDetalleLotes = false;
+            StateHasChanged();
+        }
+    }
+
+    private void CerrarModalDetalleLotes() => mostrarModalDetalleLotes = false;
 
     private bool mostrarModalItems = false;
     private int numeroRecepcionSeleccionada;

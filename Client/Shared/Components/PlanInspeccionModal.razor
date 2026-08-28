@@ -13,13 +13,17 @@
     │   │                    con botones ↑ ↓ 🗑 por fila
     │   ├─ Fila de agregar : inputs + botón Agregar
     │   └─ Textarea        : Observaciones (Codiproc.Observaciones)
-    └─ modal-footer : Cancelar | Guardar
+    └─ modal-footer : Cancelar | Imprimir (A4) | Imprimir/Excel (grilla) | Guardar
 
     FLUJO DE DATOS
     - Al abrir : GET api/plainsp/by-codinte/{CodInte}
                  GET api/codiproc/by-codinte/{CodInte}
     - Al guardar: POST api/plainsp/guardar/{CodInte}  (DELETE + INSERT)
                   PUT  api/codiproc/observaciones/{CodInte}
+    - Al imprimir (A4): GET api/codiproc/{CodInte}/datos-impresion-plan-inspeccion
+    - Al exportar/imprimir la grilla: componente ImpresionLista (mismo patrón que
+      /pedidos-venta y el resto del sistema) + POST api/excel/exportar-plan-inspeccion
+      con la lista de filas Plainsp tal como están cargadas en pantalla.
 
     BUG DE REORDEN RESUELTO
     Los <tr> usan @key="fila.Key" (Guid único por ítem, no por posición).
@@ -32,6 +36,7 @@
 @inject IJSRuntime JSRuntime
 @using IMPLANPROD.Shared.Entities
 @using IMPLANPROD.Shared.DTOs
+@using IMPLANPROD.Client.Pages.Reportes
 @using System.Globalization
 
 @if (IsVisible)
@@ -276,6 +281,10 @@
                         { <i class="fas fa-print me-1"></i> }
                         Imprimir
                     </button>
+                    <button type="button" class="btn btn-outline-success btn-sm"
+                            @onclick="MostrarExportacion" disabled="@(isGuardando || CodInte == null || !filas.Any())">
+                        <i class="fas fa-file-excel me-1"></i>Imprimir/Excel
+                    </button>
                     <button type="button" class="btn btn-success btn-sm"
                             @onclick="Guardar" disabled="@isGuardando">
                         @if (isGuardando)
@@ -289,6 +298,20 @@
             </div>
         </div>
     </div>
+
+    @* ══ Exportación/impresión de la grilla PLAINSP ═══════════════════════════
+       Mismo patrón usado en el resto del sistema (por ejemplo /pedidos-venta):
+       componente genérico ImpresionLista + endpoint api/excel/exportar-plan-inspeccion.
+       El título incluye Código, Descripción y el texto fijo "Plan de Inspección y Ensayo",
+       que además se muestra como encabezado en la vista previa/impresión del componente. *@
+    <ImpresionLista TItem="Plainsp"
+                    Datos="@(filas.Select(f => f.Item).ToList())"
+                    Titulo="@TituloExportacion"
+                    UrlExportarExcel="api/excel/exportar-plan-inspeccion"
+                    Encabezados="encabezadosPlan"
+                    ModoDirecto="false"
+                    MostrarModal="mostrarModalExportarPlan"
+                    OnCerrar="@(() => mostrarModalExportarPlan = false)" />
 }
 
 <style>
@@ -321,6 +344,19 @@
     private bool          isLoading         = false;   // spinner de carga inicial
     private bool          isGuardando       = false;   // spinner del botón Guardar
     private bool          isImprimiendo     = false;   // spinner del botón Imprimir
+
+    // ── Exportación/impresión de la grilla (componente ImpresionLista) ───────
+    private bool mostrarModalExportarPlan = false;
+    private Dictionary<string, string> encabezadosPlan = new()
+    {
+        { "DimSegunPlano", "Dimensión s/Plano" },
+        { "Instrumento", "Instrumento" },
+        { "Observaciones", "Resultado" }
+    };
+    // Encabezado con Código, Descripción y el texto fijo del título del formulario.
+    private string TituloExportacion => $"Plan de Inspección y Ensayo - {Producto?.Codigo} - {Producto?.Descripcion}";
+
+    private void MostrarExportacion() => mostrarModalExportarPlan = true;
 
     // ── Campos para agregar una nueva fila ────────────────────────────────────
     private string        nuevaDim          = string.Empty;

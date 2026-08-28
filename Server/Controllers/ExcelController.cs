@@ -126,7 +126,7 @@ namespace IMPLANPROD.Server.Controllers
                 ws.Row(fila + 3).Height = 15;
                 ws.Row(fila + 4).Height = 15;
 
-                var logoPath = Path.Combine(_env.ContentRootPath, "..", "Client", "wwwroot", "images", "logo.png");
+                var logoPath = Path.Combine(_env.ContentRootPath, "..", "Client", "wwwroot", "images", "logoempresa.png");
                 if (System.IO.File.Exists(logoPath))
                 {
                     using var logoStream = new MemoryStream(System.IO.File.ReadAllBytes(logoPath));
@@ -1684,6 +1684,162 @@ namespace IMPLANPROD.Server.Controllers
             {
                 _logger.LogError(ex, "[ExportarCargaHorariaMaquinas] Error al generar Excel de Carga Horaria");
                 _logger.LogError($"[ExportarCargaHorariaMaquinas] Detalles: {ex.Message}");
+                return StatusCode(500, $"Error al generar el archivo excel: {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// Exporta a Excel el Plan de Inspección y Ensayo mostrado en el modal de
+        /// /ingenieria/documentos. Sigue el mismo patrón de integración que el resto del
+        /// sistema (por ejemplo /pedidos-venta): el componente &lt;ImpresionLista&gt; del
+        /// cliente envía la lista de filas (List&lt;Plainsp&gt;) tal cual las tiene en pantalla
+        /// mediante <c>UrlExportarExcel</c>. Acá se arma manualmente con ClosedXML (en vez de
+        /// _excelService.GenerarExcel) porque además de la tabla se necesita un encabezado fijo
+        /// con Código, Descripción y el título del formulario; el Código interno (Cod_Inte) para
+        /// buscar esos datos en Master se toma del primer ítem recibido.
+        /// </summary>
+        /// <param name="datos">Filas PLAINSP actualmente cargadas en la grilla del modal.</param>
+        /// <returns>Archivo Excel con el Plan de Inspección.</returns>
+        [HttpPost("exportar-plan-inspeccion")]
+        public IActionResult ExportarPlanInspeccion([FromBody] List<Plainsp> datos)
+        {
+            try
+            {
+                if (datos == null || !datos.Any())
+                {
+                    return BadRequest("No hay filas para exportar");
+                }
+
+                // El Código/Descripción del encabezado se buscan en Master a partir del
+                // Cod_Inte que ya viaja en cada fila PLAINSP (misma clave que Master.Codint).
+                var codInte = datos.FirstOrDefault(d => d.Cod_Inte.HasValue)?.Cod_Inte;
+                var master = codInte.HasValue
+                    ? _db.masters.AsNoTracking().FirstOrDefault(m => m.Codint == codInte.Value)
+                    : null;
+
+                using var wb = new XLWorkbook();
+                var ws = wb.Worksheets.Add("Plan de Inspección");
+
+                ws.Style.Font.FontName = "Arial";
+                ws.Style.Font.FontSize = 10;
+
+                ws.Column(1).Width = 30; // Dimensión s/Plano
+                ws.Column(2).Width = 24; // Instrumento
+                ws.Column(3).Width = 45; // Resultado
+
+                var fila = 1;
+
+                // Título fijo del formulario
+                ws.Cell(fila, 1).Value = "Plan de Inspección y Ensayo";
+                ws.Range(fila, 1, fila, 3).Merge();
+                ws.Range(fila, 1, fila, 3).Style.Font.Bold = true;
+                ws.Range(fila, 1, fila, 3).Style.Font.FontSize = 14;
+                ws.Range(fila, 1, fila, 3).Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
+                fila += 2;
+
+                // Encabezado: Código y Descripción del producto
+                ws.Cell(fila, 1).Value = "Código:";
+                ws.Cell(fila, 1).Style.Font.Bold = true;
+                ws.Cell(fila, 2).Value = master?.Codigo ?? string.Empty;
+                fila++;
+
+                ws.Cell(fila, 1).Value = "Descripción:";
+                ws.Cell(fila, 1).Style.Font.Bold = true;
+                ws.Cell(fila, 2).Value = master?.Descripcion ?? string.Empty;
+                ws.Range(fila, 2, fila, 3).Merge();
+                fila += 2;
+
+                // Encabezado de la tabla de detalle
+                ws.Cell(fila, 1).Value = "Dimensión s/Plano";
+                ws.Cell(fila, 2).Value = "Instrumento";
+                ws.Cell(fila, 3).Value = "Resultado";
+                ws.Range(fila, 1, fila, 3).Style.Font.Bold = true;
+                ws.Range(fila, 1, fila, 3).Style.Fill.BackgroundColor = XLColor.LightGray;
+                ws.Range(fila, 1, fila, 3).Style.Border.OutsideBorder = XLBorderStyleValues.Thin;
+                var filaEncabezadoDetalle = fila;
+                fila++;
+
+                // Detalle PLAINSP en el mismo orden que la grilla del modal (NroOrden).
+                // Se exporta tal cual, incluyendo filas vacías que el usuario usa como
+                // separador visual (mismo criterio que la impresión A4).
+                foreach (var item in datos.OrderBy(d => d.NroOrden).ThenBy(d => d.Id))
+                {
+                    ws.Cell(fila, 1).Value = item.DimSegunPlano ?? string.Empty;
+                    ws.Cell(fila, 2).Value = item.Instrumento ?? string.Empty;
+                    ws.Cell(fila, 3).Value = item.Observaciones ?? string.Empty;
+                    fila++;
+                }
+
+                ws.Range(filaEncabezadoDetalle, 1, fila - 1, 3).Style.Border.OutsideBorder = XLBorderStyleValues.Thin;
+                ws.Range(filaEncabezadoDetalle, 1, fila - 1, 3).Style.Border.InsideBorder = XLBorderStyleValues.Thin;
+
+                using var stream = new MemoryStream();
+                wb.SaveAs(stream);
+
+                var nombreArchivo = $"PlanInspeccion_{Safe(master?.Codigo)}_{DateTime.Now:yyyyMMdd_HHmmss}.xlsx";
+                return File(stream.ToArray(),
+                            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                            nombreArchivo);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "[ExportarPlanInspeccion] Error al generar Excel del Plan de Inspección");
+                return StatusCode(500, $"Error al generar el archivo excel: {ex.Message}");
+            }
+        }
+
+        private static string Safe(string? value) => string.IsNullOrWhiteSpace(value)
+            ? "SinCodigo"
+            : string.Concat(value.Split(Path.GetInvalidFileNameChars()));
+
+        /// <summary>
+        /// Exporta a Excel el detalle por lote de las recepciones pendientes de aprobación
+        /// (modal "Detalle por Lote" de /recepcion/selproveedor). Mismo patrón que el resto
+        /// del sistema: el componente ImpresionLista del cliente envía la lista ya filtrada
+        /// mediante UrlExportarExcel; acá se usa _excelService.GenerarExcel porque es una
+        /// tabla plana, sin encabezado fijo adicional.
+        /// </summary>
+        /// <param name="datos">Filas de detalle por lote (ya filtradas en el cliente).</param>
+        /// <returns>Archivo Excel con el detalle por lote.</returns>
+        [HttpPost("exportar-recepciones-pendientes-detalle")]
+        public IActionResult ExportarRecepcionesPendientesDetalle([FromBody] List<RecepcionPendienteAprobacionDetalleDTO> datos)
+        {
+            try
+            {
+                if (datos == null || !datos.Any())
+                {
+                    return BadRequest("No hay datos para exportar");
+                }
+
+                var encabezados = new Dictionary<string, string>
+                {
+                    { "NumeroRecepcion", "Nro. Recepción" },
+                    { "FechaRecepcion", "Fecha" },
+                    { "NumeroOrdenCompra", "Nro. OC" },
+                    { "NumeroRemito", "Remito" },
+                    { "NumeroProveedor", "N. Proveedor" },
+                    { "RazonSocial", "R. Social" },
+                    { "IdenLote", "Lote" },
+                    { "Codigo", "Código" },
+                    { "Descripcion", "Descripción" },
+                    { "CantidadNominal", "Cantidad" }
+                };
+
+                var orden = new List<string>
+                {
+                    "NumeroRecepcion", "FechaRecepcion", "NumeroOrdenCompra", "NumeroRemito",
+                    "NumeroProveedor", "RazonSocial", "IdenLote", "Codigo", "Descripcion", "CantidadNominal"
+                };
+
+                var archivo = _excelService.GenerarExcel(datos, "Detalle por Lote", encabezados, orden);
+
+                return File(archivo,
+                            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                            $"Recepciones_Pendientes_Detalle_{DateTime.Now:yyyyMMdd_HHmmss}.xlsx");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "[ExportarRecepcionesPendientesDetalle] Error al generar Excel del detalle por lote");
                 return StatusCode(500, $"Error al generar el archivo excel: {ex.Message}");
             }
         }
