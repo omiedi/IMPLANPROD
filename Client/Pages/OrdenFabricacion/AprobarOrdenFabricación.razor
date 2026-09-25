@@ -12,6 +12,7 @@
 @inject HttpClient Http
 @inject PageAccessService PageAccess
 @inject AuthenticationStateProvider AuthProvider
+@inject IJSRuntime JS
 
 <PageTitle>Aprobación de Órdenes de Fabricación</PageTitle>
 
@@ -41,7 +42,15 @@ else
             TotalPages="totalPages"
             SelectedPage="SelectedPageAsync" />
 
-@if (registros.Count == 0)
+@if (isLoading)
+{
+    <div class="d-flex justify-content-center align-items-center" style="height: 200px;">
+        <div class="spinner-border text-primary" role="status" style="width: 3rem; height: 3rem;">
+            <span class="visually-hidden">Cargando...</span>
+        </div>
+    </div>
+}
+else if (registros.Count == 0)
 { 
     <div class="alert alert-info mt-3">
         <i class="oi oi-info me-2"></i> No se encontraron registros que coincidan con la búsqueda.
@@ -106,6 +115,161 @@ else
                        OnModalClosed="@(EventCallback.Factory.Create(this, OnModalDepositoConsumoCerrado))"
                        DepositoPorDefecto="depositoConsumo" />
 
+@* Modal de vista previa del Vale Interno emitido al aprobar una Orden de Fabricación *@
+@if (mostrarModalVistaPreviaVale && ordenSeleccionadaActual != null)
+{
+    <div class="modal fade show" style="display: block" tabindex="-1">
+        <div class="modal-dialog modal-xl">
+            <div class="modal-content">
+                <div class="modal-header bg-primary text-white">
+                    <h5 class="modal-title">
+                        <i class="oi oi-file me-2"></i>Vale Interno - Aprobación de Orden de Fabricación
+                    </h5>
+                    <button type="button" class="btn-close btn-close-white" @onclick="CancelarVistaPreviaVale"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="card">
+                                <div class="card-header bg-light">
+                                    <strong>Observaciones</strong>
+                                </div>
+                                <div class="card-body">
+                                    <textarea class="form-control" rows="4" placeholder="Ingrese observaciones para el vale interno..." @bind="observacionesVale"></textarea>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="card">
+                                <div class="card-header bg-light">
+                                    <strong>Vista Previa</strong>
+                                </div>
+                                <div class="card-body">
+                                    <div style="font-family: 'Courier New', monospace; font-size: 12px; border: 1px solid #ccc; padding: 20px; background: white;">
+                                        <div class="d-flex justify-content-between align-items-start mb-2">
+                                            <div>
+                                                <strong>VALE INTERNO</strong>
+                                            </div>
+                                            <div class="text-end">
+                                                <div>FECHA DE CIERRE: @DateTime.Now.ToString("dd/MM/yyyy")</div>
+                                                <div>Origen: @(ordenFabricacionSeleccionada)</div>
+                                            </div>
+                                        </div>
+
+                                        <div style="border-top: 1px solid black; margin: 10px 0;"></div>
+
+                                        <div class="row mb-2" style="font-weight: bold;">
+                                            <div class="col-3">Código</div>
+                                            <div class="col-6">Descripción</div>
+                                            <div class="col-3 text-end">Cantidad</div>
+                                        </div>
+
+                                        <div class="row mb-2">
+                                            <div class="col-3">@(ordenSeleccionadaActual.Cod_Exte)</div>
+                                            <div class="col-6">@GetDescripcion(ordenSeleccionadaActual.Cod_Inte ?? 0)</div>
+                                            <div class="col-3 text-end">@FormatDecimalVale(cantidadVale)</div>
+                                        </div>
+
+                                        <div style="border-top: 1px solid black; margin: 10px 0;"></div>
+                                        <div style="border-top: 1px solid black; margin: 10px 0;"></div>
+                                        <div style="border-top: 1px solid black; margin: 10px 0;"></div>
+
+                                        @if (!string.IsNullOrWhiteSpace(observacionesVale))
+                                        {
+                                            <div class="mt-3">
+                                                <strong>Observaciones:</strong>
+                                                <div style="white-space: pre-wrap;">@observacionesVale</div>
+                                            </div>
+                                            <div style="border-top: 1px solid black; margin: 10px 0;"></div>
+                                        }
+
+                                        <div class="text-end mt-3">
+                                            <strong>Cerró: @nombreUsuarioActualVale</strong>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-info" @onclick="ImprimirValeOF">
+                        <i class="oi oi-print me-1"></i>Imprimir
+                    </button>
+                    <button type="button" class="btn btn-secondary" @onclick="CancelarVistaPreviaVale">
+                        <i class="oi oi-check me-1"></i>Cerrar
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="modal-backdrop fade show"></div>
+}
+
+<!-- Área de impresión del Vale Interno (aprobación de O.F.) -->
+<div id="areaImpresionValeAprobacionOF" style="display: none;">
+    @if (ordenSeleccionadaActual != null)
+    {
+        <div style="padding: 20px; font-family: 'Courier New', monospace; font-size: 12px;">
+            <div style="margin-bottom: 20px;">
+                <div style="text-align: center; margin-bottom: 15px;">
+                    <h2 style="font-size: 24px; font-weight: bold; margin: 0;">VALE INTERNO</h2>
+                </div>
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <div style="font-size: 16px; font-weight: bold;">
+                        Origen: @(ordenFabricacionSeleccionada)
+                    </div>
+                    <div style="font-size: 16px; font-weight: bold;">
+                        Fecha de Cierre: @DateTime.Now.ToString("dd/MM/yyyy")
+                    </div>
+                </div>
+            </div>
+
+            <table style="width: 100%; border-collapse: collapse; margin-top: 20px;">
+                <thead>
+                    <tr style="background-color: #212529; color: white; font-weight: bold;">
+                        <th style="border: 1px solid #000; padding: 8px; text-align: left;">Código</th>
+                        <th style="border: 1px solid #000; padding: 8px; text-align: left;">Descripción</th>
+                        <th style="border: 1px solid #000; padding: 8px; text-align: right;">Cantidad</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td style="border: 1px solid #000; padding: 8px;">@(ordenSeleccionadaActual.Cod_Exte)</td>
+                        <td style="border: 1px solid #000; padding: 8px;">@GetDescripcion(ordenSeleccionadaActual.Cod_Inte ?? 0)</td>
+                        <td style="border: 1px solid #000; padding: 8px; text-align: right;">@FormatDecimalVale(cantidadVale)</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            @if (!string.IsNullOrWhiteSpace(observacionesVale))
+            {
+                <div style="margin-top: 20px;">
+                    <strong>Observaciones:</strong>
+                    <div style="white-space: pre-wrap; margin-top: 10px;">@observacionesVale</div>
+                </div>
+            }
+
+            <div style="margin-top: 30px; text-align: right;">
+                <strong>Cerró: @nombreUsuarioActualVale</strong>
+            </div>
+        </div>
+    }
+</div>
+
+@if (procesandoAprobacion)
+{
+    <div class="position-fixed top-0 start-0 w-100 h-100 d-flex justify-content-center align-items-center"
+         style="background-color: rgba(0,0,0,0.4); z-index: 1050;">
+        <div class="bg-white rounded-3 p-4 text-center shadow">
+            <div class="spinner-border text-primary mb-2" role="status" style="width: 3rem; height: 3rem;">
+                <span class="visually-hidden">Procesando...</span>
+            </div>
+            <div class="fw-semibold text-primary">Procesando aprobación...</div>
+        </div>
+    </div>
+}
+
 @code
 {
 
@@ -121,11 +285,21 @@ else
     private bool esSuperAdmin = false;
     
     // Variables para el proceso de aprobación
+    private Orfapen? ordenSeleccionadaActual;
     private string ordenFabricacionSeleccionada = string.Empty;
     private string idTextCierre = string.Empty;
     private decimal saldoPendiente = 0;
     private int depositoEntrada = 0;
     private int depositoConsumo = 0;
+
+    // ------------------------------------------------------------------
+    // VALE INTERNO (impreso al aprobar una Orden de Fabricación)
+    // ------------------------------------------------------------------
+    private bool mostrarModalVistaPreviaVale = false;
+    private string? nombreUsuarioActualVale;
+    private string observacionesVale = string.Empty;
+    private decimal cantidadVale;
+    private const string idAreaImpresionValeOF = "areaImpresionValeAprobacionOF";
     
     // Variables para el modal de selección de depósito
     private bool mostrarModalDeposito = false;
@@ -133,6 +307,12 @@ else
     private bool depositoCambiado = false;
     private bool depositoConsumoCambiado = false;
     private string tipoDepositoSeleccionando = string.Empty; // "entrada" o "consumo"
+
+    // Spinner que se muestra mientras se procesa la aprobación y se refresca la grilla.
+    private bool procesandoAprobacion = false;
+
+    // Spinner que se muestra mientras se cargan los resultados (filtro o paginación).
+    private bool isLoading = false;
 
     public class DescripcionResponse
     {
@@ -224,39 +404,50 @@ else
             return;
         }
 
-        currentPage = page;
+        isLoading = true;
+        StateHasChanged();
 
-        var parametros = new OFabricacionRequestDTO
+        try
         {
-            IdFlexoftUsuario = esSuperAdmin ? null : idFlexoftUsuario,
-            Depositos = esSuperAdmin ? null : depositos,
-            Page = page,
-            RecordsNumber = 10,
-            Filter = string.IsNullOrWhiteSpace(Filter) ? null : Filter
-        };
+            currentPage = page;
 
-        var responseOrdenes = await repository.Post<OFabricacionRequestDTO, List<Orfapen>>(
-            "api/AprobacionOrdenFabricacion/pendientesAprobacion", parametros);
+            var parametros = new OFabricacionRequestDTO
+            {
+                IdFlexoftUsuario = esSuperAdmin ? null : idFlexoftUsuario,
+                Depositos = esSuperAdmin ? null : depositos,
+                Page = page,
+                RecordsNumber = 10,
+                Filter = string.IsNullOrWhiteSpace(Filter) ? null : Filter
+            };
 
-        if (responseOrdenes.Error || responseOrdenes.Response == null)
-        {
-            await sweetAlertService.FireAsync("Error", "No se pudieron obtener las órdenes pendientes de aprobación", SweetAlertIcon.Error);
-            return;
+            var responseOrdenes = await repository.Post<OFabricacionRequestDTO, List<Orfapen>>(
+                "api/AprobacionOrdenFabricacion/pendientesAprobacion", parametros);
+
+            if (responseOrdenes.Error || responseOrdenes.Response == null)
+            {
+                await sweetAlertService.FireAsync("Error", "No se pudieron obtener las órdenes pendientes de aprobación", SweetAlertIcon.Error);
+                return;
+            }
+
+            var responsePages = await repository.Post<OFabricacionRequestDTO, int>(
+                "api/AprobacionOrdenFabricacion/totalPages", parametros);
+
+            if (!responsePages.Error)
+            {
+                totalPages = responsePages.Response;
+            }
+
+            registros = responseOrdenes.Response;
+
+            // Cargar descripciones
+            await CargarDescripciones();
+            await CargarDepositos();
         }
-
-        var responsePages = await repository.Post<OFabricacionRequestDTO, int>(
-            "api/AprobacionOrdenFabricacion/totalPages", parametros);
-
-        if (!responsePages.Error)
+        finally
         {
-            totalPages = responsePages.Response;
+            isLoading = false;
+            StateHasChanged();
         }
-
-        registros = responseOrdenes.Response;
-
-        // Cargar descripciones
-        await CargarDescripciones();
-        await CargarDepositos();
     }
 
     private async Task CleanFilterAsync()
@@ -361,7 +552,9 @@ else
     {
         try
         {
-            // Capturar datos de la orden seleccionada
+            // Capturar datos de la orden seleccionada (se guarda la orden completa para poder
+            // armar el Vale Interno con su código/descripción una vez aprobada).
+            ordenSeleccionadaActual = orden;
             ordenFabricacionSeleccionada = orden.DoPriCor ?? string.Empty;
             idTextCierre = orden.IDTEXT ?? string.Empty;
             saldoPendiente = orden.Ajuste;
@@ -732,20 +925,71 @@ else
             if (!confirmacionFinal.IsConfirmed)
                 return;
 
-            // 4. Usar el endpoint existente de cierre con control de calidad
-            await ProcesarAprobacionConCierreExistente(cantidadConfirmada);
+            // Mostrar spinner mientras se procesa la aprobación y se refresca la grilla.
+            procesandoAprobacion = true;
+            StateHasChanged();
 
-            // 5. Mensaje de éxito
-            await sweetAlertService.FireAsync("Éxito", "Aprobación procesada correctamente", SweetAlertIcon.Success);
-            
-            // 6. Recargar la lista
-            await LoadAsync(currentPage);
+            try
+            {
+                // 4. Usar el endpoint existente de cierre con control de calidad
+                await ProcesarAprobacionConCierreExistente(cantidadConfirmada);
+
+                // 5. Mensaje de éxito
+                await sweetAlertService.FireAsync("Éxito", "Aprobación procesada correctamente", SweetAlertIcon.Success);
+
+                // 6. Preparar y mostrar el Vale Interno (mismo formato que el emitido al cerrar
+                // una O.F. desde la grilla de Órdenes de Fabricación).
+                var authState = await AuthProvider.GetAuthenticationStateAsync();
+                nombreUsuarioActualVale = authState.User.Identity?.Name ?? "Usuario";
+                cantidadVale = cantidadConfirmada;
+                observacionesVale = string.Empty;
+                mostrarModalVistaPreviaVale = true;
+            }
+            finally
+            {
+                // Ocultar spinner una vez que terminó el procesamiento.
+                procesandoAprobacion = false;
+                StateHasChanged();
+            }
         }
         catch (Exception ex)
         {
+            // En caso de error, asegurar que el spinner se oculte.
+            procesandoAprobacion = false;
+            StateHasChanged();
+
             await sweetAlertService.FireAsync("Error", 
                 $"Error al procesar la aprobación: {ex.Message}", 
                 SweetAlertIcon.Error);
+        }
+    }
+
+    private string FormatDecimalVale(decimal value)
+    {
+        return value.ToString("N2");
+    }
+
+    // Cierra la vista previa del Vale Interno y recarga la grilla de órdenes pendientes.
+    private async Task CancelarVistaPreviaVale()
+    {
+        mostrarModalVistaPreviaVale = false;
+        observacionesVale = string.Empty;
+
+        // Recargar la lista de órdenes para reflejar los cambios
+        await LoadAsync(currentPage);
+    }
+
+    // Imprime el Vale Interno usando la misma función JS que el resto de las impresiones simples.
+    private async Task ImprimirValeOF()
+    {
+        try
+        {
+            await Task.Delay(100);
+            await JS.InvokeVoidAsync("imprimirElemento", idAreaImpresionValeOF);
+        }
+        catch (Exception ex)
+        {
+            await sweetAlertService.FireAsync("Error", $"Error al imprimir: {ex.Message}", SweetAlertIcon.Error);
         }
     }
 

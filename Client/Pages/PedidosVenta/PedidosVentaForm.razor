@@ -213,7 +213,15 @@
                                 {
                                     <tr>
                                         <td>@det.CodInt</td>
-                                        <td>@det.Codigo</td>
+                                        <td>
+                                            @det.Codigo
+                                            @if (det.Status == 8)
+                                            {
+                                                @* Ítem marcado como cumplido desde la utilidad
+                                                   "Anular Items de Pedido" (Status = 8) *@
+                                                <span class="badge bg-info ms-1" title="MARCADO COMO CUMPLIDO">M.C.</span>
+                                            }
+                                        </td>
                                         <td>@det.Descripcion</td>
                                         <td>
                                             @if (IsEdit)
@@ -544,6 +552,10 @@ OnClose="TerminarCicloSeleccionProductos" />
                 Motivo = motivoTexto,
                 MoneEmis = pedido.MoneEmis,
                 TipoCam = pedido.TipoCam,
+                NTranspo = pedido.NTranspo,
+                TranspEnt = pedido.TranspEnt,
+                DomiEnt = pedido.DomiEnt,
+                LocaEnt = pedido.LocaEnt,
                 Items = new()
             };
 
@@ -908,6 +920,11 @@ OnClose="TerminarCicloSeleccionProductos" />
         /// Cantidad entregada (solo para edición) - no puede ser modificada
         /// </summary>
         public decimal CantidadEntregada { get; set; } = 0;
+        /// <summary>
+        /// Estado del ítem en PEDDETA (8 = marcado como cumplido desde la
+        /// utilidad "Anular Items de Pedido")
+        /// </summary>
+        public short? Status { get; set; }
         /// <summary>
         /// Fecha de entrega del item
         /// </summary>
@@ -1318,6 +1335,7 @@ OnClose="TerminarCicloSeleccionProductos" />
                         Unidad = string.Empty,
                         CantidadEntregada = d.CantEnt ?? 0,
                         FechaEntrega = d.FeSolEnt,
+                        Status = d.Status, // 8 = marcado como cumplido
                         EsItemNuevo = false, // Items existentes
                         });
                 }
@@ -1446,6 +1464,8 @@ OnClose="TerminarCicloSeleccionProductos" />
                 TipoCam = pedido.TipoCam,
                 NTranspo = pedido.NTranspo,
                 TranspEnt = pedido.TranspEnt,
+                DomiEnt = pedido.DomiEnt,
+                LocaEnt = pedido.LocaEnt,
                 Items = new()
             };
 

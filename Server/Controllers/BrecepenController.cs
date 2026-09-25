@@ -20,35 +20,82 @@ namespace IMPLANPROD.Server.Controllers
         }
 
         /// <summary>
-        /// Obtiene las recepciones pendientes de aprobación para un producto específico
-        /// Usado en Stock Proyectado de StockInfGeneral
-        /// Filtra: CantIngre > CantSalid
+        /// Obtiene las recepciones pendientes de aprobación para un producto específico.
+        /// Usado en Stock Proyectado de StockInfGeneral.
+        ///
+        /// Corazón de la consulta (SQL equivalente):
+        ///   SELECT IDENLOTE, COD_INTE, SUM(CANTINGRE - CANTSALID) AS CantPendiente
+        ///   FROM BRECEPEN
+        ///   WHERE COD_INTE = @codint
+        ///   GROUP BY IDENLOTE, COD_INTE
+        ///   HAVING SUM(CANTINGRE - CANTSALID) > 0
+        ///
+        /// NOTA EF Core: no se usan cláusulas `let` ni `OrderBy(...).FirstOrDefault()`
+        /// dentro del GroupBy porque EF Core no puede traducirlos a SQL
+        /// ("Translation of 'Select' which contains grouping parameter without composition").
+        /// Se proyectan los agregados directamente en el Select del grupo.
         /// </summary>
         [HttpGet("pendientes-aprobacion-por-producto/{codint}")]
         public async Task<ActionResult<List<StockRecepcionPendienteAprobacionDTO>>> GetPendientesAprobacionPorProducto(int codint)
         {
             try
             {
-                var query = from b in _context.Brecepens.AsNoTracking()
-                            where b.COD_INTE == codint
-                                  && (b.Cantingre ?? 0) > (b.Cantsalid ?? 0)
-                            join p in _context.Proveedores.AsNoTracking()
-                                on (b.NumeProv ?? 0) equals p.Nume_Cli into provJoin
-                            from p in provJoin.DefaultIfEmpty()
-                            select new StockRecepcionPendienteAprobacionDTO
-                            {
-                                Numebore = b.Id,
-                                NumeProv = b.NumeProv,
-                                Proveedor = p != null ? (p.Raso_Cli ?? "") : "",
-                                CantPendiente = (b.Cantingre ?? 0) - (b.Cantsalid ?? 0),
-                                RemitoProveedor = b.Refercor ?? "",
-                                FechaRecepcion = b.Fechmov ?? DateTime.MinValue,
-                                Lote = b.Idenlote ?? ""
-                            };
-
-                var result = await query
-                    .OrderBy(x => x.Numebore)
+                // ── Paso 1: agrupar por IDENLOTE + COD_INTE ──────────────────
+                // Agregados proyectados directamente (sin `let`), que EF Core sí traduce.
+                var grupos = await _context.Brecepens
+                    .AsNoTracking()
+                    .Where(b => b.COD_INTE == codint)
+                    .GroupBy(b => new { b.Idenlote, b.COD_INTE })
+                    .Select(g => new
+                    {
+                        g.Key.Idenlote,
+                        g.Key.COD_INTE,
+                        CantPendiente = g.Sum(x => (x.Cantingre ?? 0m) - (x.Cantsalid ?? 0m)),
+                        // Datos representativos del grupo, resueltos con agregados (traducibles)
+                        MaxId = g.Max(x => x.Id),
+                        FechaRecepcion = g.Max(x => x.Fechmov),
+                        NumeProv = g.Max(x => x.NumeProv),
+                        RemitoProveedor = g.Max(x => x.Refercor)
+                    })
+                    .Where(x => x.CantPendiente > 0m)
                     .ToListAsync();
+
+                if (grupos.Count == 0)
+                    return Ok(new List<StockRecepcionPendienteAprobacionDTO>());
+
+                // ── Paso 2: resolver razón social de los proveedores ─────────
+                // El número de proveedor de BRECEPEN es Proved12.Nume_Cli (no el Id).
+                var numeProvs = grupos
+                    .Select(g => g.NumeProv ?? 0)
+                    .Where(n => n > 0)
+                    .Distinct()
+                    .ToList();
+
+                var proveedores = await _context.Proveedores
+                    .AsNoTracking()
+                    .Where(p => numeProvs.Contains(p.Nume_Cli))
+                    .ToDictionaryAsync(p => p.Nume_Cli, p => p.Raso_Cli ?? "");
+
+                // ── Paso 3: armar el DTO ─────────────────────────────────────
+                var result = grupos
+                    .Select(g =>
+                    {
+                        var numeProv = g.NumeProv ?? 0;
+                        return new StockRecepcionPendienteAprobacionDTO
+                        {
+                            Numebore = g.MaxId,
+                            NumeProv = g.NumeProv,
+                            Proveedor = numeProv > 0 && proveedores.ContainsKey(numeProv)
+                                ? proveedores[numeProv]
+                                : "",
+                            CantPendiente = g.CantPendiente,
+                            RemitoProveedor = g.RemitoProveedor ?? "",
+                            FechaRecepcion = g.FechaRecepcion ?? DateTime.MinValue,
+                            Lote = g.Idenlote ?? ""
+                        };
+                    })
+                    .OrderBy(x => x.Numebore)
+                    .ToList();
 
                 return Ok(result);
             }
@@ -98,6 +145,10 @@ namespace IMPLANPROD.Server.Controllers
                     NumeroRecepcion = g.Max(x => x.bol != null ? (int?)x.bol.NumeBoRe : null),
                     // Fecha de recepción desde BOLRECEP.FechRecep
                     FechaRecepcion = g.Max(x => x.bol != null ? x.bol.FechRecep : (DateTime?)null),
+                    // Depósito de ingreso del registro original de recepción (se usa como valor por
+                    // defecto al aprobar; el usuario puede cambiarlo antes de confirmar).
+                    // BRECEPEN.Depomovi es short?; lo llevamos a int? para no acoplar el DTO al tipo de columna.
+                    DepositoIngreso = g.Max(x => (int?)x.b.Depomovi),
                     // Ingresado: los registros 'AP' tienen CANTINGRE = 0, así que suman 0 aquí.
                     CantidadIngresada = g.Sum(x => x.b.Cantingre ?? 0m),
                     // Aprobado: SUM(CANTSALID) SOLO de los registros CODIMOVI = 'AP'.
@@ -115,12 +166,25 @@ namespace IMPLANPROD.Server.Controllers
                     x.Doprilar,
                     x.NumeroRecepcion,
                     x.FechaRecepcion,
+                    x.DepositoIngreso,
                     CantidadPendiente = x.CantidadIngresada - x.CantidadAprobada
                 })
                 .Where(x => x.CantidadPendiente > 0)
                 .OrderBy(x => x.Doprilar)
                 .ThenBy(x => x.Codigo)
                 .ToListAsync();
+
+            // Resolvemos la descripción de los depósitos involucrados en una sola consulta,
+            // para no golpear la base de datos una vez por fila.
+            var codigosDeposito = result
+                .Where(x => x.DepositoIngreso.HasValue && x.DepositoIngreso.Value > 0)
+                .Select(x => x.DepositoIngreso.Value)
+                .Distinct()
+                .ToList();
+
+            var nombresDeposito = await _context.Tadeposi
+                .Where(d => codigosDeposito.Contains(d.CodigoDepo))
+                .ToDictionaryAsync(d => d.CodigoDepo, d => d.Descripcion ?? "");
 
             var dtoResult = result.Select(x => new BrecepenPendienteCalidadDTO
             {
@@ -131,7 +195,11 @@ namespace IMPLANPROD.Server.Controllers
                 Descripcion = x.Descripcion ?? "SIN DATOS",
                 CantidadPendiente = x.CantidadPendiente,
                 NumeroRecepcion = x.NumeroRecepcion,
-                FechaRecepcion = x.FechaRecepcion
+                FechaRecepcion = x.FechaRecepcion,
+                DepositoIngreso = x.DepositoIngreso,
+                NombreDepositoIngreso = x.DepositoIngreso.HasValue && nombresDeposito.ContainsKey(x.DepositoIngreso.Value)
+                    ? nombresDeposito[x.DepositoIngreso.Value]
+                    : null
             }).ToList();
 
             return Ok(dtoResult);
@@ -261,6 +329,13 @@ namespace IMPLANPROD.Server.Controllers
                     // Es el menor entre lo que le queda pendiente al registro y lo que aún nos falta repartir.
                     var consumir = Math.Min(pendienteMov, restante);
 
+                    // Depósito de ingreso a usar: si el usuario eligió uno explícitamente en la
+                    // confirmación de aprobación, prevalece sobre el depósito original del registro.
+                    // BRECEPEN.Depomovi es short?, por eso convertimos el valor elegido por el usuario.
+                    short? depositoIngreso = (request.DepositoIngreso.HasValue && request.DepositoIngreso.Value > 0)
+                        ? (short)request.DepositoIngreso.Value
+                        : brecepen.Depomovi;
+
                     // 1) NO modificamos el registro original (CODIMOVI = 'BR').
                     //    En su lugar generamos un NUEVO registro de aprobación (CODIMOVI = 'AP'),
                     //    idéntico al original pero con:
@@ -285,7 +360,7 @@ namespace IMPLANPROD.Server.Controllers
                         Refercor = brecepen.Refercor,
                         Valount = brecepen.Valount,
                         Moneval = brecepen.Moneval,
-                        Depomovi = brecepen.Depomovi,
+                        Depomovi = depositoIngreso,
                         NumeClie = brecepen.NumeClie,
                         NumeProv = brecepen.NumeProv,
                         Cantingre = 0m,
@@ -312,7 +387,7 @@ namespace IMPLANPROD.Server.Controllers
                         DocumentoPrimarioCorto = brecepen.Dopricor,                      // Documento primario (corto)
                         DocumentoSecundarioLargo = brecepen.Doseclar,                    // Documento secundario (largo)
                         DocumentoSecundarioCorto = brecepen.Doseccor,                    // Documento secundario (corto)
-                        Deposito = brecepen.Depomovi ?? 0,                               // Depósito destino
+                        Deposito = depositoIngreso ?? 0,                                 // Depósito destino (editable por el usuario al aprobar)
                         NumeroCliente = -Math.Abs(brecepen.NumeProv ?? 0),               // Proveedor en negativo (convención MOVISTO)
                         CodigoInterno = brecepen.COD_INTE,                               // Producto (código interno)
                         Cantidad = consumir                                              // Cantidad que estamos aprobando ahora

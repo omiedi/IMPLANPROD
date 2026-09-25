@@ -4,6 +4,7 @@
 @using Blazored.Modal
 @using Blazored.Modal.Services
 @using CurrieTechnologies.Razor.SweetAlert2
+@using Microsoft.AspNetCore.Components.Authorization
 @inject NavigationManager Navigation
 @using IMPLANPROD.Client.Pages.OrdenesCompra
 @using IMPLANPROD.Client.Pages.Reportes
@@ -15,6 +16,7 @@
 @inject SweetAlertService sweetAlertService
 @inject IJSRuntime JSRuntime
 @inject PageAccessService PageAccess
+@inject AuthenticationStateProvider AuthProvider
 
 <PageTitle>Recepción de Proveedores</PageTitle>
 
@@ -82,8 +84,15 @@ else
                                @onkeyup="async (KeyboardEventArgs e) => await OnKeyPress(e)"
                                data-autofocus
                                placeholder="Buscar proveedor..." />
-                        <button class="btn btn-primary" type="button" @onclick="BuscarProveedorPorRazonSocial">
-                            <i class="oi oi-magnifying-glass"></i>
+                        <button class="btn btn-primary" type="button" @onclick="BuscarProveedorPorRazonSocial" disabled="@procesandoBusquedaProveedor">
+                            @if (procesandoBusquedaProveedor)
+                            {
+                                <span class="spinner-border spinner-border-sm"></span>
+                            }
+                            else
+                            {
+                                <i class="oi oi-magnifying-glass"></i>
+                            }
                         </button>
                     </div>
                 </div>
@@ -114,8 +123,15 @@ else
                                 <td>@proveedor.Cuit</td>
                                 <td>@proveedor.Email</td>
                                 <td>
-                                    <button class="btn btn-sm btn-primary" @onclick="() => SeleccionarProveedor(proveedor)">
-                                        Seleccionar
+                                    <button class="btn btn-sm btn-primary" @onclick="() => SeleccionarProveedor(proveedor)" disabled="@(seleccionandoProveedorId != null)">
+                                        @if (seleccionandoProveedorId == proveedor.Id)
+                                        {
+                                            <span class="spinner-border spinner-border-sm"></span>
+                                        }
+                                        else
+                                        {
+                                            <text>Seleccionar</text>
+                                        }
                                     </button>
                                 </td>
                             </tr>
@@ -233,14 +249,38 @@ else
                                 <td style="border-right: 1px solid #dee2e6;">@recepcion.RazonSocial</td>
                                 <td class="text-center">
                                     <div class="btn-group">
-                                        <button class="btn btn-sm btn-primary" @onclick="() => VerDetalleRecepcion(recepcion.NumeroRecepcion, recepcion.NumeroOrdenCompra)">
-                                            <i class="oi oi-list"></i> Aprobar
+                                        <button class="btn btn-sm btn-primary" @onclick="() => VerDetalleRecepcion(recepcion.NumeroRecepcion, recepcion.NumeroOrdenCompra)" disabled="@(procesandoDetalleRecepcion != null)">
+                                            @if (procesandoDetalleRecepcion == recepcion.NumeroRecepcion)
+                                            {
+                                                <span class="spinner-border spinner-border-sm"></span>
+                                            }
+                                            else
+                                            {
+                                                <i class="oi oi-list"></i>
+                                            }
+                                            Aprobar
                                         </button>
-                                        <button class="btn btn-sm btn-success ms-1" @onclick="() => ImprimirRecepcionPendienteAsync(recepcion.NumeroRecepcion)">
-                                            <i class="fas fa-print"></i> Imprimir
+                                        <button class="btn btn-sm btn-success ms-1" @onclick="() => ImprimirRecepcionPendienteAsync(recepcion.NumeroRecepcion)" disabled="@(procesandoImpresionRecepcion != null)">
+                                            @if (procesandoImpresionRecepcion == recepcion.NumeroRecepcion)
+                                            {
+                                                <span class="spinner-border spinner-border-sm"></span>
+                                            }
+                                            else
+                                            {
+                                                <i class="fas fa-print"></i>
+                                            }
+                                            Imprimir
                                         </button>
-                                        <button class="btn btn-sm btn-danger ms-1" @onclick="() => ConfirmarBorrarRecepcion(recepcion.NumeroRecepcion)">
-                                            <i class="oi oi-trash"></i> Borrar
+                                        <button class="btn btn-sm btn-danger ms-1" @onclick="() => ConfirmarBorrarRecepcion(recepcion.NumeroRecepcion)" disabled="@(procesandoBorradoRecepcion != null)">
+                                            @if (procesandoBorradoRecepcion == recepcion.NumeroRecepcion)
+                                            {
+                                                <span class="spinner-border spinner-border-sm"></span>
+                                            }
+                                            else
+                                            {
+                                                <i class="oi oi-trash"></i>
+                                            }
+                                            Borrar
                                         </button>
                                     </div>
                                 </td>
@@ -308,8 +348,16 @@ else
                                         <td class="text-center">
                                             <button class="btn btn-sm btn-success"
                                                     title="Aprobar"
+                                                    disabled="@(procesandoAprobacionCalidad != null)"
                                                     @onclick="() => ConfirmarYAprobarPendienteCalidad(row)">
-                                                Aprobar
+                                                @if (procesandoAprobacionCalidad == key)
+                                                {
+                                                    <span class="spinner-border spinner-border-sm"></span>
+                                                }
+                                                else
+                                                {
+                                                    <text>Aprobar</text>
+                                                }
                                             </button>
                                         </td>
                                     </tr>
@@ -352,6 +400,29 @@ else
                         <a href="/graficos-recepciones" class="btn btn-success btn-lg">
                             <i class="fas fa-chart-bar me-2"></i>
                             Ver Gráficos y Análisis
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Botón Recepciones por Rango de Fechas -->
+        <div class="row mb-3">
+            <div class="col-12">
+                <div class="card border-primary">
+                    <div class="card-body text-center py-4">
+                        <h5 class="text-primary mb-3">
+                            <i class="fas fa-calendar-alt me-2"></i>
+                            Recepciones por Rango de Fechas
+                        </h5>
+                        <p class="text-muted mb-3">
+                            Consulte todas las recepciones (incluyendo aprobadas) filtradas por rango de fechas.
+                            Muestra la misma grilla que "Aprueba Calidad" pero sin botones de Aprobar/Borrar,
+                            conservando la impresión y el detalle por lote.
+                        </p>
+                        <a href="/recepciones-todas-x-fecha" class="btn btn-primary btn-lg">
+                            <i class="fas fa-box-open me-2"></i>
+                            Ver Recepciones por Fecha
                         </a>
                     </div>
                 </div>
@@ -428,12 +499,28 @@ else
             <div class="col text-center">
                 @if (tieneOrdenesPendientes)
                 {
-                    <button class="btn btn-success me-2" @onclick="RecepcionarPorOrdenCompra">
-                        Recepción Provisoria por O/C
+                    <button class="btn btn-success me-2" @onclick="RecepcionarPorOrdenCompra" disabled="@(procesandoRecepcionOC || procesandoRecepcionLibre)">
+                        @if (procesandoRecepcionOC)
+                        {
+                            <span class="spinner-border spinner-border-sm me-1"></span>
+                            <text>Procesando...</text>
+                        }
+                        else
+                        {
+                            <text>Recepción Provisoria por O/C</text>
+                        }
                     </button>
                 }
-                <button class="btn btn-primary" @onclick="RecepcionLibre">
-                    Recepción Provisoria Libre
+                <button class="btn btn-primary" @onclick="RecepcionLibre" disabled="@(procesandoRecepcionLibre || procesandoRecepcionOC)">
+                    @if (procesandoRecepcionLibre)
+                    {
+                        <span class="spinner-border spinner-border-sm me-1"></span>
+                        <text>Procesando...</text>
+                    }
+                    else
+                    {
+                        <text>Recepción Provisoria Libre</text>
+                    }
                 </button>
             </div>
         </div>
@@ -538,11 +625,34 @@ else
                 <button type="button" class="btn-close btn-close-white" @onclick="CerrarModalItems"></button>
             </div>
             <div class="modal-body">
-                <div class="d-flex justify-content-end mb-3">
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <div class="d-flex align-items-center gap-2">
+                        <span class="fw-bold">Depósito de Ingreso:</span>
+                        <span class="badge bg-info text-dark fs-6">@nombreDepositoCalidad</span>
+                        <button type="button" class="btn btn-sm btn-outline-primary" @onclick="SeleccionarDepositoCalidad" disabled="@(procesandoCambioDeposito || procesandoAprobacionRecepcion)">
+                            @if (procesandoCambioDeposito)
+                            {
+                                <span class="spinner-border spinner-border-sm"></span>
+                            }
+                            else
+                            {
+                                <i class="oi oi-pencil me-1"></i><text>Cambiar</text>
+                            }
+                        </button>
+                    </div>
                     @if (numeroRecepcionSeleccionada == 0)
                     {
-                        <button type="button" class="btn btn-success" @onclick="AgregarMasRepuestos">
-                            <i class="oi oi-plus"></i> Agregar Repuesto
+                        <button type="button" class="btn btn-success" @onclick="AgregarMasRepuestos" disabled="@(procesandoAgregarRepuesto || procesandoAprobacionRecepcion)">
+                            @if (procesandoAgregarRepuesto)
+                            {
+                                <span class="spinner-border spinner-border-sm me-1"></span>
+                                <text>Agregando...</text>
+                            }
+                            else
+                            {
+                                <i class="oi oi-plus"></i>
+                                <text> Agregar Repuesto</text>
+                            }
                         </button>
                     }
                 </div>
@@ -624,12 +734,31 @@ else
             <div class="modal-footer">
                 @if (numeroRecepcionSeleccionada == 0)
                 {
-                    <button type="button" class="btn btn-success" @onclick="AgregarMasRepuestos">
-                        <i class="oi oi-plus"></i> Agregar Repuesto
+                    <button type="button" class="btn btn-success" @onclick="AgregarMasRepuestos" disabled="@(procesandoAgregarRepuesto || procesandoAprobacionRecepcion)">
+                        @if (procesandoAgregarRepuesto)
+                        {
+                            <span class="spinner-border spinner-border-sm me-1"></span>
+                            <text>Agregando...</text>
+                        }
+                        else
+                        {
+                            <i class="oi oi-plus"></i>
+                            <text> Agregar Repuesto</text>
+                        }
                     </button>
                 }
-                <button type="button" class="btn btn-secondary" @onclick="CerrarModalItems">Cerrar</button>
-                <button type="button" class="btn btn-primary" @onclick="AprobarRecepcionPendiente">Aprobar Recepción</button>
+                <button type="button" class="btn btn-secondary" @onclick="CerrarModalItems" disabled="@procesandoAprobacionRecepcion">Cerrar</button>
+                <button type="button" class="btn btn-primary" @onclick="AprobarRecepcionPendiente" disabled="@procesandoAprobacionRecepcion">
+                    @if (procesandoAprobacionRecepcion)
+                    {
+                        <span class="spinner-border spinner-border-sm me-1"></span>
+                        <text>Procesando...</text>
+                    }
+                    else
+                    {
+                        <text>Aprobar Recepción</text>
+                    }
+                </button>
             </div>
         </div>
     </div>
@@ -678,11 +807,28 @@ else
                         <small class="text-muted">Seleccione un proveedor para ver sus órdenes pendientes</small>
                     </div>
                     <div class="col-md-8 d-flex align-items-end justify-content-end gap-2">
-                        <button class="btn btn-primary" @onclick="FiltrarOrdenesPendientes" disabled="@(!numeroProveedorFiltroOrdenes.HasValue)">
-                            <i class="fas fa-filter"></i> Buscar Órdenes
+                        <button class="btn btn-primary" @onclick="FiltrarOrdenesPendientes" disabled="@(!numeroProveedorFiltroOrdenes.HasValue || cargandoOrdenesPendientes)">
+                            @if (cargandoOrdenesPendientes)
+                            {
+                                <span class="spinner-border spinner-border-sm me-1"></span>
+                                <text>Buscando...</text>
+                            }
+                            else
+                            {
+                                <i class="fas fa-filter"></i>
+                                <text> Buscar Órdenes</text>
+                            }
                         </button>
-                        <button class="btn btn-success" @onclick="ImprimirReporteOrdenesPendientes" disabled="@(ordenesPendientes == null || !ordenesPendientes.Any())">
-                            <i class="fas fa-print"></i> Imprimir Reporte
+                        <button class="btn btn-success" @onclick="ImprimirReporteOrdenesPendientes" disabled="@(ordenesPendientes == null || !ordenesPendientes.Any() || procesandoImpresionReporte)">
+                            @if (procesandoImpresionReporte)
+                            {
+                                <span class="spinner-border spinner-border-sm me-1"></span>
+                            }
+                            else
+                            {
+                                <i class="fas fa-print"></i>
+                            }
+                            Imprimir Reporte
                         </button>
                     </div>
                 </div>
@@ -749,8 +895,15 @@ else
                                                 <button class="btn btn-sm btn-outline-info" @onclick="(() => VerDetalleOrden(orden.OCOMENCA_ID))" title="Ver Detalle">
                                                     <i class="fas fa-eye"></i>
                                                 </button>
-                                                <button class="btn btn-sm btn-outline-success" @onclick="(() => ImprimirOrdenPendiente(orden.NumeOcom ?? 0))" title="Imprimir">
-                                                    <i class="fas fa-print"></i>
+                                                <button class="btn btn-sm btn-outline-success" @onclick="(() => ImprimirOrdenPendiente(orden.NumeOcom ?? 0))" title="Imprimir" disabled="@(procesandoImpresionOrden != null)">
+                                                    @if (procesandoImpresionOrden == orden.NumeOcom)
+                                                    {
+                                                        <span class="spinner-border spinner-border-sm"></span>
+                                                    }
+                                                    else
+                                                    {
+                                                        <i class="fas fa-print"></i>
+                                                    }
                                                 </button>
                                             </div>
                                         </td>
@@ -845,7 +998,7 @@ else
                 {
                     <tr>
                         <td class="text-end">@item.CantidadNominal.ToString("N2")</td>
-                        <td>@item.CodigoInterno</td>
+                        <td>@item.CodigoExterno</td>
                         <td>@item.DescripcionItem</td>
                         <td>@item.Unidad</td>
                         <td class="text-end">@((item.NumeroOrdenCompra.HasValue && item.NumeroOrdenCompra.Value > 0) ? item.NumeroOrdenCompra.Value.ToString() : "")</td>
@@ -876,8 +1029,8 @@ else
 
         <div class="row mt-3">
             <div class="col-6">
-                <div style="border: 1px solid #000; height: 3cm; padding: 6px;">
-                    <div><strong>Obs:</strong></div>
+                <div style="border: 1px solid #000; height: 3cm; padding: 6px; overflow: hidden; white-space: pre-line;">
+                    <div><strong>Obs:</strong> @(itemsRecepcionParaImprimir.FirstOrDefault()?.Observa ?? recepcionParaImprimir?.Observa ?? "")</div>
                 </div>
             </div>
             <div class="col-6">
@@ -887,17 +1040,166 @@ else
                 </div>
             </div>
         </div>
-
-        <div class="row mt-2">
-            <div class="col-12">
-                <div style="border: 1px solid #000; height: 3cm;"></div>
-            </div>
-        </div>
     </div>
 </div>
 
 <!-- Componente selector de proveedores para filtro de órdenes -->
 <SelectorProveedores @ref="selectorProveedoresOrdenes" OnProveedorSeleccionado="OnProveedorSeleccionadoOrdenes" />
+
+@* Modal de vista previa del Vale Interno emitido al aprobar en la solapa "Aprueba Calidad" *@
+@if (mostrarModalVistaPreviaVale)
+{
+    <div class="modal fade show" style="display: block" tabindex="-1">
+        <div class="modal-dialog modal-xl">
+            <div class="modal-content">
+                <div class="modal-header bg-primary text-white">
+                    <h5 class="modal-title">
+                        <i class="oi oi-file me-2"></i>Vale Interno - Aprobación de Recepción
+                    </h5>
+                    <button type="button" class="btn-close btn-close-white" @onclick="CancelarVistaPreviaVale"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="row">
+                        <div class="col-md-5">
+                            <div class="card">
+                                <div class="card-header bg-light">
+                                    <strong>Observaciones</strong>
+                                </div>
+                                <div class="card-body">
+                                    <textarea class="form-control" rows="4" placeholder="Ingrese observaciones para el vale interno..." @bind="observacionesVale"></textarea>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-7">
+                            <div class="card">
+                                <div class="card-header bg-light">
+                                    <strong>Vista Previa</strong>
+                                </div>
+                                <div class="card-body">
+                                    <div style="font-family: 'Courier New', monospace; font-size: 12px; border: 1px solid #ccc; padding: 20px; background: white;">
+                                        <div class="d-flex justify-content-between align-items-start mb-2">
+                                            <div>
+                                                <strong>VALE INTERNO</strong>
+                                            </div>
+                                            <div class="text-end">
+                                                <div>FECHA DE CIERRE: @DateTime.Now.ToString("dd/MM/yyyy")</div>
+                                                <div>Origen: @origenVale</div>
+                                                <div>Depósito: @nombreDepositoCalidad</div>
+                                            </div>
+                                        </div>
+
+                                        <div style="border-top: 1px solid black; margin: 10px 0;"></div>
+
+                                        <div class="row mb-2" style="font-weight: bold;">
+                                            <div class="col-3">Código</div>
+                                            <div class="col-6">Descripción</div>
+                                            <div class="col-3 text-end">Cantidad</div>
+                                        </div>
+
+                                        @foreach (var item in itemsVale)
+                                        {
+                                            <div class="row mb-2">
+                                                <div class="col-3">@item.CodigoExterno</div>
+                                                <div class="col-6">@item.DescripcionItem</div>
+                                                <div class="col-3 text-end">@FormatDecimalVale(item.CanToApro ?? 0)</div>
+                                            </div>
+                                        }
+
+                                        <div style="border-top: 1px solid black; margin: 10px 0;"></div>
+
+                                        @if (!string.IsNullOrWhiteSpace(observacionesVale))
+                                        {
+                                            <div class="mt-3">
+                                                <strong>Observaciones:</strong>
+                                                <div style="white-space: pre-wrap;">@observacionesVale</div>
+                                            </div>
+                                            <div style="border-top: 1px solid black; margin: 10px 0;"></div>
+                                        }
+
+                                        <div class="text-end mt-3">
+                                            <strong>Cerró: @nombreUsuarioActualVale</strong>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-info" @onclick="ImprimirValeRecepcion" disabled="@procesandoImpresionVale">
+                        @if (procesandoImpresionVale)
+                        {
+                            <span class="spinner-border spinner-border-sm me-1"></span>
+                        }
+                        else
+                        {
+                            <i class="oi oi-print me-1"></i>
+                        }
+                        Imprimir
+                    </button>
+                    <button type="button" class="btn btn-secondary" @onclick="CancelarVistaPreviaVale">
+                        <i class="oi oi-check me-1"></i>Cerrar
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="modal-backdrop fade show"></div>
+}
+
+<!-- Área de impresión del Vale Interno (aprobación de recepción) -->
+<div id="areaImpresionValeRecepcion" style="display: none;">
+    <div style="padding: 20px; font-family: 'Courier New', monospace; font-size: 12px;">
+        <div style="margin-bottom: 20px;">
+            <div style="text-align: center; margin-bottom: 15px;">
+                <h2 style="font-size: 24px; font-weight: bold; margin: 0;">VALE INTERNO</h2>
+            </div>
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+                <div style="font-size: 16px; font-weight: bold;">
+                    Origen: @origenVale
+                </div>
+                <div style="font-size: 16px; font-weight: bold;">
+                    Fecha de Cierre: @DateTime.Now.ToString("dd/MM/yyyy")
+                </div>
+            </div>
+            <div style="font-size: 14px; font-weight: bold; margin-top: 5px;">
+                Depósito: @nombreDepositoCalidad
+            </div>
+        </div>
+
+        <table style="width: 100%; border-collapse: collapse; margin-top: 20px;">
+            <thead>
+                <tr style="background-color: #212529; color: white; font-weight: bold;">
+                    <th style="border: 1px solid #000; padding: 8px; text-align: left;">Código</th>
+                    <th style="border: 1px solid #000; padding: 8px; text-align: left;">Descripción</th>
+                    <th style="border: 1px solid #000; padding: 8px; text-align: right;">Cantidad</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var item in itemsVale)
+                {
+                    <tr>
+                        <td style="border: 1px solid #000; padding: 8px;">@item.CodigoExterno</td>
+                        <td style="border: 1px solid #000; padding: 8px;">@item.DescripcionItem</td>
+                        <td style="border: 1px solid #000; padding: 8px; text-align: right;">@FormatDecimalVale(item.CanToApro ?? 0)</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+
+        @if (!string.IsNullOrWhiteSpace(observacionesVale))
+        {
+            <div style="margin-top: 20px;">
+                <strong>Observaciones:</strong>
+                <div style="white-space: pre-wrap; margin-top: 10px;">@observacionesVale</div>
+            </div>
+        }
+
+        <div style="margin-top: 30px; text-align: right;">
+            <strong>Cerró: @nombreUsuarioActualVale</strong>
+        </div>
+    </div>
+</div>
 
 @code {
     [CascadingParameter] BlazoredModalInstance BlazoredModal { get; set; }
@@ -1010,6 +1312,11 @@ else
     private int numeroOrdenCompraSeleccionada;
     private List<RecepcionItemDTO> itemsRecepcion;
 
+    // Depósito de ingreso seleccionado para la aprobación en la solapa "Aprueba Calidad".
+    // Se aplica a todos los items de la recepción que se están aprobando.
+    private int codigoDepositoCalidad = 0;
+    private string nombreDepositoCalidad = string.Empty;
+
     private List<dynamic> depositos;
 
     private List<RecepcionItemDTO> itemsRecepcionLibre = new();
@@ -1085,6 +1392,44 @@ else
         return Task.CompletedTask;
     }
 
+    // Permite seleccionar el depósito de ingreso para la aprobación de recepción
+    // en la solapa "Aprueba Calidad". El depósito seleccionado se aplica a todos los items.
+    // Se oculta el modal de items mientras se elige el depósito para evitar problemas de z-index.
+    private async Task SeleccionarDepositoCalidad()
+    {
+        if (procesandoCambioDeposito) return;
+        procesandoCambioDeposito = true;
+        try
+        {
+            await SeleccionarDepositoCalidadCore();
+        }
+        finally
+        {
+            procesandoCambioDeposito = false;
+        }
+    }
+
+    private async Task SeleccionarDepositoCalidadCore()
+    {
+        mostrarModalItems = false;
+        await Task.Delay(100);
+
+        var parameters = new ModalParameters()
+            .Add(nameof(SeleccionarDepositoDialog.CodigoSeleccionado), codigoDepositoCalidad);
+
+        var modal = modalService.Show<SeleccionarDepositoDialog>("Seleccionar Depósito de Ingreso", parameters);
+        var result = await modal.Result;
+
+        if (!result.Cancelled && result.Data != null)
+        {
+            var deposito = (DepositoDTO)result.Data;
+            codigoDepositoCalidad = deposito.Id;
+            nombreDepositoCalidad = deposito.Nombre;
+        }
+
+        mostrarModalItems = true;
+    }
+
     private async Task CargarDepositos()
     {
         var response = await repository.Get<List<dynamic>>("api/bolrecep/depositos");
@@ -1133,6 +1478,26 @@ else
         }
     }
 
+    // ── Flags anti doble-clic ──────────────────────────────────────────────
+    // Cada botón que dispara una transacción/acción se deshabilita y muestra un
+    // spinner mientras la operación está en curso. En las grillas se guarda la
+    // clave de la fila en proceso (no un bool) para que el spinner aparezca
+    // solo en la fila clickeada y el resto quede deshabilitado.
+    private bool procesandoBusquedaProveedor = false;   // Botón buscar proveedor (solapa Búsqueda)
+    private int? seleccionandoProveedorId = null;       // Id del proveedor que se está seleccionando
+    private bool procesandoRecepcionOC = false;         // "Recepción Provisoria por O/C"
+    private bool procesandoRecepcionLibre = false;      // "Recepción Provisoria Libre"
+    private int? procesandoDetalleRecepcion = null;     // NumeroRecepcion: "Aprobar" (grilla pendientes)
+    private int? procesandoImpresionRecepcion = null;   // NumeroRecepcion: "Imprimir" (grilla pendientes)
+    private int? procesandoBorradoRecepcion = null;     // NumeroRecepcion: "Borrar" (grilla pendientes)
+    private string? procesandoAprobacionCalidad = null; // Key LOTE|COD_INTE: "Aprobar" (solapa Aprueba Almacén)
+    private bool procesandoAprobacionRecepcion = false; // "Aprobar Recepción" (modal de items)
+    private bool procesandoAgregarRepuesto = false;     // "Agregar Repuesto" (modal de items)
+    private bool procesandoCambioDeposito = false;      // "Cambiar" depósito de ingreso (modal de items)
+    private bool procesandoImpresionVale = false;       // "Imprimir" del Vale Interno
+    private bool procesandoImpresionReporte = false;    // "Imprimir Reporte" de órdenes pendientes
+    private int? procesandoImpresionOrden = null;       // NumeOcom: "Imprimir" por orden (grilla)
+
     private async Task OnKeyPress(KeyboardEventArgs e)
     {
         if (e.Key == "Enter")
@@ -1143,44 +1508,76 @@ else
 
     private async Task BuscarProveedorPorRazonSocial()
     {
+        if (procesandoBusquedaProveedor) return;
         if (string.IsNullOrWhiteSpace(terminoBusquedaProveedor)) return;
 
-        var terminoEncoded = Uri.EscapeDataString(terminoBusquedaProveedor);
-        var responseHttp = await repository.Get<List<ProveedorDTO>>($"api/Proved12/buscar?termino={terminoEncoded}");
-        if (responseHttp.Error)
+        procesandoBusquedaProveedor = true;
+        try
         {
-            var mensaje = await responseHttp.GetErrorMessageAsync();
-            await sweetAlertService.FireAsync("Error", mensaje, SweetAlertIcon.Error);
-            return;
-        }
+            var terminoEncoded = Uri.EscapeDataString(terminoBusquedaProveedor);
+            var responseHttp = await repository.Get<List<ProveedorDTO>>($"api/Proved12/buscar?termino={terminoEncoded}");
+            if (responseHttp.Error)
+            {
+                var mensaje = await responseHttp.GetErrorMessageAsync();
+                await sweetAlertService.FireAsync("Error", mensaje, SweetAlertIcon.Error);
+                return;
+            }
 
-        proveedoresEncontrados = responseHttp.Response;
-        if (!proveedoresEncontrados.Any())
+            proveedoresEncontrados = responseHttp.Response;
+            if (!proveedoresEncontrados.Any())
+            {
+                await sweetAlertService.FireAsync("", "No se encontraron proveedores", SweetAlertIcon.Info);
+            }
+        }
+        finally
         {
-            await sweetAlertService.FireAsync("", "No se encontraron proveedores", SweetAlertIcon.Info);
+            procesandoBusquedaProveedor = false;
         }
     }
 
     private async Task SeleccionarProveedor(ProveedorDTO proveedor)
     {
-        proveedorSeleccionado = proveedor;
-        mostrarBotonesRecepcion = false;
-
-        // Verificar si tiene órdenes pendientes
-        var response = await repository.Get<bool>($"api/Ocomdeta/pendientes/proveedor/{proveedor.NumeCli}");
-        if (response.Error)
+        if (seleccionandoProveedorId != null) return;
+        seleccionandoProveedorId = proveedor.Id;
+        try
         {
-            var mensaje = await response.GetErrorMessageAsync();
-            await sweetAlertService.FireAsync("Error", mensaje, SweetAlertIcon.Error);
-            return;
-        }
+            proveedorSeleccionado = proveedor;
+            mostrarBotonesRecepcion = false;
 
-        tieneOrdenesPendientes = response.Response;
-        mostrarBotonesRecepcion = true;
-        StateHasChanged();
+            // Verificar si tiene órdenes pendientes
+            var response = await repository.Get<bool>($"api/Ocomdeta/pendientes/proveedor/{proveedor.NumeCli}");
+            if (response.Error)
+            {
+                var mensaje = await response.GetErrorMessageAsync();
+                await sweetAlertService.FireAsync("Error", mensaje, SweetAlertIcon.Error);
+                return;
+            }
+
+            tieneOrdenesPendientes = response.Response;
+            mostrarBotonesRecepcion = true;
+            StateHasChanged();
+        }
+        finally
+        {
+            seleccionandoProveedorId = null;
+        }
     }
 
     private async Task RecepcionarPorOrdenCompra()
+    {
+        if (procesandoRecepcionOC) return;
+        procesandoRecepcionOC = true;
+        try
+        {
+            await RecepcionarPorOrdenCompraCore();
+        }
+        finally
+        {
+            procesandoRecepcionOC = false;
+        }
+    }
+
+    private async Task RecepcionarPorOrdenCompraCore()
     {
         var parameters = new ModalParameters()
             .Add(nameof(RecepcionOrdenCompraDialog.NumeroProveedor), proveedorSeleccionado.NumeCli)
@@ -1191,9 +1588,17 @@ else
 
         if (!result.Cancelled)
         {
+            var numeroBoleta = result.Data is int n ? n : 0;
+
             // Después de recibir materiales, recargar las recepciones pendientes
             await CargarRecepcionesPendientes();
-            
+
+            // Mostrar vista previa de la recepción recién generada
+            if (numeroBoleta > 0)
+            {
+                await ImprimirRecepcionPendienteAsync(numeroBoleta);
+            }
+
             // Resetear el estado para permitir seleccionar otro proveedor
             mostrarBotonesRecepcion = false;
             proveedorSeleccionado = null;
@@ -1203,6 +1608,20 @@ else
     }
 
     private async Task RecepcionLibre()
+    {
+        if (procesandoRecepcionLibre) return;
+        procesandoRecepcionLibre = true;
+        try
+        {
+            await RecepcionLibreCore();
+        }
+        finally
+        {
+            procesandoRecepcionLibre = false;
+        }
+    }
+
+    private async Task RecepcionLibreCore()
     {
         try
         {
@@ -1222,7 +1641,7 @@ else
             if (!result.Cancelled)
             {
                 var items = (List<RecepcionLibreDTO>)result.Data;
-                var response = await repository.Post("api/BolRecep/recibir-libre", items);
+                var response = await repository.Post<List<RecepcionLibreDTO>, List<BolrecepResponseDTO>>("api/BolRecep/recibir-libre", items);
 
                 if (response.Error)
                 {
@@ -1232,8 +1651,19 @@ else
                 }
 
                 await sweetAlertService.FireAsync("Éxito", "Recepción registrada correctamente", SweetAlertIcon.Success);
-                await CambiarAPendientes();
-                
+
+                // Mostrar vista previa de la recepción recién generada
+                var numeroBoleta = response.Response?.FirstOrDefault()?.Numebore ?? 0;
+                if (numeroBoleta > 0)
+                {
+                    await CambiarAPendientes();
+                    await ImprimirRecepcionPendienteAsync(numeroBoleta);
+                }
+                else
+                {
+                    await CambiarAPendientes();
+                }
+
                 // Resetear el estado para permitir seleccionar otro proveedor
                 mostrarBotonesRecepcion = false;
                 proveedorSeleccionado = null;
@@ -1320,10 +1750,26 @@ else
         return $"{row.Idenlote}|{row.CodInte}";
     }
 
-    // Confirma y ejecuta la aprobación de una fila de la solapa "Aprueba Almacén".
-    // Valida la cantidad, pide confirmación al usuario y llama al endpoint POST api/brecepen/aprobar.
+    // Confirma y ejecuta la aprobación de una fila de la solapa "Aprueba Calidad".
+    // Valida la cantidad, permite modificar el depósito de ingreso, pide confirmación
+    // al usuario, llama al endpoint POST api/brecepen/aprobar y, si todo sale bien,
+    // muestra el Vale Interno listo para imprimir (mismo formato que la O.F.).
     private async Task ConfirmarYAprobarPendienteCalidad(BrecepenPendienteCalidadDTO row)
-    {//SOLAPA APRUEBA ALMACEN
+    {
+        if (procesandoAprobacionCalidad != null) return;
+        procesandoAprobacionCalidad = GetPendienteCalidadKey(row);
+        try
+        {
+            await ConfirmarYAprobarPendienteCalidadCore(row);
+        }
+        finally
+        {
+            procesandoAprobacionCalidad = null;
+        }
+    }
+
+    private async Task ConfirmarYAprobarPendienteCalidadCore(BrecepenPendienteCalidadDTO row)
+    {
         // Validar tolerancia de días para aprobar recepción
         if (row.NumeroRecepcion.HasValue && row.NumeroRecepcion.Value > 0)
         {
@@ -1360,21 +1806,6 @@ else
             return;
         }
 
-        var confirm = await sweetAlertService.FireAsync(new SweetAlertOptions
-        {
-            Title = "Confirmar",
-            Text = $"¿Aprobar {cantidad} del pendiente {row.CantidadPendiente}?",
-            Icon = SweetAlertIcon.Question,
-            ShowCancelButton = true,
-            ConfirmButtonText = "Sí, aprobar",
-            CancelButtonText = "Cancelar"
-        });
-
-        if (confirm == null || !confirm.IsConfirmed)
-        {
-            return;
-        }
-
         // Armamos el request identificando el grupo por LOTE + producto y la cantidad a aprobar.
         var request = new BrecepenAprobarRequestDTO
         {
@@ -1397,6 +1828,180 @@ else
         await CargarPendientesCalidad();
     }
 
+    // ── CÓDIGO NO UTILIZADO (se mantiene activo, no eliminar) ──────────────
+    // Este bloque implementaba un flujo de aprobación CON confirmación previa
+    // (SweetAlert con opciones "Aprobar / Cambiar Depósito / Cancelar") para la
+    // solapa "Aprueba Almacén". Hoy NO se ejecuta: el botón "Aprobar" de la
+    // grilla llama directamente a ConfirmarYAprobarPendienteCalidad(), que
+    // postea sin confirmación intermedia, y filaAprobacionActual nunca se
+    // asigna (permanece en null, por lo que MostrarConfirmacionAprobacionCalidad
+    // y EjecutarAprobacionPendienteCalidad retornan sin hacer nada).
+    // Se deja el código porque el flujo con confirmación podría reactivarse
+    // más adelante; si se decide reactivarlo, hay que asignar
+    // filaAprobacionActual / cantidadAprobacionActual y llamar a
+    // MostrarConfirmacionAprobacionCalidad() desde ConfirmarYAprobarPendienteCalidad().
+    // ─────────────────────────────────────────────────────────────────────
+
+    // Contexto de la aprobación en curso en la solapa "Aprueba Calidad" (se usa mientras
+    // el usuario confirma o cambia el depósito de ingreso, antes de llamar al backend).
+    private BrecepenPendienteCalidadDTO? filaAprobacionActual;
+    private decimal cantidadAprobacionActual;
+    private int depositoIngresoAprobacion;
+    private string nombreDepositoIngresoAprobacion = string.Empty;
+
+    // Muestra el mensaje de confirmación con los datos de la aprobación y el depósito de
+    // ingreso actual, dando la opción de aprobar, cambiar el depósito o cancelar.
+    private async Task MostrarConfirmacionAprobacionCalidad()
+    {
+        if (filaAprobacionActual == null)
+        {
+            return;
+        }
+
+        var row = filaAprobacionActual;
+        var mensaje = $"Recepción: {row.Doprilar}\n" +
+                      $"Código: {row.Codigo}\n" +
+                      $"Descripción: {row.Descripcion}\n" +
+                      $"Cantidad a Aprobar: {cantidadAprobacionActual}\n" +
+                      $"Depósito de Ingreso: {depositoIngresoAprobacion} - {nombreDepositoIngresoAprobacion}\n\n" +
+                      "Seleccione una opción:";
+
+        var confirmacion = await sweetAlertService.FireAsync(new SweetAlertOptions
+        {
+            Title = "Confirmar Aprobación",
+            Html = mensaje.Replace("\n", "<br>"),
+            Icon = SweetAlertIcon.Question,
+            ShowCancelButton = true,
+            ShowDenyButton = true,
+            ConfirmButtonText = "✓ Aprobar",
+            DenyButtonText = "🔄 Cambiar Depósito",
+            CancelButtonText = "✖ Cancelar",
+            ConfirmButtonColor = "#28a745",
+            DenyButtonColor = "#ffc107",
+            CancelButtonColor = "#6c757d"
+        });
+
+        if (confirmacion.IsConfirmed)
+        {
+            await EjecutarAprobacionPendienteCalidad();
+        }
+        else if (confirmacion.IsDenied)
+        {
+            await CambiarDepositoIngresoAprobacion();
+        }
+        // Si se cancela, no hacemos nada y se descarta el contexto en curso.
+    }
+
+    // Abre el buscador de depósitos existente (el mismo que se usa para el depósito de rechazo)
+    // para permitir cambiar el depósito de ingreso antes de confirmar la aprobación.
+    private async Task CambiarDepositoIngresoAprobacion()
+    {
+        var parameters = new ModalParameters()
+            .Add(nameof(SeleccionarDepositoDialog.CodigoSeleccionado), depositoIngresoAprobacion);
+
+        var modal = modalService.Show<SeleccionarDepositoDialog>("Seleccionar Depósito de Ingreso", parameters);
+        var result = await modal.Result;
+
+        if (!result.Cancelled && result.Data != null)
+        {
+            var deposito = (DepositoDTO)result.Data;
+            depositoIngresoAprobacion = deposito.Id;
+            nombreDepositoIngresoAprobacion = deposito.Nombre;
+        }
+
+        // Volvemos a mostrar la confirmación, con el depósito nuevo (o el mismo si se canceló el buscador).
+        await MostrarConfirmacionAprobacionCalidad();
+    }
+
+    // Ejecuta la aprobación contra el backend y, si sale bien, prepara e imprime el Vale Interno
+    // (mismo formato utilizado al aprobar una Orden de Fabricación).
+    private async Task EjecutarAprobacionPendienteCalidad()
+    {
+        if (filaAprobacionActual == null)
+        {
+            return;
+        }
+
+        var row = filaAprobacionActual;
+
+        // Armamos el request identificando el grupo por LOTE + producto y la cantidad a aprobar.
+        var request = new BrecepenAprobarRequestDTO
+        {
+            Idenlote = row.Idenlote,   // Lote de la recepción (clave principal del grupo)
+            Doprilar = row.Doprilar,   // Documento (informativo; el backend copia datos del original)
+            CodInte = row.CodInte,     // Producto (código interno)
+            CantidadAprobar = cantidadAprobacionActual, // Cantidad que se aprueba en esta operación
+            DepositoIngreso = depositoIngresoAprobacion > 0 ? depositoIngresoAprobacion : null
+        };
+
+        // Llamamos al backend: genera el registro de aprobación 'AP' y ajusta stock/OC.
+        var response = await repository.Post("api/brecepen/aprobar", request);
+        if (response.Error)
+        {
+            var mensaje = await response.GetErrorMessageAsync();
+            await sweetAlertService.FireAsync("Error", mensaje, SweetAlertIcon.Error);
+            return;
+        }
+
+        // Preparamos los datos del Vale Interno para la vista previa/impresión.
+        var authState = await AuthProvider.GetAuthenticationStateAsync();
+        nombreUsuarioActualVale = authState.User.Identity?.Name ?? "Usuario";
+        origenVale = row.Doprilar ?? row.Idenlote ?? "";
+        codigoVale = row.Codigo ?? "";
+        descripcionVale = row.Descripcion ?? "";
+        cantidadVale = cantidadAprobacionActual;
+        observacionesVale = string.Empty;
+        mostrarModalVistaPreviaVale = true;
+
+        await CargarPendientesCalidad();
+    }
+
+    // ------------------------------------------------------------------
+    // VALE INTERNO (aprobación de "Aprueba Calidad")
+    // Mismo formato/mecánica que el Vale Interno emitido al aprobar una Orden de
+    // Fabricación (ver OrdenFabricacionIndex.razor): vista previa + impresión vía
+    // la función JS "imprimirElemento" sobre un contenedor oculto.
+    // ------------------------------------------------------------------
+    private bool mostrarModalVistaPreviaVale = false;
+    private string? nombreUsuarioActualVale;
+    private string observacionesVale = string.Empty;
+    private string origenVale = string.Empty;
+    private string codigoVale = string.Empty;
+    private string descripcionVale = string.Empty;
+    private decimal cantidadVale;
+    private List<RecepcionItemDTO> itemsVale = new();
+    private const string idAreaImpresionValeRecepcion = "areaImpresionValeRecepcion";
+
+    private string FormatDecimalVale(decimal value)
+    {
+        return value.ToString("N2");
+    }
+
+    private void CancelarVistaPreviaVale()
+    {
+        mostrarModalVistaPreviaVale = false;
+        observacionesVale = string.Empty;
+    }
+
+    private async Task ImprimirValeRecepcion()
+    {
+        if (procesandoImpresionVale) return;
+        procesandoImpresionVale = true;
+        try
+        {
+            await Task.Delay(100);
+            await JSRuntime.InvokeVoidAsync("imprimirElemento", idAreaImpresionValeRecepcion);
+        }
+        catch (Exception ex)
+        {
+            await sweetAlertService.FireAsync("Error", $"Error al imprimir: {ex.Message}", SweetAlertIcon.Error);
+        }
+        finally
+        {
+            procesandoImpresionVale = false;
+        }
+    }
+
     private async Task CargarRecepcionesPendientes()
     {
         var responseHttp = await repository.Get<List<RecepcionPendienteAprobacionDTO>>("api/bolrecep/pendientes-aprobacion");
@@ -1411,6 +2016,20 @@ else
     }
 
     private async Task VerDetalleRecepcion(int numeroRecepcion, int numeroOrdenCompra)
+    {
+        if (procesandoDetalleRecepcion != null) return;
+        procesandoDetalleRecepcion = numeroRecepcion;
+        try
+        {
+            await VerDetalleRecepcionCore(numeroRecepcion, numeroOrdenCompra);
+        }
+        finally
+        {
+            procesandoDetalleRecepcion = null;
+        }
+    }
+
+    private async Task VerDetalleRecepcionCore(int numeroRecepcion, int numeroOrdenCompra)
     {
         try
         {
@@ -1432,6 +2051,14 @@ else
             {
                 item.CanToApro = item.CantidadNominal;
             }
+
+            // Depósito de ingreso: se toma el del primer item (todos suelen tener el mismo DepoEnt).
+            // El usuario puede cambiarlo desde el modal antes de aprobar.
+            var primerItem = itemsRecepcion.FirstOrDefault();
+            codigoDepositoCalidad = primerItem?.CodigoDeposito ?? 0;
+            nombreDepositoCalidad = !string.IsNullOrWhiteSpace(primerItem?.NombreDeposito)
+                ? primerItem.NombreDeposito
+                : $"{codigoDepositoCalidad} - (depósito por defecto)";
             
             mostrarModalItems = true;
         }
@@ -1449,6 +2076,20 @@ else
 
     private async Task AprobarRecepcionPendiente()
     {
+        if (procesandoAprobacionRecepcion) return;
+        procesandoAprobacionRecepcion = true;
+        try
+        {
+            await AprobarRecepcionPendienteCore();
+        }
+        finally
+        {
+            procesandoAprobacionRecepcion = false;
+        }
+    }
+
+    private async Task AprobarRecepcionPendienteCore()
+    {
         try
         {
             // Validar tolerancia de días para aprobar recepción
@@ -1463,17 +2104,53 @@ else
             }
 
             // Filtrar solo los items de la recepción seleccionada
-            var itemsAEnviar = itemsRecepcion
+            var itemsRecepcionFiltrados = itemsRecepcion
                 .Where(item => item.NumeBore == numeroRecepcionSeleccionada)
                 .ToList();
 
-            if (!itemsAEnviar.Any())
+            if (!itemsRecepcionFiltrados.Any())
             {
                 await sweetAlertService.FireAsync("Error", "No hay items para aprobar en esta recepción.", SweetAlertIcon.Warning);
                 return;
             }
 
-            // Validar coherencia de cantidades
+            // ── Aprobación parcial ──────────────────────────────────────────
+            // Solo se aprueban los items donde el usuario ingresó cantidades
+            // (CanToApro + CantidadRechazada + CantidadFaltante > 0).
+            // Las filas sin cantidad ingresada quedan pendientes (Status = 0)
+            // y podrán aprobarse en una llamada posterior.
+            var itemsAEnviar = itemsRecepcionFiltrados
+                .Where(item => (item.CanToApro ?? 0) + (item.CantidadRechazada ?? 0) + (item.CantidadFaltante ?? 0) > 0)
+                .ToList();
+
+            if (!itemsAEnviar.Any())
+            {
+                await sweetAlertService.FireAsync("Atención",
+                    "No ha ingresado cantidades en ningún item.\n" +
+                    "Ingrese al menos una cantidad (Aprobada, Rechazada o Faltante) en los items que desea aprobar.",
+                    SweetAlertIcon.Warning);
+                return;
+            }
+
+            var itemsPendientes = itemsRecepcionFiltrados.Except(itemsAEnviar).ToList();
+
+            // Si es una aprobación parcial, informar al usuario cuántos items quedan pendientes.
+            if (itemsPendientes.Any())
+            {
+                var confirmacionParcial = await sweetAlertService.FireAsync(new SweetAlertOptions
+                {
+                    Title = "Aprobación Parcial",
+                    Text = $"Se aprobarán {itemsAEnviar.Count} de {itemsRecepcionFiltrados.Count} items.\n" +
+                           $"{itemsPendientes.Count} item(s) quedarán pendientes de aprobación.\n\n¿Desea continuar?",
+                    Icon = SweetAlertIcon.Question,
+                    ShowCancelButton = true,
+                    ConfirmButtonText = "Sí, aprobar",
+                    CancelButtonText = "Cancelar"
+                });
+                if (!confirmacionParcial.IsConfirmed) return;
+            }
+
+            // Validar coherencia de cantidades solo para los items a aprobar
             var itemsInvalidos = new List<string>();
             foreach (var item in itemsAEnviar)
             {
@@ -1529,12 +2206,21 @@ else
                 }
             }
 
-            // Asignar Status = 1 a los items filtrados
+            // Validar que se haya seleccionado un depósito de ingreso
+            if (codigoDepositoCalidad <= 0)
+            {
+                await sweetAlertService.FireAsync("Atención", "Debe seleccionar un depósito de ingreso antes de aprobar.", SweetAlertIcon.Warning);
+                return;
+            }
+
+            // Aplicar el depósito de ingreso elegido a todos los items y marcarlos como aprobados
             itemsAEnviar.ForEach(item => {
+                item.CodigoDeposito = codigoDepositoCalidad;
+                item.NombreDeposito = nombreDepositoCalidad;
                 item.Status = 1;
             });
 
-            Console.WriteLine($"[RecepcionProveedorDialog] Aprobando recepción {numeroRecepcionSeleccionada} con {itemsAEnviar.Count} items");
+            Console.WriteLine($"[RecepcionProveedorDialog] Aprobando recepción {numeroRecepcionSeleccionada} con {itemsAEnviar.Count} de {itemsRecepcionFiltrados.Count} items, depósito {codigoDepositoCalidad}");
 
             var response = await repository.Post($"api/BolrecepMovisto/aprobarRecepcionEingresoMovisto/{numeroRecepcionSeleccionada}?numeroOrdenCompra={numeroOrdenCompraSeleccionada}", itemsAEnviar);
             if (response.Error)
@@ -1545,11 +2231,20 @@ else
                 return;
             }
 
-            await sweetAlertService.FireAsync("Éxito", "La recepción se aprobó correctamente", SweetAlertIcon.Success);
-            await CargarRecepcionesPendientes();
-            CerrarModalItems();
+            // Preparamos el Vale Interno con los items aprobados y el depósito seleccionado.
+            var authState = await AuthProvider.GetAuthenticationStateAsync();
+            nombreUsuarioActualVale = authState.User.Identity?.Name ?? "Usuario";
+            origenVale = $"Recepción #{numeroRecepcionSeleccionada}";
+            observacionesVale = string.Empty;
+            itemsVale = itemsAEnviar.Where(i => (i.CanToApro ?? 0) > 0).ToList();
+            mostrarModalVistaPreviaVale = true;
+
+            // Cerramos el modal de items y limpiamos la selección; el Vale Interno queda abierto.
+            mostrarModalItems = false;
             numeroRecepcionSeleccionada = 0;
             numeroOrdenCompraSeleccionada = 0;
+
+            await CargarRecepcionesPendientes();
         }
         catch (Exception ex)
         {
@@ -1558,6 +2253,12 @@ else
         }
     }
 
+    // ── MÉTODO NO UTILIZADO (se mantiene activo, no eliminar) ──────────────
+    // Este método aprobaba la recepción completa vía PUT api/bolrecep/aprobar
+    // con confirmación previa. Hoy ningún botón lo invoca: la grilla de
+    // pendientes usa "Aprobar" → VerDetalleRecepcion (modal de items) →
+    // AprobarRecepcionPendiente (POST aprobarRecepcionEingresoMovisto).
+    // Se deja porque la aprobación directa podría reactivarse más adelante.
     private async Task AprobarRecepcion(int numeroRecepcion)
     {
         var confirmacion = await sweetAlertService.FireAsync(new SweetAlertOptions
@@ -1586,20 +2287,29 @@ else
 
     private async Task ConfirmarBorrarRecepcion(int numeroRecepcion)
     {
-        var confirmacion = await sweetAlertService.FireAsync(new SweetAlertOptions
+        if (procesandoBorradoRecepcion != null) return;
+        procesandoBorradoRecepcion = numeroRecepcion;
+        try
         {
-            Title = "¿Está seguro?",
-            Text = $"¿Desea borrar la recepción #{numeroRecepcion}? Esta acción no se puede deshacer.",
-            Icon = SweetAlertIcon.Warning,
-            ShowCancelButton = true,
-            ConfirmButtonText = "Sí, borrar",
-            CancelButtonText = "Cancelar",
-            ConfirmButtonColor = "#dc3545"
-        });
+            var confirmacion = await sweetAlertService.FireAsync(new SweetAlertOptions
+            {
+                Title = "¿Está seguro?",
+                Text = $"¿Desea borrar la recepción #{numeroRecepcion}? Esta acción no se puede deshacer.",
+                Icon = SweetAlertIcon.Warning,
+                ShowCancelButton = true,
+                ConfirmButtonText = "Sí, borrar",
+                CancelButtonText = "Cancelar",
+                ConfirmButtonColor = "#dc3545"
+            });
 
-        if (confirmacion.IsConfirmed)
+            if (confirmacion.IsConfirmed)
+            {
+                await BorrarRecepcion(numeroRecepcion);
+            }
+        }
+        finally
         {
-            await BorrarRecepcion(numeroRecepcion);
+            procesandoBorradoRecepcion = null;
         }
     }
 
@@ -1624,6 +2334,20 @@ else
     }
 
     private async Task AgregarMasRepuestos()
+    {
+        if (procesandoAgregarRepuesto) return;
+        procesandoAgregarRepuesto = true;
+        try
+        {
+            await AgregarMasRepuestosCore();
+        }
+        finally
+        {
+            procesandoAgregarRepuesto = false;
+        }
+    }
+
+    private async Task AgregarMasRepuestosCore()
     {
         try 
         {
@@ -1764,8 +2488,22 @@ else
         ordenIdSeleccionadaDetalle = 0;
     }
 
-    // Método para imprimir orden (similar al de OrdenesCompraIndex)
     private async Task ImprimirOrdenPendiente(int numeroOrden)
+    {
+        if (procesandoImpresionOrden != null) return;
+        procesandoImpresionOrden = numeroOrden;
+        try
+        {
+            await ImprimirOrdenPendienteCore(numeroOrden);
+        }
+        finally
+        {
+            procesandoImpresionOrden = null;
+        }
+    }
+
+    // Método para imprimir orden (similar al de OrdenesCompraIndex)
+    private async Task ImprimirOrdenPendienteCore(int numeroOrden)
     {
         try
         {
@@ -1843,6 +2581,8 @@ else
 
     private async Task ImprimirReporteOrdenesPendientes()
     {
+        if (procesandoImpresionReporte) return;
+        procesandoImpresionReporte = true;
         try
         {
             await JSRuntime.InvokeVoidAsync("window.print");
@@ -1852,9 +2592,27 @@ else
             Console.WriteLine($"Error al imprimir reporte: {ex.Message}");
             await sweetAlertService.FireAsync("Error", "Error al imprimir el reporte", SweetAlertIcon.Error);
         }
+        finally
+        {
+            procesandoImpresionReporte = false;
+        }
     }
 
     private async Task ImprimirRecepcionPendienteAsync(int numeroRecepcion)
+    {
+        if (procesandoImpresionRecepcion != null) return;
+        procesandoImpresionRecepcion = numeroRecepcion;
+        try
+        {
+            await ImprimirRecepcionPendienteCore(numeroRecepcion);
+        }
+        finally
+        {
+            procesandoImpresionRecepcion = null;
+        }
+    }
+
+    private async Task ImprimirRecepcionPendienteCore(int numeroRecepcion)
     {
         try
         {
@@ -1865,7 +2623,11 @@ else
                 return;
             }
 
-            var response = await repository.Get<List<RecepcionItemDTO>>($"api/bolrecep/items/{numeroRecepcion}");
+            // Se usa "items-todos" en lugar de "items" porque este último filtra
+            // Status == 0 (solo pendientes). Si la recepción ya fue aprobada
+            // (Status 1), "items" no devuelve nada y la impresión sale sin detalle.
+            // "items-todos" devuelve los items sin importar el Status.
+            var response = await repository.Get<List<RecepcionItemDTO>>($"api/bolrecep/items-todos/{numeroRecepcion}");
             if (response.Error)
             {
                 var mensaje = await response.GetErrorMessageAsync();

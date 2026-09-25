@@ -2,12 +2,15 @@
 <PageTitle>Consulta de Remitos de Traslado</PageTitle>
 @using IMPLANPROD.Shared.Entities
 @using IMPLANPROD.Shared.DTOs
+@using IMPLANPROD.Shared.DTOs.Impresiones
 @using IMPLANPROD.Client.Repositories
 @using IMPLANPROD.Client.Shared.Components
 @using IMPLANPROD.Client.Pages.Reportes
 @using IMPLANPROD.Client.Helpers
 @using IMPLANPROD.Client.Services
 @inject IRepository repository
+@inject HttpClient Http
+@inject IJSRuntime JS
 @inject SweetAlertService sweetAlertService
 @inject NavigationManager navigationManager
 @inject PageAccessService PageAccess
@@ -140,20 +143,23 @@ else
                                     <th>Cliente</th>
                                     <th>Razón Social</th>
                                     <th>Fecha</th>
+                                    <th>Referencia</th>
                                     <th>Estado</th>
-                                    <th style="width: 100px;">Acciones</th>
+                                    <th style="width: 160px;">Acciones</th>
                                 </tr>
                                 </thead>
                                 <tbody>
                                 @foreach (var remito in remitos)
                                 {
+                                    var esAnulado = !string.IsNullOrEmpty(remito.ReferCor) && remito.ReferCor.StartsWith("(Anul)");
                                     <tr>
                                         <td><strong>@remito.DoPriLar</strong></td>
                                         <td>@remito.NumeClie</td>
                                         <td>@remito.RazonSocial</td>
                                         <td>@remito.FechMov.ToString("dd/MM/yyyy")</td>
+                                        <td>@remito.ReferCor</td>
                                         <td>
-                                            @if (!string.IsNullOrEmpty(remito.ReferCor) && remito.ReferCor.StartsWith("(Anul)"))
+                                            @if (esAnulado)
                                             {
                                                 <span class="badge bg-danger">Anulado</span>
                                             }
@@ -163,12 +169,28 @@ else
                                             }
                                         </td>
                                         <td>
-                                            <button class="btn btn-sm btn-outline-primary" 
+                                            <button class="btn btn-sm btn-outline-primary"
                                                     @onclick="() => ImprimirRemito(remito)"
                                                     title="Imprimir Remito"
                                                     disabled="@imprimiendoRemito">
                                                 <i class="fas fa-print"></i>
                                             </button>
+                                            @if (!esAnulado)
+                                            {
+                                                <button class="btn btn-sm btn-outline-danger ms-1"
+                                                        @onclick="() => SeleccionarRemitoParaAnular(remito)"
+                                                        title="Anular Remito"
+                                                        disabled="@anulandoRemito">
+                                                    @if (anulandoRemitoId == remito.DoPriCor)
+                                                    {
+                                                        <span class="spinner-border spinner-border-sm"></span>
+                                                    }
+                                                    else
+                                                    {
+                                                        <i class="fas fa-ban"></i>
+                                                    }
+                                                </button>
+                                            }
                                         </td>
                                     </tr>
                                 }
@@ -244,6 +266,16 @@ else
     
     // Variables para impresión de remito individual
     private bool imprimiendoRemito = false;
+
+    // Variables para anulación de remito (patrón anti-doble-clic)
+    private bool anulandoRemito = false;
+    private string? anulandoRemitoId = null;
+
+    // Plantilla de impresión del Diseñador de Plantillas.
+    // Debe coincidir con la usada en /remitos/traslado (RemitoTraslado.razor).
+    private const string NombrePlantillaRemitoConsignacion = "RemitoConsignacion2";
+    private int? plantillaRemitoConsignacionId;
+
     private string nciImpresion = "";
     private string numeroRemitoImpresion = "";
     private string fechaImpresion = "";
@@ -400,7 +432,8 @@ else
     }
 
     /// <summary>
-    /// Imprime un remito existente
+    /// Imprime un remito existente usando la plantilla "RemitoConsignacion2"
+    /// del Diseñador de Plantillas, igual que al generarlo en /remitos/traslado.
     /// </summary>
     private async Task ImprimirRemito(RemitoAnularDTO remito)
     {
@@ -409,109 +442,14 @@ else
             imprimiendoRemito = true;
             StateHasChanged();
 
-            Console.WriteLine($"[RemitosTrasladoIndex] Preparando impresión del remito: {remito.DoPriLar}");
+            Console.WriteLine($"[RemitosTrasladoIndex] Imprimiendo remito por plantilla: {remito.DoPriLar}");
 
-            // IMPORTANTE: Limpiar todas las variables antes de preparar la impresión
-            LimpiarVariablesImpresion();
+            await ImprimirRemitoConsignacionPorPlantillaAsync(
+                remito.DoPriLar ?? string.Empty,
+                remito.NumeClie,
+                remito.FechMov);
 
-            // Preparar número de remito
-            numeroRemitoImpresion = remito.DoPriLar ?? "";
-            
-            // Preparar fecha
-            fechaImpresion = remito.FechMov.ToString("dd/MM/yy");
-            
-            // Preparar datos del cliente
-            razonSocialImpresion = remito.RazonSocial ?? "";
-            
-            // Obtener datos completos del cliente
-            if (remito.NumeClie > 0)
-            {
-                var responseCliente = await repository.Get<Deudor12>($"api/Deudor12/numero/{remito.NumeClie}");
-                if (!responseCliente.Error && responseCliente.Response != null)
-                {
-                    var cliente = responseCliente.Response;
-                    domicilioImpresion = cliente.Domi_Cli ?? "";
-                    localidadImpresion = cliente.Loca_Cli ?? "";
-                    
-                    // Formatear CUIT con guiones
-                    cuitImpresion = FormatearCUIT(cliente.Cuit_Cli ?? "");
-                    
-                    // Obtener condición de IVA desde TipoIvaEnum usando Piva_Cli
-                    condicionIVAImpresion = TipoIvaHelper.ObtenerDescripcionIvaPorCodigo(cliente.Piva_Cli);
-                    Console.WriteLine($"[RemitosTrasladoIndex] Condición IVA: Código={cliente.Piva_Cli}, Descripción={condicionIVAImpresion}");
-                }
-            }
-            
-            // Obtener detalles del remito (productos)
-            // IMPORTANTE: Buscar por DoPriLar (número largo), Nume_Cli y FechMov
-            // porque los números de remito pueden reinicializarse y repetirse en diferentes fechas
-            var fechaFormateada = remito.FechMov.ToString("yyyy-MM-dd");
-            Console.WriteLine($"[RemitosTrasladoIndex] Buscando movimientos: DoPriLar={remito.DoPriLar}, NumeCli={remito.NumeClie}, Fecha={fechaFormateada}");
-            
-            var responseMovisto = await repository.Get<List<Movisto>>(
-                $"api/movisto/por-remito?doPriLar={remito.DoPriLar}&numeCli={remito.NumeClie}&fechMov={fechaFormateada}&codiMovi=RC");
-            
-            if (responseMovisto.Error)
-            {
-                Console.WriteLine($"[RemitosTrasladoIndex] Error al obtener movimientos: {await responseMovisto.GetErrorMessageAsync()}");
-            }
-            else if (responseMovisto.Response != null && responseMovisto.Response.Any())
-            {
-                Console.WriteLine($"[RemitosTrasladoIndex] Se encontraron {responseMovisto.Response.Count} movimientos");
-                
-                foreach (var movimiento in responseMovisto.Response)
-                {
-                    Console.WriteLine($"[RemitosTrasladoIndex] Procesando movimiento: Cod_Inte={movimiento.Cod_Inte}, CantSalid={movimiento.CantSalid}");
-                    
-                    if (movimiento.Cod_Inte.HasValue)
-                    {
-                        // Obtener datos del producto desde Master
-                        var responseProducto = await repository.Get<Master>($"api/master/xCodint{movimiento.Cod_Inte.Value}");
-                        if (!responseProducto.Error && responseProducto.Response != null)
-                        {
-                            var producto = responseProducto.Response;
-                            itemsImpresion.Add(new ImpresionRemito.ItemRemito
-                            {
-                                Cantidad = movimiento.CantSalid ?? 0,
-                                Codigo = producto.Codigo ?? "",
-                                Descripcion = producto.Descripcion ?? ""
-                            });
-                            Console.WriteLine($"[RemitosTrasladoIndex] Producto agregado: {producto.Codigo} - {producto.Descripcion}");
-                        }
-                        else
-                        {
-                            Console.WriteLine($"[RemitosTrasladoIndex] Error al obtener producto Cod_Inte={movimiento.Cod_Inte.Value}");
-                        }
-                    }
-                }
-                
-                Console.WriteLine($"[RemitosTrasladoIndex] Total items agregados: {itemsImpresion.Count}");
-            }
-            else
-            {
-                Console.WriteLine("[RemitosTrasladoIndex] No se encontraron movimientos para este remito");
-            }
-            
-            // Preparar observaciones y otros datos
-            observacionesImpresion = remito.ReferCor ?? "";
-            ordenCompraImpresion = ""; // No disponible en RemitoAnularDTO
-            ordenVentaImpresion = ""; // No disponible en RemitoAnularDTO
-            valorDeclaradoImpresion = ""; // No disponible en RemitoAnularDTO
-            bultosImpresion = 1; // Valor por defecto
-            nciImpresion = ""; // Vacío según especificación
-            
-            Console.WriteLine($"[RemitosTrasladoIndex] Datos preparados para impresión: {numeroRemitoImpresion}");
-            
-            // Forzar actualización del componente
-            StateHasChanged();
-            
-            // Esperar un momento para que se actualice el DOM
-            await Task.Delay(100);
-            
-            // Imprimir
-            await impresionRemito.Imprimir();
-            
-            Console.WriteLine("[RemitosTrasladoIndex] Impresión iniciada");
+            Console.WriteLine("[RemitosTrasladoIndex] Impresión por plantilla iniciada");
         }
         catch (Exception ex)
         {
@@ -523,6 +461,96 @@ else
             imprimiendoRemito = false;
             StateHasChanged();
         }
+    }
+
+    /// <summary>
+    /// Imprime un remito de traslado usando la plantilla "RemitoConsignacion2"
+    /// del Diseñador de Plantillas de impresión.
+    /// Parámetros que se le pasan a la plantilla (todos de MOVISTO):
+    ///   - Doprilar: documento primario largo (ej. "RC.1234")
+    ///   - Nume_Clie: número de cliente
+    ///   - Fechmov: fecha del movimiento
+    /// </summary>
+    private async Task ImprimirRemitoConsignacionPorPlantillaAsync(string doPriLar, int numeClie, DateTime fechMov)
+    {
+        if (string.IsNullOrWhiteSpace(doPriLar))
+        {
+            await sweetAlertService.FireAsync("Atención", "El remito no tiene número para imprimir.", SweetAlertIcon.Warning);
+            return;
+        }
+
+        var plantillaId = await GetPlantillaRemitoConsignacionIdAsync();
+        if (!plantillaId.HasValue)
+        {
+            return;
+        }
+
+        var queryParams = new List<string>
+        {
+            $"Doprilar={Uri.EscapeDataString(doPriLar.Trim())}",
+            $"Nume_Clie={numeClie}"
+        };
+
+        if (fechMov > DateTime.MinValue)
+        {
+            queryParams.Add($"Fechmov={Uri.EscapeDataString(fechMov.ToString("yyyy-MM-dd"))}");
+        }
+
+        var endpoint = $"api/impresiones/remito-plantillas/{plantillaId.Value}/pdf?{string.Join("&", queryParams)}";
+        var responsePdf = await Http.GetAsync(endpoint);
+
+        if (!responsePdf.IsSuccessStatusCode)
+        {
+            var message = await responsePdf.Content.ReadAsStringAsync();
+            await sweetAlertService.FireAsync("Error", $"No se pudo generar el PDF del remito: {message}", SweetAlertIcon.Error);
+            return;
+        }
+
+        var pdfBytes = await responsePdf.Content.ReadAsByteArrayAsync();
+        if (pdfBytes.Length == 0)
+        {
+            await sweetAlertService.FireAsync("Error", "El PDF generado está vacío.", SweetAlertIcon.Error);
+            return;
+        }
+
+        var base64 = Convert.ToBase64String(pdfBytes);
+        var opened = await JS.InvokeAsync<bool>("openPdfInNewTab", base64);
+        if (!opened)
+        {
+            await sweetAlertService.FireAsync("Atención", "No se pudo abrir el PDF en una nueva pestaña. Verificá el bloqueador de pop-ups.", SweetAlertIcon.Warning);
+        }
+    }
+
+    /// <summary>
+    /// Busca el Id de la plantilla "RemitoConsignacion2" en el listado de plantillas
+    /// guardadas por el Diseñador de Plantillas.
+    /// </summary>
+    private async Task<int?> GetPlantillaRemitoConsignacionIdAsync()
+    {
+        if (plantillaRemitoConsignacionId.HasValue)
+        {
+            return plantillaRemitoConsignacionId;
+        }
+
+        var response = await repository.Get<List<RemitoPlantillaItemDto>>("api/impresiones/remito-plantillas");
+        if (response.Error || response.Response == null)
+        {
+            var message = await response.GetErrorMessageAsync();
+            await sweetAlertService.FireAsync("Error", $"No se pudo obtener el listado de plantillas de remito: {message}", SweetAlertIcon.Error);
+            return null;
+        }
+
+        var plantilla = response.Response
+            .FirstOrDefault(x => string.Equals(x.Nombre?.Trim(), NombrePlantillaRemitoConsignacion, StringComparison.OrdinalIgnoreCase));
+
+        if (plantilla == null)
+        {
+            await sweetAlertService.FireAsync("Atención", $"No se encontró la plantilla '{NombrePlantillaRemitoConsignacion}'.", SweetAlertIcon.Warning);
+            return null;
+        }
+
+        plantillaRemitoConsignacionId = plantilla.Id;
+        return plantillaRemitoConsignacionId;
     }
 
     /// <summary>
@@ -565,6 +593,148 @@ else
 
         // Formatear: XX-XXXXXXXX-X
         return $"{cuitLimpio.Substring(0, 2)}-{cuitLimpio.Substring(2, 8)}-{cuitLimpio.Substring(10, 1)}";
+    }
+
+    /// <summary>
+    /// Solicita confirmación al usuario antes de anular un remito de traslado.
+    /// Replica el comportamiento de VB6: DERACCE("ANUREMI", "Anulación de Remito")
+    /// acá se resuelve con SweetAlert de confirmación.
+    /// Antes de confirmar, consulta la cantidad de filas (items) del remito para
+    /// mostrarlas en el mensaje de confirmación.
+    /// </summary>
+    private async Task SeleccionarRemitoParaAnular(RemitoAnularDTO remito)
+    {
+        // Evitar doble clic: si ya hay una anulación en curso, ignorar
+        if (anulandoRemito) return;
+
+        // Consultar la cantidad de filas del remito para mostrar en la confirmación
+        int cantidadFilas = 0;
+        try
+        {
+            var requestConsulta = new AnularRemitoRequest
+            {
+                NumeroRemito = remito.DoPriLar ?? "",
+                NumeroCliente = remito.NumeClie,
+                FechaMovimiento = remito.FechMov
+            };
+
+            var responseCantidad = await repository.Post<AnularRemitoRequest, int>(
+                "api/movistock/cantidad-filas-remito",
+                requestConsulta);
+
+            if (!responseCantidad.Error && responseCantidad.Response != null)
+            {
+                cantidadFilas = responseCantidad.Response;
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[RemitosTrasladoIndex] Error al obtener cantidad de filas: {ex.Message}");
+        }
+
+        var result = await sweetAlertService.FireAsync(new SweetAlertOptions
+        {
+            Title = "Confirmación de Anulación",
+            Text = $"¿Está seguro de anular el remito {remito.DoPriLar}?\n\n" +
+                   $"Cliente: {remito.NumeClie} - {remito.RazonSocial}\n" +
+                   $"Fecha: {remito.FechMov:dd/MM/yyyy}\n" +
+                   $"Cantidad de filas: {cantidadFilas} (2 x Movimiento)",
+            Icon = SweetAlertIcon.Warning,
+            ShowCancelButton = true,
+            ConfirmButtonText = "Sí, anular",
+            CancelButtonText = "Cancelar",
+            ConfirmButtonColor = "#d33"
+        });
+
+        if (result.IsConfirmed)
+        {
+            await AnularRemito(remito);
+        }
+    }
+
+    /// <summary>
+    /// Anula un remito de traslado llamando al endpoint del servidor que replica
+    /// la lógica VB6 de anulación de remitos:
+    ///   - Busca el código de movimiento (MOVISTO o MOVIREPA según COMOV$)
+    ///   - Recorre el detalle y arma el string de trazables para ACSALOTE
+    ///   - Si el remito tiene pedido asociado, actualiza PEDDETA (CantEnt, CanSaldo, Status, NroRemi)
+    ///   - UPDATE MOVISTO: Cantsalid=0, Refercor='(Anul) ' + Refercor
+    /// </summary>
+    private async Task AnularRemito(RemitoAnularDTO remito)
+    {
+        // Evitar doble clic
+        if (anulandoRemito) return;
+
+        anulandoRemito = true;
+        anulandoRemitoId = remito.DoPriCor;
+        StateHasChanged();
+
+        try
+        {
+            Console.WriteLine($"[RemitosTrasladoIndex] Anulando remito: {remito.DoPriCor}");
+
+            // Preparar request para anulación (igual que AnulaRemito.razor)
+            // La búsqueda en el backend se realiza por DoPriLar + Nume_Clie + FechMov
+            var request = new AnularRemitoRequest
+            {
+                NumeroRemito = remito.DoPriLar ?? "",
+                NumeroCliente = remito.NumeClie,
+                FechaMovimiento = remito.FechMov
+            };
+
+            // Llamar al endpoint de anulación que replica la lógica VB6
+            var response = await repository.Post<AnularRemitoRequest, AnularRemitoResponse>(
+                "api/movistock/anular-remito",
+                request);
+
+            if (!response.Error && response.Response != null)
+            {
+                var resultado = response.Response;
+
+                if (resultado.Exitoso)
+                {
+                    await sweetAlertService.FireAsync(new SweetAlertOptions
+                    {
+                        Title = "Remito Anulado",
+                        Html = $"<div style='text-align: left;'>" +
+                               $"<p><strong>Remito:</strong> {remito.DoPriLar}</p>" +
+                               $"<p><strong>Cliente:</strong> {remito.NumeClie} - {remito.RazonSocial}</p>" +
+                               $"<p><strong>Tabla utilizada:</strong> {resultado.TablaUtilizada}</p>" +
+                               $"<p><strong>Registros afectados:</strong> {resultado.RegistrosMovimientosAfectados}</p>" +
+                               $"<p><strong>Pedidos actualizados:</strong> {resultado.PedidosActualizados}</p>" +
+                               $"</div>",
+                        Icon = SweetAlertIcon.Success
+                    });
+
+                    Console.WriteLine($"[RemitosTrasladoIndex] Anulación exitosa: {resultado.Mensaje}");
+
+                    // Recargar la lista de remitos para reflejar el estado Anulado
+                    await CargarRemitos();
+                }
+                else
+                {
+                    await sweetAlertService.FireAsync("Error", resultado.Mensaje, SweetAlertIcon.Error);
+                    Console.WriteLine($"[RemitosTrasladoIndex] Error en anulación: {resultado.Mensaje}");
+                }
+            }
+            else
+            {
+                var errorMsg = await response.GetErrorMessageAsync();
+                Console.WriteLine($"[RemitosTrasladoIndex] Error al anular remito: {errorMsg}");
+                await sweetAlertService.FireAsync("Error", $"Error al anular remito: {errorMsg}", SweetAlertIcon.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[RemitosTrasladoIndex] Excepción al anular remito: {ex.Message}");
+            await sweetAlertService.FireAsync("Error", $"Error al anular remito: {ex.Message}", SweetAlertIcon.Error);
+        }
+        finally
+        {
+            anulandoRemito = false;
+            anulandoRemitoId = null;
+            StateHasChanged();
+        }
     }
 
     private void Volver()

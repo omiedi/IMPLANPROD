@@ -1,6 +1,8 @@
 @page "/master/navegacion-componentes/{Id}"
 @using IMPLANPROD.Client.Services
+@using IMPLANPROD.Client.Pages.Reportes
 @using IMPLANPROD.Shared.Entities
+@using IMPLANPROD.Shared.DTOs
 @inject IRepository repository
 @inject NavigationManager navigation
 @inject SweetAlertService sweetAlertService
@@ -35,11 +37,22 @@ else
             </div>
 
             <!-- Botón de retroceso -->
-            <div class="mb-3">
+            <div class="mb-3 d-flex justify-content-between align-items-center">
                 <button class="btn btn-secondary" @onclick="VolverAtras" disabled="@(pilaNavegacion.Count == 0)">
                     <i class="fas fa-arrow-left me-2"></i>Volver al Código Padre
                 </button>
+                <button class="btn btn-outline-success" @onclick="ConfirmarImpresionAsync" disabled="@isPrinting">
+                    <i class="oi oi-print"></i> Imprimir/Exp.Excel
+                </button>
             </div>
+            @if (isPrinting)
+            {
+                <div class="mb-3 text-end">
+                    <div class="spinner-border text-success" role="status">
+                        <span class="visually-hidden">Preparando impresión...</span>
+                    </div>
+                </div>
+            }
 
             <!-- Solapas -->
             <div class="tabs-container">
@@ -208,6 +221,18 @@ else
             </button>
         </div>
     </div>
+
+    @if (componentesAsignados != null && componentesAsignados.Any())
+    {
+        <ImpresionLista TItem="Formulas"
+                        Datos="componentesAsignados"
+                        Titulo="Reporte de Componentes"
+                        UrlExportarExcel="api/excel/exportar-componentes"
+                        Encabezados="encabezadosComponentes"
+                        ModoDirecto="false"
+                        MostrarModal="mostrarModalImpresion"
+                        OnCerrar="ResetearImpresion" />
+    }
 }
 
 @code {
@@ -224,6 +249,21 @@ else
     private string activeTab = "Componentes";
     private string activeSubTabEspecificacion = "Especificaciones";
     private int? componenteSeleccionadoCodint; // Para marcar visualmente el componente seleccionado
+
+    // ── Impresión / Exportación Excel ──
+    private bool isPrinting = false;
+    private bool mostrarModalImpresion = false;
+
+    // Encabezados de las columnas visibles para el reporte de componentes.
+    // Las claves coinciden con las propiedades de la entidad Formulas.
+    Dictionary<string, string> encabezadosComponentes = new()
+    {
+        { "CodiElem", "Códint" },
+        { "CodXElem", "Código" },
+        { "MasterDescripcion", "Descripción" },
+        { "UsoBruto", "Cantidad" },
+        { "UMED_FORM", "Unidad" }
+    };
     
     // Pila de navegación para poder volver atrás (incluye el Codint del componente seleccionado)
     private Stack<(int CodintPadre, string CodigoPadre, string DescripcionPadre, int? CodintComponenteSeleccionado)> pilaNavegacion = new();
@@ -409,5 +449,60 @@ else
     private void Regresar()
     {
         navigation.NavigateTo($"/master/edit/{Id}");
+    }
+
+    /// <summary>
+    /// Confirma la impresión/exportación de los componentes del producto activo.
+    /// Sigue el mismo patrón que MasterIndex: muestra un SweetAlert de confirmación
+    /// con la cantidad de registros y luego abre el modal de ImpresionLista.
+    /// </summary>
+    private async Task ConfirmarImpresionAsync()
+    {
+        if (componentesAsignados == null || !componentesAsignados.Any())
+        {
+            await sweetAlertService.FireAsync("Atención", "No hay componentes para imprimir.", SweetAlertIcon.Warning);
+            return;
+        }
+
+        isPrinting = true;
+        StateHasChanged();
+
+        try
+        {
+            int cantidad = componentesAsignados.Count;
+
+            var result = await sweetAlertService.FireAsync(new SweetAlertOptions
+            {
+                Title = "Confirmar impresión",
+                Text = $"Se van a imprimir {cantidad} componentes del producto \"{descripcionActiva}\".\n¿Deseás continuar?",
+                Icon = SweetAlertIcon.Warning,
+                ShowCancelButton = true,
+                ConfirmButtonText = "Sí, imprimir",
+                CancelButtonText = "Cancelar"
+            });
+
+            if (result.IsConfirmed)
+            {
+                mostrarModalImpresion = true;
+            }
+        }
+        catch (Exception ex)
+        {
+            await sweetAlertService.FireAsync("Error", ex.Message, SweetAlertIcon.Error);
+        }
+        finally
+        {
+            isPrinting = false;
+            StateHasChanged();
+        }
+    }
+
+    /// <summary>
+    /// Cierra el modal de impresión y limpia el estado.
+    /// </summary>
+    private void ResetearImpresion()
+    {
+        mostrarModalImpresion = false;
+        StateHasChanged();
     }
 }

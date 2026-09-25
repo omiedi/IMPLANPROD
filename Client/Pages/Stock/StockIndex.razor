@@ -39,7 +39,20 @@
             <i class="oi oi-sync"></i> Sincronización
         </button>
     </div>
-    <div class="dropdown">
+    <div class="d-flex gap-2">
+        <div class="dropdown">
+            <button class="btn btn-sm btn-outline-primary dropdown-toggle" type="button" data-bs-toggle="dropdown">
+                <i class="oi oi-external-link me-1"></i> Accesos Directos
+            </button>
+            <ul class="dropdown-menu dropdown-menu-end">
+                <li>
+                    <button type="button" class="dropdown-item" @onclick="AbrirAccesosDirectos">
+                        <i class="fas fa-eye me-1"></i> Anotador de Pedidos
+                    </button>
+                </li>
+            </ul>
+        </div>
+        <div class="dropdown">
         <button class="btn btn-sm btn-primary dropdown-toggle" type="button" data-bs-toggle="dropdown">
             + Utilidades
         </button>
@@ -54,7 +67,13 @@
                     Re-Impresiones de Transferencias
                 </button>
             </li>
+            <li>
+                <NavLink class="dropdown-item" href="/propia-produccion">
+                    <i class="fas fa-industry me-1"></i> Producción Propia
+                </NavLink>
+            </li>
         </ul>
+    </div>
     </div>
 </div>
 
@@ -64,6 +83,10 @@
         <button type="button" class="btn btn-outline-primary" @onclick="ApplyFilterAsync">Filtrar</button>
         <button type="button" class="btn btn-outline-danger" @onclick="CleanFilterAsync">Limpiar</button>
     </div>
+</div>
+
+<div class="text-muted" style="font-size: 0.85rem; margin-top: -0.5rem;">
+    Podés combinar términos con <b>+</b> para exigir coincidencia de ambos (AND). Ej: <code>858 + ADAPTADOR</code>
 </div>
 
 <Pagination CurrentPage="currentPage"
@@ -368,6 +391,13 @@ SelectedPage="SelectedPageAsync" />
         }
 
         await LoadAsync(page);
+
+        // Si se regresa desde el anotador de pedidos, reabrir el modal para seleccionar otro pedido.
+        if (ReabrirAccesosDirectos)
+        {
+            AbrirAccesosDirectos();
+            await BuscarPedidosAccesosDirectos();
+        }
     }
 
     int? NivelTrazable;
@@ -400,6 +430,13 @@ SelectedPage="SelectedPageAsync" />
     private TransferenciaResumenDTO? reimpresionSeleccionada;
     private DateTime? fechaDesde;
     private DateTime? fechaHasta;
+
+    // Variables para Accesos Directos (Anotador de Pedidos)
+    private bool mostrarModalAccesosDirectos = false;
+    private string filtroPedidosAccesosDirectos = string.Empty;
+    private List<Pedenca> pedidosAccesosDirectos = new();
+    private bool cargandoPedidosAccesosDirectos = false;
+
     private List<Deudor12> clientes = new();
     private List<PedidoPendienteClienteDTO> pedidosPendientes = new();
     private List<DetallePedidoPendienteDTO> detallePedido = new();
@@ -418,6 +455,14 @@ SelectedPage="SelectedPageAsync" />
     [Parameter]
     [SupplyParameterFromQuery]
     public string Filter { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Indica si se debe reabrir el modal de Accesos Directos al cargar la página.
+    /// Se usa cuando se regresa desde el anotador de pedidos para elegir otro pedido.
+    /// </summary>
+    [Parameter]
+    [SupplyParameterFromQuery(Name = "abrirAccesosDirectos")]
+    public bool ReabrirAccesosDirectos { get; set; }
 
     private int currentPage = 1;
     private int totalPages;
@@ -587,6 +632,63 @@ SelectedPage="SelectedPageAsync" />
         transferencias.Clear();
         fechaDesde = null;
         fechaHasta = null;
+    }
+
+    // ===================================================================
+    // MÉTODOS PARA ACCESOS DIRECTOS (ANOTADOR DE PEDIDOS)
+    // ===================================================================
+
+    private void AbrirAccesosDirectos()
+    {
+        mostrarModalAccesosDirectos = true;
+        filtroPedidosAccesosDirectos = string.Empty;
+        pedidosAccesosDirectos = new List<Pedenca>();
+    }
+
+    private void CerrarAccesosDirectos()
+    {
+        mostrarModalAccesosDirectos = false;
+        filtroPedidosAccesosDirectos = string.Empty;
+        pedidosAccesosDirectos = new List<Pedenca>();
+    }
+
+    private async Task BuscarPedidosAccesosDirectos()
+    {
+        try
+        {
+            cargandoPedidosAccesosDirectos = true;
+
+            var filtro = Uri.EscapeDataString(filtroPedidosAccesosDirectos ?? string.Empty);
+            var url = $"api/pedenca?page=1&recordsNumber=50&filter={filtro}";
+
+            var response = await repository.Get<List<Pedenca>>(url);
+            if (!response.Error && response.Response != null)
+            {
+                pedidosAccesosDirectos = response.Response;
+            }
+            else
+            {
+                pedidosAccesosDirectos = new List<Pedenca>();
+            }
+        }
+        catch (Exception ex)
+        {
+            await sweetAlertService.FireAsync("Error", $"Error al buscar pedidos: {ex.Message}", SweetAlertIcon.Error);
+            pedidosAccesosDirectos = new List<Pedenca>();
+        }
+        finally
+        {
+            cargandoPedidosAccesosDirectos = false;
+        }
+    }
+
+    private void VerAnotadorPedido(int nroPedido)
+    {
+        CerrarAccesosDirectos();
+
+        // Volver a /Stock-index y reabrir el modal para elegir otro pedido.
+        var returnUrl = Uri.EscapeDataString("/Stock-index?abrirAccesosDirectos=true");
+        NavigationManager.NavigateTo($"/anotaciones-pedido/{nroPedido}?returnUrl={returnUrl}");
     }
 
     private async Task BuscarTransferencias()
@@ -1104,6 +1206,92 @@ SelectedPage="SelectedPageAsync" />
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" @onclick="CerrarReimpresionesTransferencias">Cerrar</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+<!-- Modal Accesos Directos (Buscador de Pedidos -> Anotador) -->
+@if (mostrarModalAccesosDirectos)
+{
+    <div class="modal fade show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5);">
+        <div class="modal-dialog modal-xl modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header bg-info text-white">
+                    <h5 class="modal-title">
+                        <i class="oi oi-external-link me-2"></i>Accesos Directos - Anotador de Pedidos
+                    </h5>
+                    <button type="button" class="btn-close btn-close-white" @onclick="CerrarAccesosDirectos"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="row g-3 align-items-end mb-3">
+                        <div class="col-md-8">
+                            <label class="form-label">Buscar pedido (N°, cliente, referencia...)</label>
+                            <input type="text" class="form-control" placeholder="Ingrese texto a buscar..."
+                                   @bind-value="filtroPedidosAccesosDirectos" @bind-value:event="oninput" @onkeyup="BuscarPedidosAccesosDirectos" />
+                        </div>
+                        <div class="col-md-4">
+                            <button type="button" class="btn btn-primary" @onclick="BuscarPedidosAccesosDirectos">
+                                <i class="fas fa-search"></i> Buscar
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="table-responsive" style="max-height: 500px; overflow-y: auto;">
+                        <table class="table table-striped table-hover table-sm">
+                            <thead class="table-primary sticky-top">
+                                <tr>
+                                    <th>Nro. Pedido</th>
+                                    <th>Fecha</th>
+                                    <th>Cta. (N° Cliente)</th>
+                                    <th>Razón Social</th>
+                                    <th class="text-center">Acciones</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @if (cargandoPedidosAccesosDirectos)
+                                {
+                                    <tr>
+                                        <td colspan="5" class="text-center">
+                                            <div class="spinner-border spinner-border-sm text-primary" role="status">
+                                                <span class="visually-hidden">Buscando...</span>
+                                            </div>
+                                            <span class="ms-2">Buscando pedidos...</span>
+                                        </td>
+                                    </tr>
+                                }
+                                else if (pedidosAccesosDirectos.Any())
+                                {
+                                    @foreach (var pedido in pedidosAccesosDirectos)
+                                    {
+                                        <tr>
+                                            <td>@pedido.NroPed</td>
+                                            <td>@(pedido.FechEmis?.ToString("dd/MM/yyyy") ?? "-")</td>
+                                            <td>@(pedido.NroClie?.ToString() ?? "-")</td>
+                                            <td>@pedido.RasoClie</td>
+                                            <td class="text-center">
+                                                <button type="button" class="btn btn-sm btn-outline-info" title="Anotador de Pedidos" @onclick="() => VerAnotadorPedido(pedido.NroPed ?? 0)">
+                                                    <i class="fas fa-eye"></i> Ver
+                                                </button>
+                                            </td>
+                                        </tr>
+                                    }
+                                }
+                                else
+                                {
+                                    <tr>
+                                        <td colspan="5" class="text-center text-muted">
+                                            Ingrese un texto y presione Buscar para buscar pedidos.
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" @onclick="CerrarAccesosDirectos">Cerrar</button>
                 </div>
             </div>
         </div>

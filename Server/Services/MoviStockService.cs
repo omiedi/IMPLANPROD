@@ -491,14 +491,15 @@ namespace IMPLANPROD.Server.Services
                 }
 
                 var fechaInicio = new DateTime(anio, mes, 1);
-                var fechaFin = fechaInicio.AddMonths(1).AddDays(-1);
+                // var fechaFin = fechaInicio.AddMonths(1).AddDays(-1);
+                var fechaFin = fechaInicio.AddMonths(1);
 
                 _logger.LogInformation("Buscando TODOS los remitos entre {FechaInicio} y {FechaFin} con código {CodigoMov}",
                     fechaInicio, fechaFin, codigoMov);
 
                 var query = _context.Set<Movisto>()
                     .Where(m => m.FechMov >= fechaInicio &&
-                               m.FechMov <= fechaFin &&
+                               m.FechMov < fechaFin &&
                                (m.CodiMovi == codigoMov || m.CodiMovi == "DV"));
 
                 if (numeroCliente.HasValue)
@@ -553,7 +554,8 @@ namespace IMPLANPROD.Server.Services
                 var query = _context.Set<Movisto>()
                     .Where(m => m.FechMov >= fechaInicio &&
                                m.FechMov <= fechaFin &&
-                               (m.CodiMovi == "RC" || m.CodiMovi == "DV"));
+                               (m.CodiMovi == "RC" || m.CodiMovi == "DV") &&
+                               m.Nume_Clie > 0);
 
                 if (numeroCliente.HasValue)
                 {
@@ -648,9 +650,9 @@ namespace IMPLANPROD.Server.Services
                     request.NumeroRemito, request.NumeroCliente);
 
                 // PASO 1: Determinar si el remito está en MOVISTO o MOVIREPA
-                // Replica: COMOV$ = TRIM$(VALOBADA("MOVISTO", "CODIMOVI", "DoPriCor = '" & REMISEL$ & "'", "NOMESS"))
+                // La búsqueda se realiza por DoPriLar + Nume_Clie + FechMov
                 var codiMoviMovisto = await _context.Set<Movisto>()
-                    .Where(m => m.DoPriCor == request.NumeroRemito)
+                    .Where(m => m.DoPriLar == request.NumeroRemito)
                     .Select(m => m.CodiMovi)
                     .FirstOrDefaultAsync();
 
@@ -667,9 +669,9 @@ namespace IMPLANPROD.Server.Services
                 else
                 {
                     // Buscar en MOVIREPA
-                    // Replica: If COMOV$ = "" Then COMOV$ = TRIM$(VALOBADA("MOVIREPA", "CODIMOVI", "DoPriCor = '" & REMISEL$ & "'", "NOMESS"))
+                    // La búsqueda se realiza por DoPriLar
                     var codiMoviMovirepa = await _context.Set<Movirepa>()
-                        .Where(m => m.DoPriCor == request.NumeroRemito)
+                        .Where(m => m.DoPriLar == request.NumeroRemito)
                         .Select(m => m.CodiMovi)
                         .FirstOrDefaultAsync();
 
@@ -690,13 +692,13 @@ namespace IMPLANPROD.Server.Services
                 response.TablaUtilizada = tablaUtilizar;
 
                 // PASO 2: Obtener movimientos del remito para actualizar pedidos vinculados
-                // Replica: SELECT * FROM MOVISTO WHERE DoPriCor = ... AND Nume_Clie = ... AND FechMov = ...
+                // Búsqueda por DoPriLar + Nume_Clie + FechMov
                 List<dynamic> movimientos;
                 
                 if (tablaUtilizar == "MOVISTO")
                 {
                     movimientos = await _context.Set<Movisto>()
-                        .Where(m => m.DoPriCor == request.NumeroRemito &&
+                        .Where(m => m.DoPriLar == request.NumeroRemito &&
                                    m.Nume_Clie == request.NumeroCliente &&
                                    m.FechMov == request.FechaMovimiento)
                         .Select(m => new
@@ -712,7 +714,7 @@ namespace IMPLANPROD.Server.Services
                 else
                 {
                     movimientos = await _context.Set<Movirepa>()
-                        .Where(m => m.DoPriCor == request.NumeroRemito &&
+                        .Where(m => m.DoPriLar == request.NumeroRemito &&
                                    m.Nume_Clie == request.NumeroCliente &&
                                    m.FechMov == request.FechaMovimiento)
                         .Select(m => new
@@ -776,13 +778,13 @@ namespace IMPLANPROD.Server.Services
                 response.PedidosActualizados = pedidosActualizados;
 
                 // PASO 4: Marcar remito como anulado
-                // Replica: UPDATE MOVISTO SET CANTSALID=0, REFERCOR='(Anul) ' + REFERCOR, PESOKG=0, METROS=0
+                // Replica: UPDATE MOVISTO SET CANTSALID=0, CANTINGRE=0, PESOKG=0, METROS=0, REFERCOR='(Anul) ' + REFERCOR
                 int registrosAfectados;
 
                 if (tablaUtilizar == "MOVISTO")
                 {
                     var movistosAnular = await _context.Set<Movisto>()
-                        .Where(m => m.DoPriCor == request.NumeroRemito &&
+                        .Where(m => m.DoPriLar == request.NumeroRemito &&
                                    m.Nume_Clie == request.NumeroCliente &&
                                    m.FechMov == request.FechaMovimiento)
                         .ToListAsync();
@@ -790,6 +792,7 @@ namespace IMPLANPROD.Server.Services
                     foreach (var movisto in movistosAnular)
                     {
                         movisto.CantSalid = 0;
+                        movisto.CantIngre = 0;
                         movisto.PESOKG = 0;
                         movisto.METROS = 0;
                         
@@ -805,7 +808,7 @@ namespace IMPLANPROD.Server.Services
                 else
                 {
                     var movirepasAnular = await _context.Set<Movirepa>()
-                        .Where(m => m.DoPriCor == request.NumeroRemito &&
+                        .Where(m => m.DoPriLar == request.NumeroRemito &&
                                    m.Nume_Clie == request.NumeroCliente &&
                                    m.FechMov == request.FechaMovimiento)
                         .ToListAsync();
@@ -813,6 +816,7 @@ namespace IMPLANPROD.Server.Services
                     foreach (var movirepa in movirepasAnular)
                     {
                         movirepa.CantSalid = 0;
+                        movirepa.CantIngre = 0;
                         movirepa.PESOKG = 0;
                         movirepa.METROS = 0;
                         
@@ -844,6 +848,45 @@ namespace IMPLANPROD.Server.Services
                 response.Exitoso = false;
                 response.Mensaje = $"Error al anular remito: {ex.Message}";
                 return response;
+            }
+        }
+
+        /// <summary>
+        /// Obtiene la cantidad de filas (items) que componen un remito.
+        /// La búsqueda se realiza por DoPriLar + Nume_Clie + FechMov en MOVISTO o MOVIREPA.
+        /// Se usa para mostrar en el mensaje de confirmación antes de anular.
+        /// </summary>
+        public async Task<int> ObtenerCantidadFilasRemitoAsync(AnularRemitoRequest request)
+        {
+            try
+            {
+                _logger.LogInformation(
+                    "Obteniendo cantidad de filas del remito {NumeroRemito} para cliente {NumeroCliente}",
+                    request.NumeroRemito, request.NumeroCliente);
+
+                // Buscar primero en MOVISTO
+                int cantidadMovisto = await _context.Set<Movisto>()
+                    .CountAsync(m => m.DoPriLar == request.NumeroRemito &&
+                                     m.Nume_Clie == request.NumeroCliente &&
+                                     m.FechMov == request.FechaMovimiento);
+
+                if (cantidadMovisto > 0)
+                {
+                    return cantidadMovisto;
+                }
+
+                // Si no está en MOVISTO, buscar en MOVIREPA
+                int cantidadMovirepa = await _context.Set<Movirepa>()
+                    .CountAsync(m => m.DoPriLar == request.NumeroRemito &&
+                                     m.Nume_Clie == request.NumeroCliente &&
+                                     m.FechMov == request.FechaMovimiento);
+
+                return cantidadMovirepa;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error al obtener cantidad de filas del remito {NumeroRemito}", request.NumeroRemito);
+                return 0;
             }
         }
 
@@ -980,6 +1023,31 @@ namespace IMPLANPROD.Server.Services
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error al obtener último número de remito");
+                return 0;
+            }
+        }
+
+        /// <summary>
+        /// Obtiene el último número de remito de cliente (RT) para un prefijo (NUMPVTA) específico.
+        /// Se usa para proponer el siguiente número libre en ese punto de venta.
+        /// </summary>
+        /// <param name="prefijo">Prefijo del punto de venta</param>
+        /// <returns>Último número registrado para el prefijo, o 0 si no hay remitos</returns>
+        public async Task<int> ObtenerUltimoNumeroPorPrefijoAsync(short prefijo)
+        {
+            try
+            {
+                var ultimoRemito = await _context.Set<Movisto>()
+                    .Where(m => m.CodiMovi == "RT" && m.NUMPVTA == prefijo)
+                    .OrderByDescending(m => m.DOPRINUM)
+                    .Select(m => m.DOPRINUM)
+                    .FirstOrDefaultAsync();
+
+                return ultimoRemito ?? 0;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error al obtener último número de remito para prefijo {Prefijo}", prefijo);
                 return 0;
             }
         }

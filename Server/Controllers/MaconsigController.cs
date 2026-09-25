@@ -1001,7 +1001,26 @@ namespace IMPLANPROD.Server.Controllers
 
         private async Task<List<ProveedorPendienteRemisionDTO>> ObtenerProveedoresPendientesRemisionAsync()
         {
-            var proveedoresPendientes = await _context.Maconsigs
+            // Cargar todos los proveedores activos (no dados de baja) desde PROVED12.
+            // Stat_Cli >= 0 significa que el proveedor está activo.
+            var proveedoresActivos = await _context.Proveedores
+                .AsNoTracking()
+                .Where(p => p.Stat_Cli >= 0)
+                .Select(p => new
+                {
+                    p.Nume_Cli,
+                    Raso_Cli = p.Raso_Cli ?? string.Empty
+                })
+                .ToListAsync();
+
+            if (!proveedoresActivos.Any())
+            {
+                return new List<ProveedorPendienteRemisionDTO>();
+            }
+
+            // Contar órdenes pendientes de remisión por proveedor desde MACONSIG.
+            // Un proveedor puede tener 0 órdenes pendientes y aun así aparecer en la lista.
+            var pendientesPorProveedor = await _context.Maconsigs
                 .AsNoTracking()
                 .Where(m => (m.NproOcom ?? 0) > 0
                             && (m.CantAsig ?? 0m) > ((m.CantEntreg ?? 0m) + (m.CantRendid ?? 0m))
@@ -1018,42 +1037,14 @@ namespace IMPLANPROD.Server.Controllers
                     NumeroProveedor = g.Key,
                     CantidadOrdenes = g.Select(x => x.NumeroOrden).Distinct().Count()
                 })
-                .ToListAsync();
+                .ToDictionaryAsync(x => x.NumeroProveedor, x => x.CantidadOrdenes);
 
-            if (!proveedoresPendientes.Any())
-            {
-                return new List<ProveedorPendienteRemisionDTO>();
-            }
-
-            var numerosProveedor = proveedoresPendientes
-                .Select(x => x.NumeroProveedor)
-                .Distinct()
-                .ToList();
-
-            Dictionary<int, string> razonSocialByProveedor;
-            try
-            {
-                razonSocialByProveedor = await _context.Proveedores
-                    .AsNoTracking()
-                    .Where(p => numerosProveedor.Contains(p.Nume_Cli))
-                    .Select(p => new { p.Nume_Cli, p.Raso_Cli })
-                    .GroupBy(p => p.Nume_Cli)
-                    .ToDictionaryAsync(g => g.Key, g => g.First().Raso_Cli ?? string.Empty);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(ex, "[ObtenerProveedoresPendientesRemisionAsync] No se pudo resolver razón social desde Proved12. Se usarán descripciones vacías.");
-                razonSocialByProveedor = new Dictionary<int, string>();
-            }
-
-            return proveedoresPendientes
-                .Select(x => new ProveedorPendienteRemisionDTO
+            return proveedoresActivos
+                .Select(p => new ProveedorPendienteRemisionDTO
                 {
-                    NumeroProveedor = x.NumeroProveedor,
-                    RazonSocial = razonSocialByProveedor.TryGetValue(x.NumeroProveedor, out var razonSocial)
-                        ? razonSocial
-                        : string.Empty,
-                    CantidadOrdenesPendientes = x.CantidadOrdenes
+                    NumeroProveedor = p.Nume_Cli,
+                    RazonSocial = p.Raso_Cli,
+                    CantidadOrdenesPendientes = pendientesPorProveedor.TryGetValue(p.Nume_Cli, out var cant) ? cant : 0
                 })
                 .OrderBy(x => x.RazonSocial)
                 .ThenBy(x => x.NumeroProveedor)

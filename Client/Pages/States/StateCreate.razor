@@ -1,4 +1,6 @@
 ﻿@page "/states/create/{CountryId:int}"
+@using Microsoft.AspNetCore.Authorization
+@attribute [Authorize]
 @inject IRepository repository
 @inject NavigationManager navigationManager
 @inject SweetAlertService sweetAlertService

@@ -1,0 +1,523 @@
+@page "/recepciones-todas-x-fecha"
+
+@using Microsoft.AspNetCore.Authorization
+@attribute [Authorize]
+@using IMPLANPROD.Shared.DTOs
+@using IMPLANPROD.Client.Repositories
+@using IMPLANPROD.Client.Pages.Reportes
+@using CurrieTechnologies.Razor.SweetAlert2
+@inject NavigationManager Navigation
+@inject IRepository repository
+@inject SweetAlertService sweetAlertService
+@inject IJSRuntime JSRuntime
+
+<PageTitle>Recepciones por Rango de Fechas</PageTitle>
+
+<div class="container">
+    @* Título y botón de volver *@
+    <div class="d-flex align-items-center justify-content-between mb-3">
+        <h2 class="text-primary fw-bold mb-0">
+            <i class="fas fa-box-open me-2"></i>
+            RECEPCIONES POR RANGO DE FECHAS
+        </h2>
+        <a href="/recepcion/selproveedor" class="btn btn-outline-secondary btn-sm">
+            <i class="fas fa-arrow-left me-1"></i> Volver
+        </a>
+    </div>
+    <hr class="border-primary border-2 opacity-50 mb-3" />
+
+    @* Filtros de rango de fechas *@
+    <div class="row g-2 mb-2">
+        <div class="col-md-2">
+            <label class="form-label small mb-0 fw-bold">Fecha Desde</label>
+            <input type="date" class="form-control form-control-sm"
+                   @bind-value="fechaDesde" @bind-value:event="onchange" />
+        </div>
+        <div class="col-md-2">
+            <label class="form-label small mb-0 fw-bold">Fecha Hasta</label>
+            <input type="date" class="form-control form-control-sm"
+                   @bind-value="fechaHasta" @bind-value:event="onchange" />
+        </div>
+        <div class="col-md-2 d-flex align-items-end">
+            <button type="button" class="btn btn-primary btn-sm w-100" @onclick="BuscarRecepciones">
+                <i class="fas fa-search me-1"></i> Buscar
+            </button>
+        </div>
+        <div class="col-md-2 d-flex align-items-end">
+            <button type="button" class="btn btn-outline-secondary btn-sm w-100" @onclick="LimpiarFiltrosFecha" title="Limpiar rango de fechas">
+                <i class="fas fa-times me-1"></i> Limpiar Fechas
+            </button>
+        </div>
+    </div>
+
+    @* Filtros de la grilla (iguales a la solapa Aprueba Calidad) *@
+    @if (recepciones != null)
+    {
+        <div class="row g-2 mb-2">
+            <div class="col-md-2">
+                <label class="form-label small mb-0">Nro. Recepción</label>
+                <input type="text" class="form-control form-control-sm"
+                       @bind-value="filtroNroRecepcion" @bind-value:event="oninput" placeholder="Nro. Recepción" />
+            </div>
+            <div class="col-md-2">
+                <label class="form-label small mb-0">Nro. OC</label>
+                <input type="text" class="form-control form-control-sm"
+                       @bind-value="filtroNroOC" @bind-value:event="oninput" placeholder="Nro. OC" />
+            </div>
+            <div class="col-md-2">
+                <label class="form-label small mb-0">Remito</label>
+                <input type="text" class="form-control form-control-sm"
+                       @bind-value="filtroRemito" @bind-value:event="oninput" placeholder="Remito" />
+            </div>
+            <div class="col-md-2">
+                <label class="form-label small mb-0">N. Proveedor</label>
+                <input type="text" class="form-control form-control-sm"
+                       @bind-value="filtroNroProveedor" @bind-value:event="oninput" placeholder="N. Proveedor" />
+            </div>
+            <div class="col-md-3">
+                <label class="form-label small mb-0">R. Social</label>
+                <input type="text" class="form-control form-control-sm"
+                       @bind-value="filtroRazonSocial" @bind-value:event="oninput" placeholder="R. Social" />
+            </div>
+            <div class="col-md-1 d-flex align-items-end">
+                <button type="button" class="btn btn-outline-secondary btn-sm w-100" @onclick="LimpiarFiltrosPendientes" title="Limpiar filtros">
+                    <i class="oi oi-x"></i>
+                </button>
+            </div>
+        </div>
+
+        @* Botón Ver Detalle por Lote *@
+        <div class="mb-2 text-end">
+            <button type="button" class="btn btn-outline-primary btn-sm" @onclick="AbrirModalDetalleLotes" disabled="@cargandoDetalleLotes">
+                @if (cargandoDetalleLotes)
+                { <span class="spinner-border spinner-border-sm me-1"></span> }
+                else
+                { <i class="oi oi-list-rich me-1"></i> }
+                Ver Detalle por Lote
+            </button>
+        </div>
+
+        @* Grilla de recepciones *@
+        @if (!RecepcionesFiltradas.Any())
+        {
+            <div class="alert alert-info">
+                No hay recepciones que coincidan con los filtros aplicados.
+            </div>
+        }
+        else
+        {
+            <div class="table-responsive">
+                <table class="table table-sm table-hover">
+                    <thead>
+                        <tr class="bg-primary text-white">
+                            <th class="text-center" style="border-right: 1px solid #dee2e6;">
+                                <strong>Nro. Recepción</strong>
+                            </th>
+                            <th class="text-center" style="border-right: 1px solid #dee2e6;">
+                                <strong>Fecha</strong>
+                            </th>
+                            <th class="text-center" style="border-right: 1px solid #dee2e6;">
+                                <strong>Nro. OC</strong>
+                            </th>
+                            <th class="text-center" style="border-right: 1px solid #dee2e6;">
+                                <strong>Remito</strong>
+                            </th>
+                            <th class="text-center" style="border-right: 1px solid #dee2e6;">
+                                <strong>N. Proveedor</strong>
+                            </th>
+                            <th class="text-center" style="border-right: 1px solid #dee2e6;">
+                                <strong>R. Social</strong>
+                            </th>
+                            <th class="text-center">
+                                <strong>Acciones</strong>
+                            </th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var recepcion in RecepcionesFiltradas)
+                        {
+                            <tr>
+                                <td class="text-center" style="border-right: 1px solid #dee2e6;">@recepcion.NumeroRecepcion</td>
+                                <td class="text-center" style="border-right: 1px solid #dee2e6;">@recepcion.FechaRecepcion.ToString("dd/MM/yyyy HH:mm")</td>
+                                <td class="text-center" style="border-right: 1px solid #dee2e6;">@(recepcion.NumeroOrdenCompra == 0 ? "-" : recepcion.NumeroOrdenCompra.ToString())</td>
+                                <td style="border-right: 1px solid #dee2e6;">@recepcion.NumeroRemito</td>
+                                <td class="text-center" style="border-right: 1px solid #dee2e6;">@recepcion.NumeroProveedor</td>
+                                <td style="border-right: 1px solid #dee2e6;">@recepcion.RazonSocial</td>
+                                <td class="text-center">
+                                    <button class="btn btn-sm btn-success" @onclick="() => ImprimirRecepcionAsync(recepcion.NumeroRecepcion)">
+                                        <i class="fas fa-print"></i> Imprimir
+                                    </button>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    }
+    else
+    {
+        <div class="text-center">
+            <div class="spinner-border text-primary" role="status">
+                <span class="visually-hidden">Cargando...</span>
+            </div>
+        </div>
+    }
+</div>
+
+@* ── Modal "Detalle por Lote" ────────────────────────────────────────── *@
+<div class="modal fade @(mostrarModalDetalleLotes ? "show" : "")" style="display: @(mostrarModalDetalleLotes ? "block" : "none")" tabindex="-1">
+    <div class="modal-dialog" style="max-width: 95vw;">
+        <div class="modal-content">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title"><i class="oi oi-list-rich me-2"></i>Detalle por Lote - Recepciones por Rango de Fechas</h5>
+                <button type="button" class="btn-close btn-close-white" @onclick="CerrarModalDetalleLotes"></button>
+            </div>
+            <div class="modal-body">
+                @if (!RecepcionesDetalleFiltradas.Any())
+                {
+                    <div class="alert alert-info mb-0">
+                        No hay lotes que coincidan con los filtros aplicados.
+                    </div>
+                }
+                else
+                {
+                    <div class="table-responsive" style="max-height: 65vh; overflow-y: auto;">
+                        <table class="table table-sm table-hover table-bordered mb-0">
+                            <thead class="table-dark sticky-top">
+                                <tr>
+                                    <th class="text-center">Nro. Recepción</th>
+                                    <th class="text-center">Fecha</th>
+                                    <th class="text-center">Nro. OC</th>
+                                    <th>Remito</th>
+                                    <th class="text-center">N. Proveedor</th>
+                                    <th>R. Social</th>
+                                    <th>Lote</th>
+                                    <th>Código</th>
+                                    <th>Descripción</th>
+                                    <th class="text-end">Cantidad</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var item in RecepcionesDetalleFiltradas)
+                                {
+                                    <tr>
+                                        <td class="text-center">@item.NumeroRecepcion</td>
+                                        <td class="text-center">@item.FechaRecepcion.ToString("dd/MM/yyyy HH:mm")</td>
+                                        <td class="text-center">@(item.NumeroOrdenCompra == 0 ? "-" : item.NumeroOrdenCompra.ToString())</td>
+                                        <td>@item.NumeroRemito</td>
+                                        <td class="text-center">@item.NumeroProveedor</td>
+                                        <td>@item.RazonSocial</td>
+                                        <td>@item.IdenLote</td>
+                                        <td>@item.Codigo</td>
+                                        <td>@item.Descripcion</td>
+                                        <td class="text-end">@item.CantidadNominal.ToString("N2")</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                }
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline-success" @onclick="@(() => mostrarModalImpresionDetalleLotes = true)"
+                        disabled="@(!RecepcionesDetalleFiltradas.Any())">
+                    <i class="fas fa-file-excel me-1"></i>Imprimir/Excel
+                </button>
+                <button type="button" class="btn btn-secondary" @onclick="CerrarModalDetalleLotes">Cerrar</button>
+            </div>
+        </div>
+    </div>
+</div>
+@if (mostrarModalDetalleLotes)
+{
+    <div class="modal-backdrop fade show"></div>
+}
+
+@* Componente estándar de impresión/exportación a Excel, reutilizando la misma lista filtrada. *@
+<ImpresionLista TItem="RecepcionPendienteAprobacionDetalleDTO"
+                Datos="@RecepcionesDetalleFiltradas.ToList()"
+                Titulo="Detalle de Recepciones por Lote (Rango de Fechas)"
+                UrlExportarExcel="api/excel/exportar-recepciones-pendientes-detalle"
+                Encabezados="encabezadosDetalleLotes"
+                ModoDirecto="false"
+                MostrarModal="mostrarModalImpresionDetalleLotes"
+                OnCerrar="@(() => mostrarModalImpresionDetalleLotes = false)" />
+
+@* ── Área oculta para impresión de Nota de Recepción ───────────────────── *@
+<div id="@idElementoImpresionRecepcion" style="display: none;">
+    <div class="container" style="font-family: Arial, sans-serif; font-size: 12px;">
+        <div class="row mb-2">
+            <div class="col-6">
+                <img src="@(new Uri(new Uri(Navigation.BaseUri), "images/logoempresa.png").ToString())" alt="Logo" style="max-height: 60px;" />
+            </div>
+            <div class="col-6 text-end">
+                <div><strong>NOTA DE RECEPCION</strong></div>
+                @if (recepcionParaImprimir != null)
+                {
+                    <div><strong>NR-</strong> @recepcionParaImprimir.NumeroRecepcion</div>
+                    <div>Fecha: @recepcionParaImprimir.FechaRecepcion.ToString("dd/MM/yyyy")</div>
+                }
+            </div>
+        </div>
+
+        @if (recepcionParaImprimir != null)
+        {
+            <div class="row mb-2">
+                <div class="col-12">
+                    <div><strong>Proveedor:</strong> @recepcionParaImprimir.RazonSocial (@recepcionParaImprimir.NumeroProveedor)</div>
+                    <div><strong>RTO N°:</strong> @recepcionParaImprimir.NumeroRemito</div>
+                </div>
+            </div>
+        }
+
+        <table class="table table-bordered table-sm" style="border: 1px solid #000;">
+            <thead>
+                <tr>
+                    <th style="width: 12%;">CANTIDAD</th>
+                    <th style="width: 18%;">CODIGO</th>
+                    <th>DESCRIPCION</th>
+                    <th style="width: 10%;">UM</th>
+                    <th style="width: 10%;">O.C</th>
+                    <th style="width: 12%;">F.Entrega</th>
+                    <th style="width: 10%;">OBS</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var item in itemsRecepcionParaImprimir)
+                {
+                    <tr>
+                        <td class="text-end">@item.CantidadNominal.ToString("N2")</td>
+                        <td>@item.CodigoExterno</td>
+                        <td>@item.DescripcionItem</td>
+                        <td>@item.Unidad</td>
+                        <td class="text-end">@((item.NumeroOrdenCompra.HasValue && item.NumeroOrdenCompra.Value > 0) ? item.NumeroOrdenCompra.Value.ToString() : "")</td>
+                        <td class="text-center">@(item.FechaEntregaSolicitada.HasValue ? item.FechaEntregaSolicitada.Value.ToString("dd/MM/yy") : "")</td>
+                        <td></td>
+                    </tr>
+                }
+
+                @{
+                    var totalFilasObjetivo = 22;
+                    var filasVacias = Math.Max(0, totalFilasObjetivo - (itemsRecepcionParaImprimir?.Count ?? 0));
+                }
+
+                @for (var i = 0; i < filasVacias; i++)
+                {
+                    <tr>
+                        <td>&nbsp;</td>
+                        <td></td>
+                        <td></td>
+                        <td></td>
+                        <td></td>
+                        <td></td>
+                        <td></td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+
+        <div class="row mt-3">
+            <div class="col-6">
+                <div style="border: 1px solid #000; height: 3cm; padding: 6px; overflow: hidden; white-space: pre-line;">
+                    <div><strong>Obs:</strong> @(itemsRecepcionParaImprimir.FirstOrDefault()?.Observa ?? recepcionParaImprimir?.Observa ?? "")</div>
+                </div>
+            </div>
+            <div class="col-6">
+                <div style="border: 1px solid #000; height: 3cm; padding: 6px;">
+                    <div><strong>Conforme</strong></div>
+                    <div style="margin-top: 2.2cm; border-top: 1px dotted #000;"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    // ── Datos principales ──────────────────────────────────────────────────
+    private List<RecepcionPendienteAprobacionDTO>? recepciones;
+    private DateTime? fechaDesde;
+    private DateTime? fechaHasta;
+
+    // ── Filtros de la grilla (iguales a la solapa Aprueba Calidad) ──────────
+    private string filtroNroRecepcion = string.Empty;
+    private string filtroNroOC = string.Empty;
+    private string filtroRemito = string.Empty;
+    private string filtroNroProveedor = string.Empty;
+    private string filtroRazonSocial = string.Empty;
+
+    // ── Filtros aplicados a la grilla agrupada ─────────────────────────────
+    private IEnumerable<RecepcionPendienteAprobacionDTO> RecepcionesFiltradas =>
+        (recepciones ?? new List<RecepcionPendienteAprobacionDTO>())
+            .Where(r => string.IsNullOrWhiteSpace(filtroNroRecepcion) || r.NumeroRecepcion.ToString().Contains(filtroNroRecepcion.Trim()))
+            .Where(r => string.IsNullOrWhiteSpace(filtroNroOC) || r.NumeroOrdenCompra.ToString().Contains(filtroNroOC.Trim()))
+            .Where(r => string.IsNullOrWhiteSpace(filtroRemito) || (r.NumeroRemito ?? string.Empty).Contains(filtroRemito.Trim(), StringComparison.OrdinalIgnoreCase))
+            .Where(r => string.IsNullOrWhiteSpace(filtroNroProveedor) || r.NumeroProveedor.ToString().Contains(filtroNroProveedor.Trim()))
+            .Where(r => string.IsNullOrWhiteSpace(filtroRazonSocial) || (r.RazonSocial ?? string.Empty).Contains(filtroRazonSocial.Trim(), StringComparison.OrdinalIgnoreCase));
+
+    private void LimpiarFiltrosPendientes()
+    {
+        filtroNroRecepcion = string.Empty;
+        filtroNroOC = string.Empty;
+        filtroRemito = string.Empty;
+        filtroNroProveedor = string.Empty;
+        filtroRazonSocial = string.Empty;
+    }
+
+    private void LimpiarFiltrosFecha()
+    {
+        fechaDesde = null;
+        fechaHasta = null;
+    }
+
+    // ── Modal "Detalle por Lote" ────────────────────────────────────────────
+    private bool mostrarModalDetalleLotes = false;
+    private bool mostrarModalImpresionDetalleLotes = false;
+    private bool cargandoDetalleLotes = false;
+    private List<RecepcionPendienteAprobacionDetalleDTO> recepcionesDetalle = new();
+
+    private Dictionary<string, string> encabezadosDetalleLotes = new()
+    {
+        { "NumeroRecepcion", "Nro. Recepción" },
+        { "FechaRecepcion", "Fecha" },
+        { "NumeroOrdenCompra", "Nro. OC" },
+        { "NumeroRemito", "Remito" },
+        { "NumeroProveedor", "N. Proveedor" },
+        { "RazonSocial", "R. Social" },
+        { "IdenLote", "Lote" },
+        { "Codigo", "Código" },
+        { "Descripcion", "Descripción" },
+        { "CantidadNominal", "Cantidad" }
+    };
+
+    /// <summary>
+    /// Aplica los mismos 5 filtros de la grilla agrupada sobre el detalle por
+    /// lote, para que el modal "Detalle por Lote" respete el filtro activo.
+    /// </summary>
+    private IEnumerable<RecepcionPendienteAprobacionDetalleDTO> RecepcionesDetalleFiltradas =>
+        recepcionesDetalle
+            .Where(r => string.IsNullOrWhiteSpace(filtroNroRecepcion) || r.NumeroRecepcion.ToString().Contains(filtroNroRecepcion.Trim()))
+            .Where(r => string.IsNullOrWhiteSpace(filtroNroOC) || r.NumeroOrdenCompra.ToString().Contains(filtroNroOC.Trim()))
+            .Where(r => string.IsNullOrWhiteSpace(filtroRemito) || (r.NumeroRemito ?? string.Empty).Contains(filtroRemito.Trim(), StringComparison.OrdinalIgnoreCase))
+            .Where(r => string.IsNullOrWhiteSpace(filtroNroProveedor) || r.NumeroProveedor.ToString().Contains(filtroNroProveedor.Trim()))
+            .Where(r => string.IsNullOrWhiteSpace(filtroRazonSocial) || (r.RazonSocial ?? string.Empty).Contains(filtroRazonSocial.Trim(), StringComparison.OrdinalIgnoreCase));
+
+    private async Task AbrirModalDetalleLotes()
+    {
+        cargandoDetalleLotes = true;
+        StateHasChanged();
+        try
+        {
+            // El detalle respeta el mismo rango de fechas que la grilla principal.
+            var url = "api/bolrecep/todas-por-rango-fechas-detalle";
+            var queryParams = new List<string>();
+            if (fechaDesde.HasValue)
+                queryParams.Add($"fechaDesde={fechaDesde.Value:yyyy-MM-dd}");
+            if (fechaHasta.HasValue)
+                queryParams.Add($"fechaHasta={fechaHasta.Value:yyyy-MM-dd}");
+            if (queryParams.Any())
+                url += "?" + string.Join("&", queryParams);
+
+            var response = await repository.Get<List<RecepcionPendienteAprobacionDetalleDTO>>(url);
+            if (response.Error)
+            {
+                var mensaje = await response.GetErrorMessageAsync();
+                await sweetAlertService.FireAsync("Error", mensaje, SweetAlertIcon.Error);
+                return;
+            }
+
+            recepcionesDetalle = response.Response ?? new List<RecepcionPendienteAprobacionDetalleDTO>();
+            mostrarModalDetalleLotes = true;
+        }
+        finally
+        {
+            cargandoDetalleLotes = false;
+            StateHasChanged();
+        }
+    }
+
+    private void CerrarModalDetalleLotes() => mostrarModalDetalleLotes = false;
+
+    // ── Impresión de Nota de Recepción ─────────────────────────────────────
+    private string idElementoImpresionRecepcion = $"nota-recepcion-{Guid.NewGuid()}";
+    private RecepcionPendienteAprobacionDTO? recepcionParaImprimir;
+    private List<RecepcionItemDTO> itemsRecepcionParaImprimir = new();
+
+    private async Task ImprimirRecepcionAsync(int numeroRecepcion)
+    {
+        try
+        {
+            recepcionParaImprimir = recepciones?.FirstOrDefault(r => r.NumeroRecepcion == numeroRecepcion);
+            if (recepcionParaImprimir == null)
+            {
+                await sweetAlertService.FireAsync("Error", "No se encontró la recepción.", SweetAlertIcon.Error);
+                return;
+            }
+
+            // Se usa "items-todos" en lugar de "items" porque esta página muestra
+            // recepciones ya aprobadas (Status 1), y "items" filtra Status == 0.
+            var response = await repository.Get<List<RecepcionItemDTO>>($"api/bolrecep/items-todos/{numeroRecepcion}");
+            if (response.Error)
+            {
+                var mensaje = await response.GetErrorMessageAsync();
+                await sweetAlertService.FireAsync("Error", mensaje, SweetAlertIcon.Error);
+                return;
+            }
+
+            itemsRecepcionParaImprimir = response.Response ?? new List<RecepcionItemDTO>();
+            StateHasChanged();
+            await Task.Delay(50);
+
+            await JSRuntime.InvokeVoidAsync("imprimirElemento", idElementoImpresionRecepcion);
+        }
+        catch (Exception ex)
+        {
+            await sweetAlertService.FireAsync("Error", ex.Message, SweetAlertIcon.Error);
+        }
+    }
+
+    // ── Carga inicial y búsqueda ───────────────────────────────────────────
+    protected override async Task OnInitializedAsync()
+    {
+        // Por defecto mostrar las recepciones del mes actual.
+        var hoy = DateTime.Today;
+        fechaDesde = new DateTime(hoy.Year, hoy.Month, 1);
+        fechaHasta = hoy;
+        await BuscarRecepciones();
+    }
+
+    private async Task BuscarRecepciones()
+    {
+        recepciones = null;
+        StateHasChanged();
+
+        try
+        {
+            var url = "api/bolrecep/todas-por-rango-fechas";
+            var queryParams = new List<string>();
+            if (fechaDesde.HasValue)
+                queryParams.Add($"fechaDesde={fechaDesde.Value:yyyy-MM-dd}");
+            if (fechaHasta.HasValue)
+                queryParams.Add($"fechaHasta={fechaHasta.Value:yyyy-MM-dd}");
+            if (queryParams.Any())
+                url += "?" + string.Join("&", queryParams);
+
+            var response = await repository.Get<List<RecepcionPendienteAprobacionDTO>>(url);
+            if (response.Error)
+            {
+                var mensaje = await response.GetErrorMessageAsync();
+                await sweetAlertService.FireAsync("Error", mensaje, SweetAlertIcon.Error);
+                recepciones = new List<RecepcionPendienteAprobacionDTO>();
+                return;
+            }
+
+            recepciones = response.Response ?? new List<RecepcionPendienteAprobacionDTO>();
+        }
+        catch (Exception ex)
+        {
+            await sweetAlertService.FireAsync("Error", ex.Message, SweetAlertIcon.Error);
+            recepciones = new List<RecepcionPendienteAprobacionDTO>();
+        }
+        StateHasChanged();
+    }
+}

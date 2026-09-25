@@ -79,7 +79,7 @@ namespace IMPLANPROD.Server.Controllers
         /// Obtiene una lista paginada de órdenes de fabricación con filtro de estado y fechas
         /// </summary>
         [HttpGet]
-        public async Task<IActionResult> GetAsync([FromQuery] PaginationDTO pagination, short statuOrf = 0, DateTime? fechaDesde = null, DateTime? fechaHasta = null, string? idSubOrPrefix = null)
+        public async Task<IActionResult> GetAsync([FromQuery] PaginationDTO pagination, short statuOrf = 0, DateTime? fechaDesde = null, DateTime? fechaHasta = null, string? idSubOrPrefix = null, string? filterCodigo = null, string? filterDescripcion = null)
         {
             try
             {
@@ -129,11 +129,27 @@ namespace IMPLANPROD.Server.Controllers
                     queryable = queryable.Where(x => x.FechGen <= fechaHastaFinal);
                 }
 
-                // Filtro por texto (solo por IdSubOr)
+                // Filtro por texto (solo por IdSubOr - número de orden)
                 if (!string.IsNullOrWhiteSpace(pagination.Filter))
                 {
                     queryable = queryable.Where(x =>
                         x.IdSubOr != null && x.IdSubOr.Contains(pagination.Filter)
+                    );
+                }
+
+                // Filtro por código de producto (Cod_Exte)
+                if (!string.IsNullOrWhiteSpace(filterCodigo))
+                {
+                    queryable = queryable.Where(x =>
+                        x.Cod_Exte != null && x.Cod_Exte.Contains(filterCodigo)
+                    );
+                }
+
+                // Filtro por descripción de producto
+                if (!string.IsNullOrWhiteSpace(filterDescripcion))
+                {
+                    queryable = queryable.Where(x =>
+                        x.Descrip != null && x.Descrip.Contains(filterDescripcion)
                     );
                 }
 
@@ -214,7 +230,7 @@ namespace IMPLANPROD.Server.Controllers
         /// Devuelve el total de páginas para la paginación de órdenes de fabricación
         /// </summary>
         [HttpGet("totalPages")]
-        public async Task<ActionResult> GetPages([FromQuery] PaginationDTO pagination, short statuOrf = 0, DateTime? fechaDesde = null, DateTime? fechaHasta = null, string? idSubOrPrefix = null)
+        public async Task<ActionResult> GetPages([FromQuery] PaginationDTO pagination, short statuOrf = 0, DateTime? fechaDesde = null, DateTime? fechaHasta = null, string? idSubOrPrefix = null, string? filterCodigo = null, string? filterDescripcion = null)
         {
             try
             {
@@ -253,11 +269,27 @@ namespace IMPLANPROD.Server.Controllers
                     queryable = queryable.Where(x => x.FechGen <= fechaHasta);
                 }
 
-                // Filtro por texto (solo por IdSubOr)
+                // Filtro por texto (solo por IdSubOr - número de orden)
                 if (!string.IsNullOrWhiteSpace(pagination.Filter))
                 {
                     queryable = queryable.Where(x =>
                         x.IdSubOr != null && x.IdSubOr.Contains(pagination.Filter)
+                    );
+                }
+
+                // Filtro por código de producto (Cod_Exte)
+                if (!string.IsNullOrWhiteSpace(filterCodigo))
+                {
+                    queryable = queryable.Where(x =>
+                        x.Cod_Exte != null && x.Cod_Exte.Contains(filterCodigo)
+                    );
+                }
+
+                // Filtro por descripción de producto
+                if (!string.IsNullOrWhiteSpace(filterDescripcion))
+                {
+                    queryable = queryable.Where(x =>
+                        x.Descrip != null && x.Descrip.Contains(filterDescripcion)
                     );
                 }
 
@@ -395,12 +427,13 @@ namespace IMPLANPROD.Server.Controllers
         {
             try
             {
-                const int depositoMinimo = 60;
-                const int depositoMaximo = 200;
+                // Igual que el VB6 original: se recorren TODOS los depósitos desde el
+                // Nro. (TADEPOSI.CodigoDepo) 30 en adelante, sin límite superior.
+                const int depositoMinimo = 30;
 
                 var depositosSerie = await _context.Tadeposi
                     .AsNoTracking()
-                    .Where(x => x.CodigoDepo >= depositoMinimo && x.CodigoDepo <= depositoMaximo)
+                    .Where(x => x.CodigoDepo >= depositoMinimo)
                     .Select(x => new
                     {
                         x.CodigoDepo,
@@ -417,7 +450,9 @@ namespace IMPLANPROD.Server.Controllers
                     .Select(x => new
                     {
                         x.CodigoDepo,
-                        Of = ExtraerOfDesdeDescripcion(x.Descripcion)
+                        // VB6: la O.F. (OfLeida$) se obtiene de TADEPOSI.Descripcion a partir
+                        // de la posición 9, con longitud 12 (Mid$(Descripcion, 9, 12)).
+                        Of = ExtraerOfDesdeDescripcionDepositoConSaldo(x.Descripcion)
                     })
                     .Where(x => !string.IsNullOrWhiteSpace(x.Of))
                     .ToList();
@@ -993,6 +1028,26 @@ namespace IMPLANPROD.Server.Controllers
             return descripcion.Substring(17, largo).Trim();
         }
 
+        /// <summary>
+        /// Extrae el número de Orden de Fabricación (OfLeida$) desde TADEPOSI.Descripcion
+        /// para el endpoint "depositos-posibles-con-saldo", replicando exactamente el VB6
+        /// original: Mid$(Descripcion, 9, 12) (posición 9, longitud 12, 1-based).
+        /// En C# (0-based) equivale a Substring(8, 12).
+        /// NOTA: es un formato distinto al usado por ExtraerOfDesdeDescripcion (posición 18,
+        /// longitud 14), que corresponde a los depósitos de serie (rango 60-200) usados en
+        /// la asignación de depósito por número de serie; no deben unificarse.
+        /// </summary>
+        private static string ExtraerOfDesdeDescripcionDepositoConSaldo(string? descripcion)
+        {
+            if (string.IsNullOrEmpty(descripcion) || descripcion.Length < 9)
+            {
+                return string.Empty;
+            }
+
+            var largo = Math.Min(12, descripcion.Length - 8);
+            return descripcion.Substring(8, largo).Trim();
+        }
+
         private static string QuitarEspacios(string? valor)
         {
             if (string.IsNullOrWhiteSpace(valor))
@@ -1304,6 +1359,11 @@ namespace IMPLANPROD.Server.Controllers
                 nuevaOrden.NumUsuar = idFlexoft;
                 // Formatear y asignar IdSubOr correctamente
                 nuevaOrden.IdSubOr = $"OF-{nuevaOrden.NumeOrFa:000000}-1";
+
+                // El lote del producto fabricado se identifica con el identificador de la orden
+                // de fabricación (IdSubOr), por ejemplo "OF-000124-1". Esto permite la trazabilidad
+                // del lote generado en el movimiento de stock al cerrar la orden.
+                nuevaOrden.IdenLote = nuevaOrden.IdSubOr;
                 
                 // Guardar en el campo Referen la concatenación de cod_exte + " - " + Descrip + " - " + Unidad
                 nuevaOrden.Referen = $"{nuevaOrden.Cod_Exte} - {nuevaOrden.Descrip} - {nuevaOrden.Unidad}";
@@ -1321,7 +1381,15 @@ namespace IMPLANPROD.Server.Controllers
                 // Generar las reservas de componentes según la fórmula del producto
                 if (nuevaOrden.Cod_Inte.HasValue)
                 {
-                    await GenerarReservasDeFormula(nuevaOrden.Cod_Inte.Value, nuevaOrden.IdSubOr, nuevaOrden.CanProy, codigoEmpresa.Value);
+                    // Si el usuario editó el detalle en pantalla, usamos ese listado; si no, calculamos desde la fórmula.
+                    if (nuevaOrden.Componentes != null && nuevaOrden.Componentes.Any())
+                    {
+                        await GenerarReservasDesdeComponentes(nuevaOrden.IdSubOr, nuevaOrden.Componentes, codigoEmpresa.Value);
+                    }
+                    else
+                    {
+                        await GenerarReservasDeFormula(nuevaOrden.Cod_Inte.Value, nuevaOrden.IdSubOr, nuevaOrden.CanProy, codigoEmpresa.Value);
+                    }
 
                     // Generar operaciones de fabricación (OPERFAB) a partir de la secuencia estándar (SECOPER)
                     await GenerarOperacionesDesdeSecoper(
@@ -1379,16 +1447,20 @@ namespace IMPLANPROD.Server.Controllers
                     .FirstOrDefaultAsync();
             }
 
-            // Fecha de revisión del master para el Cod_Inte de la orden.
+            // Fecha de revisión y revisión del master para el Cod_Inte de la orden.
             // Master.Codint equivale al Id lógico del producto.
+            // Se obtienen ambos campos en una sola consulta para evitar un round-trip extra.
             DateTime? ferevis = null;
+            string? revision = null;
             if (orden.Cod_Inte.HasValue)
             {
-                ferevis = await _context.masters
+                var master = await _context.masters
                     .AsNoTracking()
                     .Where(m => m.Codint == orden.Cod_Inte.Value)
-                    .Select(m => m.Ferevis)
+                    .Select(m => new { m.Ferevis, m.Revision })
                     .FirstOrDefaultAsync();
+                ferevis = master?.Ferevis;
+                revision = master?.Revision;
             }
 
             // Operaciones de la ruta de fabricación: SECOPER del conjunto (CodIConj = Cod_Inte), activas (StatOper = 1), ordenadas por NumeOper.
@@ -1428,6 +1500,7 @@ namespace IMPLANPROD.Server.Controllers
                 NombreUsuario = nombreUsuario ?? orden.NumUsuar?.ToString() ?? "Usuario",
                 Ferevis = ferevis,
                 FerevisFormateada = ferevis?.ToString("dd/MM/yyyy") ?? string.Empty,
+                Revision = revision,
                 Operaciones = operaciones
             };
 
@@ -1466,15 +1539,19 @@ namespace IMPLANPROD.Server.Controllers
                     .FirstOrDefaultAsync();
             }
 
-            // Fecha de revisión del master para el Cod_Inte de la orden.
+            // Fecha de revisión y revisión del master para el Cod_Inte de la orden.
+            // Se obtienen ambos campos en una sola consulta para evitar un round-trip extra.
             DateTime? ferevis = null;
+            string? revision = null;
             if (orden.Cod_Inte.HasValue)
             {
-                ferevis = await _context.masters
+                var master = await _context.masters
                     .AsNoTracking()
                     .Where(m => m.Codint == orden.Cod_Inte.Value)
-                    .Select(m => m.Ferevis)
+                    .Select(m => new { m.Ferevis, m.Revision })
                     .FirstOrDefaultAsync();
+                ferevis = master?.Ferevis;
+                revision = master?.Revision;
             }
 
             // Materiales reservados para la OF: Reserva.IdSubOr = orden.IdSubOr, CantRes > 0.
@@ -1515,6 +1592,7 @@ namespace IMPLANPROD.Server.Controllers
                 NombreUsuario = nombreUsuario ?? orden.NumUsuar?.ToString() ?? "Usuario",
                 Ferevis = ferevis,
                 FerevisFormateada = ferevis?.ToString("dd/MM/yyyy") ?? string.Empty,
+                Revision = revision,
                 Materiales = materiales
             };
 
@@ -2698,6 +2776,11 @@ namespace IMPLANPROD.Server.Controllers
             // Este IDTEXT se usará para vincular todos los registros ORFAPEN de esta transacción
             string idTextoTransaccion = GenerarIdTextoAleatorio();
 
+            // El lote del producto fabricado se identifica con el IdSubOr de la orden de fabricación
+            // (ej.: "OF-000124-1"). Si IdenLote está vacío (órdenes creadas antes de esta asignación
+            // automática), se usa IdSubOr como fallback para garantizar la trazabilidad del lote.
+            string loteOrden = !string.IsNullOrWhiteSpace(orden.IdenLote) ? orden.IdenLote : (orden.IdSubOr ?? "");
+
             // Declarar variable para capturar el ID del movimiento OF generado
             // Este ID se usará para vincular los movimientos CF con el OF mediante IdenMovi
             // En modo estándar se captura el ID, en modo control de calidad queda null
@@ -2735,7 +2818,7 @@ namespace IMPLANPROD.Server.Controllers
                 bool resultadoMovimiento = await MoviStockAprof(
                     fecha: datosCierre.FechaCierre,
                     codigoInterno: orden.Cod_Inte ?? 0,
-                    lote: orden.IdenLote ?? "",
+                    lote: loteOrden,
                     codigoMovimiento: "OF", // Código de movimiento para orden de fabricación
                     dopri: orden.IdSubOr ?? "",
                     dosec: dosec, // Cambiar PF- por IF-
@@ -2769,7 +2852,7 @@ namespace IMPLANPROD.Server.Controllers
                 {
                     Fecha = datosCierre.FechaCierre,
                     CodigoInterno = orden.Cod_Inte ?? 0,
-                    Lote = orden.IdenLote ?? "",
+                    Lote = loteOrden,
                     CodigoMovimiento = "OF", // Código de movimiento para orden de fabricación
                     DocumentoPrimarioLargo = orden.IdSubOr ?? "",
                     DocumentoPrimarioCorto = orden.IdSubOr ?? "",
@@ -3484,6 +3567,77 @@ namespace IMPLANPROD.Server.Controllers
             {
                 _logger.LogError(ex, $"Error al generar reservas para la orden {numeroOrdenFabricacion}");
                 throw; // Relanzamos la excepción para que sea manejada por el método que llamó a este
+            }
+        }
+
+        /// <summary>
+        /// Genera reservas a partir del detalle de componentes editado en pantalla.
+        /// Permite reservar cantidades distintas a las calculadas por la fórmula estándar.
+        /// </summary>
+        /// <param name="numeroOrdenFabricacion">Número de la orden de fabricación</param>
+        /// <param name="componentes">Listado de componentes editado por el usuario</param>
+        /// <param name="codigoEmpresa">Código de la empresa</param>
+        private async Task GenerarReservasDesdeComponentes(string numeroOrdenFabricacion, List<FormulaComponenteDTO> componentes, short codigoEmpresa)
+        {
+            if (string.IsNullOrEmpty(numeroOrdenFabricacion) || componentes == null || !componentes.Any())
+            {
+                _logger.LogWarning("No se generaron reservas: parámetros inválidos");
+                return;
+            }
+
+            try
+            {
+                // Eliminar reservas existentes para esta orden
+                var reservasExistentes = await _context.Reservas.Where(r => r.IdSubOr == numeroOrdenFabricacion).ToListAsync();
+                if (reservasExistentes.Any())
+                {
+                    _context.Reservas.RemoveRange(reservasExistentes);
+                    await _context.SaveChangesAsync();
+                }
+
+                short numeroItem = 0;
+                foreach (var componente in componentes)
+                {
+                    if (componente.CodIElem <= 0)
+                    {
+                        continue;
+                    }
+
+                    decimal cantidadReserva = componente.CantidadAUtilizar;
+
+                    if (Math.Abs(cantidadReserva) >= 0.05m)
+                    {
+                        numeroItem++;
+
+                        var nuevaReserva = new Reserva
+                        {
+                            CodiEmpr = codigoEmpresa,
+                            Cod_Inte = componente.CodIElem,
+                            Cod_Exte = componente.CodXElem ?? string.Empty,
+                            Descrip = componente.Descripcion ?? string.Empty,
+                            IdSubOr = numeroOrdenFabricacion,
+                            FechRes = DateTime.Now,
+                            CantRes = cantidadReserva,
+                            CantCons = 0,
+                            Saldo_Entre = 0,
+                            IdenLote = " ",
+                            Deposito = 0,
+                            UsoUnit = componente.UsoBruto,
+                            NuOrItem = numeroItem,
+                            Nume_Solint = 0
+                        };
+
+                        _context.Reservas.Add(nuevaReserva);
+                    }
+                }
+
+                await _context.SaveChangesAsync();
+                _logger.LogInformation($"Se generaron {numeroItem} reservas para la orden {numeroOrdenFabricacion}");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, $"Error al generar reservas para la orden {numeroOrdenFabricacion}");
+                throw;
             }
         }
 

@@ -41,7 +41,7 @@ else
     }
     else
     {
-        <div class="row mb-3">
+        <div class="row mb-3 align-items-center">
             <div class="col-auto d-flex gap-2">
                 <button class="btn btn-primary" @onclick="CrearNuevaOrden" disabled="@(!tieneAccesoEscritura)">
                     <i class="fas fa-plus"></i> Nueva Orden
@@ -66,6 +66,12 @@ else
                         </li>
                     </ul>
                 </div>
+            </div>
+            <div class="col-auto ms-auto">
+                <a class="btn btn-outline-secondary" href="/TablasAuxiliares/ReplacoProv"
+                   title="Códigos equivalentes de proveedores">
+                    <i class="fas fa-exchange-alt"></i> Códigos de Proveedor
+                </a>
             </div>
         </div>
     }

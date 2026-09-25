@@ -7,6 +7,7 @@ using IMPLANPROD.Server.Services;
 using IMPLANPROD.Shared.DTOs;
 using IMPLANPROD.Shared.Entities;
 using System.Data.Common;
+using System.Security.Claims;
 
 namespace IMPLANPROD.Server.Controllers
 {
@@ -362,13 +363,17 @@ namespace IMPLANPROD.Server.Controllers
                     var cantidad = item.Cantidad ?? 0;
                     var fechaSol = item.FechaSoliciCompra ?? DateTime.Now;
 
-                    // Obtener código externo y descripción
-                    var codExt = item.CodExte ?? "";
+                    // Obtener código externo y descripción desde MASTER.
+                    // OC_SUCURSAL.CodExte viene en null, por lo que el código externo
+                    // debe tomarse de master.Codigo (igual que en GetDetalle), usando
+                    // master.Codint = peddeta.CodiInt.
+                    var codExt = "";
                     var descripcion = "";
                     if (codInt > 0)
                     {
                         var master = await _context.masters
                             .FirstOrDefaultAsync(m => m.Codint == codInt);
+                        codExt = master?.Codigo ?? "";
                         descripcion = master?.Descripcion ?? "";
                     }
 
@@ -421,6 +426,32 @@ namespace IMPLANPROD.Server.Controllers
                 await _context.SaveChangesAsync();
 
                 await transaction.CommitAsync();
+
+                // ====================================================================
+                // GUARDAR ANOTACIÓN ESTRUCTURADA EN ANOTAPED
+                // ====================================================================
+                // Mismo comportamiento que /pedidos-venta/crear y /pedidos-venta/editar:
+                // se persisten los items del pedido en la tabla ANOTAPED con la observación
+                // general " GENERADO DESDE OC SUCURSAL" (con espacio inicial, según request).
+                // Se ejecuta fuera de la transacción principal para no afectar el alta del
+                // pedido; los errores se loguean pero no revierten la generación.
+                try
+                {
+                    var numUsuar = _userContextService.GetCurrentUserId() ?? 0;
+                    var nombreUsuario = await ObtenerNombreUsuarioAsync();
+                    await _anotacionesService.GuardarEnAnotapedAsync(
+                        nuevoNroPed,
+                        detallesPedido,
+                        " GENERADO DESDE OC SUCURSAL",
+                        nombreUsuario,
+                        numUsuar,
+                        "CREADO");
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "[ANOTAPED] Error al guardar (generar pedido desde OC Sucursal {NroPed})", nuevoNroPed);
+                }
+
                 // ====================================================================
                 // GENERAR ARCHIVO ARCHIVO_GENERO_PEDIDO CON ACCION GENEPEDI
                 // ====================================================================
@@ -452,6 +483,32 @@ namespace IMPLANPROD.Server.Controllers
                 _logger.LogError(ex, "Error al generar pedido desde orden de compra de sucursal");
                 return StatusCode(500, new { error = ex.Message });
             }
+        }
+
+        /// <summary>
+        /// Obtiene el nombre del usuario activo desde el contexto HTTP.
+        /// Usa el claim Name (NombreUsuario) del JWT; si no está, usa el Identity.Name.
+        /// Replica el helper de PedencaController para alimentar ANOTAPED.Usuario.
+        /// </summary>
+        private async Task<string?> ObtenerNombreUsuarioAsync()
+        {
+            var user = _userContextService.GetCurrentUser();
+            if (user?.Identity?.IsAuthenticated ?? false)
+            {
+                var nombre = user.FindFirst(ClaimTypes.Name)?.Value
+                             ?? user.Identity?.Name;
+                if (!string.IsNullOrEmpty(nombre))
+                    return nombre;
+
+                var usuarioId = _userContextService.GetCurrentUsuarioId();
+                if (usuarioId.HasValue)
+                {
+                    var usuario = await _context.Usuarios
+                        .FirstOrDefaultAsync(u => u.Id == usuarioId.Value);
+                    return usuario?.NombreUsuario;
+                }
+            }
+            return null;
         }
     }
 }

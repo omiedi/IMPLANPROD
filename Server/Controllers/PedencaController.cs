@@ -10,6 +10,7 @@ using Microsoft.EntityFrameworkCore.Storage;
 using System.ComponentModel.DataAnnotations;
 using System.Data;
 using System.Data.Common;
+using System.Security.Claims;
 
 namespace IMPLANPROD.Server.Controllers
 {
@@ -25,6 +26,7 @@ namespace IMPLANPROD.Server.Controllers
         private readonly DocumentNumberGenerator _documentNumberGenerator;
         private readonly UserContextService _userContextService;
         private readonly ISyncService _syncService;
+        private readonly AnotacionesPedidoService _anotacionesService;
 
         /// <summary>
         /// Constructor del controlador
@@ -38,13 +40,15 @@ namespace IMPLANPROD.Server.Controllers
         ConversionMonedaService conversionMonedaService,
         DocumentNumberGenerator documentNumberGenerator,
         UserContextService userContextService,
-        ISyncService syncService)
+        ISyncService syncService,
+        AnotacionesPedidoService anotacionesService)
         {
             _context = context;
             _conversionMonedaService = conversionMonedaService;
             _documentNumberGenerator = documentNumberGenerator;
             _userContextService = userContextService;
             _syncService = syncService;
+            _anotacionesService = anotacionesService;
         }
 
         /// <summary>
@@ -200,7 +204,9 @@ namespace IMPLANPROD.Server.Controllers
                 // Grabar texto de descuento aplicado
                 encabezado.TDescApli = request.TDescApli;
                 encabezado.NTranspo = request.NTranspo; 
-                encabezado.TranspEnt = request.TranspEnt;   
+                encabezado.TranspEnt = request.TranspEnt;
+                encabezado.DomiEnt = request.DomiEnt;
+                encabezado.LocaEnt = request.LocaEnt;
 
 
 
@@ -288,6 +294,20 @@ namespace IMPLANPROD.Server.Controllers
                 await _context.SaveChangesAsync();
 
                 await transaction.CommitAsync();
+
+                // Guardar anotaciones estructuradas en tabla ANOTAPED
+                try
+                {
+                    var numUsuar = _userContextService.GetCurrentUserId() ?? 0;
+                    var nombreUsuario = await ObtenerNombreUsuarioAsync();
+                    await _anotacionesService.GuardarEnAnotapedAsync(
+                        request.NroPed, nuevos, request.Observa, nombreUsuario, numUsuar, "EDITADO");
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"[ANOTAPED] Error al guardar (editar pedido {request.NroPed}): {ex}");
+                }
+
                 // ====================================================================
                 // VALIDAR SI ES PEDIDO DE SUCURSAL Y GENERAR ARCHIVO ARCHIVO_GENERO_PEDIDO
                 // ====================================================================
@@ -392,6 +412,8 @@ namespace IMPLANPROD.Server.Controllers
                     TDescApli = request.TDescApli,
                     TranspEnt = request.TranspEnt,
                     NTranspo = request.NTranspo,
+                    DomiEnt = request.DomiEnt,
+                    LocaEnt = request.LocaEnt,
                 };
 
                 _context.Pedencas.Add(encabezado);
@@ -458,6 +480,22 @@ namespace IMPLANPROD.Server.Controllers
                 // Confirmar transacción
                 await transaction.CommitAsync();
 
+                // Guardar anotaciones estructuradas en tabla ANOTAPED
+                // (fuera de la transacción principal para no afectar el alta del pedido)
+                try
+                {
+                    var numUsuar = _userContextService.GetCurrentUserId() ?? 0;
+                    var nombreUsuario = await ObtenerNombreUsuarioAsync();
+                    await _anotacionesService.GuardarEnAnotapedAsync(
+                        nuevoNroPed, detalles, request.Observa, nombreUsuario, numUsuar, "CREADO");
+                }
+                catch (Exception ex)
+                {
+                    // Log detallado para diagnóstico: el pedido se creó correctamente,
+                    // pero falló el guardado en ANOTAPED (tabla opcional/estructurada).
+                    Console.WriteLine($"[ANOTAPED] Error al guardar (crear pedido {nuevoNroPed}): {ex}");
+                }
+
                 // Responder con el número de pedido generado y un resumen
                 return Ok(new
                 {
@@ -489,6 +527,7 @@ namespace IMPLANPROD.Server.Controllers
             [FromQuery] string? filter = null,
             [FromQuery] string? estado = null,
             [FromQuery] int? clienteId = null,
+            [FromQuery] int? nroPed = null,
             [FromQuery] DateTime? fechaDesde = null,
             [FromQuery] DateTime? fechaHasta = null)
         {
@@ -499,6 +538,12 @@ namespace IMPLANPROD.Server.Controllers
                 // Filtrar por estado activo si es necesario
                 queryable = queryable.Where(x => x.Status >= 0);
 
+                // Aplicar filtro por número de pedido (exacto)
+                if (nroPed.HasValue)
+                {
+                    queryable = queryable.Where(x => x.NroPed == nroPed.Value);
+                }
+
                 // Aplicar filtro de texto
                 if (!string.IsNullOrWhiteSpace(filter))
                 {
@@ -506,7 +551,8 @@ namespace IMPLANPROD.Server.Controllers
                         (x.RasoClie != null && x.RasoClie.Contains(filter)) ||
                         (x.NroOcom != null && x.NroOcom.Contains(filter)) ||
                         (x.Referencia != null && x.Referencia.Contains(filter)) ||
-                        (x.NroPed != null && x.NroPed.ToString().Contains(filter)));
+                        (x.NroPed != null && x.NroPed.ToString().Contains(filter)) ||
+                        (x.NroClie != null && x.NroClie.ToString().Contains(filter)));
                 }
 
                 // Aplicar filtro de estado
@@ -567,6 +613,7 @@ namespace IMPLANPROD.Server.Controllers
             [FromQuery] string? filter = null,
             [FromQuery] string? estado = null,
             [FromQuery] int? clienteId = null,
+            [FromQuery] int? nroPed = null,
             [FromQuery] DateTime? fechaDesde = null,
             [FromQuery] DateTime? fechaHasta = null)
         {
@@ -575,6 +622,12 @@ namespace IMPLANPROD.Server.Controllers
                 var queryable = _context.Pedencas.AsQueryable();
                 queryable = queryable.Where(x => x.Status >= 0);
 
+                // Aplicar filtro por número de pedido (exacto)
+                if (nroPed.HasValue)
+                {
+                    queryable = queryable.Where(x => x.NroPed == nroPed.Value);
+                }
+
                 // Aplicar filtro de texto
                 if (!string.IsNullOrWhiteSpace(filter))
                 {
@@ -582,7 +635,8 @@ namespace IMPLANPROD.Server.Controllers
                         (x.RasoClie != null && x.RasoClie.Contains(filter)) ||
                         (x.NroOcom != null && x.NroOcom.Contains(filter)) ||
                         (x.Referencia != null && x.Referencia.Contains(filter)) ||
-                        (x.NroPed != null && x.NroPed.ToString().Contains(filter)));
+                        (x.NroPed != null && x.NroPed.ToString().Contains(filter)) ||
+                        (x.NroClie != null && x.NroClie.ToString().Contains(filter)));
                 }
 
                 // Aplicar filtro de estado
@@ -624,6 +678,192 @@ namespace IMPLANPROD.Server.Controllers
             {
                 // Manejo de errores para detectar problemas en el cálculo de páginas
                 return BadRequest($"Error al calcular total de páginas: {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// Lista de pedidos que tienen al menos un ítem pendiente de entrega.
+        /// Equivale al SQL del VB6 (recordset Pedianuittemp del anulador de ítems):
+        ///   SELECT DISTINCT PEDENCA.NroPed, PEDENCA.NroClie, PEDENCA.FechEmis, PEDENCA.NroOcom
+        ///   FROM PEDENCA INNER JOIN PEDDETA ON (PEDENCA.NroPed = PEDDETA.NroPed)
+        ///   WHERE PEDDETA.Status &lt; 8                     -- no anulada ni cumplida
+        ///     AND PEDDETA.CantEnt &lt; (PEDDETA.CanPed - 0.005)  -- con saldo pendiente
+        ///     AND PEDENCA.Status &lt; 9                     -- pedido no anulado
+        ///   ORDER BY PEDENCA.NroPed ASC
+        /// Se usa en la utilidad "Anular Items de Pedido" de /pedidos-venta.
+        /// </summary>
+        /// <param name="nroPed">Filtro exacto por número de pedido</param>
+        /// <param name="texto">Filtro de texto libre sobre la referencia compuesta
+        /// (N° pedido, N° OC del cliente y razón social)</param>
+        [HttpGet("pedidos-con-items-pendientes")]
+        public async Task<ActionResult<List<PedidoConItemsPendientesDTO>>> GetPedidosConItemsPendientes(
+            [FromQuery] int? nroPed = null,
+            [FromQuery] string? texto = null)
+        {
+            try
+            {
+                var query = _context.Pedencas
+                    .AsNoTracking()
+                    .Where(pe => pe.Status < 9)
+                    .Where(pe => _context.Peddetas.Any(pd =>
+                        pd.NroPed == pe.NroPed
+                        && pd.Status < 8
+                        && (pd.CantEnt ?? 0m) < (pd.CanPed ?? 0m) - 0.005m));
+
+                if (nroPed.HasValue)
+                {
+                    query = query.Where(pe => pe.NroPed == nroPed.Value);
+                }
+
+                if (!string.IsNullOrWhiteSpace(texto))
+                {
+                    var t = texto.Trim();
+                    query = query.Where(pe =>
+                        (pe.NroOcom != null && pe.NroOcom.Contains(t)) ||
+                        (pe.RasoClie != null && pe.RasoClie.Contains(t)) ||
+                        (pe.NroPed != null && pe.NroPed.ToString().Contains(t)));
+                }
+
+                var pedidos = await query
+                    .OrderBy(pe => pe.NroPed)
+                    .Select(pe => new PedidoConItemsPendientesDTO
+                    {
+                        NroPed = pe.NroPed ?? 0,
+                        NroClie = pe.NroClie ?? 0,
+                        RasoClie = pe.RasoClie ?? string.Empty,
+                        FechEmis = pe.FechEmis,
+                        NroOcom = pe.NroOcom ?? string.Empty
+                    })
+                    .ToListAsync();
+
+                return Ok(pedidos);
+            }
+            catch (Exception ex)
+            {
+                return BadRequest($"Error al obtener pedidos con ítems pendientes: {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// Marca como cumplidos (PEDDETA.Status = 8) los ítems seleccionados de un
+        /// pedido de venta. Equivale al botón "Marcar Cumplidos" del anulador de
+        /// ítems del VB6: la línea queda cumplida y deja de figurar como pendiente
+        /// de entrega en todos los listados que filtran Status &lt; 8.
+        /// Se registran los campos de auditoría LastUpdate y NumUsuar (usuario activo).
+        /// </summary>
+        /// <param name="request">Número de pedido y lista de NuOrItem a cumplir</param>
+        [HttpPost("marcar-items-cumplidos")]
+        public async Task<ActionResult> MarcarItemsCumplidos([FromBody] MarcarItemsCumplidosDTO request)
+        {
+            if (request == null || request.NuOrItems == null || request.NuOrItems.Count == 0)
+            {
+                return BadRequest("Debe indicar al menos un ítem a marcar como cumplido.");
+            }
+
+            await using var transaction = await _context.Database.BeginTransactionAsync();
+            try
+            {
+                // NuOrItem es short? en PEDDETA: se convierte la lista para que EF
+                // traduzca el Contains a un IN (...) sin problemas de tipo.
+                var itemsSeleccionados = request.NuOrItems.Select(x => (short?)x).ToList();
+
+                var items = await _context.Peddetas
+                    .Where(d => d.NroPed == request.NroPed && itemsSeleccionados.Contains(d.NuOrItem))
+                    .ToListAsync();
+
+                if (items.Count == 0)
+                {
+                    return NotFound($"No se encontraron los ítems indicados del pedido {request.NroPed}.");
+                }
+
+                var numUsuar = _userContextService.GetCurrentUserId() ?? 0;
+                var ahora = DateTime.Now;
+
+                foreach (var item in items)
+                {
+                    // 8 = ítem cumplido (regla VB6). No se tocan cantidades ni saldos:
+                    // la línea simplemente deja de considerarse pendiente.
+                    item.Status = 8;
+                    item.LastUpdate = ahora;
+                    item.NumUsuar = numUsuar;
+                }
+
+                await _context.SaveChangesAsync();
+                await transaction.CommitAsync();
+
+                // Registrar anotación automática "Items Marcados Como Cumplidos" con
+                // el detalle de los ítems (visible en /anotaciones-pedido).
+                // Se hace después del commit: si la anotación falla no revierte el
+                // marcado de los ítems (el servicio loguea el error internamente).
+                try
+                {
+                    var nombreUsuario = await ObtenerNombreUsuarioAsync();
+                    await _anotacionesService.RegistrarItemsCumplidosAsync(
+                        request.NroPed, items, nombreUsuario, numUsuar);
+                }
+                catch (Exception exAnota)
+                {
+                    Console.WriteLine($"[ANOTAPED] Error al registrar ítems cumplidos del pedido {request.NroPed}: {exAnota}");
+                }
+
+                return Ok(new { request.NroPed, ItemsCumplidos = items.Count });
+            }
+            catch (Exception ex)
+            {
+                await transaction.RollbackAsync();
+                return BadRequest($"Error al marcar ítems como cumplidos: {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// Registra la anotación automática "Items Remitidos" en el anotador de cada
+        /// pedido asociado a un remito de cliente.
+        /// Los ítems remitidos por pedido se derivan de MOVISTO: CodiMovi = "RT" y
+        /// DoPriLar = remito, filtrando NuPedCli &gt; 0, por lo que los ítems del
+        /// remito que NO están asociados a un pedido quedan excluidos.
+        /// Se invoca desde /remitos/cliente una vez grabados todos los movimientos.
+        /// </summary>
+        /// <param name="request">Documento largo del remito (MOVISTO.DoPriLar)</param>
+        [HttpPost("registrar-items-remitidos")]
+        public async Task<ActionResult> RegistrarItemsRemitidos([FromBody] RegistrarItemsRemitidosDTO request)
+        {
+            try
+            {
+                if (request == null || string.IsNullOrWhiteSpace(request.RemitoLargo))
+                {
+                    return BadRequest("Debe indicar el número de remito.");
+                }
+
+                // Solo movimientos del remito asociados a pedido (NuPedCli > 0)
+                var movimientos = await _context.Movistos
+                    .AsNoTracking()
+                    .Where(m => m.DoPriLar == request.RemitoLargo
+                             && m.CodiMovi == "RT"
+                             && m.NuPedCli > 0)
+                    .ToListAsync();
+
+                if (!movimientos.Any())
+                {
+                    return Ok(new { PedidosAnotados = 0 });
+                }
+
+                var numUsuar = _userContextService.GetCurrentUserId() ?? 0;
+                var nombreUsuario = await ObtenerNombreUsuarioAsync();
+
+                // Una anotación por cada pedido referenciado por el remito
+                var pedidosAnotados = 0;
+                foreach (var grupo in movimientos.GroupBy(m => m.NuPedCli!.Value))
+                {
+                    await _anotacionesService.RegistrarItemsRemitidosAsync(
+                        grupo.Key, grupo.ToList(), request.RemitoLargo, nombreUsuario, numUsuar);
+                    pedidosAnotados++;
+                }
+
+                return Ok(new { request.RemitoLargo, PedidosAnotados = pedidosAnotados });
+            }
+            catch (Exception ex)
+            {
+                return BadRequest($"Error al registrar ítems remitidos: {ex.Message}");
             }
         }
 
@@ -728,6 +968,103 @@ namespace IMPLANPROD.Server.Controllers
             _context.Update(pedido);
             await _context.SaveChangesAsync();
             return NoContent();
+        }
+
+        /// <summary>
+        /// Reporte "PEDIDOS C/O.Compra x Fechas" de /pedidos-venta.
+        /// Lee directamente el encabezado PEDENCA (sin ir al detalle) filtrando por rango
+        /// de fecha de emisión. Excluye siempre el cliente "998" (venta mostrador / genérico),
+        /// igual que la consulta original:
+        /// SELECT FechEmis, NroPed, NroClie, RasoClie, NroOcom FROM PEDENCA
+        /// WHERE FechEmis >= @desde AND FechEmis &lt;= @hasta AND NroClie &lt;&gt; '998'
+        /// </summary>
+        /// <param name="fechaDesde">Fecha de emisión desde (inclusive)</param>
+        /// <param name="fechaHasta">Fecha de emisión hasta (inclusive)</param>
+        /// <param name="nroPed">Filtro opcional por número de pedido</param>
+        /// <param name="clienteId">Filtro opcional por número de cliente</param>
+        /// <param name="rasoClie">Filtro opcional por razón social (contiene)</param>
+        /// <param name="nroOcom">Filtro opcional por número de O.Compra (contiene)</param>
+        /// <param name="orderBy">Campo de ordenamiento (nombre de propiedad de PedidoVentaConOcomDTO)</param>
+        /// <param name="asc">Orden ascendente si es true, descendente si es false</param>
+        [HttpGet("con-ocom-por-fechas")]
+        public async Task<ActionResult<List<PedidoVentaConOcomDTO>>> GetPedidosConOcomPorFechasAsync(
+            [FromQuery] DateTime? fechaDesde = null,
+            [FromQuery] DateTime? fechaHasta = null,
+            [FromQuery] int? nroPed = null,
+            [FromQuery] int? clienteId = null,
+            [FromQuery] string? rasoClie = null,
+            [FromQuery] string? nroOcom = null,
+            [FromQuery] string? orderBy = null,
+            [FromQuery] bool asc = true)
+        {
+            try
+            {
+                // NroClie "998" es el cliente genérico/venta mostrador: se excluye siempre,
+                // igual que en la consulta original (NroClie <> '998').
+                var query = _context.Pedencas.AsNoTracking()
+                    .Where(p => p.NroClie != 998);
+
+                if (fechaDesde.HasValue)
+                {
+                    var desde = fechaDesde.Value.Date;
+                    query = query.Where(p => p.FechEmis.HasValue && p.FechEmis.Value.Date >= desde);
+                }
+
+                if (fechaHasta.HasValue)
+                {
+                    var hasta = fechaHasta.Value.Date;
+                    query = query.Where(p => p.FechEmis.HasValue && p.FechEmis.Value.Date <= hasta);
+                }
+
+                if (nroPed.HasValue)
+                {
+                    query = query.Where(p => p.NroPed == nroPed.Value);
+                }
+
+                if (clienteId.HasValue)
+                {
+                    query = query.Where(p => p.NroClie == clienteId.Value);
+                }
+
+                if (!string.IsNullOrWhiteSpace(rasoClie))
+                {
+                    var r = rasoClie.Trim().ToLower();
+                    query = query.Where(p => p.RasoClie != null && p.RasoClie.ToLower().Contains(r));
+                }
+
+                if (!string.IsNullOrWhiteSpace(nroOcom))
+                {
+                    var o = nroOcom.Trim().ToLower();
+                    query = query.Where(p => p.NroOcom != null && p.NroOcom.ToLower().Contains(o));
+                }
+
+                orderBy = (orderBy ?? string.Empty).Trim();
+                query = orderBy switch
+                {
+                    nameof(PedidoVentaConOcomDTO.NroPed) => asc ? query.OrderBy(p => p.NroPed) : query.OrderByDescending(p => p.NroPed),
+                    nameof(PedidoVentaConOcomDTO.NroClie) => asc ? query.OrderBy(p => p.NroClie) : query.OrderByDescending(p => p.NroClie),
+                    nameof(PedidoVentaConOcomDTO.RasoClie) => asc ? query.OrderBy(p => p.RasoClie) : query.OrderByDescending(p => p.RasoClie),
+                    nameof(PedidoVentaConOcomDTO.NroOcom) => asc ? query.OrderBy(p => p.NroOcom) : query.OrderByDescending(p => p.NroOcom),
+                    _ => asc ? query.OrderBy(p => p.FechEmis) : query.OrderByDescending(p => p.FechEmis)
+                };
+
+                var rows = await query
+                    .Select(p => new PedidoVentaConOcomDTO
+                    {
+                        FechEmis = p.FechEmis,
+                        NroPed = p.NroPed,
+                        NroClie = p.NroClie,
+                        RasoClie = p.RasoClie ?? string.Empty,
+                        NroOcom = p.NroOcom ?? string.Empty
+                    })
+                    .ToListAsync();
+
+                return Ok(rows);
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, $"Error al obtener el reporte de pedidos con O.Compra por fechas: {ex.Message}");
+            }
         }
 
         /// <summary>
@@ -1018,6 +1355,33 @@ namespace IMPLANPROD.Server.Controllers
                 await transaction.RollbackAsync();
                 return StatusCode(500, $"Error interno del servidor: {ex.Message}");
             }
+        }
+
+        /// <summary>
+        /// Obtiene el nombre del usuario activo desde el contexto HTTP.
+        /// Usa el claim Name (NombreUsuario) del JWT; si no está, usa el Identity.Name.
+        /// </summary>
+        private async Task<string?> ObtenerNombreUsuarioAsync()
+        {
+            var user = _userContextService.GetCurrentUser();
+            if (user?.Identity?.IsAuthenticated ?? false)
+            {
+                // Intentar obtener el nombre desde el claim Name
+                var nombre = user.FindFirst(ClaimTypes.Name)?.Value
+                             ?? user.Identity?.Name;
+                if (!string.IsNullOrEmpty(nombre))
+                    return nombre;
+
+                // Fallback: buscar el usuario por ID en la base
+                var usuarioId = _userContextService.GetCurrentUsuarioId();
+                if (usuarioId.HasValue)
+                {
+                    var usuario = await _context.Usuarios
+                        .FirstOrDefaultAsync(u => u.Id == usuarioId.Value);
+                    return usuario?.NombreUsuario;
+                }
+            }
+            return null;
         }
     }
 }

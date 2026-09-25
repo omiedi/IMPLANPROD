@@ -1,8 +1,8 @@
 using IMPLANPROD.Shared.DTOs;
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
-using System.Text.RegularExpressions;
 
 namespace IMPLANPROD.Client.Services
 {
@@ -109,7 +109,9 @@ namespace IMPLANPROD.Client.Services
         }
 
         /// <summary>
-        /// Parsea los productos de las líneas de anotación
+        /// Parsea los productos de las líneas de anotación.
+        /// Detecta líneas de producto por los prefijos "- " (modificado), 
+        /// "+ " (agregado) y "X " (eliminado) que usa el servicio de anotaciones.
         /// </summary>
         private List<ProductoAnotacionDTO> ParsearProductos(string[] lineas)
         {
@@ -117,69 +119,102 @@ namespace IMPLANPROD.Client.Services
 
             foreach (var linea in lineas)
             {
-                if (linea.Trim().StartsWith("- "))
+                var lineaTrim = linea.Trim();
+                if (lineaTrim.StartsWith("- ") || lineaTrim.StartsWith("+ ") || lineaTrim.StartsWith("X "))
                 {
-                    Console.WriteLine($"Parseando línea de producto: '{linea}'");
                     var producto = ParsearLineaProducto(linea);
                     if (producto != null)
                     {
-                        Console.WriteLine($"Producto parseado: {producto.Codigo} - {producto.Descripcion} - {producto.Cantidad}");
                         productos.Add(producto);
-                    }
-                    else
-                    {
-                        Console.WriteLine($"No se pudo parsear la línea: '{linea}'");
                     }
                 }
             }
 
-            Console.WriteLine($"Total productos parseados: {productos.Count}");
             return productos;
         }
 
         /// <summary>
-        /// Parsea una línea individual de producto
-        /// Formato esperado: "- CODIGO       DESCRIPCION                         CANTIDAD"
+        /// Parsea una línea individual de producto.
+        /// Formato VB6 fijo de 76 chars (FORPED07.frm línea 3631-3635):
+        ///   Pos 11 (idx 10): prefijo "- "/"X "/"+ " + código (18 chars)
+        ///   Pos 29 (idx 28): descripción (38 chars, los últimos 10 los pisa la cantidad)
+        ///   Pos 57 (idx 56): cantidad (10 chars)
+        /// Se usa extracción por posiciones fijas en lugar de regex porque el regex
+        /// falla cuando la cantidad tiene formato cultural (comas/puntos) o cuando
+        /// la descripción contiene números al final.
         /// </summary>
         private ProductoAnotacionDTO? ParsearLineaProducto(string linea)
         {
             try
             {
-                // Remover el "- " inicial
-                var contenido = linea.Substring(2).Trim();
-
-                // Usar regex para extraer código, descripción y cantidad
-                // Patrón mejorado: código (espacios) descripción (espacios) cantidad (con comas y puntos)
-                var patron = @"^(\S+)\s+(.+?)\s+([\d,\.]+)$";
-                var match = Regex.Match(contenido, patron);
-
-                if (match.Success)
+                // Buscar el marcador "- " (o "+ " / "X ") en la línea.
+                // En VB6 está en idx 10, pero puede variar si la línea viene de
+                // un bloque envuelto a 96 chars.
+                int idxMarcador = -1;
+                string prefijo = "";
+                foreach (var pref in new[] { "- ", "+ ", "X " })
                 {
-                    var cantidadTexto = match.Groups[3].Value.Replace(",", ".");
-                    return new ProductoAnotacionDTO
+                    var idx = linea.IndexOf(pref);
+                    if (idx >= 0 && (idxMarcador < 0 || idx < idxMarcador))
                     {
-                        Codigo = match.Groups[1].Value.Trim(),
-                        Descripcion = match.Groups[2].Value.Trim(),
-                        Cantidad = decimal.TryParse(cantidadTexto, out var cantidad) ? cantidad : 0
-                    };
+                        idxMarcador = idx;
+                        prefijo = pref;
+                    }
                 }
 
-                // Si el regex no funciona, intentar parsing manual
-                var partes = contenido.Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries);
-                if (partes.Length >= 3)
-                {
-                    var codigo = partes[0];
-                    var cantidadTexto = partes[partes.Length - 1].Replace(",", ".");
-                    var cantidad = decimal.TryParse(cantidadTexto, out var cant) ? cant : 0;
-                    var descripcion = string.Join(" ", partes.Skip(1).Take(partes.Length - 2));
+                if (idxMarcador < 0)
+                    return null;
 
-                    return new ProductoAnotacionDTO
-                    {
-                        Codigo = codigo,
-                        Descripcion = descripcion,
-                        Cantidad = cantidad
-                    };
+                // El código empieza 2 chars después del marcador.
+                int idxCodigo = idxMarcador + 2;
+                // La descripción empieza 18 chars después del marcador (pos 29 = idxMarcador + 18).
+                int idxDescripcion = idxMarcador + 18;
+                // La cantidad empieza 46 chars después del marcador (pos 57 = idxMarcador + 46).
+                int idxCantidad = idxMarcador + 46;
+
+                // Extraer código (16 chars)
+                string codigo = string.Empty;
+                if (idxCodigo < linea.Length)
+                {
+                    var finCodigo = Math.Min(idxCodigo + 16, linea.Length);
+                    codigo = linea.Substring(idxCodigo, finCodigo - idxCodigo).Trim();
                 }
+
+                // Extraer descripción (28 chars, antes de la cantidad)
+                string descripcion = string.Empty;
+                if (idxDescripcion < linea.Length)
+                {
+                    var finDescripcion = Math.Min(idxDescripcion + 28, linea.Length);
+                    descripcion = linea.Substring(idxDescripcion, finDescripcion - idxDescripcion).Trim();
+                }
+
+                // Extraer cantidad (10 chars)
+                string cantidadTexto = string.Empty;
+                if (idxCantidad < linea.Length)
+                {
+                    var finCantidad = Math.Min(idxCantidad + 10, linea.Length);
+                    cantidadTexto = linea.Substring(idxCantidad, finCantidad - idxCantidad).Trim();
+                }
+
+                if (string.IsNullOrEmpty(codigo))
+                    return null;
+
+                // Parsear cantidad: aceptar coma o punto como separador decimal (compatibilidad VB6/C#)
+                var cantidadNormalizada = cantidadTexto.Replace(",", ".");
+                decimal cantidad = 0m;
+                if (!string.IsNullOrEmpty(cantidadNormalizada) &&
+                    !decimal.TryParse(cantidadNormalizada, NumberStyles.Any, CultureInfo.InvariantCulture, out cantidad))
+                {
+                    // Si no es numérico (ej: "ELIMINADO"), dejar 0
+                    cantidad = 0m;
+                }
+
+                return new ProductoAnotacionDTO
+                {
+                    Codigo = codigo,
+                    Descripcion = descripcion,
+                    Cantidad = cantidad
+                };
             }
             catch
             {

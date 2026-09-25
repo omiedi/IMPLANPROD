@@ -1,4 +1,6 @@
 @page "/TablaMonedas/Tamoned/BajaIndex"
+@using Microsoft.AspNetCore.Authorization
+@attribute [Authorize]
 @inject IRepository repository
 @inject NavigationManager navigationManager
 @inject SweetAlertService sweetAlertService

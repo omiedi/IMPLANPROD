@@ -332,6 +332,29 @@ window.focusElement = function (element) {
 };
 
 /**
+ * Enfoca un input y coloca el cursor al final del texto.
+ * @param {HTMLInputElement} element - Input a enfocar
+ */
+window.focusCodigoInput = function (element) {
+    if (element) {
+        setTimeout(() => {
+            element.focus();
+            // Colocar el cursor al final del contenido
+            var len = element.value.length;
+            if (element.setSelectionRange) {
+                element.setSelectionRange(len, len);
+            } else if (element.createTextRange) {
+                var range = element.createTextRange();
+                range.collapse(true);
+                range.moveEnd('character', len);
+                range.moveStart('character', len);
+                range.select();
+            }
+        }, 100);
+    }
+};
+
+/**
  * Agrega un event listener para la tecla Escape en un modal
  * @param {string} modalId - ID del modal
  * @param {object} dotNetRef - Referencia al objeto .NET
@@ -631,7 +654,7 @@ window.imprimirOrdenFabricacion = function (datos) {
                     <table>
                         <tr>
                             <td class="etiqueta" style="width:15%">Revisión</td>
-                            <td style="width:10%">1</td>
+                            <td style="width:10%">${def(datos.revision)}</td>
                             <td class="etiqueta" style="width:15%">N°</td>
                             <td style="width:30%">${def(datos.idSubOr)}</td>
                             <td class="etiqueta" style="width:15%">Fecha</td>
@@ -828,7 +851,7 @@ window.imprimirOrdenFabricacionEnVentanaPreparada = function (datos) {
                 <table class="fila-formulario">
                     <tr>
                         <td class="etiqueta" style="width:15%">Revisión</td>
-                        <td style="width:10%">1</td>
+                        <td style="width:10%">${def(datos.revision)}</td>
                         <td class="etiqueta" style="width:15%">N°</td>
                         <td style="width:30%">${def(datos.idSubOr)}</td>
                         <td class="etiqueta" style="width:15%">Fecha</td>
@@ -1054,7 +1077,7 @@ window.imprimirConsumoMaterialesEnVentanaPreparada = function (datos) {
                 <table class="fila-formulario">
                     <tr>
                         <td class="etiqueta" style="width:15%">Revisión</td>
-                        <td style="width:10%">1</td>
+                        <td style="width:10%">${def(datos.revision)}</td>
                         <td class="etiqueta" style="width:15%">N°</td>
                         <td style="width:30%">${def(datos.idSubOr)}</td>
                         <td class="etiqueta" style="width:15%">Fecha</td>
@@ -1259,19 +1282,33 @@ window.escribirDocumentosEnVentanaPreparada = function (documentos) {
             const desc = def(op.descOper);
             const obse = op.obseOper ? String(op.obseOper).replace(/\n/g, '<br>') : '';
             const contenidoDescripcion = obse ? `${desc}<br><br>${obse}` : desc;
+            // Cada fila de operación tiene altura fija para alojar 6 líneas de texto
+            // en las columnas Control y Fecha/Firma, con fuente pequeña.
+            // Columna CONTROL: campos Maq., Oper., Cant., Inic., Fin. para llenar a mano.
+            // Columna FECHA/FIRMA: línea de fecha (dd / mm / aaaa) y línea de firma.
             html += `
-                <tr>
-                    <td style="width:10%">${def(op.numeOper)}</td>
-                    <td>${contenidoDescripcion}</td>
-                    <td class="linea-firma">&nbsp;</td>
-                    <td class="linea-firma">&nbsp;</td>
+                <tr style="height:6em;">
+                    <td style="width:10%; vertical-align:top;">${def(op.numeOper)}</td>
+                    <td style="vertical-align:top;">${contenidoDescripcion}</td>
+                    <td style="vertical-align:top; font-size:8pt; line-height:1.4;">
+                        Maq.:___________<br>
+                        Oper.:___________<br>
+                        Cant.:___________<br>
+                        Inic.:____________<br>
+                        Fin:&nbsp;&nbsp;____________
+                    </td>
+                    <td style="vertical-align:top; font-size:8pt; line-height:1.4; text-align:center;">
+                        <span style="display:inline-block; width:30%; text-align:center;">&nbsp;</span><span style="display:inline-block; width:5%; text-align:center;">/</span><span style="display:inline-block; width:30%; text-align:center;">&nbsp;</span><span style="display:inline-block; width:5%; text-align:center;">/</span><span style="display:inline-block; width:30%; text-align:center;">&nbsp;</span><br>
+                        <br>
+                        <span style="display:block; border-bottom:1px solid #000; width:100%;">&nbsp;</span>
+                    </td>
                 </tr>`;
         });
         return html;
     }
 
     function armarHojasOrden(datos) {
-        const FILAS_POR_PAGINA = 12;
+        const FILAS_POR_PAGINA = 8;
         const operaciones = (datos.operaciones && Array.isArray(datos.operaciones)) ? datos.operaciones : [];
         const paginas = [];
         for (let i = 0; i < operaciones.length; i += FILAS_POR_PAGINA) {
@@ -1293,7 +1330,7 @@ window.escribirDocumentosEnVentanaPreparada = function (documentos) {
                     <table class="fila-formulario">
                         <tr>
                             <td class="etiqueta" style="width:15%">Revisión</td>
-                            <td style="width:10%">1</td>
+                            <td style="width:10%">${def(datos.revision)}</td>
                             <td class="etiqueta" style="width:15%">N°</td>
                             <td style="width:30%">${def(datos.idSubOr)}</td>
                             <td class="etiqueta" style="width:15%">Fecha</td>
@@ -1355,18 +1392,18 @@ window.escribirDocumentosEnVentanaPreparada = function (documentos) {
         materiales.forEach(function (m) {
             html += `
                 <tr>
-                    <td style="width:20%">${def(m.cod_Exte)}</td>
-                    <td style="width:35%">${def(m.descrip)}</td>
-                    <td style="width:10%">${def(m.umedida)}</td>
-                    <td style="width:15%">${def(m.usoUnitFormateada)}</td>
-                    <td style="width:20%">${def(m.cantResFormateada)}</td>
+                    <td style="width:20%; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${def(m.cod_Exte)}</td>
+                    <td style="width:57%; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${def(m.descrip)}</td>
+                    <td style="width:4%; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${def(m.umedida)}</td>
+                    <td style="width:9%; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; text-align:right;">${def(m.usoUnitFormateada)}</td>
+                    <td style="width:10%; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; text-align:right;">${def(m.cantResFormateada)}</td>
                 </tr>`;
         });
         return html;
     }
 
     function armarHojasConsumo(datos) {
-        const FILAS_POR_PAGINA = 12;
+        const FILAS_POR_PAGINA = 32;
         const materiales = (datos.materiales && Array.isArray(datos.materiales)) ? datos.materiales : [];
         const paginas = [];
         for (let i = 0; i < materiales.length; i += FILAS_POR_PAGINA) {
@@ -1388,7 +1425,7 @@ window.escribirDocumentosEnVentanaPreparada = function (documentos) {
                     <table class="fila-formulario">
                         <tr>
                             <td class="etiqueta" style="width:15%">Revisión</td>
-                            <td style="width:10%">1</td>
+                            <td style="width:10%">${def(datos.revision)}</td>
                             <td class="etiqueta" style="width:15%">N°</td>
                             <td style="width:30%">${def(datos.idSubOr)}</td>
                             <td class="etiqueta" style="width:15%">Fecha</td>
@@ -1429,10 +1466,10 @@ window.escribirDocumentosEnVentanaPreparada = function (documentos) {
                         <thead>
                             <tr>
                                 <th style="width:20%">Código</th>
-                                <th style="width:35%">Descripción</th>
-                                <th style="width:10%">U-M</th>
-                                <th style="width:15%">Uso</th>
-                                <th style="width:20%">Consumo</th>
+                                <th style="width:57%">Descripción</th>
+                                <th style="width:4%">U-M</th>
+                                <th style="width:9%">Uso</th>
+                                <th style="width:10%">Consumo</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -1734,7 +1771,7 @@ window.escribirDocumentosEnVentanaPreparada = function (documentos) {
                     .detalle-consumo th, .detalle-consumo td,
                     .detalle-plan th, .detalle-plan td {
                         border: 1px solid #000;
-                        padding: 4px 6px;
+                        padding: 2px 6px;
                         vertical-align: middle;
                         word-wrap: break-word;
                     }
@@ -1743,12 +1780,12 @@ window.escribirDocumentosEnVentanaPreparada = function (documentos) {
                     .detalle-plan th {
                         background-color: #f0f0f0;
                         font-weight: bold;
-                        height: 24px;
+                        height: 20px;
                     }
                     .detalle-of td,
                     .detalle-consumo td,
                     .detalle-plan td {
-                        min-height: 24px;
+                        min-height: 20px;
                         height: auto;
                     }
                     .detalle-plan th {
@@ -2133,4 +2170,15 @@ window.imprimirPlanInspeccionEnVentanaPreparada = function (datos) {
             console.error('[imprimirPlanInspeccionEnVentanaPreparada] Error al imprimir:', error);
         }
     }, 500);
+};
+
+// Hace scroll al final de un elemento por su id.
+// Usado para posicionar la vista al final de la tabla de anotaciones ANOTAPED.
+window.scrollToBottom = function (id) {
+    const el = document.getElementById(id);
+    if (el) {
+        el.scrollTop = el.scrollHeight;
+        // También hacer scroll al final de la página para mostrar el último grupo
+        el.scrollIntoView({ behavior: 'smooth', block: 'end' });
+    }
 };

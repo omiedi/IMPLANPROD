@@ -1,5 +1,6 @@
 @using IMPLANPROD.Shared.DTOs
 @inject IRepository repository
+@inject SweetAlertService sweetAlertService
 
 <div class="container">
     <div class="row">
@@ -9,39 +10,53 @@
                        class="form-control" 
                        @bind-value="terminoBusqueda" 
                        @bind-value:event="oninput"
-                       placeholder="Buscar depósito...*" />
+                       placeholder="Buscar depósito..." />
             </div>
         </div>
     </div>
 
     <div class="row mt-3">
         <div class="col">
-            <table class="table table-sm table-hover">
-                <thead>
-                    <tr>
-                        <th>Código</th>
-                        <th>Nombre</th>
-                        <th></th>
-                    </tr>
-                </thead>
-                <tbody>
-                    @if (depositos != null)
-                    {
-                        @foreach (var deposito in depositos)
-                        {
-                            <tr class="@(deposito.Id == CodigoSeleccionado ? "table-primary" : "")">
-                                <td>@deposito.Id</td>
-                                <td>@deposito.Nombre</td>
-                                <td>
-                                    <button class="btn btn-sm btn-primary" @onclick="() => SeleccionarDeposito(deposito)">
-                                        Seleccionar
-                                    </button>
-                                </td>
+            @if (cargando)
+            {
+                <div class="text-center">
+                    <div class="spinner-border text-primary" role="status">
+                        <span class="visually-hidden">Cargando depósitos...</span>
+                    </div>
+                </div>
+            }
+            else if (DepositosFiltrados.Any())
+            {
+                <div style="max-height: 400px; overflow-y: auto;">
+                    <table class="table table-sm table-hover">
+                        <thead class="table-light sticky-top">
+                            <tr>
+                                <th>Código</th>
+                                <th>Nombre</th>
+                                <th></th>
                             </tr>
-                        }
-                    }
-                </tbody>
-            </table>
+                        </thead>
+                        <tbody>
+                            @foreach (var deposito in DepositosFiltrados)
+                            {
+                                <tr class="@(deposito.Id == CodigoSeleccionado ? "table-primary" : "")">
+                                    <td>@deposito.Id</td>
+                                    <td>@deposito.Nombre</td>
+                                    <td>
+                                        <button class="btn btn-sm btn-primary" @onclick="() => SeleccionarDeposito(deposito)">
+                                            Seleccionar
+                                        </button>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+            else
+            {
+                <div class="alert alert-info mb-0">No se encontraron depósitos.</div>
+            }
         </div>
     </div>
 </div>
@@ -50,20 +65,46 @@
     [CascadingParameter] BlazoredModalInstance Modal { get; set; }
     [Parameter] public int CodigoSeleccionado { get; set; }
 
-    private List<DepositoDTO> depositos;
-    private string terminoBusqueda;
+    private List<DepositoDTO> depositos = new();
+    private string terminoBusqueda = string.Empty;
+    private bool cargando = false;
+
+    private IEnumerable<DepositoDTO> DepositosFiltrados =>
+        string.IsNullOrWhiteSpace(terminoBusqueda)
+            ? depositos
+            : depositos.Where(d =>
+                (d.Nombre ?? string.Empty).Contains(terminoBusqueda, StringComparison.OrdinalIgnoreCase) ||
+                d.Id.ToString().Contains(terminoBusqueda));
 
     protected override async Task OnInitializedAsync()
     {
         await CargarDepositos();
     }
 
+    // Carga los depósitos desde el endpoint correcto (api/tadeposi/combo), que devuelve
+    // un diccionario CodigoDepo -> "Codigo - Descripción". Antes se llamaba a "api/tadepo",
+    // una ruta que no existe en el backend, por lo que la lista nunca se cargaba.
     private async Task CargarDepositos()
     {
-        var response = await repository.Get<List<DepositoDTO>>("api/tadepo");
-        if (!response.Error)
+        try
         {
-            depositos = response.Response;
+            cargando = true;
+            var response = await repository.Get<Dictionary<int, string>>("api/tadeposi/combo");
+            if (response.Error || response.Response == null)
+            {
+                await sweetAlertService.FireAsync("Error", "No se pudieron cargar los depósitos", SweetAlertIcon.Error);
+                depositos = new();
+                return;
+            }
+
+            depositos = response.Response
+                .OrderBy(x => x.Value)
+                .Select(x => new DepositoDTO { Id = x.Key, Nombre = x.Value })
+                .ToList();
+        }
+        finally
+        {
+            cargando = false;
         }
     }
 

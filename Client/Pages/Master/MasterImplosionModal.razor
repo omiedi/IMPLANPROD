@@ -40,6 +40,7 @@
                             <table class="table table-striped table-sm">
                                 <thead class="table-dark sticky-top">
                                     <tr>
+                                        <th>Seleccionar</th>
                                         <th>Código</th>
                                         <th>Descripción</th>
                                         <th class="text-center">U.Med.</th>
@@ -50,6 +51,13 @@
                                     @foreach (var item in items)
                                     {
                                         <tr>
+                                            <td class="text-center">
+                                                <button type="button" class="btn btn-sm btn-outline-primary"
+                                                        title="Seleccionar Item"
+                                                        @onclick="() => SeleccionarProducto(item)">
+                                                    <i class="fas fa-check"></i>
+                                                </button>
+                                            </td>
                                             <td>@item.Codigo</td>
                                             <td>@item.Descripcion</td>
                                             <td class="text-center">@item.Umedida</td>
@@ -115,6 +123,14 @@
     [Parameter] public int Codint { get; set; }
     [Parameter] public string? CodigoProducto { get; set; }
     [Parameter] public string? DescripcionProducto { get; set; }
+
+    /// <summary>
+    /// Evento que se dispara cuando el usuario selecciona un producto del modal
+    /// para abrirlo en la página de edición (MasterEdit).
+    /// Pasa el CodIConj (Id del producto padre) y el Codint del producto actual
+    /// para poder volver al modal después.
+    /// </summary>
+    [Parameter] public EventCallback<(int IdProductoSeleccionado, int CodintOrigen)> OnSeleccionarProducto { get; set; }
 
     /// <summary>
     /// Variables de estado
@@ -197,6 +213,17 @@
     private async Task CerrarModal()
     {
         await OnCloseRequested.InvokeAsync();
+    }
+
+    /// <summary>
+    /// Dispara el evento OnSeleccionarProducto para que el padre (MasterForm)
+    /// navegue a la edición del producto seleccionado.
+    /// Se pasa IdMaster (PK de MASTER) porque la ruta /master/edit/{Id} usa la clave primaria,
+    /// no el código interno (CodIConj = Codint).
+    /// </summary>
+    private async Task SeleccionarProducto(ImplosionItemDTO item)
+    {
+        await OnSeleccionarProducto.InvokeAsync((item.IdMaster, Codint));
     }
 
     /// <summary>

@@ -24,6 +24,35 @@ namespace IMPLANPROD.Client.Repositories
             return await _jsRuntime.InvokeAsync<string>("sessionStorage.getItem", "token") ?? string.Empty;
         }
 
+        /// <summary>
+        /// Verifica si la respuesta incluye un token renovado por el middleware del servidor
+        /// (TokenRenewalMiddleware). Si existe el header "X-Renewed-Token", lo guarda en
+        /// sessionStorage y actualiza el header de autorización del HttpClient.
+        /// Esto implementa la renovación de token con actividad (sliding expiration):
+        /// mientras el usuario haga llamadas al backend, el token se renueva automáticamente
+        /// y la sesión no expira.
+        /// </summary>
+        private async Task TryCaptureRenewedTokenAsync(HttpResponseMessage response)
+        {
+            try
+            {
+                if (response.Headers.TryGetValues("X-Renewed-Token", out var renewedTokens))
+                {
+                    var newToken = renewedTokens.FirstOrDefault();
+                    if (!string.IsNullOrEmpty(newToken))
+                    {
+                        await _jsRuntime.InvokeVoidAsync("sessionStorage.setItem", "token", newToken);
+                        _httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", newToken);
+                        Console.WriteLine("[Repository] Token renovado automáticamente por el servidor (sliding expiration)");
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[Repository] Error al capturar token renovado: {ex.Message}");
+            }
+        }
+
         public async Task SetTokenAsync(string token)
         {
             await _jsRuntime.InvokeVoidAsync("sessionStorage.setItem", "token", token);
@@ -97,6 +126,7 @@ namespace IMPLANPROD.Client.Repositories
             }
 
             var responseHTTP = await _httpClient.GetAsync(url);
+            await TryCaptureRenewedTokenAsync(responseHTTP);
             if (responseHTTP.IsSuccessStatusCode)
             {
                 var response = await UnserializeAnswer<T>(responseHTTP);
@@ -115,6 +145,7 @@ namespace IMPLANPROD.Client.Repositories
             }
 
             var responseHTTP = await _httpClient.GetAsync(url);
+            await TryCaptureRenewedTokenAsync(responseHTTP);
             if (responseHTTP.IsSuccessStatusCode)
             {
                 var bytes = await responseHTTP.Content.ReadAsByteArrayAsync();
@@ -135,6 +166,7 @@ namespace IMPLANPROD.Client.Repositories
             var messageJSON = JsonSerializer.Serialize(model);
             var messageContent = new StringContent(messageJSON, Encoding.UTF8, "application/json");
             var responseHttp = await _httpClient.PostAsync(url, messageContent);
+            await TryCaptureRenewedTokenAsync(responseHttp);
             return new HttpResponseWrapper<object>(null, !responseHttp.IsSuccessStatusCode, responseHttp);
         }
 
@@ -149,6 +181,7 @@ namespace IMPLANPROD.Client.Repositories
             var messageJSON = JsonSerializer.Serialize(model);
             var messageContent = new StringContent(messageJSON, Encoding.UTF8, "application/json");
             var responseHttp = await _httpClient.PostAsync(url, messageContent);
+            await TryCaptureRenewedTokenAsync(responseHttp);
             if (responseHttp.IsSuccessStatusCode)
             {
                 var response = await UnserializeAnswer<TResponse>(responseHttp);
@@ -166,6 +199,7 @@ namespace IMPLANPROD.Client.Repositories
             }
 
             var responseHttp = await _httpClient.PostAsync(url, content);
+            await TryCaptureRenewedTokenAsync(responseHttp);
             if (responseHttp.IsSuccessStatusCode)
             {
                 var response = await UnserializeAnswer<TResponse>(responseHttp);
@@ -183,6 +217,7 @@ namespace IMPLANPROD.Client.Repositories
             }
 
             var responseHTTP = await _httpClient.DeleteAsync(url);
+            await TryCaptureRenewedTokenAsync(responseHTTP);
             return new HttpResponseWrapper<object>(null, !responseHTTP.IsSuccessStatusCode, responseHTTP);
         }
 
@@ -197,6 +232,7 @@ namespace IMPLANPROD.Client.Repositories
             var messageJSON = JsonSerializer.Serialize(model);
             var messageContent = new StringContent(messageJSON, Encoding.UTF8, "application/json");
             var responseHttp = await _httpClient.PutAsync(url, messageContent);
+            await TryCaptureRenewedTokenAsync(responseHttp);
             return new HttpResponseWrapper<object>(null, !responseHttp.IsSuccessStatusCode, responseHttp);
         }
 
@@ -211,6 +247,7 @@ namespace IMPLANPROD.Client.Repositories
             var messageJSON = JsonSerializer.Serialize(model);
             var messageContent = new StringContent(messageJSON, Encoding.UTF8, "application/json");
             var responseHttp = await _httpClient.PutAsync(url, messageContent);
+            await TryCaptureRenewedTokenAsync(responseHttp);
             if (responseHttp.IsSuccessStatusCode)
             {
                 var response = await UnserializeAnswer<TResponse>(responseHttp);

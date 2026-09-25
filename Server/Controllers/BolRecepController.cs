@@ -160,7 +160,8 @@ namespace MantenimientoImp.Server.Controllers
                                 CanToRech = 0,
                                 CanToFalta = 0,
                                 Status = 0, // Pendiente
-                                FechLibe = null
+                                FechLibe = null,
+                                Observa = material.Observa
                             };
 
                             _context.Bolreceps.Add(bolRecep);
@@ -262,7 +263,8 @@ namespace MantenimientoImp.Server.Controllers
                             CanToRech = 0,
                             CanToFalta = 0,
                             Status = 0, // Pendiente
-                            FechLibe = null
+                            FechLibe = null,
+                            Observa = item.Observa
                         };
 
                         _context.Bolreceps.Add(bolRecep);
@@ -324,7 +326,8 @@ namespace MantenimientoImp.Server.Controllers
                         RazonSocial = _context.Proveedores
                             .Where(p => p.Nume_Cli == g.Key.NumProv)
                             .Select(p => p.Raso_Cli)
-                            .FirstOrDefault() ?? string.Empty
+                            .FirstOrDefault() ?? string.Empty,
+                        Observa = g.First().Observa
                     })
                     .OrderByDescending(r => r.FechaRecepcion)
                     .ToListAsync();
@@ -403,6 +406,10 @@ namespace MantenimientoImp.Server.Controllers
                             equals new { NumeOcom = od.NumeOcom, NuOrdItem = od.NuOrdItem }
                             into odJoin
                         from od in odJoin.DefaultIfEmpty()
+                        join t in _context.Tadeposi
+                            on (int?)(b.DepoEnt ?? 0) equals t.CodigoDepo
+                            into tJoin
+                        from t in tJoin.DefaultIfEmpty()
                         where b.NumeBoRe == numeroRecepcionDecimal && b.Status == 0
                               && (numeroOrdenCompra == null || b.NumOC == numeroOrdenCompra)
                         select new RecepcionItemDTO
@@ -418,7 +425,10 @@ namespace MantenimientoImp.Server.Controllers
                             Unidad = b.Unidad,
                             CantidadRechazada = b.CanToRech,
                             CantidadFaltante = b.CanToFalta,
-                            Status = b.Status ?? 0
+                            CodigoDeposito = (int?)(b.DepoEnt ?? 0) ?? 0,
+                            NombreDeposito = t == null ? string.Empty : $"{t.CodigoDepo} - {t.Descripcion}",
+                            Status = b.Status ?? 0,
+                            Observa = b.Observa
                         })
                     .ToListAsync();
 
@@ -429,6 +439,65 @@ namespace MantenimientoImp.Server.Controllers
             catch (Exception ex)
             {
                 Console.WriteLine($"[BolRecep] Error al obtener items de recepción {numeroRecepcion}: {ex.Message}");
+                return BadRequest(ex.Message);
+            }
+        }
+
+        /// <summary>
+        /// Devuelve TODOS los items de una recepción, sin filtrar por Status.
+        /// A diferencia de "items/{numeroRecepcion}" (que filtra Status == 0),
+        /// este endpoint devuelve los items tanto si la recepción está pendiente
+        /// (Status 0) como si ya fue aprobada (Status 1).
+        /// Se usa para imprimir la Nota de Recepción cuando la recepción ya fue
+        /// aprobada, ya que el endpoint original no devuelve items en ese caso.
+        /// GET /api/bolrecep/items-todos/{numeroRecepcion}
+        /// </summary>
+        [HttpGet("items-todos/{numeroRecepcion}")]
+        public async Task<ActionResult<List<RecepcionItemDTO>>> GetItemsRecepcionTodos(int numeroRecepcion)
+        {
+            try
+            {
+                var numeroRecepcionDecimal = (decimal)numeroRecepcion;
+
+                var items = await (
+                        from b in _context.Bolreceps
+                        join od in _context.Ocomdetas
+                            on new { NumeOcom = b.NumOC, NuOrdItem = b.NroItemOC }
+                            equals new { NumeOcom = od.NumeOcom, NuOrdItem = od.NuOrdItem }
+                            into odJoin
+                        from od in odJoin.DefaultIfEmpty()
+                        join t in _context.Tadeposi
+                            on (int?)(b.DepoEnt ?? 0) equals t.CodigoDepo
+                            into tJoin
+                        from t in tJoin.DefaultIfEmpty()
+                        where b.NumeBoRe == numeroRecepcionDecimal
+                        select new RecepcionItemDTO
+                        {
+                            CodigoInterno = b.CodInte ?? 0,
+                            NumeBore = (int?)b.NumeBoRe,
+                            NumeroOrdenCompra = b.NumOC,
+                            FechaEntregaSolicitada = od != null ? od.FentreSol : null,
+                            FechaRecepcion = b.FechRecep,
+                            CodigoExterno = b.CodExte,
+                            DescripcionItem = b.DescripItem,
+                            CantidadNominal = b.CantNom ?? 0,
+                            Unidad = b.Unidad,
+                            CantidadRechazada = b.CanToRech,
+                            CantidadFaltante = b.CanToFalta,
+                            CodigoDeposito = (int?)(b.DepoEnt ?? 0) ?? 0,
+                            NombreDeposito = t == null ? string.Empty : $"{t.CodigoDepo} - {t.Descripcion}",
+                            Status = b.Status ?? 0,
+                            Observa = b.Observa
+                        })
+                    .ToListAsync();
+
+                Console.WriteLine($"[BolRecep] Items (todos) encontrados para recepción {numeroRecepcion}: {items.Count}");
+
+                return Ok(items);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[BolRecep] Error al obtener items (todos) de recepción {numeroRecepcion}: {ex.Message}");
                 return BadRequest(ex.Message);
             }
         }
@@ -934,6 +1003,131 @@ namespace MantenimientoImp.Server.Controllers
             catch (Exception ex)
             {
                 Console.WriteLine($"[BolRecep] Error al validar tolerancia: {ex.Message}");
+                return BadRequest(ex.Message);
+            }
+        }
+
+        // ===================================================================
+        // RECEPCIONES TODAS POR RANGO DE FECHAS
+        // ===================================================================
+        // A diferencia de "pendientes-aprobacion" (que filtra Status == 0),
+        // estos endpoints devuelven TODAS las recepciones (cualquier Status)
+        // dentro de un rango de fechas, en el mismo formato DTO para que la
+        // página RecepcionesTodasXFecha reutilice la misma grilla y filtros
+        // que la solapa "Aprueba Calidad" pero sin botones de Aprobar/Borrar.
+        // Se usan tanto para la grilla agrupada como para el "Detalle por Lote".
+        // ===================================================================
+
+        /// <summary>
+        /// Devuelve todas las recepciones (cualquier Status) agrupadas por
+        /// (NumeBoRe + NumOC) dentro de un rango de fechas.
+        /// GET /api/bolrecep/todas-por-rango-fechas?fechaDesde=...&fechaHasta=...
+        /// </summary>
+        [HttpGet("todas-por-rango-fechas")]
+        public async Task<ActionResult<List<RecepcionPendienteAprobacionDTO>>> GetTodasRecepcionesPorRangoFechas(
+            [FromQuery] DateTime? fechaDesde,
+            [FromQuery] DateTime? fechaHasta)
+        {
+            try
+            {
+                var query = _context.Bolreceps
+                    .Where(b => b.NumeBoRe != null);
+
+                if (fechaDesde.HasValue)
+                {
+                    query = query.Where(b => b.FechRecep >= fechaDesde.Value.Date);
+                }
+                if (fechaHasta.HasValue)
+                {
+                    query = query.Where(b => b.FechRecep <= fechaHasta.Value.Date);
+                }
+
+                var recepciones = await query
+                    .GroupBy(b => new
+                    {
+                        b.NumeBoRe,
+                        b.NumOC,
+                        b.FEYHORecep,
+                        b.NumRemProv,
+                        b.NumProv
+                    })
+                    .Select(g => new RecepcionPendienteAprobacionDTO
+                    {
+                        NumeroRecepcion = (int)(g.Key.NumeBoRe ?? 0),
+                        NumeroOrdenCompra = g.Key.NumOC ?? 0,
+                        FechaRecepcion = g.Key.FEYHORecep ?? DateTime.MinValue,
+                        NumeroRemito = g.Key.NumRemProv,
+                        NumeroProveedor = g.Key.NumProv ?? 0,
+                        // El número de proveedor de BOLRECEP (NumProv) es Proved12.Nume_Cli,
+                        // no la clave primaria Id. Buscar por Nume_Cli para obtener la Razón Social.
+                        RazonSocial = _context.Proveedores
+                            .Where(p => p.Nume_Cli == g.Key.NumProv)
+                            .Select(p => p.Raso_Cli)
+                            .FirstOrDefault() ?? string.Empty,
+                        Observa = g.First().Observa
+                    })
+                    .OrderByDescending(r => r.FechaRecepcion)
+                    .ToListAsync();
+
+                return Ok(recepciones);
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(ex.Message);
+            }
+        }
+
+        /// <summary>
+        /// Devuelve el detalle por lote de TODAS las recepciones (cualquier
+        /// Status) dentro de un rango de fechas. Una fila por cada registro de
+        /// BOLRECEP (una misma recepción puede tener varias filas, una por lote).
+        /// GET /api/bolrecep/todas-por-rango-fechas-detalle?fechaDesde=...&fechaHasta=...
+        /// </summary>
+        [HttpGet("todas-por-rango-fechas-detalle")]
+        public async Task<ActionResult<List<RecepcionPendienteAprobacionDetalleDTO>>> GetTodasRecepcionesPorRangoFechasDetalle(
+            [FromQuery] DateTime? fechaDesde,
+            [FromQuery] DateTime? fechaHasta)
+        {
+            try
+            {
+                var query = _context.Bolreceps
+                    .Where(b => b.NumeBoRe != null);
+
+                if (fechaDesde.HasValue)
+                {
+                    query = query.Where(b => b.FechRecep >= fechaDesde.Value.Date);
+                }
+                if (fechaHasta.HasValue)
+                {
+                    query = query.Where(b => b.FechRecep <= fechaHasta.Value.Date);
+                }
+
+                var detalle = await query
+                    .Select(b => new RecepcionPendienteAprobacionDetalleDTO
+                    {
+                        NumeroRecepcion = (int)(b.NumeBoRe ?? 0),
+                        NumeroOrdenCompra = b.NumOC ?? 0,
+                        FechaRecepcion = b.FEYHORecep ?? DateTime.MinValue,
+                        NumeroRemito = b.NumRemProv,
+                        NumeroProveedor = b.NumProv ?? 0,
+                        RazonSocial = _context.Proveedores
+                            .Where(p => p.Nume_Cli == b.NumProv)
+                            .Select(p => p.Raso_Cli)
+                            .FirstOrDefault() ?? string.Empty,
+                        IdenLote = b.IdenLote ?? string.Empty,
+                        Codigo = b.CodExte ?? string.Empty,
+                        Descripcion = b.DescripItem ?? string.Empty,
+                        CantidadNominal = b.CantNom ?? 0
+                    })
+                    .OrderByDescending(r => r.FechaRecepcion)
+                    .ThenBy(r => r.NumeroRecepcion)
+                    .ThenBy(r => r.IdenLote)
+                    .ToListAsync();
+
+                return Ok(detalle);
+            }
+            catch (Exception ex)
+            {
                 return BadRequest(ex.Message);
             }
         }

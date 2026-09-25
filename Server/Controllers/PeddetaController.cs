@@ -25,6 +25,8 @@ namespace IMPLANPROD.Server.Controllers
         public async Task<ActionResult<List<PedidoVentaPendienteDetalleDTO>>> ObtenerPedidosPendientesDetalle(
             [FromQuery] string? filter = null,
             [FromQuery] int? nroPed = null,
+            [FromQuery] int? nroClie = null,
+            [FromQuery] string? rasoclie = null,
             [FromQuery] string? codigo = null,
             [FromQuery] string? descripcion = null,
             [FromQuery] string? uMedida = null,
@@ -36,6 +38,9 @@ namespace IMPLANPROD.Server.Controllers
             [FromQuery] decimal? cantEntregadaMax = null,
             [FromQuery] decimal? saldoMin = null,
             [FromQuery] decimal? saldoMax = null,
+            // Exclusión de cliente del reporte "Pedidos Pendientes": si > 0,
+            // aplica la condición nroclie <> @excluirNroClie.
+            [FromQuery] int? excluirNroClie = null,
             [FromQuery] string? orderBy = null,
             [FromQuery] bool asc = true)
         {
@@ -43,12 +48,20 @@ namespace IMPLANPROD.Server.Controllers
             {
                 var q =
                     from pd in _context.Peddetas.AsNoTracking()
+                    // Regla VB6: solo ítems vigentes. Status >= 8 indica línea
+                    // anulada/cerrada y no debe figurar como pendiente.
+                    where pd.Status >= 0 && pd.Status < 8
                     group pd by new
                     {
                         pd.NroPed,
                         pd.CodiInt,
                         pd.CodiExt,
-                        pd.Descrip
+                        pd.Descrip,
+                        // Se agregan NroClie y RaSoClie a la clave de grupo porque son
+                        // atributos del cliente que son constantes para todas las filas
+                        // de un mismo pedido+producto, y así se conservan al agrupar.
+                        pd.NroClie,
+                        pd.RaSoClie
                     }
                     into g
                     select new
@@ -60,8 +73,10 @@ namespace IMPLANPROD.Server.Controllers
                     }
                     into x
                     where (x.CantPed - x.CantEnt) > 0.005m
-                    join pe in _context.Pedencas.AsNoTracking() on (x.Key.NroPed ?? 0) equals (pe.NroPed ?? 0) into pedencaJoin
-                    from pe in pedencaJoin.DefaultIfEmpty()
+                    // Inner join: todo ítem debe tener cabecera en PEDENCA, y un
+                    // pedido anulado (PEDENCA.Status >= 9) no muestra pendientes.
+                    join pe in _context.Pedencas.AsNoTracking() on (x.Key.NroPed ?? 0) equals (pe.NroPed ?? 0)
+                    where (pe.Status ?? 0) < 9
                     join m in _context.masters.AsNoTracking()
                         on (x.Key.CodiInt ?? 0) equals m.Codint into masterJoin
                     from m in masterJoin.DefaultIfEmpty()
@@ -70,6 +85,8 @@ namespace IMPLANPROD.Server.Controllers
                         Item = new PedidoVentaPendienteDetalleDTO
                         {
                             NroPed = x.Key.NroPed ?? 0,
+                            NroClie = x.Key.NroClie ?? 0,
+                            Rasoclie = x.Key.RaSoClie ?? "",
                             Codigo = x.Key.CodiExt ?? "",
                             Descripcion = x.Key.Descrip ?? "",
                             CantSolicitada = x.CantPed,
@@ -78,7 +95,7 @@ namespace IMPLANPROD.Server.Controllers
                             UMedida = m != null ? (m.Umedida ?? "") : "",
                             FechaEntrega = x.FechaEntrega
                         },
-                        FechaEmision = pe != null ? pe.FechEmis : null
+                        FechaEmision = pe.FechEmis
                     };
 
                 if (fechaEmisDesde.HasValue)
@@ -98,6 +115,23 @@ namespace IMPLANPROD.Server.Controllers
                 if (nroPed.HasValue)
                 {
                     qItems = qItems.Where(x => x.NroPed == nroPed.Value);
+                }
+
+                if (nroClie.HasValue)
+                {
+                    qItems = qItems.Where(x => x.NroClie == nroClie.Value);
+                }
+
+                // Filtro por exclusión: "No Mostrar pedidos de Cliente N°" → nroclie <> @n.
+                if (excluirNroClie.HasValue && excluirNroClie.Value > 0)
+                {
+                    qItems = qItems.Where(x => x.NroClie != excluirNroClie.Value);
+                }
+
+                if (!string.IsNullOrWhiteSpace(rasoclie))
+                {
+                    var r = rasoclie.Trim().ToLower();
+                    qItems = qItems.Where(x => x.Rasoclie != null && x.Rasoclie.ToLower().Contains(r));
                 }
 
                 if (!string.IsNullOrWhiteSpace(codigo))
@@ -153,6 +187,8 @@ namespace IMPLANPROD.Server.Controllers
                     var f = filter.Trim().ToLower();
                     qItems = qItems.Where(x =>
                         x.NroPed.ToString().Contains(f) ||
+                        x.NroClie.ToString().Contains(f) ||
+                        (x.Rasoclie != null && x.Rasoclie.ToLower().Contains(f)) ||
                         (x.Codigo != null && x.Codigo.ToLower().Contains(f)) ||
                         (x.Descripcion != null && x.Descripcion.ToLower().Contains(f)) ||
                         (x.UMedida != null && x.UMedida.ToLower().Contains(f)) ||
@@ -167,6 +203,8 @@ namespace IMPLANPROD.Server.Controllers
                 qItems = orderBy switch
                 {
                     nameof(PedidoVentaPendienteDetalleDTO.NroPed) => asc ? qItems.OrderBy(x => x.NroPed) : qItems.OrderByDescending(x => x.NroPed),
+                    nameof(PedidoVentaPendienteDetalleDTO.NroClie) => asc ? qItems.OrderBy(x => x.NroClie) : qItems.OrderByDescending(x => x.NroClie),
+                    nameof(PedidoVentaPendienteDetalleDTO.Rasoclie) => asc ? qItems.OrderBy(x => x.Rasoclie) : qItems.OrderByDescending(x => x.Rasoclie),
                     nameof(PedidoVentaPendienteDetalleDTO.Codigo) => asc ? qItems.OrderBy(x => x.Codigo) : qItems.OrderByDescending(x => x.Codigo),
                     nameof(PedidoVentaPendienteDetalleDTO.Descripcion) => asc ? qItems.OrderBy(x => x.Descripcion) : qItems.OrderByDescending(x => x.Descripcion),
                     nameof(PedidoVentaPendienteDetalleDTO.CantSolicitada) => asc ? qItems.OrderBy(x => x.CantSolicitada) : qItems.OrderByDescending(x => x.CantSolicitada),
@@ -196,25 +234,359 @@ namespace IMPLANPROD.Server.Controllers
             }
         }
 
+        /// <summary>
+        /// Obtiene el detalle de entregas de pedidos de venta (PEDDETA.CantEnt), agrupado
+        /// por Pedido + Producto. A diferencia de "pendientes-detalle" (que solo muestra
+        /// ítems con saldo pendiente), acá se muestran los ítems que tuvieron alguna
+        /// entrega registrada (CantEnt > 0), aunque ya estén totalmente entregados.
+        /// Se usa en el reporte "Entregas de Pedidos" de /pedidos-venta.
+        /// Filtros: cliente, pedido y rango de fechas del pedido (Pedenca.FechEmis),
+        /// además de código/descripción y rangos de cantidades/saldo, igual que
+        /// "pendientes-detalle".
+        /// </summary>
+        [HttpGet("entregas-detalle")]
+        public async Task<ActionResult<List<PedidoVentaEntregaDetalleDTO>>> ObtenerEntregasDetalle(
+            [FromQuery] string? filter = null,
+            [FromQuery] int? nroPed = null,
+            [FromQuery] int? clienteId = null,
+            [FromQuery] string? codigo = null,
+            [FromQuery] string? descripcion = null,
+            [FromQuery] DateTime? fechaEmisDesde = null,
+            [FromQuery] DateTime? fechaEmisHasta = null,
+            [FromQuery] decimal? canPedMin = null,
+            [FromQuery] decimal? canPedMax = null,
+            [FromQuery] decimal? cantEntMin = null,
+            [FromQuery] decimal? cantEntMax = null,
+            [FromQuery] decimal? saldoMin = null,
+            [FromQuery] decimal? saldoMax = null,
+            // Exclusión de cliente del reporte "Entregas de Pedidos": si > 0,
+            // aplica la condición nroclie <> @excluirNroClie.
+            [FromQuery] int? excluirNroClie = null,
+            [FromQuery] string? orderBy = null,
+            [FromQuery] bool asc = true)
+        {
+            try
+            {
+                var q =
+                    from pd in _context.Peddetas.AsNoTracking()
+                    group pd by new
+                    {
+                        pd.NroPed,
+                        pd.NroClie,
+                        pd.CodiInt,
+                        pd.CodiExt,
+                        pd.Descrip,
+                        // Se incluye FeSolEnt en la clave para que un mismo ítem
+                        // repetido en el pedido (normalmente con distinta fecha de
+                        // entrega solicitada) se muestre como filas separadas y
+                        // pueda repartirse el remito que le corresponde a cada una.
+                        pd.FeSolEnt
+                    }
+                    into g
+                    select new
+                    {
+                        g.Key,
+                        CanPed = g.Sum(x => x.CanPed ?? 0m),
+                        CantEnt = g.Sum(x => x.CantEnt ?? 0m),
+                        Fecha = g.Key.FeSolEnt
+                    }
+                    into x
+                    // Solo interesan los ítems que tuvieron alguna entrega registrada.
+                    where x.CantEnt > 0.005m
+                    join pe in _context.Pedencas.AsNoTracking() on (x.Key.NroPed ?? 0) equals (pe.NroPed ?? 0) into pedencaJoin
+                    from pe in pedencaJoin.DefaultIfEmpty()
+                    join c in _context.Clientes.AsNoTracking() on (x.Key.NroClie ?? 0) equals c.Nume_Cli into clienteJoin
+                    from c in clienteJoin.DefaultIfEmpty()
+                    select new
+                    {
+                        Item = new PedidoVentaEntregaDetalleDTO
+                        {
+                            NroPed = x.Key.NroPed ?? 0,
+                            NroClie = x.Key.NroClie,
+                            Cliente = c != null ? (c.Raso_Cli ?? string.Empty) : string.Empty,
+                            Codigo = x.Key.CodiExt ?? "",
+                            Descripcion = x.Key.Descrip ?? "",
+                            Fecha = x.Fecha,
+                            CanPed = x.CanPed,
+                            CantEnt = x.CantEnt,
+                            Saldo = x.CanPed - x.CantEnt,
+                            CodiInt = x.Key.CodiInt ?? 0,
+                            // Pedido anulado (PEDENCA.Status >= 9): la fila se marca
+                            // con la etiqueta ANULADO en el reporte.
+                            Anulado = pe != null && (pe.Status ?? 0) >= 9
+                        },
+                        // Fecha del pedido (encabezado), usada solo para el filtro por rango de fechas.
+                        FechaEmision = pe != null ? pe.FechEmis : null
+                    };
+
+                if (fechaEmisDesde.HasValue)
+                {
+                    var fd = fechaEmisDesde.Value.Date;
+                    q = q.Where(x => x.FechaEmision.HasValue && x.FechaEmision.Value.Date >= fd);
+                }
+
+                if (fechaEmisHasta.HasValue)
+                {
+                    var fh = fechaEmisHasta.Value.Date;
+                    q = q.Where(x => x.FechaEmision.HasValue && x.FechaEmision.Value.Date <= fh);
+                }
+
+                var qItems = q.Select(x => x.Item);
+
+                if (nroPed.HasValue)
+                {
+                    qItems = qItems.Where(x => x.NroPed == nroPed.Value);
+                }
+
+                if (clienteId.HasValue)
+                {
+                    qItems = qItems.Where(x => x.NroClie == clienteId.Value);
+                }
+
+                // Filtro por exclusión: "No Mostrar pedidos de Cliente N°" → nroclie <> @n.
+                if (excluirNroClie.HasValue && excluirNroClie.Value > 0)
+                {
+                    qItems = qItems.Where(x => x.NroClie != excluirNroClie.Value);
+                }
+
+                if (!string.IsNullOrWhiteSpace(codigo))
+                {
+                    var c = codigo.Trim().ToLower();
+                    qItems = qItems.Where(x => x.Codigo != null && x.Codigo.ToLower().Contains(c));
+                }
+
+                if (!string.IsNullOrWhiteSpace(descripcion))
+                {
+                    var d = descripcion.Trim().ToLower();
+                    qItems = qItems.Where(x => x.Descripcion != null && x.Descripcion.ToLower().Contains(d));
+                }
+
+                if (canPedMin.HasValue)
+                {
+                    qItems = qItems.Where(x => x.CanPed >= canPedMin.Value);
+                }
+
+                if (canPedMax.HasValue)
+                {
+                    qItems = qItems.Where(x => x.CanPed <= canPedMax.Value);
+                }
+
+                if (cantEntMin.HasValue)
+                {
+                    qItems = qItems.Where(x => x.CantEnt >= cantEntMin.Value);
+                }
+
+                if (cantEntMax.HasValue)
+                {
+                    qItems = qItems.Where(x => x.CantEnt <= cantEntMax.Value);
+                }
+
+                if (saldoMin.HasValue)
+                {
+                    qItems = qItems.Where(x => x.Saldo >= saldoMin.Value);
+                }
+
+                if (saldoMax.HasValue)
+                {
+                    qItems = qItems.Where(x => x.Saldo <= saldoMax.Value);
+                }
+
+                if (!string.IsNullOrWhiteSpace(filter))
+                {
+                    var f = filter.Trim().ToLower();
+                    qItems = qItems.Where(x =>
+                        x.NroPed.ToString().Contains(f) ||
+                        (x.Cliente != null && x.Cliente.ToLower().Contains(f)) ||
+                        (x.Codigo != null && x.Codigo.ToLower().Contains(f)) ||
+                        (x.Descripcion != null && x.Descripcion.ToLower().Contains(f)) ||
+                        x.CanPed.ToString().Contains(f) ||
+                        x.CantEnt.ToString().Contains(f) ||
+                        x.Saldo.ToString().Contains(f)
+                    );
+                }
+
+                orderBy = (orderBy ?? string.Empty).Trim();
+                qItems = orderBy switch
+                {
+                    nameof(PedidoVentaEntregaDetalleDTO.NroPed) => asc ? qItems.OrderBy(x => x.NroPed) : qItems.OrderByDescending(x => x.NroPed),
+                    nameof(PedidoVentaEntregaDetalleDTO.Fecha) => asc ? qItems.OrderBy(x => x.Fecha) : qItems.OrderByDescending(x => x.Fecha),
+                    nameof(PedidoVentaEntregaDetalleDTO.Cliente) => asc ? qItems.OrderBy(x => x.Cliente) : qItems.OrderByDescending(x => x.Cliente),
+                    nameof(PedidoVentaEntregaDetalleDTO.Codigo) => asc ? qItems.OrderBy(x => x.Codigo) : qItems.OrderByDescending(x => x.Codigo),
+                    nameof(PedidoVentaEntregaDetalleDTO.Descripcion) => asc ? qItems.OrderBy(x => x.Descripcion) : qItems.OrderByDescending(x => x.Descripcion),
+                    nameof(PedidoVentaEntregaDetalleDTO.CanPed) => asc ? qItems.OrderBy(x => x.CanPed) : qItems.OrderByDescending(x => x.CanPed),
+                    nameof(PedidoVentaEntregaDetalleDTO.CantEnt) => asc ? qItems.OrderBy(x => x.CantEnt) : qItems.OrderByDescending(x => x.CantEnt),
+                    nameof(PedidoVentaEntregaDetalleDTO.Saldo) => asc ? qItems.OrderBy(x => x.Saldo) : qItems.OrderByDescending(x => x.Saldo),
+                    _ => qItems.OrderByDescending(x => x.Fecha).ThenBy(x => x.NroPed)
+                };
+
+                var rows = await qItems.ToListAsync();
+                rows = rows
+                    .Select(x =>
+                    {
+                        if (x.Saldo < 0m) x.Saldo = 0m;
+                        return x;
+                    })
+                    .ToList();
+
+                // ── N° de Remito por fila ─────────────────────────────────────
+                // Para cada par (NroPed, CodiInt) se buscan en MOVISTO las
+                // entregas por remito (CodiMovi = "RT", cantidad en CantSalid,
+                // documento en DoPriLar) y se reparten en orden cronológico
+                // sobre las líneas del ítem (ordenadas por FeSolEnt) según su
+                // CantEnt acumulada. Una fila lista todos los remitos cuyo
+                // tramo de unidades entregadas se solapa con el suyo,
+                // separados por ", "; cuando las cantidades coinciden, cada
+                // fila muestra solo el remito que le corresponde.
+                await AsignarRemitosEntregasAsync(rows);
+
+                return Ok(rows);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error al obtener detalle de entregas de pedidos");
+                return StatusCode(500, "Error interno del servidor");
+            }
+        }
+
+        /// <summary>
+        /// Asigna a cada fila del reporte "Entregas de Pedidos" el/los remito(s)
+        /// (MOVISTO.DoPriLar, CodiMovi = "RT") con los que se entregó el ítem.
+        /// La distribución se hace por par (NroPed, CodiInt): las entregas
+        /// registradas en MOVISTO (CantSalid) se consumen en orden cronológico
+        /// contra las líneas del ítem ordenadas por FeSolEnt, usando la CantEnt
+        /// acumulada como tramo de cada línea. Una línea muestra todos los
+        /// remitos cuyo tramo se solapa con el suyo (ej.: remito de 18 u. +
+        /// remito de 32 u. sobre líneas de 20 y 30 pedidas → la primera fila
+        /// muestra el remito que cubrió sus 18 entregadas y la segunda, los dos).
+        /// </summary>
+        private async Task AsignarRemitosEntregasAsync(List<PedidoVentaEntregaDetalleDTO> rows)
+        {
+            if (!rows.Any()) return;
+
+            var pares = rows
+                .Where(r => r.NroPed > 0 && r.CodiInt > 0)
+                .Select(r => (r.NroPed, r.CodiInt))
+                .Distinct()
+                .ToHashSet();
+            if (!pares.Any()) return;
+
+            var nroPeds = pares.Select(p => (int?)p.NroPed).Distinct().ToList();
+            var codInts = pares.Select(p => (int?)p.CodiInt).Distinct().ToList();
+
+            // Líneas del ítem en PEDDETA (todas las del par, no solo las filtradas
+            // del reporte, para que el reparto de remitos sea consistente).
+            var peddetas = await _context.Peddetas.AsNoTracking()
+                .Where(p => nroPeds.Contains(p.NroPed) && codInts.Contains(p.CodiInt))
+                .Select(p => new { p.NroPed, p.CodiInt, p.CodiExt, p.Descrip, p.FeSolEnt, p.CantEnt })
+                .ToListAsync();
+
+            // Entregas por remito: MOVISTO CodiMovi = "RT", cantidad en CantSalid,
+            // número de remito en DoPriLar.
+            var movimientos = await _context.Movistos.AsNoTracking()
+                .Where(m => m.CodiMovi == "RT"
+                         && m.CantSalid != null && m.CantSalid > 0
+                         && nroPeds.Contains(m.NuPedCli)
+                         && codInts.Contains(m.Cod_Inte))
+                .Select(m => new { m.NuPedCli, m.Cod_Inte, m.DoPriLar, m.CantSalid, m.FechMov, m.Id })
+                .ToListAsync();
+
+            foreach (var par in pares)
+            {
+                // Líneas del ítem con entrega registrada, ordenadas por fecha de
+                // entrega solicitada (mismo criterio de agrupación del reporte).
+                var lineas = peddetas
+                    .Where(p => (p.NroPed ?? 0) == par.NroPed && (p.CodiInt ?? 0) == par.CodiInt && (p.CantEnt ?? 0m) > 0m)
+                    .GroupBy(p => new { p.CodiExt, p.Descrip, p.FeSolEnt })
+                    .Select(g => new
+                    {
+                        g.Key.CodiExt,
+                        g.Key.Descrip,
+                        g.Key.FeSolEnt,
+                        CantEnt = g.Sum(x => x.CantEnt ?? 0m)
+                    })
+                    .OrderBy(x => x.FeSolEnt ?? DateTime.MaxValue)
+                    .ThenBy(x => x.CodiExt)
+                    .ToList();
+
+                var movs = movimientos
+                    .Where(m => (m.NuPedCli ?? 0) == par.NroPed && (m.Cod_Inte ?? 0) == par.CodiInt)
+                    .OrderBy(m => m.FechMov ?? DateTime.MaxValue)
+                    .ThenBy(m => m.Id)
+                    .Select(m => new { Remito = (m.DoPriLar ?? "").Trim(), Cant = m.CantSalid ?? 0m, Fecha = m.FechMov })
+                    .ToList();
+
+                // Reparto por tramos acumulados: el remito cubre unidades de las
+                // líneas en orden; una línea muestra todos los remitos cuyo
+                // tramo se solapa con el suyo.
+                decimal acumLinea = 0m;
+                decimal acumMov = 0m;
+                int d = 0;
+                var remitosPorClave = new Dictionary<string, List<RemitoEntregaDTO>>();
+                foreach (var linea in lineas)
+                {
+                    var inicio = acumLinea;
+                    var fin = inicio + linea.CantEnt;
+                    acumLinea = fin;
+
+                    // Avanzar el puntero de entregas ya consumidas por líneas previas.
+                    while (d < movs.Count && acumMov + movs[d].Cant <= inicio)
+                    {
+                        acumMov += movs[d].Cant;
+                        d++;
+                    }
+
+                    var remitos = new List<RemitoEntregaDTO>();
+                    int k = d;
+                    decimal kmov = acumMov;
+                    while (k < movs.Count && kmov < fin)
+                    {
+                        if (!string.IsNullOrEmpty(movs[k].Remito)
+                            && !remitos.Any(r => r.Remito == movs[k].Remito))
+                        {
+                            remitos.Add(new RemitoEntregaDTO { Remito = movs[k].Remito, FechaRemito = movs[k].Fecha });
+                        }
+                        kmov += movs[k].Cant;
+                        k++;
+                    }
+
+                    var clave = $"{linea.CodiExt}\u001F{linea.Descrip}\u001F{linea.FeSolEnt:O}";
+                    remitosPorClave[clave] = remitos;
+                }
+
+                foreach (var row in rows.Where(r => r.NroPed == par.NroPed && r.CodiInt == par.CodiInt))
+                {
+                    var clave = $"{row.Codigo}\u001F{row.Descripcion}\u001F{row.Fecha:O}";
+                    if (remitosPorClave.TryGetValue(clave, out var lista) && lista.Any())
+                    {
+                        row.RemitosDetalle = lista;
+                        row.Remito = string.Join(", ", lista.Select(r => r.Remito));
+                    }
+                }
+            }
+        }
+
         [HttpGet("pendientes-por-producto/{codint:int}")]
         public async Task<ActionResult<List<StockPedidoPendienteDTO>>> ObtenerPedidosPendientesPorProducto(int codint)
         {
             try
             {
                 var query = from pd in _context.Peddetas.AsNoTracking()
-                            join c in _context.Clientes.AsNoTracking()
-                                on (pd.NroClie ?? 0) equals c.Nume_Cli into clienteJoin
-                            from c in clienteJoin.DefaultIfEmpty()
+                            // Inner join: todo ítem pendiente debe tener cabecera en
+                            // PEDENCA, y pedidos anulados (Status >= 9) no comprometen
+                            // stock proyectado.
+                            join pe in _context.Pedencas.AsNoTracking()
+                                on pd.NroPed equals pe.NroPed
                             where pd.CodiInt == codint
-                                  && pd.VenRep == "V"
                                   && (pd.Status ?? 0) < 8
+                                  && (pe.Status ?? 0) < 9
                                   && (pd.CanPed ?? 0m) - (pd.CantEnt ?? 0m) > 0.005m
                             orderby pd.NroPed
                             select new StockPedidoPendienteDTO
                             {
                                 NroPed = pd.NroPed ?? 0,
                                 NroClie = pd.NroClie ?? 0,
-                                Cliente = c != null ? (c.Raso_Cli ?? string.Empty) : string.Empty,
+                                // RasoClie viene de PEDENCA (cabecera del pedido), no de DEUDOR12.
+                                Cliente = pe != null ? (pe.RasoClie ?? string.Empty) : string.Empty,
                                 CantPendiente = (pd.CanPed ?? 0m) - (pd.CantEnt ?? 0m),
                                 SalPreparado = 0m,
                                 FechaSolEnt = pd.FeSolEnt

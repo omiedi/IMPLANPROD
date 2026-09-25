@@ -15,6 +15,7 @@ namespace IMPLANPROD.Shared.DTOs.Impresiones
         public string Nombre { get; set; } = string.Empty;
         public string? LienzoJson { get; set; }
         public List<RemitoPlantillaDatasetDto> Datasets { get; set; } = new();
+        public List<RemitoPlantillaParameterDto> Parameters { get; set; } = new();
     }
 
     public class RemitoPlantillaDetailDto : RemitoPlantillaUpsertDto
@@ -52,5 +53,6 @@ namespace IMPLANPROD.Shared.DTOs.Impresiones
     {
         public string? LienzoJson { get; set; }
         public List<RemitoPlantillaDatasetDto> Datasets { get; set; } = new();
+        public List<RemitoPlantillaParameterDto> Parameters { get; set; } = new();
     }
 }

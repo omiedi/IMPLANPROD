@@ -7,7 +7,12 @@ namespace IMPLANPROD.Client.Services
 {
     /// <summary>
     /// Servicio que monitorea la inactividad del usuario y cierra la sesión automáticamente
-    /// después de un período configurable de tiempo sin actividad
+    /// después de un período configurable de tiempo sin actividad.
+    ///
+    /// NOTA (2025-06-24): Este servicio fue desvinculado del DI y de MainLayout porque
+    /// la sesión ahora depende únicamente de la expiración del token JWT del servidor.
+    /// Se mantiene en el repositorio como referencia histórica; para reactivarlo hay que
+    /// volver a registrarlo en Program.cs y conectarlo en MainLayout.
     /// </summary>
     public class InactivityService : IDisposable
     {

@@ -7,9 +7,16 @@ namespace IMPLANPROD.Shared.DTOs
     public class ImplosionItemDTO
     {
         /// <summary>
-        /// Código interno del conjunto (producto padre)
+        /// Código interno del conjunto (producto padre). Equivale a Master.Codint.
         /// </summary>
         public int CodIConj { get; set; }
+
+        /// <summary>
+        /// Id (clave primaria) del conjunto en la tabla MASTER.
+        /// Necesario para navegar a /master/edit/{Id}, ya que la ruta usa la PK
+        /// y no el código interno (Codint).
+        /// </summary>
+        public int IdMaster { get; set; }
 
         /// <summary>
         /// Código externo del conjunto (producto padre)

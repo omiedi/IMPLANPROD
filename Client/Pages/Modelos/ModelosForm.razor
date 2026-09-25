@@ -1,7 +1,12 @@
 @using IMPLANPROD.Shared.Entities
+@using IMPLANPROD.Shared.DTOs
 @using IMPLANPROD.Client.Shared.Components
+@using IMPLANPROD.Client.Services
 @inject IRepository repository
 @inject SweetAlertService sweetAlertService
+@inject DerechosUsuarioClientService derechosUsuario
+@inject CurrentUserService currentUserService
+@inject IJSRuntime JS
 
 <!--
 Componente: ModelosForm.razor
@@ -524,11 +529,41 @@ nuevaNota.CodiEmprNet = 1;</code></pre>
                     <!-- Sección: Notas y Observaciones del Modelo -->
                         <div class="row mb-4">
                             <div class="col-md-12">
-                                <h6 class="text-primary border-bottom border-primary pb-2 mb-3">
-                                    <i class="fas fa-sticky-note me-2"></i>Notas y Observaciones
-                                </h6>
+                                <div class="d-flex justify-content-between align-items-center border-bottom border-primary pb-2 mb-3">
+                                    <h6 class="text-primary mb-0">
+                                        <i class="fas fa-sticky-note me-2"></i>Notas y Observaciones
+                                    </h6>
+                                    <div class="d-flex gap-2">
+                                        @* Botón Proveedor (Command24 del VB6): ALTERNA con las
+                                           opciones Despachar (REMIMO09) / Recibir (RECEMO09) *@
+                                        <div class="dropdown">
+                                            <button class="btn btn-outline-primary btn-sm dropdown-toggle" type="button"
+                                                    data-bs-toggle="dropdown" aria-expanded="false">
+                                                <i class="fas fa-truck"></i> Movimientos - Entregas y Recepción
+                                            </button>
+                                            <ul class="dropdown-menu dropdown-menu-end">
+                                                <li>
+                                                    <button type="button" class="dropdown-item" @onclick="AbrirDespachoModeloAsync">
+                                                        <i class="fas fa-sign-out-alt me-2"></i>Despachar Modelo A Proveedor
+                                                    </button>
+                                                </li>
+                                                <li>
+                                                    <button type="button" class="dropdown-item" @onclick="AbrirRecepcionModelo">
+                                                        <i class="fas fa-sign-in-alt me-2"></i>Recibir Modelo de Proveedor
+                                                    </button>
+                                                </li>
+                                            </ul>
+                                        </div>
+                                        @* Botón Transacciones de Inspección (Command7 del VB6):
+                                           abre el modal NOVMOD09 "Registro de Inspección de Modelos" *@
+                                        <button type="button" class="btn btn-outline-success btn-sm" @onclick="AbrirInspeccionModeloAsync">
+                                            <i class="fas fa-clipboard-check"></i> Transacciones de Inspección
+                                        </button>
+                                    </div>
+                                </div>
                                 <div style="max-height: 12cm; overflow-y: auto;">
                                     <NotasObservaciones 
+                                        @key="notasVersion"
                                         NombreTabla="BADAMODE_NOTA"
                                         CampoIdentificador="Cod_Mod"
                                         ValorIdentificador="@Modelo.Cod_Mod"
@@ -639,6 +674,422 @@ else
                    OnProductoSeleccionado="OnProductoSeleccionado"
                    OnClose="CerrarSelectorProducto" />
 
+<SelectorProveedores @ref="selectorProveedoresModelo"
+                     ZIndex="1090"
+                     OnProveedorSeleccionado="OnProveedorRemitoSeleccionado" />
+
+@* ═══════════════════════════════════════════════════════════════════════
+   Modal "Remitir Modelo a Proveedor" / "Recibir Modelo de Proveedor".
+   Replica REMIMO09 (Despacho) y RECEMO09 (Recepción) del VB6:
+   - Proveedor: número editable (carga datos al cambiar) + botón selector.
+     Muestra Razón Social, Domicilio, Cód. Postal y Localidad (solo lectura).
+   - Número de remito y Fecha editables (Text7 / Text9 del VB6).
+   - Textarea "Remitimos a Ustedes:" (Text6) precargado con los datos del
+     modelo: código, descripción, cantidad de piezas, próximo control y
+     observaciones. En Recepción queda de solo lectura (Label4 del VB6).
+   Al confirmar se graba la anotación en BADAMODE_NOTA (equivalente al
+   anotador ANOTAMOD del VB6). La impresión del remito se implementa aparte.
+   ═══════════════════════════════════════════════════════════════════════ *@
+@if (mostrarModalRemitoModelo)
+{
+    <div class="modal fade show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5); z-index: 1050;">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header bg-primary text-white">
+                    <h5 class="modal-title">
+                        <i class="fas fa-truck me-2"></i>
+                        @(modoRemitoModelo == "despacho" ? "Remitir Modelo a Proveedor" : "Recibir Modelo de Proveedor")
+                    </h5>
+                    <button type="button" class="btn-close btn-close-white" @onclick="CerrarModalRemitoModelo"></button>
+                </div>
+
+                <div class="modal-body">
+                    @* Fila superior: N° remito (Text7) y Fecha (Text9) *@
+                    <div class="row g-2 mb-3">
+                        <div class="col-md-3 ms-auto">
+                            <label class="form-label fw-bold">@(modoRemitoModelo == "despacho" ? "Número:" : "Remito:")</label>
+                            <InputNumeroLimpio TValue="int?" @bind-Value="numeroRemitoModelo" Class="form-control" />
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label fw-bold">Fecha:</label>
+                            <input type="date" class="form-control" @bind="fechaRemitoModelo" />
+                        </div>
+                    </div>
+
+                    @* Proveedor: Text1 + botón "." (SELECHO PROVED1 del VB6).
+                       El input, el botón de búsqueda y Razón Social quedan
+                       alineados en la misma fila (align-items-end). *@
+                    <div class="row g-2 mb-2 align-items-end">
+                        <div class="col-md-2">
+                            <label class="form-label fw-bold">Proveedor:</label>
+                            <InputNumeroLimpio TValue="int?" @bind-Value="numeroProveedorRemito"
+                                               @bind-Value:after="BuscarProveedorPorNumeroAsync"
+                                               Class="form-control" />
+                        </div>
+                        <div class="col-md-1">
+                            <button type="button" class="btn btn-outline-secondary w-100" title="Buscar proveedor"
+                                    @onclick="AbrirSelectorProveedorModeloAsync">...</button>
+                        </div>
+                        <div class="col-md-9">
+                            <label class="form-label">Razón Social:</label>
+                            <input class="form-control" readonly value="@(proveedorRemitoModelo?.RazonSocial ?? "")" />
+                        </div>
+                    </div>
+                    <div class="row g-2 mb-3">
+                        <div class="col-md-6">
+                            <label class="form-label">Domicilio:</label>
+                            <input class="form-control" readonly value="@(proveedorRemitoModelo?.Domicilio ?? "")" />
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label">Cód. Postal:</label>
+                            <input class="form-control" readonly value="@(proveedorRemitoModelo?.CodigoPostal ?? "")" />
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Localidad:</label>
+                            <input class="form-control" readonly value="@(proveedorRemitoModelo?.Localidad ?? "")" />
+                        </div>
+                    </div>
+
+                    @* Datos del Transportista — solo Despacho (REMIMO09 → PRIREMITO
+                       del VB6 arma DTP$ con estos campos para la impresión del remito):
+                         TRANSPOR  : nombre empresa de transporte (32)
+                         DOMI-TRA  : domicilio (32)
+                         CUIT-TRA  : CUIT (16)
+                         PATE-TRA  : patente (16)
+                         COND-TRA  : nombre del chofer (32)
+                         DOCUCOND  : documento del chofer (24)
+                       En recepción (RECEMO09) el VB6 no usa transportista. *@
+                    @if (modoRemitoModelo == "despacho")
+                    {
+                        <div class="border rounded p-2 mb-3">
+                            <label class="form-label fw-bold mb-2">
+                                <i class="fas fa-truck-moving me-1"></i>Datos del Transportista
+                            </label>
+                            <div class="row g-2 mb-2">
+                                <div class="col-md-5">
+                                    <label class="form-label">Transporte:</label>
+                                    <input class="form-control" maxlength="32" @bind="transpNombre"
+                                           placeholder="Nombre de la empresa de transporte" />
+                                </div>
+                                <div class="col-md-4">
+                                    <label class="form-label">Domicilio:</label>
+                                    <input class="form-control" maxlength="32" @bind="transpDomicilio" />
+                                </div>
+                                <div class="col-md-3">
+                                    <label class="form-label">C.U.I.T.:</label>
+                                    <input class="form-control" maxlength="16" @bind="transpCuit" />
+                                </div>
+                            </div>
+                            <div class="row g-2">
+                                <div class="col-md-3">
+                                    <label class="form-label">Patente:</label>
+                                    <input class="form-control" maxlength="16" @bind="transpPatente" />
+                                </div>
+                                <div class="col-md-5">
+                                    <label class="form-label">Chofer:</label>
+                                    <input class="form-control" maxlength="32" @bind="transpChofer"
+                                           placeholder="Nombre del chofer" />
+                                </div>
+                                <div class="col-md-4">
+                                    <label class="form-label">Doc. Chofer:</label>
+                                    <input class="form-control" maxlength="24" @bind="transpDocChofer"
+                                           placeholder="Documento del chofer" />
+                                </div>
+                            </div>
+                        </div>
+                    }
+
+                    @* Text6 del VB6: texto precargado con los datos del modelo.
+                       En despacho es editable (Text6 multilínea); en recepción
+                       queda de solo lectura (Label4 del VB6). *@
+                    <label class="form-label fw-bold text-decoration-underline">
+                        @(modoRemitoModelo == "despacho" ? "Remitimos a Ustedes:" : "Recibimos de Ustedes:")
+                    </label>
+                    <textarea class="form-control font-monospace" rows="@(modoRemitoModelo == "despacho" ? 9 : 4)"
+                              @bind="textoRemitoModelo"
+                              readonly="@(modoRemitoModelo == "recepcion")"></textarea>
+                </div>
+
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-primary" @onclick="EmitirRemitoModeloAsync" disabled="@procesandoRemitoModelo">
+                        @if (procesandoRemitoModelo)
+                        {
+                            <span class="spinner-border spinner-border-sm me-1"></span>
+                        }
+                        <i class="fas fa-check"></i>
+                        @(modoRemitoModelo == "despacho" ? "Emitir Remito" : "Aprobar Recepción")
+                    </button>
+                    <button type="button" class="btn btn-secondary" @onclick="CerrarModalRemitoModelo">
+                        <i class="fas fa-times"></i> Salir
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@* ═══════════════════════════════════════════════════════════════════════
+   Modal "Registro de Inspección de Modelos" (NOVMOD09 del VB6).
+   Command7_Click carga: código modelo (Label3), descripción (Label6),
+   código producto (Label7) + descripción (Label8), fecha (Text10 = hoy) y
+   usuario activo (Label9 = USERNAME). Frame "Tipo de Registro" con las
+   opciones Inspección / Reparación (Option1 por defecto) y un textarea
+   editable "Detalle / Observaciones / Resultados" (Text1).
+   Al registrar (Command3): valida fecha y detalle, actualiza
+   BADAMODE.FECHULT_CON / FECHPRO_CON (CALPROCON según FRECUEN) y graba la
+   anotación en BADAMODE_NOTA (equivalente al anotador ANOTAMOD del VB6).
+   ═══════════════════════════════════════════════════════════════════════ *@
+@if (mostrarModalInspeccion)
+{
+    <div class="modal fade show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5); z-index: 1050;">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header bg-success text-white">
+                    <h5 class="modal-title">
+                        <i class="fas fa-clipboard-check me-2"></i>Registro de Inspección de Modelos
+                    </h5>
+                    <button type="button" class="btn-close btn-close-white" @onclick="CerrarModalInspeccion"></button>
+                </div>
+
+                <div class="modal-body">
+                    @* Datos del modelo (Label3 / Label6 del VB6) *@
+                    <div class="row g-2 mb-2">
+                        <div class="col-md-3">
+                            <label class="form-label">Código Modelo:</label>
+                            <input class="form-control" readonly value="@Modelo.Cod_Mod" />
+                        </div>
+                        <div class="col-md-9">
+                            <label class="form-label">Descripción:</label>
+                            <input class="form-control" readonly value="@Modelo.Descripcion" />
+                        </div>
+                    </div>
+
+                    @* Producto asociado (Label7 / Label8 del VB6) *@
+                    <div class="row g-2 mb-3">
+                        <div class="col-md-3">
+                            <label class="form-label">Código Producto:</label>
+                            <input class="form-control" readonly value="@codigoProducto" />
+                        </div>
+                        <div class="col-md-9">
+                            <label class="form-label">Descripción Producto:</label>
+                            <input class="form-control" readonly value="@descripcionProducto" />
+                        </div>
+                    </div>
+
+                    @* Fecha (Text10 = hoy) y Usuario (Label9 = USERNAME) *@
+                    <div class="row g-2 mb-3">
+                        <div class="col-md-3">
+                            <label class="form-label fw-bold">Fecha:</label>
+                            <input type="date" class="form-control" @bind="fechaInspeccion" />
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Usuario:</label>
+                            <input class="form-control" readonly value="@usuarioInspeccion" />
+                        </div>
+                    </div>
+
+                    @* Frame "Tipo de Registro" (Option1/Option2 del VB6) *@
+                    <div class="border rounded p-2 mb-3">
+                        <label class="form-label fw-bold mb-1">Tipo de Registro</label>
+                        <div class="d-flex gap-4">
+                            <div class="form-check">
+                                <input class="form-check-input" type="radio" name="tipoRegistroInspeccion" id="opInspeccion"
+                                       checked="@(tipoRegistroInspeccion == "inspeccion")"
+                                       @onchange='() => tipoRegistroInspeccion = "inspeccion"' />
+                                <label class="form-check-label" for="opInspeccion">Inspección</label>
+                            </div>
+                            <div class="form-check">
+                                <input class="form-check-input" type="radio" name="tipoRegistroInspeccion" id="opReparacion"
+                                       checked="@(tipoRegistroInspeccion == "reparacion")"
+                                       @onchange='() => tipoRegistroInspeccion = "reparacion"' />
+                                <label class="form-check-label" for="opReparacion">Reparación</label>
+                            </div>
+                        </div>
+                    </div>
+
+                    @* Text1 del VB6: detalle editable *@
+                    <label class="form-label fw-bold">Detalle / Observaciones / Resultados:</label>
+                    <textarea class="form-control" rows="6" @bind="detalleInspeccion"></textarea>
+                </div>
+
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-success" @onclick="RegistrarInspeccionModeloAsync" disabled="@procesandoInspeccion">
+                        @if (procesandoInspeccion)
+                        {
+                            <span class="spinner-border spinner-border-sm me-1"></span>
+                        }
+                        <i class="fas fa-check"></i> Registra inspección de modelo
+                    </button>
+                    <button type="button" class="btn btn-secondary" @onclick="CerrarModalInspeccion">
+                        <i class="fas fa-times"></i> Salir
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@* ═══════════════════════════════════════════════════════════════════════
+   Vista previa imprimible del remito/recepción del modelo (PRIREMITO /
+   PRIRECEPMOD del VB6). Mismo formato visual que ImpresionOrdenCompra:
+   encabezado con logo y datos de la empresa, caja del documento con N° y
+   fecha, datos del proveedor ("Señores"), tabla de detalle
+   Código / Descripción / Cantidad y datos del transportista (solo despacho).
+   ═══════════════════════════════════════════════════════════════════════ *@
+@if (mostrarVistaPreviaRemito && proveedorRemitoModelo != null)
+{
+    var esDespachoImp = modoRemitoModelo == "despacho";
+
+    <div class="modal fade show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5); z-index: 1400;">
+        <div class="modal-dialog modal-xl">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">
+                        <i class="fas fa-print"></i> Vista Previa - @(esDespachoImp ? "Remito" : "Recepción") de Modelo N° @numeroRemitoModelo
+                    </h5>
+                    <button type="button" class="btn-close" @onclick="CerrarVistaPreviaRemito"></button>
+                </div>
+                <div class="modal-body p-0">
+                    @* Contenido de impresión: el JS clona este div al imprimir *@
+                    <div id="contenido-impresion-remito" class="p-3" style="background: white; font-family: Arial, sans-serif; font-size: 12px; line-height: 1.3;">
+
+                        @* Encabezado: logo + datos de la empresa (mismo formato que la O.Compra) *@
+                        <div class="row encabezado-empresa" style="margin-bottom: 12px; page-break-inside: avoid;">
+                            <div class="col-8">
+                                <div style="border: 2px solid #000; padding: 12px; text-align: left;">
+                                    <img src="images/logoConDNV.jpeg" style="max-height: 75px; max-width: 100%; margin-bottom: 6px; display: block;" />
+                                    <p style="margin: 0 0 2px 0; font-size: 13px; line-height: 1.3; font-weight: bold; text-align: left;">
+                                        METALURGICASIAM S.A.
+                                    </p>
+                                    <p style="margin: 4px 0; font-size: 11px; line-height: 1.3; text-align: left;">
+                                        Dirección: Dr. Atilio Lavarello  2156<br>
+                                        (1870) Avellaneda Buenos Aires - Argentina<br>
+                                        Teléfono: (5411) 4203-0011 - Email: info@siam-arcon.com.ar<br>
+                                        CUIT: 30-71135193-7
+                                    </p>
+                                </div>
+                            </div>
+                            <div class="col-4">
+                                <div style="border: 2px solid #000; padding: 12px; text-align: center;">
+                                    <h5 style="margin: 0; font-weight: bold; font-size: 14px;">
+                                        @(esDespachoImp ? "REMITO" : "RECEPCIÓN DE MODELOS")
+                                    </h5>
+                                    <div style="border: 1px solid #000; padding: 8px; margin: 8px 0;">
+                                        <strong style="font-size: 13px;">Nro: @numeroRemitoModelo</strong>
+                                    </div>
+                                    <p style="margin: 5px 0; font-size: 12px;">
+                                        <strong>Fecha: @fechaRemitoModelo.ToString("dd/MM/yyyy")</strong>
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+
+                        @* Datos del proveedor (RASO-CLI / DOMI-CLI / CPOS-CLI / LOCA-CLI / CUIT-CLI) *@
+                        <div class="row datos-proveedor" style="margin-bottom: 12px; align-items: stretch; page-break-inside: avoid;">
+                            <div class="col-12">
+                                <div style="border: 1px solid #000;">
+                                    <div style="background: #f0f0f0; padding: 6px; border-bottom: 1px solid #000; font-size: 12px;">
+                                        <strong>@(esDespachoImp ? "Señores:" : "Recibimos de:")</strong>
+                                        <strong>@proveedorRemitoModelo.RazonSocial</strong>
+                                    </div>
+                                    <div style="padding: 10px; font-size: 11px;">
+                                        Domicilio: @proveedorRemitoModelo.Domicilio&nbsp;&nbsp;|&nbsp;&nbsp;
+                                        C.P.: @proveedorRemitoModelo.CodigoPostal&nbsp;&nbsp;|&nbsp;&nbsp;
+                                        Localidad: @proveedorRemitoModelo.Localidad&nbsp;&nbsp;|&nbsp;&nbsp;
+                                        CUIT: @proveedorRemitoModelo.Cuit
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        @* Detalle:
+                           - Despacho (PRIREMITO): tabla Código / Descripción / Cantidad
+                             (COD-MAT = código modelo, DES-MAT = texto "Remitimos a
+                             Ustedes:", CANTIDAD = 1).
+                           - Recepción (PRIRECEPMOD): una sola columna DES-MAT con el
+                             texto "Recibimos de Ustedes:" (sin código ni cantidad). *@
+                        @if (esDespachoImp)
+                        {
+                            <table class="tabla-items" style="width: 100%; border-collapse: collapse; border: 1px solid #000; margin-bottom: 15px;">
+                                <thead>
+                                    <tr style="background: #f0f0f0;">
+                                        <th style="border: 1px solid #000; padding: 6px; text-align: center; width: 15%; font-size: 11px;">Código</th>
+                                        <th style="border: 1px solid #000; padding: 6px; text-align: center; width: 75%; font-size: 11px;">Descripción</th>
+                                        <th style="border: 1px solid #000; padding: 6px; text-align: center; width: 10%; font-size: 11px;">Cantidad</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr>
+                                        <td style="border: 1px solid #000; padding: 5px; font-size: 10px;">
+                                            <strong>@Modelo.Cod_Mod</strong>
+                                        </td>
+                                        <td style="border: 1px solid #000; padding: 5px; font-size: 10px; white-space: pre-wrap;">@textoRemitoModelo</td>
+                                        <td style="border: 1px solid #000; padding: 5px; text-align: right; font-size: 10px;">1</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        }
+                        else
+                        {
+                            <table class="tabla-items" style="width: 100%; border-collapse: collapse; border: 1px solid #000; margin-bottom: 15px;">
+                                <thead>
+                                    <tr style="background: #f0f0f0;">
+                                        <th style="border: 1px solid #000; padding: 6px; text-align: center; font-size: 11px;">Descripción</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr>
+                                        <td style="border: 1px solid #000; padding: 5px; font-size: 10px; white-space: pre-wrap;">@textoRemitoModelo</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        }
+
+                        @* Datos del transportista — solo despacho (TRANSPOR, DOMI-TRA,
+                           CUIT-TRA, PATE-TRA, COND-TRA, DOCUCOND del VB6) *@
+                        @if (esDespachoImp && TieneDatosTransportista)
+                        {
+                            <table style="width: 100%; border-collapse: collapse; border: 1px solid #000; margin-bottom: 15px;">
+                                <thead>
+                                    <tr style="background: #f0f0f0;">
+                                        <th colspan="6" style="border: 1px solid #000; padding: 6px; text-align: left; font-size: 11px;">Transportista</th>
+                                    </tr>
+                                    <tr style="background: #f0f0f0;">
+                                        <th style="border: 1px solid #000; padding: 5px; font-size: 10px;">Transporte</th>
+                                        <th style="border: 1px solid #000; padding: 5px; font-size: 10px;">Domicilio</th>
+                                        <th style="border: 1px solid #000; padding: 5px; font-size: 10px;">C.U.I.T.</th>
+                                        <th style="border: 1px solid #000; padding: 5px; font-size: 10px;">Patente</th>
+                                        <th style="border: 1px solid #000; padding: 5px; font-size: 10px;">Chofer</th>
+                                        <th style="border: 1px solid #000; padding: 5px; font-size: 10px;">Doc. Chofer</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr>
+                                        <td style="border: 1px solid #000; padding: 5px; font-size: 10px;">@transpNombre</td>
+                                        <td style="border: 1px solid #000; padding: 5px; font-size: 10px;">@transpDomicilio</td>
+                                        <td style="border: 1px solid #000; padding: 5px; font-size: 10px;">@transpCuit</td>
+                                        <td style="border: 1px solid #000; padding: 5px; font-size: 10px;">@transpPatente</td>
+                                        <td style="border: 1px solid #000; padding: 5px; font-size: 10px;">@transpChofer</td>
+                                        <td style="border: 1px solid #000; padding: 5px; font-size: 10px;">@transpDocChofer</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        }
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-primary" @onclick="ImprimirRemitoModelo">
+                        <i class="fas fa-print"></i> Imprimir
+                    </button>
+                    <button type="button" class="btn btn-secondary" @onclick="CerrarVistaPreviaRemito">
+                        <i class="fas fa-times"></i> Cerrar
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
 @code {
     [Parameter]
     public Badamode Modelo { get; set; } = null!;
@@ -656,6 +1107,7 @@ else
     private string codigoProducto = string.Empty;
     private string codigoInterno = string.Empty;
     private string unidadMedida = string.Empty;
+    private string descripcionProducto = string.Empty;
     private SelectorProductos? selectorProductosRef;
     private bool mostrarInstructivoUsuario = false;
 
@@ -715,6 +1167,7 @@ else
                     codigoProducto = producto.Codigo ?? string.Empty;
                     this.codigoInterno = producto.Codint.ToString();
                     unidadMedida = producto.Umedida ?? string.Empty;
+                    descripcionProducto = producto.Descripcion ?? string.Empty;
                     StateHasChanged();
                 }
             }
@@ -740,6 +1193,7 @@ else
             codigoProducto = producto.Codigo ?? string.Empty;
             codigoInterno = producto.Codint.ToString();
             unidadMedida = producto.Umedida ?? string.Empty;
+            descripcionProducto = producto.Descripcion ?? string.Empty;
             
             // Guardar el MASTER.CODINT en BADAMODE.COD_INTE
             Modelo.Cod_Inte = producto.Codint;
@@ -979,5 +1433,577 @@ else
                 await sweetAlertService.FireAsync("Error", $"Error al eliminar imagen: {ex.Message}", SweetAlertIcon.Error);
             }
         }
+    }
+
+    // ═══════════════════════════════════════════════════════════════════
+    // Botón Proveedor (Command24 del VB6 - ALTERNA con 2 opciones)
+    // Replica los circuitos REMIMO09 "Remitir Modelo a Proveedor" (DESPAMODE)
+    // y RECEMO09 "Recibir Modelo de Proveedor" (RECIMODE):
+    //   - Selección de proveedor por número o selector (SELECHO PROVED1).
+    //     Muestra Raso_Cli, Domi_Cli, Cpos_Cli y Loca_Cli de solo lectura.
+    //   - N° de remito y fecha editables (Text7 / Text9 del VB6).
+    //   - Textarea precargado con los datos del modelo (Text6 del VB6):
+    //       Modelo: {Cod_Mod}
+    //       {Descripcion}
+    //       Cantidad de Piezas: {CantPiezas}
+    //       Próximo Control: {FechPro_Con}
+    //       {ObservaMod}
+    //   Al confirmar se graba la anotación en BADAMODE_NOTA (equivalente
+    //   al anotador ANOTAMOD del VB6, que en el nuevo sistema se guarda
+    //   como nota del modelo). La impresión del remito se implementa aparte.
+    // ═══════════════════════════════════════════════════════════════════
+    private bool mostrarModalRemitoModelo = false;
+    private string modoRemitoModelo = "despacho"; // "despacho" (REMIMO09) | "recepcion" (RECEMO09)
+    private SelectorProveedores? selectorProveedoresModelo;
+    private SelectorProveedores.ProveedorSeleccionado? proveedorRemitoModelo;
+    private int? numeroProveedorRemito;
+    private int? numeroRemitoModelo;
+    private DateTime fechaRemitoModelo = DateTime.Today;
+    private string textoRemitoModelo = string.Empty;
+    private bool procesandoRemitoModelo = false;
+    private int notasVersion = 0; // fuerza recarga de NotasObservaciones tras agregar la anotación
+
+    // Datos del transportista del remito (solo despacho - PRIREMITO del VB6):
+    // DTP$ empaqueta TRANSPOR(32) + DOMI-TRA(32) + CUIT-TRA(16) + PATE-TRA(16)
+    // + COND-TRA(32) + DOCUCOND(24) para la impresión del remito.
+    private string transpNombre = string.Empty;    // TRANSPOR: empresa de transporte
+    private string transpDomicilio = string.Empty; // DOMI-TRA
+    private string transpCuit = string.Empty;      // CUIT-TRA
+    private string transpPatente = string.Empty;   // PATE-TRA
+    private string transpChofer = string.Empty;    // COND-TRA: nombre del chofer
+    private string transpDocChofer = string.Empty; // DOCUCOND: documento del chofer
+
+    /// <summary>
+    /// Opción "Despachar Modelo A Proveedor" (DESPAMODE del VB6).
+    /// Mantiene el control de derechos: DERACCE("REMIMODE", "Remitir Modelo
+    /// a Proveedor") >= 2 → TieneAccesoEscrituraAsync (nivel 2).
+    /// </summary>
+    private async Task AbrirDespachoModeloAsync()
+    {
+        if (!await derechosUsuario.TieneAccesoEscrituraAsync("REMIMODE", "Remitir Modelo a Proveedor"))
+            return;
+
+        AbrirModalRemitoModelo("despacho");
+    }
+
+    /// <summary>
+    /// Opción "Recibir Modelo de Proveedor" (RECIMODE → RECEMO09 del VB6).
+    /// </summary>
+    private void AbrirRecepcionModelo() => AbrirModalRemitoModelo("recepcion");
+
+    /// <summary>
+    /// Inicializa y abre el modal de remito/recepción del modelo.
+    /// Precarga el texto del VB6 (REMIMO09.Text6) con los datos del modelo.
+    /// </summary>
+    /// <param name="modo">"despacho" (REMIMO09) o "recepcion" (RECEMO09)</param>
+    private void AbrirModalRemitoModelo(string modo)
+    {
+        modoRemitoModelo = modo;
+        proveedorRemitoModelo = null;
+        numeroProveedorRemito = null;
+        numeroRemitoModelo = null;
+        fechaRemitoModelo = DateTime.Today;
+
+        // Limpiar datos del transportista (solo se usan en despacho)
+        transpNombre = transpDomicilio = transpCuit = transpPatente = transpChofer = transpDocChofer = string.Empty;
+
+        if (modo == "despacho")
+        {
+            // Texto precargado = REMIMO09.Text6 del VB6:
+            //   "Modelo: {cod}" + línea vacía + {descripcion} + línea vacía +
+            //   "Cantidad de Piezas: {n}" + "Próximo Control: {fecha}" +
+            //   línea vacía + {observaciones del modelo}
+            textoRemitoModelo =
+                $"Modelo: {(Modelo.Cod_Mod ?? string.Empty).Trim()}\n\n" +
+                $"{Modelo.Descripcion ?? string.Empty}\n\n" +
+                $"Cantidad de Piezas: {Modelo.CantPiezas}\n" +
+                $"Próximo Control: {Modelo.FechPro_Con:dd/MM/yyyy}\n\n" +
+                $"{(Modelo.ObservaMod ?? string.Empty).Trim()}";
+        }
+        else
+        {
+            // Recepción (RECEMO09): área de solo lectura "Recibimos de Ustedes:"
+            // con solo el código del modelo y su descripción.
+            textoRemitoModelo =
+                $"Modelo: {(Modelo.Cod_Mod ?? string.Empty).Trim()}\n" +
+                $"{Modelo.Descripcion ?? string.Empty}";
+        }
+
+        mostrarModalRemitoModelo = true;
+    }
+
+    /// <summary>
+    /// Cierra el modal de remito/recepción (Command3 "Exit" del VB6).
+    /// </summary>
+    private void CerrarModalRemitoModelo() => mostrarModalRemitoModelo = false;
+
+    /// <summary>
+    /// Abre el selector de proveedores (botón "." → SELECHO PROVED1 del VB6).
+    /// </summary>
+    private async Task AbrirSelectorProveedorModeloAsync()
+    {
+        if (selectorProveedoresModelo != null)
+            await selectorProveedoresModelo.AbrirModal();
+    }
+
+    /// <summary>
+    /// Handler de OnProveedorSeleccionado del selector: asigna el proveedor
+    /// elegido y su número al campo editable.
+    /// </summary>
+    private void OnProveedorRemitoSeleccionado(SelectorProveedores.ProveedorSeleccionado proveedor)
+    {
+        proveedorRemitoModelo = proveedor;
+        numeroProveedorRemito = proveedor.NumeCli;
+    }
+
+    /// <summary>
+    /// Carga el proveedor por su número (Nume_Cli) cuando el usuario lo tipea
+    /// directamente (Text1_Change → CARDACLI del VB6, REGICLI(-NPRO)).
+    /// </summary>
+    private async Task BuscarProveedorPorNumeroAsync()
+    {
+        if (!numeroProveedorRemito.HasValue || numeroProveedorRemito.Value <= 0)
+        {
+            proveedorRemitoModelo = null;
+            return;
+        }
+
+        var response = await repository.Get<Proved12>($"api/Proved12/numero/{numeroProveedorRemito.Value}");
+        if (!response.Error && response.Response != null)
+        {
+            var p = response.Response;
+            proveedorRemitoModelo = new SelectorProveedores.ProveedorSeleccionado
+            {
+                NumeCli = p.Nume_Cli,
+                RazonSocial = p.Raso_Cli ?? string.Empty,
+                CodigoProveedor = p.Codi_Cli ?? string.Empty,
+                Domicilio = p.Domi_Cli ?? string.Empty,
+                CodigoPostal = p.Cpos_Cli ?? string.Empty,
+                Localidad = p.Loca_Cli ?? string.Empty,
+                Cuit = p.Cuit_Cli ?? string.Empty
+            };
+        }
+        else
+        {
+            // Número sin proveedor asociado: limpiar los datos mostrados
+            proveedorRemitoModelo = null;
+        }
+    }
+
+    /// <summary>
+    /// Confirmación del modal (Command1 del VB6: "Emite Remito" /
+    /// "Aprueba recepción del modelo").
+    /// Valida proveedor y N° de remito como en el VB6 y graba UN REGISTRO en
+    /// BADAMODE_NOTA (Cod_Mod + Observaciones) — mismo mecanismo que el botón
+    /// "Guardar Nota" de la solapa (POST api/observaciones).
+    /// El texto replica el bloque que el VB6 escribe en el anotador
+    /// (AGREGA_ANOTAMODELO → BADAMODE.ANOTAMOD):
+    ///   {fecha}  {Título} - Remito {n}              {usuario}
+    ///   (línea vacía)
+    ///               Destino|Origen: {razón social}
+    ///                          {domicilio}
+    ///                          {CP} {localidad}
+    ///   ============... (88)
+    /// La impresión del remito se muestra en la vista previa aparte.
+    /// </summary>
+    private async Task EmitirRemitoModeloAsync()
+    {
+        // Validaciones del VB6 (Command1_Click):
+        //   REGICLI(-NPRO) < 1 → "Seleccione Proveedor"
+        if (proveedorRemitoModelo == null)
+        {
+            await sweetAlertService.FireAsync("Atención", "Seleccione Proveedor", SweetAlertIcon.Warning);
+            return;
+        }
+
+        //   Val(Text7) < 1 → "Ingrese Número de Remito"
+        if (!numeroRemitoModelo.HasValue || numeroRemitoModelo.Value <= 0)
+        {
+            await sweetAlertService.FireAsync("Atención", "Ingrese Número de Remito", SweetAlertIcon.Warning);
+            return;
+        }
+
+        procesandoRemitoModelo = true;
+        try
+        {
+            var esDespacho = modoRemitoModelo == "despacho";
+            var titulo = esDespacho ? "Despacho a Proveedor" : "Recepción de Proveedor";
+            var etiqueta = esDespacho ? "Destino" : "Origen";
+
+            // USERNAME$ del VB6: nombre del usuario activo
+            var nombreUsuario = await currentUserService.GetNombreUsuarioAsync();
+            if (string.IsNullOrWhiteSpace(nombreUsuario))
+                nombreUsuario = "SISTEMA";
+
+            // Línea de encabezado de 76 chars (TTXX$ del VB6):
+            //   pos 1-8  : fecha (Text9, dd/MM/yy)
+            //   pos 11-56: "{título} - Remito {n}"
+            //   pos 69-  : usuario (USERNAME$, truncado al largo de la línea)
+            var lineaHeader = new string(' ', 76).ToCharArray();
+            ReemplazarEnPosicionModelo(lineaHeader, fechaRemitoModelo.ToString("dd/MM/yy"), 0, 8);
+            ReemplazarEnPosicionModelo(lineaHeader, $"{titulo} - Remito {numeroRemitoModelo}", 10, 56);
+            ReemplazarEnPosicionModelo(lineaHeader, nombreUsuario, 68, 24);
+
+            // Cuerpo del bloque (AGREGA_ANOTAMODELO del VB6):
+            //   línea vacía + "            Destino|Origen: " + razón social
+            //   + "                     " + domicilio + "                     " + CP + localidad
+            //   + separador de 88 "="
+            var observacion =
+                new string(lineaHeader).TrimEnd() + "\n\n" +
+                $"            {etiqueta}: {proveedorRemitoModelo.RazonSocial}\n" +
+                $"                     {proveedorRemitoModelo.Domicilio}\n" +
+                $"                     {($"{proveedorRemitoModelo.CodigoPostal} {proveedorRemitoModelo.Localidad}").Trim()}\n" +
+                new string('=', 88);
+
+            // Nuevo registro en BADAMODE_NOTA: Cod_Mod + Observaciones
+            // (equivalente a "Nueva Nota" + "Guardar Nota" de la solapa)
+            var dto = new GuardarObservacionDTO
+            {
+                NombreTabla = "BADAMODE_NOTA",
+                CampoIdentificador = "Cod_Mod",
+                ValorIdentificador = Modelo.Cod_Mod ?? string.Empty,
+                EsTexto = true,
+                Observaciones = observacion
+            };
+
+            var response = await repository.Post<GuardarObservacionDTO, ObservacionDTO>("api/observaciones", dto);
+            if (response.Error)
+            {
+                var message = await response.GetErrorMessageAsync();
+                await sweetAlertService.FireAsync("Error", message, SweetAlertIcon.Error);
+                return;
+            }
+
+            // Cerrar el modal de despacho ANTES de la alerta: SweetAlert
+            // (swal2-container ~1060) quedaría detrás del modal (1070) y el
+            // usuario no podría confirmarla. Además así la vista previa
+            // nunca queda tapada por este modal.
+            CerrarModalRemitoModelo();
+            notasVersion++; // recargar el historial de notas para mostrar la anotación nueva
+
+            await sweetAlertService.FireAsync("Éxito",
+                esDespacho
+                    ? "Remito registrado. La anotación se agregó a las notas del modelo."
+                    : "Recepción registrada. La anotación se agregó a las notas del modelo.",
+                SweetAlertIcon.Success);
+
+            // PRIREMITO / PRIRECEPMOD del VB6: abrir la vista previa imprimible
+            mostrarVistaPreviaRemito = true;
+        }
+        catch (Exception ex)
+        {
+            await sweetAlertService.FireAsync("Error", $"Error al emitir remito: {ex.Message}", SweetAlertIcon.Error);
+        }
+        finally
+        {
+            procesandoRemitoModelo = false;
+        }
+    }
+
+    // ── Vista previa e impresión del remito/recepción (PRIREMITO/PRIRECEPMOD) ──
+    private bool mostrarVistaPreviaRemito = false;
+
+    /// <summary>
+    /// Indica si hay datos de transportista cargados (solo despacho).
+    /// </summary>
+    private bool TieneDatosTransportista =>
+        !string.IsNullOrWhiteSpace(transpNombre) ||
+        !string.IsNullOrWhiteSpace(transpDomicilio) ||
+        !string.IsNullOrWhiteSpace(transpCuit) ||
+        !string.IsNullOrWhiteSpace(transpPatente) ||
+        !string.IsNullOrWhiteSpace(transpChofer) ||
+        !string.IsNullOrWhiteSpace(transpDocChofer);
+
+    /// <summary>
+    /// Cierra la vista previa del remito/recepción.
+    /// </summary>
+    private void CerrarVistaPreviaRemito() => mostrarVistaPreviaRemito = false;
+
+    /// <summary>
+    /// Imprime el remito/recepción del modelo: clona el div
+    /// 'contenido-impresion-remito' en una ventana nueva y dispara print().
+    /// Mismo mecanismo que ImpresionOrdenCompra.
+    /// </summary>
+    private async Task ImprimirRemitoModelo()
+    {
+        try
+        {
+            await JS.InvokeVoidAsync("eval", @"
+                (function() {
+                    var contenido = document.getElementById('contenido-impresion-remito');
+                    if (!contenido) return;
+
+                    var contenidoClonado = contenido.cloneNode(true);
+
+                    // Título de la ventana = título del documento (REMITO / RECEPCIÓN DE MODELOS)
+                    var tituloDoc = 'Documento de Modelo';
+                    var h5 = contenidoClonado.querySelector('h5');
+                    if (h5) tituloDoc = h5.textContent.trim();
+
+                    var htmlContent = `
+                        <!DOCTYPE html>
+                        <html>
+                        <head>
+                            <meta charset='utf-8'>
+                            <base href='${document.baseURI}'>
+                            <title>${tituloDoc}</title>
+                            <style>
+                                * {
+                                    box-sizing: border-box;
+                                    -webkit-print-color-adjust: exact;
+                                    print-color-adjust: exact;
+                                }
+                                html, body {
+                                    width: 100%;
+                                    margin: 0;
+                                    padding: 0;
+                                }
+                                body {
+                                    width: 733px;
+                                    font-family: Arial, sans-serif;
+                                    font-size: 12px;
+                                    padding: 15px;
+                                    background: white;
+                                    color: black !important;
+                                    line-height: 1.3;
+                                }
+                                @page {
+                                    margin: 0.8cm;
+                                    size: A4 portrait;
+                                }
+                                table {
+                                    border-collapse: collapse !important;
+                                    width: 100% !important;
+                                }
+                                td, th {
+                                    border: 1px solid #000 !important;
+                                    padding: 5px 8px !important;
+                                    font-size: 11px !important;
+                                    vertical-align: top !important;
+                                    color: black !important;
+                                }
+                                .row {
+                                    display: flex !important;
+                                    flex-wrap: nowrap !important;
+                                    margin-bottom: 12px !important;
+                                    align-items: stretch !important;
+                                    page-break-inside: avoid !important;
+                                }
+                                .col-8 { width: 66.6667% !important; padding: 0 6px 0 0 !important; }
+                                .col-4 { width: 33.3333% !important; padding: 0 0 0 6px !important; }
+                                .col-12 { width: 100% !important; }
+                                img { max-width: 100% !important; }
+                                p { margin: 0 !important; }
+                            </style>
+                        </head>
+                        <body>
+                            ${contenidoClonado.outerHTML}
+                        </body>
+                        </html>`;
+
+                    var ventana = window.open('', '_blank');
+                    ventana.document.write(htmlContent);
+                    ventana.document.close();
+
+                    // Esperar a que cargue el logo antes de imprimir
+                    ventana.onload = function() { ventana.print(); };
+                    setTimeout(function() { ventana.print(); }, 800);
+                })();
+            ");
+        }
+        catch (Exception ex)
+        {
+            await sweetAlertService.FireAsync("Error", $"Error al imprimir: {ex.Message}", SweetAlertIcon.Error);
+        }
+    }
+
+    /// <summary>
+    /// Replica el REPLA del VB6: ubica un texto en una posición fija dentro
+    /// de un array de caracteres, truncando lo que exceda el largo.
+    /// </summary>
+    /// <param name="linea">Array de la línea a completar</param>
+    /// <param name="texto">Texto a ubicar</param>
+    /// <param name="inicio">Posición inicial (base 0)</param>
+    /// <param name="largo">Largo máximo del campo</param>
+    private static void ReemplazarEnPosicionModelo(char[] linea, string texto, int inicio, int largo)
+    {
+        var t = (texto ?? string.Empty).Trim();
+        if (t.Length > largo) t = t.Substring(0, largo);
+        for (int i = 0; i < largo && inicio + i < linea.Length; i++)
+            linea[inicio + i] = i < t.Length ? t[i] : ' ';
+    }
+
+    // ═══════════════════════════════════════════════════════════════════
+    // Botón "Transacciones de Inspección" (Command7 del VB6 → NOVMOD09)
+    // Replica el circuito "Registro de Inspección de Modelos":
+    //   - Abre el modal con los datos del modelo, producto asociado,
+    //     fecha de hoy y usuario activo.
+    //   - Al registrar (Command3 del VB6) actualiza BADAMODE.FECHULT_CON /
+    //     FECHPRO_CON (CALPROCON según FRECUEN) y graba la anotación en
+    //     BADAMODE_NOTA (equivalente al anotador ANOTAMOD del VB6).
+    // ═══════════════════════════════════════════════════════════════════
+    private bool mostrarModalInspeccion = false;
+    private string tipoRegistroInspeccion = "inspeccion"; // Option1/Option2 del VB6
+    private DateTime fechaInspeccion = DateTime.Today;     // Text10 = hoy
+    private string detalleInspeccion = string.Empty;       // Text1 del VB6
+    private string usuarioInspeccion = string.Empty;       // Label9 = USERNAME
+    private bool procesandoInspeccion = false;
+
+    /// <summary>
+    /// Command7 del VB6: abre el modal NOVMOD09 con los datos del modelo.
+    /// Requiere DERACCE("REGINSPE", "Registro de Inspección de Modelos") >= 2.
+    /// </summary>
+    private async Task AbrirInspeccionModeloAsync()
+    {
+        if (!await derechosUsuario.TieneAccesoEscrituraAsync("REGINSPE", "Registro de Inspección de Modelos"))
+            return;
+
+        tipoRegistroInspeccion = "inspeccion"; // Option1.Value = True (por defecto Inspección)
+        fechaInspeccion = DateTime.Today;
+        detalleInspeccion = string.Empty;
+        usuarioInspeccion = await currentUserService.GetNombreUsuarioAsync() ?? "SISTEMA";
+        if (string.IsNullOrWhiteSpace(usuarioInspeccion))
+            usuarioInspeccion = "SISTEMA";
+
+        mostrarModalInspeccion = true;
+    }
+
+    /// <summary>
+    /// Cierra el modal de inspección (Exit del VB6).
+    /// </summary>
+    private void CerrarModalInspeccion() => mostrarModalInspeccion = false;
+
+    /// <summary>
+    /// Command3 del VB6 "Registra inspección de modelo":
+    /// 1) Valida que la fecha no sea futura y que el detalle no esté vacío.
+    /// 2) Actualiza BADAMODE.FECHULT_CON = fecha de inspección y FECHPRO_CON =
+    ///    CALPROCON según FRECUEN (1: +7 días, 2: +30, 3: +90, 4: +180, 5: +365),
+    ///    persistiendo con PUT api/badamode (ACTUREGISTRO del VB6).
+    /// 3) Graba la anotación en BADAMODE_NOTA con el formato del anotador VB6:
+    ///      {fecha}  Registro de Inspección:|Reparación:        {usuario}
+    ///      (línea vacía)
+    ///                {detalle en líneas de 56 chars desde pos 11}
+    ///      (línea vacía)
+    ///                Próxima Inspección: {FechPro_Con}
+    ///      ============... (88)
+    /// </summary>
+    private async Task RegistrarInspeccionModeloAsync()
+    {
+        // Validaciones del VB6 (Command3_Click):
+        //   FF% < 1 Or FF% > HOY(HOS$) → "Fecha de Inspección no Válida."
+        if (fechaInspeccion > DateTime.Today)
+        {
+            await sweetAlertService.FireAsync("Atención", "Fecha de Inspección no Válida.", SweetAlertIcon.Warning);
+            return;
+        }
+
+        //   TRIM$(Text1) = "" → "No se Ha Ingresado Detalle de Inspección / Reparación"
+        if (string.IsNullOrWhiteSpace(detalleInspeccion))
+        {
+            await sweetAlertService.FireAsync("Atención", "No se Ha Ingresado\nDetalle de Inspección / Reparación", SweetAlertIcon.Warning);
+            return;
+        }
+
+        procesandoInspeccion = true;
+        try
+        {
+            // ALTMOD09.Label6 = Text10 del VB6: la fecha de inspección pasa a
+            // ser el Último Control y se recalcula el Próximo Control según
+            // FRECUEN (CALPROCON → CalcularProximoControl).
+            Modelo.FechUlt_Con = fechaInspeccion;
+            CalcularProximoControl();
+
+            // ACTUREGISTRO del VB6: persiste FECHULT_CON / FECHPRO_CON en BADAMODE
+            var putResponse = await repository.Put($"api/badamode/{Modelo.Id}", Modelo);
+            if (putResponse.Error)
+            {
+                var msg = await putResponse.GetErrorMessageAsync();
+                await sweetAlertService.FireAsync("Error", msg, SweetAlertIcon.Error);
+                return;
+            }
+
+            var tipoTitulo = tipoRegistroInspeccion == "reparacion" ? "Reparación" : "Inspección";
+
+            // Encabezado de 76 chars (TTXX$ del VB6):
+            //   pos 1-8  : fecha de hoy (HOS$)
+            //   pos 11-56: "Registro de Inspección:|Reparación:"
+            //   pos 69-  : usuario (USERNAME$)
+            var lineaHeader = new string(' ', 76).ToCharArray();
+            ReemplazarEnPosicionModelo(lineaHeader, DateTime.Today.ToString("dd/MM/yy"), 0, 8);
+            ReemplazarEnPosicionModelo(lineaHeader, $"Registro de {tipoTitulo}:", 10, 56);
+            ReemplazarEnPosicionModelo(lineaHeader, usuarioInspeccion, 68, 24);
+
+            var lineas = new List<string>
+            {
+                new string(lineaHeader).TrimEnd(),
+                string.Empty
+            };
+
+            // FRATEXTO(Text1, 56) del VB6: el detalle se franquea en líneas de
+            // 56 caracteres ubicadas a partir de la posición 11.
+            foreach (var linea in FranquearTexto(detalleInspeccion.Trim(), 56))
+                lineas.Add(new string(' ', 10) + linea);
+
+            lineas.Add(string.Empty);
+            lineas.Add(new string(' ', 10) + $"Próxima Inspección: {Modelo.FechPro_Con:dd/MM/yy}");
+            lineas.Add(new string('=', 88));
+
+            // Nuevo registro en BADAMODE_NOTA: Cod_Mod + Observaciones
+            // (equivalente a "Nueva Nota" + "Guardar Nota" de la solapa)
+            var dto = new GuardarObservacionDTO
+            {
+                NombreTabla = "BADAMODE_NOTA",
+                CampoIdentificador = "Cod_Mod",
+                ValorIdentificador = Modelo.Cod_Mod ?? string.Empty,
+                EsTexto = true,
+                Observaciones = string.Join("\n", lineas)
+            };
+
+            var response = await repository.Post<GuardarObservacionDTO, ObservacionDTO>("api/observaciones", dto);
+            if (response.Error)
+            {
+                var msg = await response.GetErrorMessageAsync();
+                await sweetAlertService.FireAsync("Error", msg, SweetAlertIcon.Error);
+                return;
+            }
+
+            detalleInspeccion = string.Empty; // Text1 = "" del VB6
+            CerrarModalInspeccion();
+            notasVersion++; // recargar el historial de notas
+
+            await sweetAlertService.FireAsync("Éxito",
+                $"Registro de {tipoTitulo.ToLower()} guardado correctamente.",
+                SweetAlertIcon.Success);
+        }
+        catch (Exception ex)
+        {
+            await sweetAlertService.FireAsync("Error", $"Error al registrar inspección: {ex.Message}", SweetAlertIcon.Error);
+        }
+        finally
+        {
+            procesandoInspeccion = false;
+        }
+    }
+
+    /// <summary>
+    /// Replica FRATEXTO del VB6: divide un texto en líneas de máximo 'ancho'
+    /// caracteres, cortando preferentemente por espacios (word wrap).
+    /// </summary>
+    private static List<string> FranquearTexto(string texto, int ancho)
+    {
+        var lineas = new List<string>();
+        foreach (var parrafo in (texto ?? string.Empty).Split('\n'))
+        {
+            var p = parrafo.Trim();
+            while (p.Length > ancho)
+            {
+                var corte = p.LastIndexOf(' ', ancho);
+                if (corte <= 0) corte = ancho;
+                lineas.Add(p.Substring(0, corte).TrimEnd());
+                p = p.Substring(corte).TrimStart();
+            }
+            lineas.Add(p);
+        }
+        return lineas;
     }
 }

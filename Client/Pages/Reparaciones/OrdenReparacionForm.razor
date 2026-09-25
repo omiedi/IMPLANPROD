@@ -1,4 +1,6 @@
 @page "/orden-reparacion/{NumRepa:int}"
+@using Microsoft.AspNetCore.Authorization
+@attribute [Authorize]
 @using IMPLANPROD.Client.Shared.Components
 @inject IRepository repository
 @inject NavigationManager navigationManager

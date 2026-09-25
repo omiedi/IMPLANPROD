@@ -4,6 +4,7 @@
 @using IMPLANPROD.Client.Services
 @using IMPLANPROD.Client.Pages.Remitos
 @using IMPLANPROD.Client.Helpers
+@using IMPLANPROD.Client.Shared.Components
 @using IMPLANPROD.Shared.DTOs.Impresiones
 @inject IRepository repository
 @inject NavigationManager navigationManager
@@ -220,18 +221,39 @@ else
                                 </div>
                             </div>
 
-                            <div class="col-md-4">
+                            <div class="col-md-7">
                                 <label class="form-label">Proveedor</label>
-                                <select class="form-select" @bind="numeroProveedorRemito" @bind:after="OnProveedorSeleccionadoChangedAsync">
-                                    <option value="0">-- Seleccionar proveedor --</option>
-                                    @foreach (var p in proveedoresRemito)
+                                <div class="position-relative" @onfocusout="CerrarDropdownProveedor">
+                                    <input type="text" class="form-control"
+                                           value="@busquedaProveedorRemito"
+                                           @oninput="OnBusquedaProveedorInput"
+                                           @onfocus="MostrarDropdownProveedor"
+                                           placeholder="Buscar por código o R. social..." />
+                                    @if (mostrarDropdownProveedor && proveedoresRemitoFiltrados.Any())
                                     {
-                                        <option value="@p.NumeroProveedor">@p.NumeroProveedor - @p.RazonSocial (@p.CantidadOrdenesPendientes OCs)</option>
+                                        <div class="position-absolute w-100 bg-white border border-secondary rounded shadow-sm"
+                                             style="z-index: 1050; max-height: 250px; overflow-y: auto;">
+                                            @foreach (var p in proveedoresRemitoFiltrados)
+                                            {
+                                                <div class="px-2 py-1 cursor-pointer hover-bg-light"
+                                                     style="cursor: pointer; border-bottom: 1px solid #eee;"
+                                                     @onclick="() => SeleccionarProveedorRemito(p)">
+                                                    <strong>@p.NumeroProveedor</strong> - @p.RazonSocial
+                                                    <span class="badge bg-secondary ms-1">@p.CantidadOrdenesPendientes OCs</span>
+                                                </div>
+                                            }
+                                        </div>
                                     }
-                                </select>
+                                    @if (numeroProveedorRemito > 0)
+                                    {
+                                        <small class="text-muted d-block mt-1">
+                                            Seleccionado: @numeroProveedorRemito - @(proveedoresRemito.FirstOrDefault(x => x.NumeroProveedor == numeroProveedorRemito)?.RazonSocial ?? "")
+                                        </small>
+                                    }
+                                </div>
                             </div>
 
-                            <div class="col-md-8">
+                            <div class="col-md-5">
                                 <label class="form-label">Transporte</label>
                                 <select class="form-select" @bind="transporteRemitoId" @bind:after="OnTransporteRemitoChangedAsync">
                                     <option value="0">-- Seleccionar transporte --</option>
@@ -307,10 +329,41 @@ else
                                 </button>
                             </div>
 
+                            @* La carga manual solo aplica cuando se filtra únicamente por proveedor (modo 1);
+                               si se filtra por proveedor y O.Compra (modo 2) no tiene sentido, ya que el
+                               detalle debe surgir de las O.Compra seleccionadas. *@
+                            @if (modoFiltroRemito == 1)
+                            {
+                                <div class="col-md-3 d-flex align-items-end">
+                                    <button class="btn btn-outline-primary w-100" @onclick="ActivarCargaManual" disabled="@(numeroProveedorRemito <= 0 || depositoRemito <= 0)">
+                                        <i class="fas fa-keyboard"></i> Carga Manual
+                                    </button>
+                                </div>
+                            }
+
+                            @if (modoCargaManual)
+                            {
+                                <div class="col-12">
+                                    <div class="card border-primary">
+                                        <div class="card-header bg-primary bg-opacity-10 d-flex justify-content-between align-items-center">
+                                            <span><i class="fas fa-search"></i> Buscar y agregar producto manualmente</span>
+                                            <button type="button" class="btn btn-sm btn-outline-secondary" @onclick="DesactivarCargaManual" title="Cerrar carga manual">
+                                                <i class="fas fa-times"></i>
+                                            </button>
+                                        </div>
+                                        <div class="card-body">
+                                            <MasterSearchComponent OnRepuestoSelected="AgregarProductoManualAsync" />
+                                        </div>
+                                    </div>
+                                </div>
+                            }
+
                             <div class="col-12">
                                 @if (!pendientesRemision.Any())
                                 {
-                                    <div class="alert alert-info mb-0">No hay ítems pendientes cargados para remitir.</div>
+                                    <div class="alert alert-info mb-0">
+                                        @(modoCargaManual ? "Busque y agregue productos manualmente para incluirlos en el remito." : "No hay ítems pendientes cargados para remitir.")
+                                    </div>
                                 }
                                 else
                                 {
@@ -349,9 +402,18 @@ else
                                                                    @bind="item.CantidadEntregar" />
                                                         </td>
                                                         <td class="text-center">
-                                                            <button type="button" class="btn btn-sm btn-outline-danger" @onclick="() => LimpiarCantidadEntregar(item)" title="Limpiar cantidad">
-                                                                <i class="fas fa-times"></i>
-                                                            </button>
+                                                            @if (item.IdMaconsig == 0)
+                                                            {
+                                                                <button type="button" class="btn btn-sm btn-outline-danger" @onclick="() => QuitarItemManual(item)" title="Quitar producto agregado manualmente">
+                                                                    <i class="fas fa-trash"></i>
+                                                                </button>
+                                                            }
+                                                            else
+                                                            {
+                                                                <button type="button" class="btn btn-sm btn-outline-danger" @onclick="() => LimpiarCantidadEntregar(item)" title="Limpiar cantidad">
+                                                                    <i class="fas fa-times"></i>
+                                                                </button>
+                                                            }
                                                         </td>
                                                     </tr>
                                                 }
@@ -625,7 +687,16 @@ else
     private bool cargandoRemitosRc = false;
     private bool imprimiendoRemitoRc = false;
     private int modoFiltroRemito = 1;
+    // Indica si el detalle se está cargando manualmente (búsqueda de producto) en vez de
+    // traerlo automáticamente con "Cargar Pendientes". Es mutuamente excluyente: activar uno
+    // limpia el detalle cargado por el otro. Solo aplica cuando modoFiltroRemito == 1.
+    private bool modoCargaManual = false;
     private int numeroProveedorRemito = 0;
+    // Buscador de proveedor: texto ingresado, lista filtrada y visibilidad del dropdown.
+    // Permite buscar por NUME_CLI (código) o RASO_CLI (R. social) dentro de proveedoresRemito.
+    private string busquedaProveedorRemito = string.Empty;
+    private List<ProveedorPendienteRemisionDto> proveedoresRemitoFiltrados = new();
+    private bool mostrarDropdownProveedor = false;
     private int depositoRemito = 0;
     private int transporteRemitoId = 0;
     private List<string> ordenesCompraSeleccionadas = new();
@@ -956,6 +1027,7 @@ else
         {
             cargandoConfigRemito = true;
             mostrarModalRemito = true;
+            modoCargaManual = false;
             pendientesRemision = new List<ConsignacionPendienteRemisionDto>();
 
             var responseConfig = await repository.Get<ConfigRemisionInicialDto>("api/maconsig/config-remision-inicial");
@@ -974,6 +1046,8 @@ else
             proximoComprobanteRc = responseComprobante.Error ? null : responseComprobante.Response;
 
             numeroProveedorRemito = 0;
+            busquedaProveedorRemito = string.Empty;
+            mostrarDropdownProveedor = false;
             ordenesCompraSeleccionadas = new List<string>();
             ordenesCompraPendientesRemito = new List<OrdenCompraPendienteRemisionDto>();
             depositoRemito = depositosRemito.Any() ? depositosRemito.First().CodigoDepo : 0;
@@ -997,11 +1071,92 @@ else
         mostrarModalRemito = false;
         transporteRemitoId = 0;
         transporteRemitoSeleccionado = null;
+        mostrarDropdownProveedor = false;
     }
 
     private void LimpiarCantidadEntregar(ConsignacionPendienteRemisionDto item)
     {
         item.CantidadEntregar = 0;
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // CARGA MANUAL DE PRODUCTOS (solo modoFiltroRemito == 1: filtrar por proveedor)
+    // Mutuamente excluyente con "Cargar Pendientes": activar uno limpia el detalle
+    // cargado por el otro (ver CargarPendientesRemitoAsync, CambiarModoFiltroRemitoAsync
+    // y OnProveedorSeleccionadoChangedAsync, que desactivan modoCargaManual).
+    // El remito se genera exactamente igual que con los pendientes automáticos: se envían
+    // los mismos RemitirConsignacionItemRequest (con IdMaconsig=0 para los ítems agregados
+    // manualmente); el servidor ya soporta crear el registro MACONSIG correspondiente sobre
+    // la marcha (RemitirConsignacionesRequest.PermitirCrearRegistroSiNoExiste = true).
+    // ═══════════════════════════════════════════════════════════════════════
+
+    /// <summary>Activa la carga manual: limpia el detalle actual y muestra el buscador de productos.</summary>
+    private void ActivarCargaManual()
+    {
+        if (numeroProveedorRemito <= 0 || depositoRemito <= 0)
+        {
+            return;
+        }
+
+        modoCargaManual = true;
+        LimpiarDetalleRemito();
+    }
+
+    /// <summary>Cierra el buscador de carga manual sin perder los productos ya agregados.</summary>
+    private void DesactivarCargaManual()
+    {
+        modoCargaManual = false;
+    }
+
+    /// <summary>
+    /// Agrega un producto elegido en el buscador (MasterSearchComponent) al detalle a remitir.
+    /// Se completa con IdMaconsig=0 porque no proviene de un registro MACONSIG existente;
+    /// el backend lo crea al confirmar el remito (ver RemitirConsignaciones).
+    /// </summary>
+    private async Task AgregarProductoManualAsync(Master producto)
+    {
+        if (producto == null)
+        {
+            return;
+        }
+
+        if (pendientesRemision.Any(x => x.CodInte == producto.Codint))
+        {
+            await sweetAlertService.FireAsync("Aviso", "Este producto ya fue agregado al detalle.", SweetAlertIcon.Warning);
+            return;
+        }
+
+        var stockDeposito = 0m;
+        if (depositoRemito > 0)
+        {
+            var respStock = await repository.Get<decimal>($"api/stock/stockdeposito/{producto.Codint}/{depositoRemito}");
+            if (!respStock.Error)
+            {
+                stockDeposito = respStock.Response;
+            }
+        }
+
+        pendientesRemision.Add(new ConsignacionPendienteRemisionDto
+        {
+            IdMaconsig = 0,
+            CodInte = producto.Codint,
+            CodExte = producto.Codigo ?? string.Empty,
+            Descripcion = producto.Descripcion ?? string.Empty,
+            Unidad = producto.Umedida ?? string.Empty,
+            FaltaEntregar = 0m,
+            StockDeposito = stockDeposito,
+            CantidadEntregar = 0m,
+            OCompra = string.Empty,
+            Lote = string.Empty
+        });
+
+        StateHasChanged();
+    }
+
+    /// <summary>Quita del detalle un producto agregado manualmente (IdMaconsig == 0).</summary>
+    private void QuitarItemManual(ConsignacionPendienteRemisionDto item)
+    {
+        pendientesRemision.Remove(item);
     }
 
     private async Task CargarTransportesRemitoAsync()
@@ -1080,6 +1235,8 @@ else
     {
         modoFiltroRemito = modo;
         ordenesCompraSeleccionadas = new List<string>();
+        // La carga manual solo tiene sentido filtrando únicamente por proveedor (modo 1).
+        modoCargaManual = false;
         LimpiarDetalleRemito();
 
         if (modoFiltroRemito == 2 && numeroProveedorRemito > 0)
@@ -1095,6 +1252,13 @@ else
     private async Task OnDepositoRemitoChangedAsync()
     {
         LimpiarDetalleRemito();
+
+        if (modoCargaManual)
+        {
+            // En carga manual no se recarga automáticamente; el usuario vuelve a buscar
+            // y agregar productos (el stock mostrado depende del depósito seleccionado).
+            return;
+        }
 
         if (numeroProveedorRemito <= 0 || depositoRemito <= 0)
         {
@@ -1136,9 +1300,57 @@ else
         pendientesRemision = new List<ConsignacionPendienteRemisionDto>();
     }
 
+    // === Buscador de proveedor (reemplaza al <select> anterior) ===
+    // Filtra proveedoresRemito por código (NUME_CLI) o razón social (RASO_CLI).
+    private void OnBusquedaProveedorInput(ChangeEventArgs e)
+    {
+        busquedaProveedorRemito = e.Value?.ToString() ?? string.Empty;
+        FiltrarProveedoresRemito();
+    }
+
+    private void FiltrarProveedoresRemito()
+    {
+        if (string.IsNullOrWhiteSpace(busquedaProveedorRemito))
+        {
+            proveedoresRemitoFiltrados = proveedoresRemito;
+        }
+        else
+        {
+            proveedoresRemitoFiltrados = proveedoresRemito
+                .Where(p => p.NumeroProveedor.ToString().Contains(busquedaProveedorRemito, StringComparison.OrdinalIgnoreCase)
+                         || (p.RazonSocial ?? "").Contains(busquedaProveedorRemito, StringComparison.OrdinalIgnoreCase))
+                .ToList();
+        }
+        mostrarDropdownProveedor = true;
+    }
+
+    private void MostrarDropdownProveedor()
+    {
+        proveedoresRemitoFiltrados = proveedoresRemito;
+        mostrarDropdownProveedor = true;
+    }
+
+    // Cierra el dropdown al perder el foco. Se usa @onfocusout en el contenedor.
+    private async Task CerrarDropdownProveedor()
+    {
+        // Pequeño retraso para permitir que el @onclick del item se ejecute antes de cerrar.
+        await Task.Delay(150);
+        mostrarDropdownProveedor = false;
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private async Task SeleccionarProveedorRemito(ProveedorPendienteRemisionDto proveedor)
+    {
+        numeroProveedorRemito = proveedor.NumeroProveedor;
+        busquedaProveedorRemito = $"{proveedor.NumeroProveedor} - {proveedor.RazonSocial}";
+        mostrarDropdownProveedor = false;
+        await OnProveedorSeleccionadoChangedAsync();
+    }
+
     private async Task OnProveedorSeleccionadoChangedAsync()
     {
         ordenesCompraSeleccionadas = new List<string>();
+        modoCargaManual = false;
         LimpiarDetalleRemito();
 
         if (modoFiltroRemito == 2 && numeroProveedorRemito > 0)
@@ -1181,6 +1393,10 @@ else
 
     private async Task CargarPendientesRemitoAsync()
     {
+        // "Cargar Pendientes" y "Carga Manual" son mutuamente excluyentes: al traer los
+        // pendientes automáticamente se desactiva la carga manual y se reemplaza el detalle.
+        modoCargaManual = false;
+
         if (numeroProveedorRemito <= 0)
         {
             await sweetAlertService.FireAsync("Atención", "Debe seleccionar un proveedor.", SweetAlertIcon.Warning);

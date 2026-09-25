@@ -70,9 +70,11 @@ namespace IMPLANPROD.Server.Controllers
         {
             try
             {
+                // Se ordena de forma segura por NuorIt; los registros sin orden asignado (NULL)
+                // quedan al final en lugar de intercalarse de forma indefinida.
                 var componentes = await _context.Formulas
              .Where(f => f.CodIConj == codigoConjunto)
-             .OrderBy(f => f.NuorIt)
+             .OrderBy(f => f.NuorIt ?? short.MaxValue)
              .ToListAsync();
 
                 return Ok(componentes);
@@ -284,6 +286,8 @@ namespace IMPLANPROD.Server.Controllers
                     lista.Add(new ImplosionItemDTO
                     {
                         CodIConj = r.f.CodIConj ?? 0,
+                        // Id (PK) del Master, necesario para navegar a /master/edit/{Id}
+                        IdMaster = r.m.Id,
                         Codigo = r.m.Codigo ?? string.Empty,
                         Descripcion = r.m.Descripcion ?? "Sin descripción",
                         Umedida = r.m.Umedida ?? string.Empty,

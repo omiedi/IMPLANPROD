@@ -111,7 +111,9 @@ namespace MantenimientoImp.Server.Controllers
                     .Select(m => new MovimientoHistoricoDTO
                     {
                         Id = (int)m.Cod_Inte,
+                        MovistoId = m.Id,
                         Fecha = m.FeReMovi ?? DateTime.Now,
+                        FeReMovi = m.FeReMovi,
                         TipoMovimiento = m.CodiMovi ?? "",
                         DocumentoNumero = m.DoPriCor ?? "",
                         Transaccion = m.DoSecCor ?? "",
@@ -121,9 +123,32 @@ namespace MantenimientoImp.Server.Controllers
                         Entrada = m.CantIngre,
                         Salida = m.CantSalid,
                         Saldo = 0,
-                        CodInte = m.Cod_Inte ?? 0
+                        CodInte = m.Cod_Inte ?? 0,
+                        NumUsuar = m.NumUsuar ?? 0
                     })
                     .ToListAsync();
+
+                // Resolver nombres de usuario (equivalente a USERNAM$ en VB6).
+                // MOVISTO.NumUsuar mapea a usuarios.idflexoft (compatibilidad VB6).
+                var numUsuares = movimientos
+                    .Select(m => m.NumUsuar ?? 0)
+                    .Where(n => n > 0)
+                    .Distinct()
+                    .ToList();
+
+                if (numUsuares.Any())
+                {
+                    var usuarios = await _context.Usuarios
+                        .Where(u => numUsuares.Contains(u.IdFlexoft))
+                        .ToDictionaryAsync(u => u.IdFlexoft, u => u.NombreUsuario);
+
+                    foreach (var mov in movimientos)
+                    {
+                        var numUsuar = mov.NumUsuar ?? 0;
+                        if (numUsuar > 0 && usuarios.TryGetValue(numUsuar, out var nombre))
+                            mov.NombreUsuario = nombre;
+                    }
+                }
 
                 decimal saldoAcumulado = 0;
                 foreach (var movimiento in movimientos.OrderBy(m => m.Fecha))

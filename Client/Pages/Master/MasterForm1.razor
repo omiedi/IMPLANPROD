@@ -1,6 +1,8 @@
 
 @page "/FichaProductosForm"
 @page "/FichaProductosForm/{Id:int}"
+@using Microsoft.AspNetCore.Authorization
+@attribute [Authorize]
 @using IMPLANPROD.Shared.Entities
 @using Microsoft.AspNetCore.Components.Forms
 @using System.Linq.Expressions

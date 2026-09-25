@@ -225,15 +225,27 @@ namespace IMPLANPROD.Server.Services
             try
             {
                 var config = ObtenerConfiguracion();
+
+                // Logging de diagnóstico: mostrar el estado de la configuración
+                // para facilitar la detección de por qué no se generan archivos.
+                _logger.LogInformation(
+                    "GenerarArchivoSyncMasterAsync(Codint={Codint}) - Config: GeneraScriptSync={GeneraScriptSync}, GeneraProductos={GeneraProductos}, RutaIntercambio='{RutaIntercambio}'",
+                    codint, config.GeneraScriptSync, config.GeneraProductos, config.RutaIntercambio);
+
                 if (!config.GeneraScriptSync || !config.GeneraProductos)
                 {
+                    _logger.LogWarning(
+                        "No se genera archivo de sincronización para Master.Codint={Codint} porque la configuración lo deshabilita " +
+                        "(GeneraScriptSync={GeneraScriptSync}, GeneraProductos={GeneraProductos}). " +
+                        "Verifique la tabla SyncConfig en la base de datos o la sección SyncConfig en appsettings.json.",
+                        codint, config.GeneraScriptSync, config.GeneraProductos);
                     return false;
                 }
 
                 var rutaIntercambio = config.RutaIntercambio;
                 if (string.IsNullOrEmpty(rutaIntercambio) || !Directory.Exists(rutaIntercambio))
                 {
-                    _logger.LogWarning($"Ruta de intercambio no válida: {rutaIntercambio}");
+                    _logger.LogWarning($"Ruta de intercambio no válida o inexistente: '{rutaIntercambio}'");
                     return false;
                 }
 
@@ -428,7 +440,7 @@ namespace IMPLANPROD.Server.Services
                                 Directory.CreateDirectory(carpetaError);
                             }
                             var rutaDestino = Path.Combine(carpetaError, nombreArchivo);
-                            File.Move(archivoPath, rutaDestino);
+                            File.Move(archivoPath, rutaDestino, overwrite: true);
                             _logger.LogInformation($"Archivo movido a carpeta ERROR_MASTER: {nombreArchivo}");
                         }
                         catch (Exception moveEx)
@@ -1141,7 +1153,9 @@ namespace IMPLANPROD.Server.Services
                         // Campos de texto del TXT
                         CodExte = campos[4],
                         DescriLar = campos[6],
-                        ReferCor = campos[16],
+                        // R.SOCIAL está en la posición 18 del TXT (ver FOREMIT07.frm en VB6).
+                        // Antes se leía campos[16] que corresponde a VENDED, no a la razón social.
+                        ReferCor = campos.Length > 18 ? campos[18] : "",
                         
                         // Fecha de movimiento del remito (FECHMOV)
                         FeReMovi = DateTime.TryParseExact(campos[13], "dd/MM/yy", null, 
@@ -1238,7 +1252,8 @@ namespace IMPLANPROD.Server.Services
                         // Campos de texto del TXT
                         CodExte = campos[4],
                         DescriLar = campos[6],
-                        ReferCor = campos[16],
+                        // R.SOCIAL está en la posición 18 del TXT (ver FOREMIT07.frm en VB6).
+                        ReferCor = campos.Length > 18 ? campos[18] : "",
 
                         // Fecha de movimiento de la reparación (FECHMOV)
                         FechMov = DateTime.TryParseExact(campos[13], "dd/MM/yy", null,
@@ -1338,7 +1353,8 @@ namespace IMPLANPROD.Server.Services
                         // Campos de texto del TXT
                         CodExte = campos[4],
                         DescriLar = campos[6],
-                        ReferCor = campos[16],
+                        // R.SOCIAL está en la posición 18 del TXT (ver FOREMIT07.frm en VB6).
+                        ReferCor = campos.Length > 18 ? campos[18] : "",
 
                         // Fecha de movimiento del ajuste (FECHMOV)
                         FechMov = DateTime.TryParseExact(campos[13], "dd/MM/yy", null,
@@ -1864,7 +1880,7 @@ namespace IMPLANPROD.Server.Services
                                 Directory.CreateDirectory(carpetaProcesados);
                             }
                             var rutaDestino = Path.Combine(carpetaProcesados, nombreArchivo);
-                            File.Move(archivoPath, rutaDestino);
+                            File.Move(archivoPath, rutaDestino, overwrite: true);
                             _logger.LogInformation($"Archivo de reparación movido a PROCESADOS: {nombreArchivo}");
                         }
                         catch (Exception moveEx)
@@ -1889,7 +1905,7 @@ namespace IMPLANPROD.Server.Services
                                 Directory.CreateDirectory(carpetaError);
                             }
                             var rutaDestino = Path.Combine(carpetaError, nombreArchivo);
-                            File.Move(archivoPath, rutaDestino);
+                            File.Move(archivoPath, rutaDestino, overwrite: true);
                         }
                         catch (Exception moveEx)
                         {
@@ -2005,7 +2021,7 @@ namespace IMPLANPROD.Server.Services
                                 Directory.CreateDirectory(carpetaProcesados);
                             }
                             var rutaDestino = Path.Combine(carpetaProcesados, nombreArchivo);
-                            File.Move(archivoPath, rutaDestino);
+                            File.Move(archivoPath, rutaDestino, overwrite: true);
                             _logger.LogInformation($"Archivo de ajuste movido a PROCESADOS: {nombreArchivo}");
                         }
                         catch (Exception moveEx)
@@ -2030,7 +2046,7 @@ namespace IMPLANPROD.Server.Services
                                 Directory.CreateDirectory(carpetaError);
                             }
                             var rutaDestino = Path.Combine(carpetaError, nombreArchivo);
-                            File.Move(archivoPath, rutaDestino);
+                            File.Move(archivoPath, rutaDestino, overwrite: true);
                         }
                         catch (Exception moveEx)
                         {
@@ -2146,7 +2162,7 @@ namespace IMPLANPROD.Server.Services
                                 Directory.CreateDirectory(carpetaProcesados);
                             }
                             var rutaDestino = Path.Combine(carpetaProcesados, nombreArchivo);
-                            File.Move(archivoPath, rutaDestino);
+                            File.Move(archivoPath, rutaDestino, overwrite: true);
                             _logger.LogInformation($"Archivo movido a PROCESADOS: {nombreArchivo}");
                         }
                         catch (Exception moveEx)
@@ -2171,7 +2187,7 @@ namespace IMPLANPROD.Server.Services
                                 Directory.CreateDirectory(carpetaError);
                             }
                             var rutaDestino = Path.Combine(carpetaError, nombreArchivo);
-                            File.Move(archivoPath, rutaDestino);
+                            File.Move(archivoPath, rutaDestino, overwrite: true);
                         }
                         catch (Exception moveEx)
                         {

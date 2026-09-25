@@ -2,10 +2,13 @@
 @using IMPLANPROD.Shared.Entities
 @using IMPLANPROD.Shared.DTOs
 @using IMPLANPROD.Client.Services
+@using IMPLANPROD.Client.Pages.Reportes
 @inject IRepository repository
 @inject NavigationManager NavigationManager
 @inject AnotacionesParserService anotacionesParser
 @inject PageAccessService PageAccess
+@inject SweetAlertService sweetAlertService
+@inject IJSRuntime JS
 
 <PageTitle>Anotaciones del Pedido</PageTitle>
 
@@ -152,6 +155,72 @@ else
                 Anotaciones del Pedido N° @NroPedido
             </h3>
 
+            @if (pedido != null)
+            {
+                <!-- Cabecera con datos del pedido provenientes de PEDENCA -->
+                <div class="card mb-4">
+                    <div class="card-header bg-light">
+                        <h5 class="mb-0"><i class="fas fa-info-circle text-primary"></i> Datos del Pedido</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row g-3">
+                            <div class="col-md-3">
+                                <label class="form-label fw-bold text-muted small mb-1">Fecha del Pedido</label>
+                                <input class="form-control form-control-sm" readonly
+                                       value="@(pedido.FechEmis?.ToString("dd/MM/yyyy") ?? "")" />
+                            </div>
+                            <div class="col-md-5">
+                                <label class="form-label fw-bold text-muted small mb-1">Razón Social</label>
+                                <input class="form-control form-control-sm" readonly
+                                       value="@(pedido.RasoClie ?? "")" />
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label fw-bold text-muted small mb-1">Orden de Compra</label>
+                                <input class="form-control form-control-sm" readonly
+                                       value="@(pedido.NroOcom ?? "")" />
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label fw-bold text-muted small mb-1">Domicilio de Entrega</label>
+                                <input class="form-control form-control-sm" readonly
+                                       value="@(pedido.DomiEnt ?? "")" />
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label fw-bold text-muted small mb-1">Localidad de Entrega</label>
+                                <input class="form-control form-control-sm" readonly
+                                       value="@(pedido.LocaEnt ?? "")" />
+                            </div>
+                            <div class="col-md-2">
+                                <label class="form-label fw-bold text-muted small mb-1">Transporte</label>
+                                <input class="form-control form-control-sm" readonly
+                                       value="@(pedido.NTranspo?.ToString() ?? "")" />
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            }
+
+            <!-- Toggle para conmutar entre vista texto (AnotaPed) y vista tabla (ANOTAPED) -->
+            <div class="mb-3 d-flex gap-2 align-items-center">
+                <button class="btn btn-sm @(vistaActual == "texto" ? "btn-primary" : "btn-outline-primary")"
+                        @onclick="CambiarVistaTexto">
+                    <i class="fas fa-file-alt me-1"></i> Vista Texto (AnotaPed)
+                </button>
+                <button class="btn btn-sm @(vistaActual == "tabla" ? "btn-primary" : "btn-outline-primary")"
+                        @onclick="CambiarVistaTabla">
+                    <i class="fas fa-table me-1"></i> Vista Tabla (ANOTAPED)
+                </button>
+                <button type="button" class="btn btn-sm btn-info ms-auto" @onclick="ImprimirPedido">
+                    <i class="fas fa-print me-1"></i> Imprimir Pedido
+                </button>
+                <button type="button" class="btn btn-sm btn-success" @onclick="ImprimirOrdenDespacho">
+                    <i class="fas fa-truck me-1"></i> O. Despacho
+                </button>
+                <button class="btn btn-sm btn-outline-success" @onclick="ConfirmarImpresionAsync"
+                        disabled="@(anotapeds == null || !anotapeds.Any())">
+                    <i class="oi oi-print"></i> Imprimir/Exp.Excel
+                </button>
+            </div>
+
             @if (cargando)
             {
                 <div class="loading-spinner">
@@ -161,126 +230,339 @@ else
                     <p class="mt-2">Cargando anotaciones del pedido...</p>
                 </div>
             }
-            else if (anotaciones == null || !anotaciones.Any())
+            else if (vistaActual == "texto")
             {
-                <div class="no-anotaciones">
-                    <i class="fas fa-info-circle fa-3x text-muted mb-3"></i>
-                    <h5>No hay anotaciones disponibles</h5>
-                    <p>Este pedido no tiene anotaciones registradas.</p>
-                </div>
-            }
-            else
-            {
-                <div class="anotaciones-container">
-                    @foreach (var anotacion in anotaciones)
-                    {
-                        <div class="anotacion-bloque">
-                            <div class="anotacion-header">
-                                <div class="fecha-usuario">
-                                    <span class="fecha">
-                                        <i class="fas fa-calendar"></i> @anotacion.Fecha
-                                    </span>
-                                    <span class="usuario">
-                                        <i class="fas fa-user"></i> @anotacion.Usuario
-                                    </span>
+                @* ── VISTA TEXTO (AnotaPed ntext parseado) ── *@
+                if (anotaciones == null || !anotaciones.Any())
+                {
+                    <div class="no-anotaciones">
+                        <i class="fas fa-info-circle fa-3x text-muted mb-3"></i>
+                        <h5>No hay anotaciones disponibles</h5>
+                        <p>Este pedido no tiene anotaciones registradas.</p>
+                    </div>
+                }
+                else
+                {
+                    <div class="anotaciones-container">
+                        @foreach (var anotacion in anotaciones)
+                        {
+                            <div class="anotacion-bloque">
+                                <div class="anotacion-header">
+                                    <div class="fecha-usuario">
+                                        <span class="fecha">
+                                            <i class="fas fa-calendar"></i> @anotacion.Fecha
+                                        </span>
+                                        <span class="usuario">
+                                            <i class="fas fa-user"></i> @anotacion.Usuario
+                                        </span>
+                                    </div>
+                                </div>
+
+                                @if (!string.IsNullOrEmpty(anotacion.Descripcion))
+                                {
+                                    @* Título del bloque de anotación en negrita
+                                       (ej. "ITEMS REMITIDOS - REMITO ...") *@
+                                    <div class="descripcion" style="font-weight: bold;">
+                                        <i class="fas fa-comment"></i> @anotacion.Descripcion
+                                    </div>
+                                }
+
+                                @if (anotacion.Productos.Any())
+                                {
+                                    <h6><i class="fas fa-boxes"></i> Productos:</h6>
+                                    <table class="productos-table">
+                                        <thead>
+                                            <tr>
+                                                <th style="width: 15%;">Código</th>
+                                                <th style="width: 65%;">Descripción</th>
+                                                <th style="width: 20%;">Cantidad</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            @foreach (var producto in anotacion.Productos)
+                                            {
+                                                <tr>
+                                                    <td class="codigo-producto">@producto.Codigo</td>
+                                                    <td>@producto.Descripcion</td>
+                                                    <td class="cantidad-producto">@producto.Cantidad.ToString("F1")</td>
+                                                </tr>
+                                            }
+                                        </tbody>
+                                    </table>
+                                }
+
+                                @if (!string.IsNullOrEmpty(anotacion.Observaciones))
+                                {
+                                    <div class="observaciones" style="white-space: pre-wrap;">
+                                        <strong><i class="fas fa-exclamation-triangle"></i> Observaciones:</strong>
+                                        <br />@anotacion.Observaciones
+                                    </div>
+                                }
+
+                                <!-- Mostrar texto original en un acordeón -->
+                                <div class="mt-3">
+                                    <button class="btn btn-sm btn-outline-secondary" type="button"
+                                            @onclick="() => ToggleTextoOriginal(anotacion)">
+                                        <i class="fas fa-code"></i>
+                                        @(mostrarTextoOriginal.Contains(anotacion) ? "Ocultar" : "Ver") Texto Original
+                                    </button>
+
+                                    @if (mostrarTextoOriginal.Contains(anotacion))
+                                    {
+                                        <div class="texto-original">@anotacion.TextoOriginal</div>
+                                    }
                                 </div>
                             </div>
-
-                            @if (!string.IsNullOrEmpty(anotacion.Descripcion))
-                            {
-                                <div class="descripcion">
-                                    <i class="fas fa-comment"></i> @anotacion.Descripcion
-                                </div>
-                            }
-
-                            @if (anotacion.Productos.Any())
-                            {
-                                <h6><i class="fas fa-boxes"></i> Productos:</h6>
-                                <table class="productos-table">
-                                    <thead>
+                        }
+                    </div>
+                }
+            }
+            else if (vistaActual == "tabla")
+            {
+                @* ── VISTA TABLA (ANOTAPED estructurada) ── *@
+                if (anotapeds == null || !anotapeds.Any())
+                {
+                    <div class="no-anotaciones">
+                        <i class="fas fa-info-circle fa-3x text-muted mb-3"></i>
+                        <h5>No hay anotaciones estructuradas</h5>
+                        <p>Este pedido no tiene registros en la tabla ANOTAPED.</p>
+                    </div>
+                }
+                else
+                {
+                    var grupos = anotapeds.GroupBy(a => a.IdAnotacion).OrderBy(g => g.Key);
+                    <div id="anotaped-scroll">
+                    @foreach (var grupo in grupos)
+                    {
+                        var primerRegistro = grupo.First();
+                        <div class="card mb-3">
+                            <div class="card-header d-flex justify-content-between align-items-center"
+                                 style="background-color: #217346; color: white;">
+                                <span>
+                                    <i class="fas fa-tag me-1"></i>
+                                    Anotación N° @grupo.Key
+                                </span>
+                                <span class="small">
+                                    <i class="fas fa-calendar me-1"></i>
+                                    @(primerRegistro.FechaCambio?.ToString("dd/MM/yyyy HH:mm") ?? "")
+                                    &nbsp;
+                                    <i class="fas fa-user me-1"></i>
+                                    @(primerRegistro.Usuario ?? "")
+                                </span>
+                            </div>
+                            <div class="card-body p-0">
+                                <table class="table table-striped table-sm mb-0">
+                                    <thead class="table-light">
                                         <tr>
-                                            <th style="width: 15%;">Código</th>
-                                            <th style="width: 65%;">Descripción</th>
-                                            <th style="width: 20%;">Cantidad</th>
+                                            <th style="width: 20%;">Fecha</th>
+                                            <th style="width: 20%;">Código</th>
+                                            <th style="width: 50%;">Descripción</th>
+                                            <th style="width: 10%;" class="text-end">Cantidad</th>
                                         </tr>
                                     </thead>
                                     <tbody>
-                                        @foreach (var producto in anotacion.Productos)
+                                        @foreach (var item in grupo)
                                         {
                                             <tr>
-                                                <td class="codigo-producto">@producto.Codigo</td>
-                                                <td>@producto.Descripcion</td>
-                                                <td class="cantidad-producto">@producto.Cantidad.ToString("F1")</td>
+                                                <td>@(item.FechaCambio?.ToString("dd/MM/yyyy HH:mm") ?? "")</td>
+                                                <td class="fw-bold text-danger">@(item.CodiExt ?? "")</td>
+                                                <td>@(item.Descrip ?? "")</td>
+                                                <td class="text-end fw-bold text-success">@(item.CanPed?.ToString("F2") ?? "0")</td>
                                             </tr>
                                         }
                                     </tbody>
                                 </table>
-                            }
-
-                            @if (!string.IsNullOrEmpty(anotacion.Observaciones))
+                            </div>
+                            @if (!string.IsNullOrWhiteSpace(primerRegistro.ObservaGral))
                             {
-                                <div class="observaciones">
-                                    <strong><i class="fas fa-exclamation-triangle"></i> Observaciones:</strong>
-                                    <br />@anotacion.Observaciones
+                                <div class="card-footer bg-light" style="white-space: pre-wrap;">
+                                    @* Título de la anotación (ej. "Items Remitidos") en negrita *@
+                                    <strong><i class="fas fa-exclamation-triangle text-warning"></i> @primerRegistro.ObservaGral</strong>
                                 </div>
                             }
-
-                            <!-- Mostrar texto original en un acordeón -->
-                            <div class="mt-3">
-                                <button class="btn btn-sm btn-outline-secondary" type="button" 
-                                        @onclick="() => ToggleTextoOriginal(anotacion)">
-                                    <i class="fas fa-code"></i> 
-                                    @(mostrarTextoOriginal.Contains(anotacion) ? "Ocultar" : "Ver") Texto Original
-                                </button>
-                                
-                                @if (mostrarTextoOriginal.Contains(anotacion))
-                                {
-                                    <div class="texto-original">@anotacion.TextoOriginal</div>
-                                }
-                            </div>
                         </div>
                     }
-                </div>
+                    </div>
+                }
             }
         </div>
     </div>
 </div>
+
+@* ── Área para agregar una observación general (al pie de la página) ── *@
+@if (!cargando && !validando)
+{
+    <div class="container-fluid mt-3">
+        <div class="card">
+            <div class="card-header bg-light">
+                <h6 class="mb-0"><i class="fas fa-comment-dots text-primary"></i> Agregar Observación</h6>
+            </div>
+            <div class="card-body">
+                <textarea class="form-control" rows="3" placeholder="Escriba una observación general para el pedido..."
+                          @bind="nuevaObservacion"></textarea>
+                <div class="mt-2 d-flex justify-content-end">
+                    <button class="btn btn-sm btn-primary" @onclick="GuardarObservacionAsync"
+                            disabled="@(string.IsNullOrWhiteSpace(nuevaObservacion) || guardandoObservacion)">
+                        @if (guardandoObservacion)
+                        {
+                            <span class="spinner-border spinner-border-sm me-1"></span>
+                            @: Guardando
+                        }
+                        else
+                        {
+                            <i class="fas fa-save me-1"></i>
+                            @: Guardar Observación
+                        }
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+<!-- Modal para mostrar ObservaItem de un registro ANOTAPED -->
+@if (mostrarModalObservaItem && observaItemSeleccionado != null)
+{
+    <div class="modal fade show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5);">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header bg-info text-white">
+                    <h5 class="modal-title">
+                        <i class="fas fa-eye me-1"></i> Observación del Item
+                    </h5>
+                    <button type="button" class="btn-close btn-close-white" @onclick="CerrarModalObservaItem"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-2">
+                        <strong>Código:</strong> @(observaItemSeleccionado.CodiExt ?? "")
+                    </div>
+                    <div class="mb-2">
+                        <strong>Descripción:</strong> @(observaItemSeleccionado.Descrip ?? "")
+                    </div>
+                    <div class="mb-3">
+                        <strong>Cantidad:</strong> @(observaItemSeleccionado.CanPed?.ToString("F2") ?? "0")
+                    </div>
+                    <hr />
+                    <div class="form-group">
+                        <label class="form-label fw-bold">Observación del Item:</label>
+                        <textarea class="form-control" rows="6" readonly>@(observaItemSeleccionado.ObservaItem ?? "")</textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" @onclick="CerrarModalObservaItem">Cerrar</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@* Impresión / Exportación Excel de la tabla ANOTAPED *@
+@if (anotapeds != null && anotapeds.Any())
+{
+    <ImpresionLista TItem="Anotaped"
+                    Datos="anotapeds"
+                    Titulo="Anotaciones del Pedido"
+                    UrlExportarExcel="api/excel/exportar-anotaped"
+                    Encabezados="encabezadosAnotaped"
+                    ModoDirecto="false"
+                    MostrarModal="mostrarModalImpresion"
+                    OnCerrar="ResetearImpresion" />
+}
 }
 
 @code {
     [Parameter] public int NroPedido { get; set; }
 
+    /// <summary>
+    /// URL de retorno opcional recibida por query string.
+    /// Si se abrió desde /Stock-index, vuelve allá; si no, vuelve a /pedidos-venta.
+    /// </summary>
+    [Parameter]
+    [SupplyParameterFromQuery]
+    public string? ReturnUrl { get; set; }
+
     private List<AnotacionPedidoDTO>? anotaciones;
+    private List<Anotaped>? anotapeds;
+    private Pedenca? pedido;
     private bool cargando = true;
     private bool validando = true;
     private HashSet<AnotacionPedidoDTO> mostrarTextoOriginal = new();
+
+    // Vista actual: "texto" (AnotaPed ntext) o "tabla" (ANOTAPED estructurada)
+    // Por defecto "tabla" según requerimiento (vista ANOTAPED estructurada)
+    private string vistaActual = "tabla";
+
+    // Modal de ObservaItem
+    private bool mostrarModalObservaItem = false;
+    private Anotaped? observaItemSeleccionado;
+
+    // Impresión / Exportación Excel
+    private bool mostrarModalImpresion = false;
+
+    // Nueva observación general (textarea)
+    private string nuevaObservacion = string.Empty;
+    private bool guardandoObservacion = false;
+
+    // Encabezados de las columnas para el reporte de ANOTAPED.
+    // Las claves coinciden con las propiedades de la entidad Anotaped.
+    Dictionary<string, string> encabezadosAnotaped = new()
+    {
+        { "IdAnotacion", "N° Anot." },
+        { "FechaCambio", "Fecha" },
+        { "CodiExt", "Código" },
+        { "Descrip", "Descripción" },
+        { "CanPed", "Cantidad" },
+        { "Usuario", "Usuario" },
+        { "ObservaItem", "Obs. Item" },
+        { "ObservaGral", "Obs. Gral." }
+    };
 
     protected override async Task OnInitializedAsync()
     {
         // Validar que el usuario tenga permiso para acceder a esta página antes de mostrar el contenido
         await PageAccess.RequiereAccesoAsync("/anotaciones-pedido/{NroPedido}");
         validando = false;
-        
+
         await CargarAnotaciones();
     }
 
     /// <summary>
-    /// Carga las anotaciones del pedido desde la base de datos
+    /// Después de renderizar, si la vista actual es "tabla" y hay datos,
+    /// posiciona el scroll al final de la tabla para mostrar el último grupo de anotaciones.
+    /// </summary>
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (vistaActual == "tabla" && anotapeds != null && anotapeds.Any())
+        {
+            try
+            {
+                await JS.InvokeVoidAsync("scrollToBottom", "anotaped-scroll");
+            }
+            catch
+            {
+                // Ignorar errores de JS si el elemento aún no está en el DOM
+            }
+        }
+    }
+
+    /// <summary>
+    /// Carga las anotaciones del pedido desde la base de datos.
+    /// Carga ambas vistas: texto (PEDENCA.AnotaPed) y tabla (ANOTAPED).
     /// </summary>
     private async Task CargarAnotaciones()
     {
         try
         {
             cargando = true;
-            
-            // Obtener el pedido con sus anotaciones
+
+            // Obtener el pedido con sus anotaciones (vista texto)
             var response = await repository.Get<Pedenca>($"api/pedenca/{NroPedido}");
-            
+
             if (!response.Error && response.Response != null)
             {
-                var pedido = response.Response;
-                
-                // Parsear las anotaciones usando el servicio
+                pedido = response.Response;
+
+                // Parsear las anotaciones usando el servicio (vista texto)
                 if (!string.IsNullOrEmpty(pedido.AnotaPed))
                 {
                     anotaciones = anotacionesParser.ParsearAnotaciones(pedido.AnotaPed);
@@ -294,6 +576,9 @@ else
             {
                 anotaciones = new List<AnotacionPedidoDTO>();
             }
+
+            // Cargar anotaciones estructuradas (vista tabla)
+            await CargarAnotapedsAsync();
         }
         catch (Exception ex)
         {
@@ -304,6 +589,161 @@ else
         {
             cargando = false;
         }
+    }
+
+    /// <summary>
+    /// Carga los registros de la tabla ANOTAPED para el pedido actual.
+    /// </summary>
+    private async Task CargarAnotapedsAsync()
+    {
+        try
+        {
+            var response = await repository.Get<List<Anotaped>>($"api/anotaped/por-pedido/{NroPedido}");
+            if (!response.Error && response.Response != null)
+            {
+                anotapeds = response.Response;
+            }
+            else
+            {
+                anotapeds = new List<Anotaped>();
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error al cargar ANOTAPED: {ex.Message}");
+            anotapeds = new List<Anotaped>();
+        }
+    }
+
+    /// <summary>
+    /// Cambia a la vista de tabla (ANOTAPED estructurada).
+    /// </summary>
+    private void CambiarVistaTabla()
+    {
+        vistaActual = "tabla";
+    }
+
+    /// <summary>
+    /// Cambia a la vista de texto (AnotaPed ntext parseado).
+    /// </summary>
+    private void CambiarVistaTexto()
+    {
+        vistaActual = "texto";
+    }
+
+    /// <summary>
+    /// Marca que hubo un cambio en el textarea de observación (para forzar render).
+    /// </summary>
+    private void MarcarCambioObservacion()
+    {
+        // No requiere acción; el @bind ya actualiza nuevaObservacion.
+    }
+
+    /// <summary>
+    /// Guarda una observación general como un nuevo registro en ANOTAPED.
+    /// Crea un nuevo IdAnotacion con un único registro que solo tiene ObservaGral,
+    /// FechaCambio y Usuario (sin producto asociado).
+    /// </summary>
+    private async Task GuardarObservacionAsync()
+    {
+        if (string.IsNullOrWhiteSpace(nuevaObservacion))
+        {
+            await sweetAlertService.FireAsync("Datos incompletos", "Debe escribir una observación.", SweetAlertIcon.Warning);
+            return;
+        }
+
+        guardandoObservacion = true;
+        try
+        {
+            // Truncar a 1024 caracteres (límite de ObservaGral)
+            var texto = nuevaObservacion.Length > 1024
+                ? nuevaObservacion.Substring(0, 1024)
+                : nuevaObservacion;
+
+            // Llamar al endpoint POST api/anotaped/agregar-observacion
+            var request = new
+            {
+                NroPed = NroPedido,
+                ObservaGral = texto
+            };
+
+            var response = await repository.Post("api/anotaped/agregar-observacion", request);
+            if (response.Error)
+            {
+                var msg = await response.GetErrorMessageAsync();
+                await sweetAlertService.FireAsync("Error", msg, SweetAlertIcon.Error);
+                return;
+            }
+
+            // Limpiar el textarea
+            nuevaObservacion = string.Empty;
+
+            // Recargar las anotaciones para mostrar el nuevo registro
+            await CargarAnotapedsAsync();
+
+            await sweetAlertService.FireAsync("Guardado", "Observación guardada correctamente.", SweetAlertIcon.Success);
+        }
+        catch (Exception ex)
+        {
+            await sweetAlertService.FireAsync("Error", $"Error al guardar la observación: {ex.Message}", SweetAlertIcon.Error);
+        }
+        finally
+        {
+            guardandoObservacion = false;
+        }
+    }
+
+    /// <summary>
+    /// Abre el modal mostrando el ObservaItem de un registro ANOTAPED.
+    /// </summary>
+    private void AbrirModalObservaItem(Anotaped item)
+    {
+        observaItemSeleccionado = item;
+        mostrarModalObservaItem = true;
+    }
+
+    /// <summary>
+    /// Cierra el modal de ObservaItem.
+    /// </summary>
+    private void CerrarModalObservaItem()
+    {
+        mostrarModalObservaItem = false;
+        observaItemSeleccionado = null;
+    }
+
+    /// <summary>
+    /// Muestra confirmación antes de abrir el modal de impresión/exportación.
+    /// </summary>
+    private async Task ConfirmarImpresionAsync()
+    {
+        if (anotapeds == null || !anotapeds.Any())
+        {
+            await sweetAlertService.FireAsync("Sin datos", "No hay anotaciones para imprimir.", SweetAlertIcon.Info);
+            return;
+        }
+
+        var result = await sweetAlertService.FireAsync(new SweetAlertOptions
+        {
+            Title = "Imprimir / Exportar Excel",
+            Text = $"Se van a imprimir {anotapeds.Count} registros de anotaciones. ¿Deseás continuar?",
+            Icon = SweetAlertIcon.Question,
+            ShowCancelButton = true,
+            ConfirmButtonText = "Sí, continuar",
+            CancelButtonText = "Cancelar"
+        });
+
+        if (result.IsConfirmed)
+        {
+            mostrarModalImpresion = true;
+        }
+    }
+
+    /// <summary>
+    /// Cierra el modal de impresión y resetea el flag.
+    /// </summary>
+    private void ResetearImpresion()
+    {
+        mostrarModalImpresion = false;
     }
 
     /// <summary>
@@ -322,10 +762,34 @@ else
     }
 
     /// <summary>
-    /// Vuelve a la lista de pedidos manteniendo los filtros
+    /// Vuelve a la pantalla de origen.
+    /// Si se especificó ReturnUrl por query, lo usa; de lo contrario vuelve a /pedidos-venta.
     /// </summary>
     private void Volver()
     {
-        NavigationManager.NavigateTo("/pedidos-venta");
+        if (!string.IsNullOrWhiteSpace(ReturnUrl))
+        {
+            NavigationManager.NavigateTo(ReturnUrl);
+        }
+        else
+        {
+            NavigationManager.NavigateTo("/pedidos-venta");
+        }
+    }
+
+    /// <summary>
+    /// Navega a la página de impresión del pedido.
+    /// </summary>
+    private void ImprimirPedido()
+    {
+        NavigationManager.NavigateTo($"/pedido-impresion/{NroPedido}/pedido");
+    }
+
+    /// <summary>
+    /// Navega a la página de impresión de orden de despacho.
+    /// </summary>
+    private void ImprimirOrdenDespacho()
+    {
+        NavigationManager.NavigateTo($"/pedido-impresion/{NroPedido}/despacho");
     }
 }

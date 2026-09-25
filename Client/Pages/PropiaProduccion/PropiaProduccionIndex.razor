@@ -1,0 +1,698 @@
+@page "/propia-produccion"
+@using IMPLANPROD.Client.Services
+@using IMPLANPROD.Shared.DTOs
+@using IMPLANPROD.Client.Pages.Reportes
+@using IMPLANPROD.Client.Shared.Components
+@inject IRepository repository
+@inject SweetAlertService sweetAlertService
+@inject PageAccessService PageAccess
+@inject NavigationManager navigationManager
+
+<PageTitle>Producción Propia</PageTitle>
+
+@if (validando)
+{
+    <p>Validando acceso...</p>
+}
+else
+{
+    <div class="container-fluid">
+        <!-- Título de la página -->
+        <div class="mb-4">
+            <h2 class="text-center fw-bold text-primary">
+                <i class="fas fa-industry me-2"></i>
+                PRODUCCIÓN PROPIA
+            </h2>
+            <hr class="border-primary border-2 opacity-50" />
+        </div>
+
+        @* Botones de acción *@
+        @* Botón para generar una nueva producción propia *@
+        <div class="mb-3">
+            <button class="btn btn-primary" @onclick="IrACrear">
+                <i class="fas fa-plus"></i> Generar X Propia 'Producción'
+            </button>
+        </div>
+
+        @* Filtros: código + descripción (combinado con '+') y documento separado *@
+        <div class="d-flex align-items-center justify-content-between mb-3">
+            <div class="d-flex align-items-center gap-2">
+                <input type="text" class="form-control" style="min-width: 10cm; width: 10cm;"
+                       placeholder="Buscar x código y/o descrip..."
+                       @bind-value="Filter" @onkeyup="HandleKeyPress" />
+                <button type="button" class="btn btn-outline-primary" @onclick="ApplyFilterAsync">Filtrar</button>
+                <button type="button" class="btn btn-outline-danger" @onclick="CleanFilterAsync">Limpiar</button>
+            </div>
+            <div class="d-flex align-items-center gap-2">
+                <label class="mb-0 text-nowrap fw-bold">Documento:</label>
+                <input type="text" class="form-control" style="width: 4cm;"
+                       placeholder="OF-..."
+                       @bind-value="FilterDocumento" @onkeyup="HandleKeyPressDocumento" />
+            </div>
+        </div>
+
+        @* Botón Imprimir/Exp.Excel debajo del input Documento *@
+        <div class="d-flex justify-content-end mb-3">
+            <button class="btn btn-success" @onclick="MostrarImpresionAsync" disabled="@(producciones == null || !producciones.Any())">
+                <i class="fas fa-print"></i> Imprimir/Exp.Excel
+            </button>
+        </div>
+
+        <div class="text-muted" style="font-size: 0.85rem; margin-top: -0.5rem;">
+            Podés combinar términos con <b>+</b> para exigir coincidencia de ambos (AND). Ej: <code>858 + ADAPTADOR</code>
+        </div>
+
+        <Pagination CurrentPage="currentPage"
+                    TotalPages="totalPages"
+                    SelectedPage="SelectedPageAsync" />
+
+        @* Indicador de carga *@
+        @if (isLoading)
+        {
+            <div class="d-flex justify-content-center align-items-center" style="height: 200px;">
+                <div class="spinner-border text-primary" role="status">
+                    <span class="visually-hidden">Cargando...</span>
+                </div>
+            </div>
+        }
+        else if (producciones == null || !producciones.Any())
+        {
+            <div class="alert alert-info mt-3">
+                <i class="fas fa-info-circle me-2"></i>
+                No se encontraron registros de producción propia@(string.IsNullOrEmpty(Filter) && string.IsNullOrEmpty(FilterDocumento) ? "." : $" para los filtros aplicados.").
+            </div>
+        }
+        else
+        {
+            @* Tabla principal de producciones propias *@
+            <div class="table-responsive">
+                <table class="table table-striped table-bordered">
+                    <thead class="table-primary">
+                        <tr>
+                            <th>Fecha</th>
+                            <th>Documento</th>
+                            <th>Código</th>
+                            <th>Descripción</th>
+                            <th class="text-end">Cantidad</th>
+                            <th class="text-center">Consumos</th>
+                            <th class="text-center">Anular</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var produccion in producciones)
+                        {
+                            <tr>
+                                <td>@(produccion.FechMov.HasValue ? produccion.FechMov.Value.ToString("dd/MM/yyyy") : "")</td>
+                                <td>@produccion.DoPriLar</td>
+                                <td>@produccion.Cod_Exte</td>
+                                <td>@produccion.Descrip</td>
+                                <td class="text-end">@FormatDecimal(produccion.CantIngre)</td>
+                                <td class="text-center">
+                                    @* Botón con ojo para ver los consumos de esta producción *@
+                                    <button class="btn btn-info btn-sm" @onclick="() => VerConsumosAsync(produccion)" title="Ver consumos">
+                                        <i class="fas fa-eye"></i>
+                                    </button>
+                                </td>
+                                <td class="text-center">
+                                    @* Botón para anular la producción propia (ingreso + consumos).
+                                       Se oculta si la producción ya está anulada (CantIngre = 0). *@
+                                    @if (produccion.CantIngre.HasValue && produccion.CantIngre.Value > 0)
+                                    {
+                                        <button class="btn btn-danger btn-sm" @onclick="() => AnularProduccionAsync(produccion)" title="Anular producción">
+                                            <i class="fas fa-ban"></i>
+                                        </button>
+                                    }
+                                    else
+                                    {
+                                        <span class="text-muted" title="Anulada">Anulada</span>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </div>
+}
+
+@* Modal de consumos de producción *@
+@if (mostrarModalConsumos)
+{
+    <div class="modal fade show" style="display: block" tabindex="-1">
+        <div class="modal-dialog modal-xl">
+            <div class="modal-content">
+                @* Encabezado del modal con código del producto terminado y cantidad fabricada *@
+                <div class="modal-header bg-info text-white">
+                    <h5 class="modal-title">
+                        <i class="fas fa-eye me-2"></i>Consumos de Producción
+                    </h5>
+                    <button type="button" class="btn-close btn-close-white" @onclick="CerrarModalConsumos"></button>
+                </div>
+                <div class="modal-body">
+                    @* Encabezado con datos del producto terminado fabricado *@
+                    @if (produccionSeleccionada != null)
+                    {
+                        <div class="card mb-3">
+                            <div class="card-header bg-light">
+                                <h6 class="mb-0"><strong>Producto Terminado Fabricado</strong></h6>
+                            </div>
+                            <div class="card-body">
+                                <div class="row">
+                                    <div class="col-md-3">
+                                        <strong>Documento:</strong> @produccionSeleccionada.DoPriLar
+                                    </div>
+                                    <div class="col-md-3">
+                                        <strong>Código:</strong> @produccionSeleccionada.Cod_Exte
+                                    </div>
+                                    <div class="col-md-4">
+                                        <strong>Descripción:</strong> @produccionSeleccionada.Descrip
+                                    </div>
+                                    <div class="col-md-2 text-end">
+                                        <strong>Cant. Fabricada:</strong> @FormatDecimal(produccionSeleccionada.CantIngre)
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    }
+
+                    @* Contenedor con altura fija de ~14 cm y scroll si es necesario *@
+                    <div style="max-height: 14cm; overflow-y: auto; overflow-x: auto;">
+                        @* Indicador de carga de consumos *@
+                        @if (cargandoConsumos)
+                        {
+                            <div class="d-flex justify-content-center align-items-center" style="min-height: 150px;">
+                                <div class="spinner-border text-primary" role="status">
+                                    <span class="visually-hidden">Cargando consumos...</span>
+                                </div>
+                            </div>
+                        }
+                        else if (consumos == null || !consumos.Any())
+                        {
+                            <div class="alert alert-info">
+                                <i class="fas fa-info-circle me-2"></i> No se encontraron consumos para esta producción.
+                            </div>
+                        }
+                        else
+                        {
+                            @* Botón Imprimir/Exp.Excel dentro del modal *@
+                            <div class="d-flex justify-content-end mb-3">
+                                <button class="btn btn-outline-success" @onclick="ConfirmarImpresionConsumosAsync" disabled="@isPrintingConsumos">
+                                    <i class="oi oi-print"></i> Imprimir/Exp.Excel
+                                </button>
+                            </div>
+
+                            @* Tabla de consumos (componentes consumidos) *@
+                            <div class="table-responsive">
+                                <table class="table table-striped table-bordered">
+                                    <thead class="table-light" style="position: sticky; top: 0; z-index: 1;">
+                                        <tr>
+                                            <th>Código</th>
+                                            <th>Descripción</th>
+                                            <th class="text-end">Cantidad Consumida</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach (var consumo in consumos)
+                                        {
+                                            <tr>
+                                                <td>@consumo.Cod_Exte</td>
+                                                <td>@consumo.Descrip</td>
+                                                <td class="text-end">@FormatDecimal(consumo.CantSalid)</td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+                        }
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-secondary" @onclick="CerrarModalConsumos">Cerrar</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="modal-backdrop fade show"></div>
+}
+
+@* Componente de impresión/exportación de la lista principal *@
+@if (producciones != null && producciones.Any())
+{
+    <ImpresionLista TItem="PropiaProduccionDTO"
+                    Datos="produccionesImpresion"
+                    Titulo="Producción Propia"
+                    UrlExportarExcel="api/excel/exportar-propia-produccion"
+                    Encabezados="encabezadosProduccion"
+                    ModoDirecto="false"
+                    MostrarModal="mostrarModalImpresion"
+                    OnCerrar="ResetearImpresion" />
+}
+
+@* Componente de impresión/exportación de consumos del modal *@
+@if (consumos != null && consumos.Any())
+{
+    <ImpresionLista TItem="ConsumoProduccionDTO"
+                    Datos="consumos"
+                    Titulo="@tituloImpresionConsumos"
+                    UrlExportarExcel="api/excel/exportar-consumos-produccion"
+                    Encabezados="encabezadosConsumos"
+                    ModoDirecto="false"
+                    MostrarModal="mostrarModalImpresionConsumos"
+                    OnCerrar="ResetearImpresionConsumos" />
+}
+
+@code {
+    // ── Estado de la página ──────────────────────────────────────────────
+    private bool validando = true;
+    private bool isLoading = false;
+
+    // ── Datos principales (página actual) ──────────────────────────────
+    private List<PropiaProduccionDTO> producciones = new();
+
+    // ── Datos para impresión (todos los registros filtrados, sin paginar) ──
+    private List<PropiaProduccionDTO> produccionesImpresion = new();
+
+    // ── Paginación ──────────────────────────────────────────────────────
+    private int currentPage = 1;
+    private int totalPages = 1;
+
+    // ── Filtros ──────────────────────────────────────────────────────────
+    // Filter: filtro combinado por código (Cod_Exte) y descripción (Descrip) con '+'.
+    // FilterDocumento: filtro por documento (DoPriLar).
+    [Parameter]
+    [SupplyParameterFromQuery]
+    public string Filter { get; set; } = string.Empty;
+
+    [Parameter]
+    [SupplyParameterFromQuery]
+    public string FilterDocumento { get; set; } = string.Empty;
+
+    [Parameter]
+    [SupplyParameterFromQuery]
+    public string Page { get; set; } = string.Empty;
+
+    // ── Modal de consumos ───────────────────────────────────────────────
+    private bool mostrarModalConsumos = false;
+    private bool cargandoConsumos = false;
+    private PropiaProduccionDTO? produccionSeleccionada = null;
+    private List<ConsumoProduccionDTO> consumos = new();
+
+    // ── Impresión lista principal ───────────────────────────────────────
+    private bool mostrarModalImpresion = false;
+
+    // ── Impresión consumos (modal) ──────────────────────────────────────
+    private bool isPrintingConsumos = false;
+    private bool mostrarModalImpresionConsumos = false;
+    private string tituloImpresionConsumos = "Consumos de Producción";
+
+    // ── Encabezados para ImpresionLista ─────────────────────────────────
+    // Las claves deben coincidir con los nombres de las propiedades de los DTOs.
+    private Dictionary<string, string> encabezadosProduccion = new()
+    {
+        { "FechMov", "Fecha" },
+        { "DoPriLar", "Documento" },
+        { "Cod_Exte", "Código" },
+        { "Descrip", "Descripción" },
+        { "CantIngre", "Cantidad" }
+    };
+
+    private Dictionary<string, string> encabezadosConsumos = new()
+    {
+        { "Cod_Exte", "Código" },
+        { "Descrip", "Descripción" },
+        { "CantSalid", "Cantidad Consumida" }
+    };
+
+    protected override async Task OnInitializedAsync()
+    {
+        // Validar que el usuario tenga permiso para acceder a esta página
+        await PageAccess.RequiereAccesoAsync("/propia-produccion");
+        validando = false;
+
+        // Leer la página inicial desde el query string
+        var page = 1;
+        if (!string.IsNullOrWhiteSpace(Page) && int.TryParse(Page, out var parsedPage) && parsedPage > 0)
+        {
+            page = parsedPage;
+        }
+
+        await LoadAsync(page);
+    }
+
+    /// <summary>
+    /// Navega a la página de creación de producción propia.
+    /// </summary>
+    private void IrACrear()
+    {
+        navigationManager.NavigateTo("/propia-produccion-create");
+    }
+
+    /// <summary>
+    /// Anula una producción propia: pone en 0 las cantidades del movimiento
+    /// de ingreso (PF) y de todos los consumos (CF) asociados.
+    /// Llama al endpoint api/movisto/anular-propia-produccion/{documento}.
+    /// </summary>
+    private async Task AnularProduccionAsync(PropiaProduccionDTO produccion)
+    {
+        if (produccion == null || string.IsNullOrEmpty(produccion.DoPriLar))
+        {
+            return;
+        }
+
+        // Confirmación antes de anular
+        var confirmResult = await sweetAlertService.FireAsync(new SweetAlertOptions
+        {
+            Title = "Anular producción propia",
+            Text = $"¿Confirma que desea anular la producción {produccion.DoPriLar}? Se pondrán en 0 las cantidades del ingreso y de todos los consumos asociados.",
+            Icon = SweetAlertIcon.Warning,
+            ShowCancelButton = true,
+            ConfirmButtonText = "Sí, anular",
+            CancelButtonText = "Cancelar"
+        });
+
+        if (!confirmResult.IsConfirmed)
+        {
+            return;
+        }
+
+        try
+        {
+            var documento = Uri.EscapeDataString(produccion.DoPriLar);
+            var response = await repository.Put<object>($"api/movisto/anular-propia-produccion/{documento}", new { });
+
+            if (response.Error)
+            {
+                var mensaje = await response.GetErrorMessageAsync();
+                await sweetAlertService.FireAsync("Error", mensaje, SweetAlertIcon.Error);
+                return;
+            }
+
+            await sweetAlertService.FireAsync("Éxito", "Producción propia anulada correctamente.", SweetAlertIcon.Success);
+
+            // Recargar la lista para reflejar la anulación
+            await LoadAsync(currentPage);
+        }
+        catch (Exception ex)
+        {
+            await sweetAlertService.FireAsync("Error", ex.Message, SweetAlertIcon.Error);
+        }
+    }
+
+    /// <summary>
+    /// Carga la lista paginada de producciones propias desde el backend.
+    /// Condición SQL: SELECT * FROM MOVISTO WHERE CANTINGRE > 0 AND codimovi = 'pf'
+    ///   AND doprilar LIKE 'OF-%' ORDER BY FECHMOV DESC
+    /// Aplica los filtros Filter (código+descripción) y FilterDocumento (DoPriLar).
+    /// </summary>
+    private async Task LoadAsync(int page = 1)
+    {
+        try
+        {
+            isLoading = true;
+
+            // Endpoint de datos paginados
+            string url = $"api/movisto/propia-produccion?page={page}&recordsNumber=10";
+            string urlPages = $"api/movisto/propia-produccion/totalPages?page={page}&recordsNumber=10";
+
+            // Agregar filtro de código+descripción si existe
+            if (!string.IsNullOrEmpty(Filter))
+            {
+                url += $"&filter={Uri.EscapeDataString(Filter)}";
+                urlPages += $"&filter={Uri.EscapeDataString(Filter)}";
+            }
+
+            // Agregar filtro de documento si existe
+            if (!string.IsNullOrEmpty(FilterDocumento))
+            {
+                url += $"&filterDocumento={Uri.EscapeDataString(FilterDocumento)}";
+                urlPages += $"&filterDocumento={Uri.EscapeDataString(FilterDocumento)}";
+            }
+
+            var response = await repository.Get<List<PropiaProduccionDTO>>(url);
+            var responsePages = await repository.Get<int>(urlPages);
+
+            if (response.Error)
+            {
+                var mensaje = await response.GetErrorMessageAsync();
+                await sweetAlertService.FireAsync("Error", mensaje, SweetAlertIcon.Error);
+                producciones = new();
+                totalPages = 1;
+            }
+            else
+            {
+                producciones = response.Response ?? new();
+                totalPages = responsePages.Response > 0 ? responsePages.Response : 1;
+                currentPage = page;
+            }
+        }
+        catch (Exception ex)
+        {
+            await sweetAlertService.FireAsync("Error", ex.Message, SweetAlertIcon.Error);
+            producciones = new();
+            totalPages = 1;
+        }
+        finally
+        {
+            isLoading = false;
+            StateHasChanged();
+        }
+    }
+
+    /// <summary>
+    /// Aplica el filtro: vuelve a la página 1 y recarga con los filtros actuales.
+    /// Sigue el mismo patrón que /Stock-index: navega con query string y recarga.
+    /// </summary>
+    private async Task ApplyFilterAsync()
+    {
+        int page = 1;
+        currentPage = page;
+        Page = page.ToString();
+
+        var filtro = string.IsNullOrWhiteSpace(Filter) ? string.Empty : $"&Filter={Uri.EscapeDataString(Filter)}";
+        var filtroDoc = string.IsNullOrWhiteSpace(FilterDocumento) ? string.Empty : $"&FilterDocumento={Uri.EscapeDataString(FilterDocumento)}";
+        navigationManager.NavigateTo($"/propia-produccion?Page={page}{filtro}{filtroDoc}", forceLoad: false, replace: true);
+
+        await LoadAsync(page);
+    }
+
+    /// <summary>
+    /// Limpia ambos filtros y recarga.
+    /// </summary>
+    private async Task CleanFilterAsync()
+    {
+        Filter = string.Empty;
+        FilterDocumento = string.Empty;
+        await ApplyFilterAsync();
+    }
+
+    /// <summary>
+    /// Cambia de página desde el componente Pagination.
+    /// </summary>
+    private async Task SelectedPageAsync(int page)
+    {
+        currentPage = page;
+        Page = page.ToString();
+
+        var filtro = string.IsNullOrWhiteSpace(Filter) ? string.Empty : $"&Filter={Uri.EscapeDataString(Filter)}";
+        var filtroDoc = string.IsNullOrWhiteSpace(FilterDocumento) ? string.Empty : $"&FilterDocumento={Uri.EscapeDataString(FilterDocumento)}";
+        navigationManager.NavigateTo($"/propia-produccion?Page={page}{filtro}{filtroDoc}", forceLoad: false, replace: true);
+
+        await LoadAsync(page);
+    }
+
+    /// <summary>
+    /// Maneja la tecla Enter en el filtro de código+descripción.
+    /// </summary>
+    private async Task HandleKeyPress(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+        {
+            await ApplyFilterAsync();
+        }
+    }
+
+    /// <summary>
+    /// Maneja la tecla Enter en el filtro de documento.
+    /// </summary>
+    private async Task HandleKeyPressDocumento(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+        {
+            await ApplyFilterAsync();
+        }
+    }
+
+    /// <summary>
+    /// Abre el modal de consumos para una producción específica.
+    /// El identificador de la producción se construye a partir del DoPriLar:
+    /// si el documento es "OF-5604", el DoSecLar de los consumos es "pf-5604".
+    /// Condición SQL: SELECT * FROM MOVISTO WHERE cantsalid > 0
+    ///   AND doseclar = 'pf-5604' AND codimovi = 'cf' ORDER BY FECHMOV DESC
+    /// </summary>
+    private async Task VerConsumosAsync(PropiaProduccionDTO produccion)
+    {
+        produccionSeleccionada = produccion;
+        mostrarModalConsumos = true;
+        cargandoConsumos = true;
+        consumos = new();
+        StateHasChanged();
+
+        try
+        {
+            // Construir el identificador DoSecLar: "OF-5604" -> "pf-5604"
+            // En VB6 el DoPriLar de la producción ('pf') se usa como DoSecLar de los consumos ('cf'),
+            // pero con el prefijo en minúscula: "OF-" se convierte en "pf-".
+            var doseclar = string.Empty;
+            if (!string.IsNullOrEmpty(produccion.DoPriLar) && produccion.DoPriLar.StartsWith("OF-"))
+            {
+                doseclar = "pf-" + produccion.DoPriLar.Substring(3);
+            }
+            else
+            {
+                doseclar = produccion.DoPriLar ?? string.Empty;
+            }
+
+            // Actualizar el título de impresión con los datos del producto terminado
+            tituloImpresionConsumos = $"Consumos de Producción - {produccion.Cod_Exte} ({produccion.DoPriLar})";
+
+            var response = await repository.Get<List<ConsumoProduccionDTO>>($"api/movisto/consumos-produccion/{doseclar}");
+            if (response.Error)
+            {
+                var mensaje = await response.GetErrorMessageAsync();
+                await sweetAlertService.FireAsync("Error", mensaje, SweetAlertIcon.Error);
+                consumos = new();
+            }
+            else
+            {
+                consumos = response.Response ?? new();
+            }
+        }
+        catch (Exception ex)
+        {
+            await sweetAlertService.FireAsync("Error", ex.Message, SweetAlertIcon.Error);
+            consumos = new();
+        }
+        finally
+        {
+            cargandoConsumos = false;
+            StateHasChanged();
+        }
+    }
+
+    /// <summary>
+    /// Cierra el modal de consumos y limpia el estado.
+    /// </summary>
+    private void CerrarModalConsumos()
+    {
+        mostrarModalConsumos = false;
+        produccionSeleccionada = null;
+        consumos = new();
+        isPrintingConsumos = false;
+        StateHasChanged();
+    }
+
+    // ── Impresión lista principal ───────────────────────────────────────
+
+    /// <summary>
+    /// Muestra el modal de ImpresionLista para la lista principal de producciones.
+    /// Antes de abrir el modal, obtiene TODOS los registros filtrados (sin paginar)
+    /// desde el endpoint "todos" para que el reporte incluya todos los datos.
+    /// </summary>
+    private async Task MostrarImpresionAsync()
+    {
+        if (producciones == null || !producciones.Any())
+        {
+            await sweetAlertService.FireAsync("Información", "No hay producciones para imprimir.", SweetAlertIcon.Info);
+            return;
+        }
+
+        try
+        {
+            // Obtener todos los registros filtrados (sin paginación) para el reporte
+            string url = "api/movisto/propia-produccion/todos";
+            if (!string.IsNullOrEmpty(Filter))
+            {
+                url += $"?filter={Uri.EscapeDataString(Filter)}";
+            }
+            if (!string.IsNullOrEmpty(FilterDocumento))
+            {
+                url += string.IsNullOrEmpty(Filter) ? "?" : "&";
+                url += $"filterDocumento={Uri.EscapeDataString(FilterDocumento)}";
+            }
+
+            var response = await repository.Get<List<PropiaProduccionDTO>>(url);
+            if (response.Error)
+            {
+                var mensaje = await response.GetErrorMessageAsync();
+                await sweetAlertService.FireAsync("Error", mensaje, SweetAlertIcon.Error);
+                return;
+            }
+
+            produccionesImpresion = response.Response ?? new();
+            if (!produccionesImpresion.Any())
+            {
+                await sweetAlertService.FireAsync("Información", "No hay producciones para imprimir.", SweetAlertIcon.Info);
+                return;
+            }
+
+            mostrarModalImpresion = true;
+            StateHasChanged();
+        }
+        catch (Exception ex)
+        {
+            await sweetAlertService.FireAsync("Error", ex.Message, SweetAlertIcon.Error);
+        }
+    }
+
+    private void ResetearImpresion()
+    {
+        mostrarModalImpresion = false;
+        produccionesImpresion = new();
+        StateHasChanged();
+    }
+
+    // ── Impresión consumos (modal) ──────────────────────────────────────
+
+    /// <summary>
+    /// Muestra el modal de ImpresionLista para los consumos de la producción seleccionada.
+    /// </summary>
+    private async Task ConfirmarImpresionConsumosAsync()
+    {
+        if (consumos == null || !consumos.Any())
+        {
+            await sweetAlertService.FireAsync("Información", "No hay consumos para imprimir.", SweetAlertIcon.Info);
+            return;
+        }
+
+        isPrintingConsumos = true;
+        StateHasChanged();
+
+        try
+        {
+            mostrarModalImpresionConsumos = true;
+        }
+        finally
+        {
+            isPrintingConsumos = false;
+            StateHasChanged();
+        }
+    }
+
+    private void ResetearImpresionConsumos()
+    {
+        mostrarModalImpresionConsumos = false;
+        StateHasChanged();
+    }
+
+    // ── Utilidades ──────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Formatea un valor decimal para mostrar en la tabla (4 decimales, sin ceros sobrantes).
+    /// </summary>
+    private string FormatDecimal(decimal? valor)
+    {
+        if (!valor.HasValue) return "";
+        return valor.Value.ToString("N4").TrimEnd('0').TrimEnd(',');
+    }
+}

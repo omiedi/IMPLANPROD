@@ -128,26 +128,25 @@
                                             <td style="border: 1px solid #000; padding: 5px; text-align: center; font-size: 10px;">@(item.FentreSol?.ToString("dd/MM/yy") ?? "")</td>
                                         </tr>
                                     }
-                                    
-                                    <!-- Filas vacías para llenar la página A4 -->
-                                    @for (int i = itemsActivos.Count; i < Math.Min(itemsActivos.Count + 15, 18); i++)
-                                    {
-                                        <tr>
-                                            <td style="border: 1px solid #000; padding: 10px; font-size: 10px;">&nbsp;</td>
-                                            <td style="border: 1px solid #000; padding: 10px; font-size: 10px;">&nbsp;</td>
-                                            <td style="border: 1px solid #000; padding: 10px; font-size: 10px;">&nbsp;</td>
-                                            <td style="border: 1px solid #000; padding: 10px; font-size: 10px;">&nbsp;</td>
-                                            <td style="border: 1px solid #000; padding: 10px; font-size: 10px;">&nbsp;</td>
-                                            <td style="border: 1px solid #000; padding: 10px; font-size: 10px;">&nbsp;</td>
-                                            <td style="border: 1px solid #000; padding: 10px; font-size: 10px;">&nbsp;</td>
-                                        </tr>
-                                    }
                                 }
                             </tbody>
                         </table>
 
+                        <!-- Plantilla oculta para las filas de relleno (se clona en la impresión) -->
+                        <template id="fila-relleno-template">
+                            <tr class="fila-relleno">
+                                <td style="border: 1px solid #000; padding: 10px; font-size: 10px;">&nbsp;</td>
+                                <td style="border: 1px solid #000; padding: 10px; font-size: 10px;">&nbsp;</td>
+                                <td style="border: 1px solid #000; padding: 10px; font-size: 10px;">&nbsp;</td>
+                                <td style="border: 1px solid #000; padding: 10px; font-size: 10px;">&nbsp;</td>
+                                <td style="border: 1px solid #000; padding: 10px; font-size: 10px;">&nbsp;</td>
+                                <td style="border: 1px solid #000; padding: 10px; font-size: 10px;">&nbsp;</td>
+                                <td style="border: 1px solid #000; padding: 10px; font-size: 10px;">&nbsp;</td>
+                            </tr>
+                        </template>
+
                         <!-- Pie con totales y observaciones -->
-                        <div style="display: flex; margin-bottom: 0; page-break-inside: avoid;">
+                        <div class="pie-orden-compra" style="display: flex; margin-bottom: 0; page-break-inside: avoid;">
                             <!-- Columna de Observaciones (58%) - Alineada con Item+Código+UM+Cantidad -->
                             <div style="width: 58%; padding-right: 0;">
                                 <div style="border: 1px solid #000; height: 140px; display: flex; flex-direction: column;">
@@ -217,11 +216,12 @@
                                 <div style="border: 1px solid #000; border-left: none; height: 140px; display: flex; flex-direction: column;">
                                     <div style="flex: 1; display: flex; flex-direction: column; justify-content: center; align-items: center; border-bottom: 1px solid #000; padding: 5px;">
                                         <strong style="font-size: 9px; margin-bottom: 3px;">Hoja N°</strong>
-                                        <span style="font-size: 16px; font-weight: bold;">1</span>
+                                        @* El paginador de la impresión reemplaza estos valores por hoja (Hoja N de M) *@
+                                        <span class="numero-hoja" style="font-size: 16px; font-weight: bold;">1</span>
                                     </div>
                                     <div style="flex: 1; display: flex; flex-direction: column; justify-content: center; align-items: center; padding: 5px;">
                                         <strong style="font-size: 9px; margin-bottom: 3px;">De:</strong>
-                                        <span style="font-size: 16px; font-weight: bold;">1</span>
+                                        <span class="total-hojas" style="font-size: 16px; font-weight: bold;">1</span>
                                     </div>
                                 </div>
                             </div>
@@ -513,6 +513,51 @@
 
         try
         {
+            // ── Validación de IVA del proveedor ──────────────────────────────
+            // Si el proveedor (Proved12.Piva_Cli) tiene tipo de IVA:
+            //   5 = Comercio Exterior (TipoIvaEnum.ComercioExterior)
+            //   7 = Exento Zona Promovida (TipoIvaEnum.ExentoZonaPromovida)
+            // entonces NO se calcula IVA (tasa 0) para todos los ítems,
+            // sin importar el grupo de IVA (Master.Grupiva) de cada producto.
+            // El proveedor se busca por Proved12.Nume_Cli = Ocomenca.NproOcom
+            // (NproOcom es el campo que almacena el número de proveedor).
+            bool proveedorExentoDeIva = false;
+
+            if (OrdenCompra?.NproOcom != null && OrdenCompra.NproOcom.Value > 0)
+            {
+                var responseProveedor = await repository.Get<Proved12>($"api/Proved12/numero/{OrdenCompra.NproOcom.Value}");
+                if (!responseProveedor.Error && responseProveedor.Response != null)
+                {
+                    var pivaCli = responseProveedor.Response.Piva_Cli;
+                    // 5 = Comercio Exterior, 7 = Exento Zona Promovida → sin IVA
+                    if (pivaCli.HasValue && (pivaCli.Value == 5 || pivaCli.Value == 7))
+                    {
+                        proveedorExentoDeIva = true;
+                    }
+                }
+            }
+
+            // Si el proveedor está exento, todas las tasas son 0 y no se
+            // necesita consultar los grupos de IVA de cada producto.
+            if (proveedorExentoDeIva)
+            {
+                var codintesExento = DetalleItems
+                    .Where(i => (i.StatOcom ?? 0) < 10)
+                    .Select(i => i.CodInte)
+                    .Where(ci => ci.HasValue && ci.Value > 0)
+                    .Select(ci => (int)ci!.Value)
+                    .Distinct();
+
+                foreach (var codint in codintesExento)
+                {
+                    tasasIvaPorCodinte[codint] = 0m;
+                }
+
+                RecalcularIva();
+                return;
+            }
+            // ── Fin validación de IVA del proveedor ──────────────────────────
+
             var responseGruposIva = await repository.Get<List<Grupiva>>("api/grupivas/combo");
             var tasasPorGrupo = !responseGruposIva.Error && responseGruposIva.Response != null
                 ? responseGruposIva.Response
@@ -753,18 +798,19 @@
                                     
                                     html, body { 
                                         width: 100%;
-                                        height: 100%;
                                         margin: 0;
                                         padding: 0;
                                     }
                                     
                                     body { 
+                                        width: 733px;
                                         font-family: Arial, sans-serif; 
                                         font-size: 12px; 
                                         padding: 15px;
                                         background: white;
                                         color: black !important;
                                         line-height: 1.3;
+                                        box-sizing: border-box;
                                     }
                                     
                                     @page { 
@@ -847,8 +893,40 @@
                                         page-break-before: avoid !important;
                                     }
                                     
+                                    .tabla-items thead {
+                                        display: table-header-group !important;
+                                    }
+                                    
                                     .tabla-items tbody tr {
-                                        page-break-inside: avoid !important;
+                                        page-break-inside: auto !important;
+                                    }
+                                    
+                                    .fila-relleno td {
+                                        padding: 10px !important;
+                                    }
+                                    
+                                    .encabezado-empresa img {
+                                        display: block;
+                                        min-height: 75px;
+                                        max-height: 75px;
+                                        width: auto;
+                                        max-width: 100%;
+                                        margin-bottom: 6px;
+                                    }
+
+                                    /* Cada hoja armada por el paginador ocupa una página física.
+                                       La última no fuerza salto para no generar una hoja en blanco.
+                                       No se usa page-break-inside: avoid porque, ante un mínimo
+                                       desborde de medición, empujaría la hoja completa y dejaría
+                                       una página vacía. */
+                                    .hoja-impresion {
+                                        page-break-after: always;
+                                        break-after: page;
+                                    }
+
+                                    .hoja-impresion:last-child {
+                                        page-break-after: auto;
+                                        break-after: auto;
                                     }
                                 </style>
                             </head>
@@ -868,6 +946,123 @@
                         
                         // Esperar a que se cargue completamente antes de imprimir
                         setTimeout(function() {
+                            // ===========================================================
+                            // PAGINACIÓN MANUAL DE LA ORDEN DE COMPRA
+                            //
+                            // Regla de negocio: el documento se arma en hojas completas.
+                            // Cada hoja repite el encabezado de la empresa, los datos del
+                            // proveedor, el encabezado del detalle y el pie con
+                            // observaciones y totales. La numeración se actualiza como
+                            // 'Hoja N' / 'De: M'.
+                            //
+                            // No se usa el salto automático del navegador porque éste sólo
+                            // repite el <thead> de la tabla: el encabezado de la empresa
+                            // quedaba únicamente en la primera hoja y el pie únicamente en
+                            // la última.
+                            // ===========================================================
+                            function paginarDocumento() {
+                                var doc = printWindow.document;
+                                var contenido = doc.getElementById('contenido-impresion');
+                                if (!contenido) return;
+
+                                // Partes que se repiten en cada hoja
+                                var partesEncabezado = Array.prototype.slice.call(
+                                    contenido.querySelectorAll('.encabezado-empresa, .datos-proveedor'));
+                                var tablaOriginal = contenido.querySelector('.tabla-items');
+                                var pieOriginal = contenido.querySelector('.pie-orden-compra');
+                                var template = doc.getElementById('fila-relleno-template');
+
+                                if (partesEncabezado.length === 0 || !tablaOriginal || !pieOriginal) return;
+
+                                var tbodyOriginal = tablaOriginal.querySelector('tbody');
+                                if (!tbodyOriginal) return;
+
+                                // Fila vacía usada para empujar el pie al final de la última hoja
+                                var filaRelleno = null;
+                                if (template) {
+                                    filaRelleno = template.content
+                                        ? template.content.querySelector('tr')
+                                        : template.querySelector('tr');
+                                }
+
+                                // Filas reales del detalle que se reparten entre las hojas
+                                var filas = Array.prototype.slice.call(tbodyOriginal.children);
+                                tbodyOriginal.innerHTML = '';
+
+                                // A4 vertical con márgenes de 0.8cm deja aproximadamente 1062px de alto
+                                // útil. Se descuenta el padding del body (15px arriba y abajo) para que
+                                // el pie nunca salte a la hoja siguiente.
+                                var alturaMaxima = 1030;
+
+                                var contenedorPaginas = doc.createElement('div');
+                                var paginas = [];
+
+                                function nuevaPagina() {
+                                    var hoja = doc.createElement('div');
+                                    hoja.className = 'hoja-impresion';
+
+                                    for (var e = 0; e < partesEncabezado.length; e++) {
+                                        hoja.appendChild(partesEncabezado[e].cloneNode(true));
+                                    }
+
+                                    var tabla = tablaOriginal.cloneNode(true);
+                                    var tbody = tabla.querySelector('tbody');
+                                    hoja.appendChild(tabla);
+
+                                    var pie = pieOriginal.cloneNode(true);
+                                    hoja.appendChild(pie);
+
+                                    contenedorPaginas.appendChild(hoja);
+
+                                    var registro = { hoja: hoja, tbody: tbody, pie: pie };
+                                    paginas.push(registro);
+                                    return registro;
+                                }
+
+                                // Se reemplaza el flujo continuo por el contenedor de hojas
+                                contenido.innerHTML = '';
+                                contenido.appendChild(contenedorPaginas);
+
+                                var actual = nuevaPagina();
+
+                                for (var i = 0; i < filas.length; i++) {
+                                    actual.tbody.appendChild(filas[i]);
+
+                                    // Si la fila no entra y la hoja ya tenía al menos una, se abre hoja nueva.
+                                    // La condición evita un bucle infinito con filas más altas que la hoja.
+                                    if (actual.hoja.offsetHeight > alturaMaxima && actual.tbody.children.length > 1) {
+                                        actual.tbody.removeChild(filas[i]);
+                                        actual = nuevaPagina();
+                                        actual.tbody.appendChild(filas[i]);
+                                    }
+                                }
+
+                                // Relleno sólo en la última hoja, para que el pie quede abajo
+                                if (filaRelleno && paginas.length > 0) {
+                                    var ultima = paginas[paginas.length - 1];
+                                    var guarda = 0;
+                                    while (guarda < 300) {
+                                        guarda++;
+                                        var clon = filaRelleno.cloneNode(true);
+                                        ultima.tbody.appendChild(clon);
+                                        if (ultima.hoja.offsetHeight > alturaMaxima) {
+                                            ultima.tbody.removeChild(clon);
+                                            break;
+                                        }
+                                    }
+                                }
+
+                                // Numeración 'Hoja N de M' en el pie de cada hoja
+                                for (var p = 0; p < paginas.length; p++) {
+                                    var numeroHoja = paginas[p].pie.querySelector('.numero-hoja');
+                                    var totalHojas = paginas[p].pie.querySelector('.total-hojas');
+                                    if (numeroHoja) numeroHoja.textContent = String(p + 1);
+                                    if (totalHojas) totalHojas.textContent = String(paginas.length);
+                                }
+                            }
+                            
+                            paginarDocumento();
+                            
                             printWindow.focus();
                             printWindow.print();
                             setTimeout(function() {

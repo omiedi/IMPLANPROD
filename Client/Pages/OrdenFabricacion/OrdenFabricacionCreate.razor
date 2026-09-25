@@ -112,17 +112,36 @@ else
     private async Task CreateAsync()
     {
         // Validaciones previas
-        if (ordenFabricacion.Cod_Inte <= 0)
+        // Cod_Inte es nullable (int?): si no se seleccionó producto, viene null.
+        // La comparación `null <= 0` devuelve false en C#, por eso hay que chequear null explícitamente.
+        if (ordenFabricacion.Cod_Inte is null || ordenFabricacion.Cod_Inte <= 0)
         {
-            await sweetAlertService.FireAsync("Error", "El código interno debe ser mayor a 0.", SweetAlertIcon.Warning);
+            await sweetAlertService.FireAsync("Error", "Debe seleccionar un producto a fabricar.", SweetAlertIcon.Warning);
             ordenFabricacionForm?.ReiniciarFormulario();
             return;
         }
 
         if (ordenFabricacion.CanProy <= 0 || ordenFabricacion.CanProy is null)
         {
-            await sweetAlertService.FireAsync("Error", "La cantidad proyectada debe ser mayor a 0.", SweetAlertIcon.Warning);
+            await sweetAlertService.FireAsync("Error", "La cantidad a fabricar debe ser mayor a 0.", SweetAlertIcon.Warning);
             ordenFabricacionForm?.ReiniciarFormulario();
+            return;
+        }
+
+        // Mostrar warning de confirmación antes de generar la orden de fabricación.
+        // Se presenta al usuario el producto y la cantidad a fabricar para que confirme.
+        var confirmResult = await sweetAlertService.FireAsync(new SweetAlertOptions
+        {
+            Title = "Confirmar generación",
+            Text = $"Se va a generar una orden de fabricación para el producto '{ordenFabricacion.Descrip}' con una cantidad a fabricar de {ordenFabricacion.CanProy.Value:N2} {ordenFabricacion.Unidad}. ¿Desea continuar?",
+            Icon = SweetAlertIcon.Warning,
+            ShowCancelButton = true,
+            ConfirmButtonText = "Sí, generar",
+            CancelButtonText = "Cancelar"
+        });
+
+        if (!confirmResult.IsConfirmed)
+        {
             return;
         }
 

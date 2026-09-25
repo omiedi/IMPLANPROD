@@ -28,7 +28,7 @@ namespace IMPLANPROD.Server.Controllers
         }
 
         /// <summary>
-        /// Obtiene una lista paginada de productos (Master) con filtro 
+        /// Obtiene una lista paginada de productos (Master) con filtro combinado por '+'
         /// </summary>
         [HttpGet("search")]
         public async Task<ActionResult<List<Master>>> SearchMaster([FromQuery] string filter, [FromQuery] int pageSize = 100)
@@ -44,44 +44,49 @@ namespace IMPLANPROD.Server.Controllers
                 if (pageSize > 500) pageSize = 500;
                 if (pageSize < 10) pageSize = 10;
 
-                var connection = _context.Database.GetDbConnection();
-                await connection.OpenAsync();
+                // Filtro combinado con '+': cada término separado por '+' actúa como un AND.
+                // Ej: "858 + ADAPTADOR" busca registros que contengan "858" Y "ADAPTADOR"
+                // en código y/o descripción.
+                var terms = filter
+                    .Split('+', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries)
+                    .Select(t => t.Trim().ToLower())
+                    .Where(t => !string.IsNullOrWhiteSpace(t))
+                    .ToList();
 
-                var sql = $@"
-                    SELECT TOP {pageSize}
-                        Codigo,
-                        Codint,
-                        Descripcion,
-                        Umedida,
-                        Status,
-                        Cosuni,
-                        Monecos,
-                        Trazable
-                    FROM Master
-                    WHERE (Status >= 0 OR Status IS NULL)
-                    AND (Codigo LIKE @filter OR Descripcion LIKE @filter)
-                    ORDER BY Descripcion";
-
-                using var command = connection.CreateCommand();
-                command.CommandText = sql;
-                command.Parameters.Add(new Microsoft.Data.SqlClient.SqlParameter("@filter", $"%{filter}%"));
-
-                var results = new List<Master>();
-                using var reader = await command.ExecuteReaderAsync();
-                while (await reader.ReadAsync())
+                if (!terms.Any())
                 {
-                    results.Add(new Master
-                    {
-                        Codint = (int)reader["Codint"],
-                        Codigo = reader["Codigo"].ToString(),
-                        Descripcion = reader["Descripcion"].ToString(),
-                        Umedida = reader["Umedida"].ToString(),
-                        Status = reader["Status"] == DBNull.Value ? null : (short?)reader["Status"],
-                        Cosuni = reader["Cosuni"] == DBNull.Value ? null : (decimal?)reader["Cosuni"],
-                        Monecos = reader["Monecos"] == DBNull.Value ? null : (short?)reader["Monecos"],
-                        Trazable = reader["Trazable"] == DBNull.Value ? null : (short?)reader["Trazable"]
-                    });
+                    return new List<Master>();
                 }
+
+                var queryable = _context.masters
+                    .AsNoTracking()
+                    .Where(x => (x.Status ?? 0) >= 0);
+
+                foreach (var term in terms)
+                {
+                    var like = $"%{term}%";
+                    queryable = queryable.Where(x =>
+                        EF.Functions.Like((x.Descripcion ?? string.Empty).ToLower(), like) ||
+                        EF.Functions.Like((x.Codigo ?? string.Empty).ToLower(), like) ||
+                        EF.Functions.Like(x.Codint.ToString(), like)
+                    );
+                }
+
+                var results = await queryable
+                    .OrderBy(x => x.Descripcion)
+                    .Take(pageSize)
+                    .Select(x => new Master
+                    {
+                        Codint = x.Codint,
+                        Codigo = x.Codigo ?? string.Empty,
+                        Descripcion = x.Descripcion ?? string.Empty,
+                        Umedida = x.Umedida ?? string.Empty,
+                        Status = x.Status,
+                        Cosuni = x.Cosuni,
+                        Monecos = x.Monecos,
+                        Trazable = x.Trazable
+                    })
+                    .ToListAsync();
 
                 return Ok(results);
             }
@@ -167,23 +172,25 @@ namespace IMPLANPROD.Server.Controllers
                     .AsNoTracking()
                     .Where(x => (x.Status ?? 0) >= 0);
 
+                // Filtro combinado con '+': cada término separado por '+' actúa como un AND.
+                // Ej: "858 + ADAPTADOR" busca registros que contengan "858" Y "ADAPTADOR"
+                // en código y/o descripción.
                 if (!string.IsNullOrWhiteSpace(pagination.Filter))
                 {
-                    var filter = pagination.Filter.Trim();
-                    var filterLower = filter.ToLower();
+                    var terms = pagination.Filter
+                        .Split('+', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries)
+                        .Select(t => t.Trim().ToLower())
+                        .Where(t => !string.IsNullOrWhiteSpace(t))
+                        .ToList();
 
-                    if (int.TryParse(filter, out var codintFilter))
+                    foreach (var term in terms)
                     {
+                        var like = $"%{term}%";
                         queryable = queryable.Where(x =>
-                            (x.Descripcion ?? string.Empty).ToLower().Contains(filterLower) ||
-                            (x.Codigo ?? string.Empty).ToLower().Contains(filterLower) ||
-                            x.Codint == codintFilter);
-                    }
-                    else
-                    {
-                        queryable = queryable.Where(x =>
-                            (x.Descripcion ?? string.Empty).ToLower().Contains(filterLower) ||
-                            (x.Codigo ?? string.Empty).ToLower().Contains(filterLower));
+                            EF.Functions.Like((x.Descripcion ?? string.Empty).ToLower(), like) ||
+                            EF.Functions.Like((x.Codigo ?? string.Empty).ToLower(), like) ||
+                            EF.Functions.Like(x.Codint.ToString(), like)
+                        );
                     }
                 }
 
@@ -222,23 +229,25 @@ namespace IMPLANPROD.Server.Controllers
                     .AsNoTracking()
                     .Where(x => (x.Status ?? 0) >= 0);
 
+                // Filtro combinado con '+': cada término separado por '+' actúa como un AND.
+                // Debe replicar exactamente la lógica del endpoint de listado para que las
+                // páginas calculadas coincidan con los resultados filtrados.
                 if (!string.IsNullOrWhiteSpace(pagination.Filter))
                 {
-                    var filter = pagination.Filter.Trim();
-                    var filterLower = filter.ToLower();
+                    var terms = pagination.Filter
+                        .Split('+', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries)
+                        .Select(t => t.Trim().ToLower())
+                        .Where(t => !string.IsNullOrWhiteSpace(t))
+                        .ToList();
 
-                    if (int.TryParse(filter, out var codintFilter))
+                    foreach (var term in terms)
                     {
+                        var like = $"%{term}%";
                         queryable = queryable.Where(x =>
-                            (x.Descripcion ?? string.Empty).ToLower().Contains(filterLower) ||
-                            (x.Codigo ?? string.Empty).ToLower().Contains(filterLower) ||
-                            x.Codint == codintFilter);
-                    }
-                    else
-                    {
-                        queryable = queryable.Where(x =>
-                            (x.Descripcion ?? string.Empty).ToLower().Contains(filterLower) ||
-                            (x.Codigo ?? string.Empty).ToLower().Contains(filterLower));
+                            EF.Functions.Like((x.Descripcion ?? string.Empty).ToLower(), like) ||
+                            EF.Functions.Like((x.Codigo ?? string.Empty).ToLower(), like) ||
+                            EF.Functions.Like(x.Codint.ToString(), like)
+                        );
                     }
                 }
 
@@ -349,6 +358,32 @@ namespace IMPLANPROD.Server.Controllers
             {
                 return NotFound();
             }
+            return Ok(producto);
+        }
+
+        /// <summary>
+        /// Obtiene un producto por su código externo (Codigo) exacto.
+        /// Usado por el buscador editable de /StockInfGeneral.
+        /// </summary>
+        /// <param name="codigo">Código externo del producto</param>
+        /// <returns>El producto Master si existe, NotFound si no</returns>
+        [HttpGet("por-codigo/{codigo}")]
+        public async Task<IActionResult> GetPorCodigoAsync(string codigo)
+        {
+            if (string.IsNullOrWhiteSpace(codigo))
+            {
+                return NotFound();
+            }
+
+            var producto = await _context.masters
+                .AsNoTracking()
+                .FirstOrDefaultAsync(x => x.Codigo == codigo.Trim());
+
+            if (producto == null)
+            {
+                return NotFound();
+            }
+
             return Ok(producto);
         }
 

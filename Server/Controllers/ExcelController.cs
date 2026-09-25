@@ -319,6 +319,47 @@ namespace IMPLANPROD.Server.Controllers
         }
 
         /// <summary>
+        /// Exporta la lista de componentes (Formulas) de un producto a Excel.
+        /// Usado desde /master/navegacion-componentes con el botón Imprimir/Exp.Excel.
+        /// </summary>
+        [HttpPost("exportar-componentes")]
+        public IActionResult ExportarComponentes([FromBody] List<Formulas> datos)
+        {
+            try
+            {
+                if (datos == null || !datos.Any())
+                {
+                    return BadRequest("No hay datos para exportar");
+                }
+
+                var encabezados = new Dictionary<string, string>
+                {
+                    { "CodiElem", "Códint" },
+                    { "CodXElem", "Código" },
+                    { "MasterDescripcion", "Descripción" },
+                    { "UsoBruto", "Cantidad" },
+                    { "UMED_FORM", "Unidad" }
+                };
+
+                var orden = new List<string>
+                {
+                    "CodiElem", "CodXElem", "MasterDescripcion", "UsoBruto", "UMED_FORM"
+                };
+
+                var archivo = _excelService.GenerarExcel(datos, "Componentes", encabezados, orden);
+
+                return File(archivo,
+                            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                            $"Componentes_{DateTime.Now:yyyyMMdd_HHmmss}.xlsx");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error al generar Excel de Componentes");
+                return StatusCode(500, "Error al generar el archivo excel");
+            }
+        }
+
+        /// <summary>
         /// Exporta remitos (RemitoAnularDTO) a Excel
         /// </summary>
         /// <param name="datos">Lista de remitos a exportar</param>
@@ -679,9 +720,11 @@ namespace IMPLANPROD.Server.Controllers
 
                 var encabezados = new Dictionary<string, string>
                 {
-                    { nameof(PedidoVentaPendienteDetalleDTO.NroPed), "N° Pedido" },
+                    { nameof(PedidoVentaPendienteDetalleDTO.NroClie), "N° Cliente" },
+                    { nameof(PedidoVentaPendienteDetalleDTO.Rasoclie), "Razón Social" },
                     { nameof(PedidoVentaPendienteDetalleDTO.Codigo), "Código" },
                     { nameof(PedidoVentaPendienteDetalleDTO.Descripcion), "Descripción" },
+                    { nameof(PedidoVentaPendienteDetalleDTO.NroPed), "N° Pedido" },
                     { nameof(PedidoVentaPendienteDetalleDTO.CantSolicitada), "Cant. Solicitada" },
                     { nameof(PedidoVentaPendienteDetalleDTO.UMedida), "U. Medida" },
                     { nameof(PedidoVentaPendienteDetalleDTO.CantEntregada), "Cant. Entregada" },
@@ -691,9 +734,11 @@ namespace IMPLANPROD.Server.Controllers
 
                 var orden = new List<string>
                 {
-                    nameof(PedidoVentaPendienteDetalleDTO.NroPed),
+                    nameof(PedidoVentaPendienteDetalleDTO.NroClie),
+                    nameof(PedidoVentaPendienteDetalleDTO.Rasoclie),
                     nameof(PedidoVentaPendienteDetalleDTO.Codigo),
                     nameof(PedidoVentaPendienteDetalleDTO.Descripcion),
+                    nameof(PedidoVentaPendienteDetalleDTO.NroPed),
                     nameof(PedidoVentaPendienteDetalleDTO.CantSolicitada),
                     nameof(PedidoVentaPendienteDetalleDTO.UMedida),
                     nameof(PedidoVentaPendienteDetalleDTO.CantEntregada),
@@ -710,6 +755,98 @@ namespace IMPLANPROD.Server.Controllers
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error al generar Excel de Pedidos Pendientes (detalle)");
+                return StatusCode(500, "Error al generar el archivo excel");
+            }
+        }
+
+        [HttpPost("exportar-pedidos-entregas-detalle")]
+        public IActionResult ExportarPedidosEntregasDetalle([FromBody] List<PedidoVentaEntregaDetalleDTO> datos)
+        {
+            try
+            {
+                if (datos == null || !datos.Any())
+                {
+                    return BadRequest("No hay datos para exportar");
+                }
+
+                var encabezados = new Dictionary<string, string>
+                {
+                    { nameof(PedidoVentaEntregaDetalleDTO.NroPed), "N° Pedido" },
+                    { nameof(PedidoVentaEntregaDetalleDTO.Fecha), "Fecha" },
+                    { nameof(PedidoVentaEntregaDetalleDTO.Cliente), "Cliente" },
+                    { nameof(PedidoVentaEntregaDetalleDTO.Codigo), "Código" },
+                    { nameof(PedidoVentaEntregaDetalleDTO.Descripcion), "Descripción" },
+                    { nameof(PedidoVentaEntregaDetalleDTO.CanPed), "Cant. Pedida" },
+                    { nameof(PedidoVentaEntregaDetalleDTO.CantEnt), "Cant. Entregada" },
+                    { nameof(PedidoVentaEntregaDetalleDTO.Saldo), "Saldo" },
+                    { nameof(PedidoVentaEntregaDetalleDTO.Remito), "N° Remito" },
+                    { nameof(PedidoVentaEntregaDetalleDTO.Estado), "Estado" }
+                };
+
+                var orden = new List<string>
+                {
+                    nameof(PedidoVentaEntregaDetalleDTO.NroPed),
+                    nameof(PedidoVentaEntregaDetalleDTO.Fecha),
+                    nameof(PedidoVentaEntregaDetalleDTO.Cliente),
+                    nameof(PedidoVentaEntregaDetalleDTO.Codigo),
+                    nameof(PedidoVentaEntregaDetalleDTO.Descripcion),
+                    nameof(PedidoVentaEntregaDetalleDTO.CanPed),
+                    nameof(PedidoVentaEntregaDetalleDTO.CantEnt),
+                    nameof(PedidoVentaEntregaDetalleDTO.Remito),
+                    nameof(PedidoVentaEntregaDetalleDTO.Saldo),
+                    nameof(PedidoVentaEntregaDetalleDTO.Estado)
+                };
+
+                var archivo = _excelService.GenerarExcel(datos, "Entregas de Pedidos", encabezados, orden);
+
+                return File(archivo,
+                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    $"Entregas_Pedidos_{DateTime.Now:yyyyMMdd_HHmmss}.xlsx");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error al generar Excel de Entregas de Pedidos (detalle)");
+                return StatusCode(500, "Error al generar el archivo excel");
+            }
+        }
+
+        [HttpPost("exportar-pedidos-con-ocom-por-fechas")]
+        public IActionResult ExportarPedidosConOcomPorFechas([FromBody] List<PedidoVentaConOcomDTO> datos)
+        {
+            try
+            {
+                if (datos == null || !datos.Any())
+                {
+                    return BadRequest("No hay datos para exportar");
+                }
+
+                var encabezados = new Dictionary<string, string>
+                {
+                    { nameof(PedidoVentaConOcomDTO.FechEmis), "Fecha Emisión" },
+                    { nameof(PedidoVentaConOcomDTO.NroPed), "N° Pedido" },
+                    { nameof(PedidoVentaConOcomDTO.NroClie), "N° Cliente" },
+                    { nameof(PedidoVentaConOcomDTO.RasoClie), "Cliente" },
+                    { nameof(PedidoVentaConOcomDTO.NroOcom), "N° O.Compra" }
+                };
+
+                var orden = new List<string>
+                {
+                    nameof(PedidoVentaConOcomDTO.FechEmis),
+                    nameof(PedidoVentaConOcomDTO.NroPed),
+                    nameof(PedidoVentaConOcomDTO.NroClie),
+                    nameof(PedidoVentaConOcomDTO.RasoClie),
+                    nameof(PedidoVentaConOcomDTO.NroOcom)
+                };
+
+                var archivo = _excelService.GenerarExcel(datos, "Pedidos con O.Compra", encabezados, orden);
+
+                return File(archivo,
+                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    $"Pedidos_Con_OCompra_{DateTime.Now:yyyyMMdd_HHmmss}.xlsx");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error al generar Excel de Pedidos con O.Compra por fechas");
                 return StatusCode(500, "Error al generar el archivo excel");
             }
         }
@@ -1841,6 +1978,133 @@ namespace IMPLANPROD.Server.Controllers
             {
                 _logger.LogError(ex, "[ExportarRecepcionesPendientesDetalle] Error al generar Excel del detalle por lote");
                 return StatusCode(500, $"Error al generar el archivo excel: {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// Exporta anotaciones de pedido (Anotaped) a Excel.
+        /// Recibe la lista de registros ANOTAPED desde el cliente (ImpresionLista).
+        /// </summary>
+        /// <param name="datos">Lista de registros ANOTAPED a exportar</param>
+        /// <returns>Archivo Excel con las anotaciones del pedido</returns>
+        [HttpPost("exportar-anotaped")]
+        public IActionResult ExportarAnotaped([FromBody] List<Anotaped> datos)
+        {
+            try
+            {
+                if (datos == null || !datos.Any())
+                {
+                    return BadRequest("No hay datos para exportar");
+                }
+
+                var encabezados = new Dictionary<string, string>
+                {
+                    { "IdAnotacion", "N° Anot." },
+                    { "FechaCambio", "Fecha" },
+                    { "CodiExt", "Código" },
+                    { "Descrip", "Descripción" },
+                    { "CanPed", "Cantidad" },
+                    { "Usuario", "Usuario" },
+                    { "ObservaItem", "Obs. Item" },
+                    { "ObservaGral", "Obs. Gral." }
+                };
+
+                var orden = new List<string>
+                {
+                    "IdAnotacion", "FechaCambio", "CodiExt", "Descrip",
+                    "CanPed", "Usuario", "ObservaItem", "ObservaGral"
+                };
+
+                var archivo = _excelService.GenerarExcel(datos, "Anotaciones del Pedido", encabezados, orden);
+
+                return File(archivo,
+                            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                            $"Anotaciones_Pedido_{DateTime.Now:yyyyMMdd_HHmmss}.xlsx");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "[ExportarAnotaped] Error al generar Excel de anotaciones de pedido");
+                return StatusCode(500, $"Error al generar el archivo excel: {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// Exporta producciones propias (PropiaProduccionDTO) a Excel.
+        /// Se usa en la pantalla /propia-produccion.
+        /// </summary>
+        [HttpPost("exportar-propia-produccion")]
+        public IActionResult ExportarPropiaProduccion([FromBody] List<PropiaProduccionDTO> datos)
+        {
+            try
+            {
+                if (datos == null || !datos.Any())
+                {
+                    return BadRequest("No hay datos para exportar");
+                }
+
+                var encabezados = new Dictionary<string, string>
+                {
+                    { "FechMov", "Fecha" },
+                    { "DoPriLar", "Documento" },
+                    { "Cod_Exte", "Código" },
+                    { "Descrip", "Descripción" },
+                    { "CantIngre", "Cantidad" }
+                };
+
+                var orden = new List<string>
+                {
+                    "FechMov", "DoPriLar", "Cod_Exte", "Descrip", "CantIngre"
+                };
+
+                var archivo = _excelService.GenerarExcel(datos, "Producción Propia", encabezados, orden);
+
+                return File(archivo,
+                            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                            $"ProduccionPropia_{DateTime.Now:yyyyMMdd_HHmmss}.xlsx");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error al generar Excel de Producción Propia");
+                return StatusCode(500, "Error al generar el archivo excel");
+            }
+        }
+
+        /// <summary>
+        /// Exporta consumos de una producción propia (ConsumoProduccionDTO) a Excel.
+        /// Se usa en el modal de consumos de la pantalla /propia-produccion.
+        /// </summary>
+        [HttpPost("exportar-consumos-produccion")]
+        public IActionResult ExportarConsumosProduccion([FromBody] List<ConsumoProduccionDTO> datos)
+        {
+            try
+            {
+                if (datos == null || !datos.Any())
+                {
+                    return BadRequest("No hay datos para exportar");
+                }
+
+                var encabezados = new Dictionary<string, string>
+                {
+                    { "Cod_Exte", "Código" },
+                    { "Descrip", "Descripción" },
+                    { "CantSalid", "Cantidad Consumida" }
+                };
+
+                var orden = new List<string>
+                {
+                    "Cod_Exte", "Descrip", "CantSalid"
+                };
+
+                var archivo = _excelService.GenerarExcel(datos, "Consumos de Producción", encabezados, orden);
+
+                return File(archivo,
+                            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                            $"ConsumosProduccion_{DateTime.Now:yyyyMMdd_HHmmss}.xlsx");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error al generar Excel de consumos de producción");
+                return StatusCode(500, "Error al generar el archivo excel");
             }
         }
 

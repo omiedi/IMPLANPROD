@@ -298,5 +298,54 @@ namespace IMPLANPROD.Server.Controllers
                 return StatusCode(500, $"Error interno: {ex.Message}");
             }
         }
+
+        /// <summary>
+        /// Previsualiza los registros del archivo legacy REPLACOP.DAT sin migrarlos.
+        /// GET /api/Migration/replacop/preview?basePath=...
+        /// </summary>
+        [HttpGet("replacop/preview")]
+        public async Task<ActionResult<List<ReplacopPreviewDTO>>> PreviewReplacop([FromQuery] string? basePath = null)
+        {
+            try
+            {
+                var data = await _migrationService.PreviewReplacopAsync(basePath);
+                return Ok(data);
+            }
+            catch (FileNotFoundException ex)
+            {
+                return NotFound(ex.Message);
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, $"Error interno: {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// Migra los datos del archivo legacy REPLACOP.DAT a la tabla SQL REPLACO.
+        /// Solo migra si la tabla destino está vacía.
+        /// POST /api/Migration/replacop?basePath=...
+        /// </summary>
+        [HttpPost("replacop")]
+        public async Task<ActionResult<int>> MigrateReplacop([FromQuery] string? basePath = null)
+        {
+            try
+            {
+                int count = await _migrationService.MigrateReplacopAsync(basePath);
+                if (count == 0)
+                {
+                    return Ok("La tabla ya contenía datos o no se encontraron registros para migrar.");
+                }
+                return Ok($"Se migraron {count} registros exitosamente.");
+            }
+            catch (FileNotFoundException ex)
+            {
+                return NotFound(ex.Message);
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, $"Error interno: {ex.Message}");
+            }
+        }
     }
 }

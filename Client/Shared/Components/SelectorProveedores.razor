@@ -4,7 +4,7 @@
 @inject SweetAlertService sweetAlertService
 
 <!-- Modal para seleccionar proveedor -->
-<div class="modal fade @(mostrarModal ? "show" : "")" style="display: @(mostrarModal ? "block" : "none")" tabindex="-1" role="dialog"
+<div class="modal fade @(mostrarModal ? "show" : "")" style="display: @(mostrarModal ? "block" : "none"); z-index: @ZIndex;" tabindex="-1" role="dialog"
      @onkeydown="OnKeyDown">
     <div class="modal-dialog modal-lg" role="document">
         <div class="modal-content">
@@ -88,7 +88,7 @@
 <!-- Backdrop del modal -->
 @if (mostrarModal)
 {
-    <div class="modal-backdrop fade show"></div>
+    <div class="modal-backdrop fade show" style="z-index: @(ZIndex - 5);"></div>
 }
 
 @code {
@@ -96,6 +96,12 @@
     /// Evento que se dispara cuando se selecciona un proveedor
     /// </summary>
     [Parameter] public EventCallback<ProveedorSeleccionado> OnProveedorSeleccionado { get; set; }
+
+    /// <summary>
+    /// z-index del modal. El padre puede elevarlo cuando el selector se abre
+    /// desde dentro de otro modal (ej. Remito de Modelo a Proveedor).
+    /// </summary>
+    [Parameter] public int ZIndex { get; set; } = 1055;
 
     /// <summary>
     /// Controla la visibilidad del modal

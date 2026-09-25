@@ -55,8 +55,10 @@ namespace IMPLANPROD.Server.Controllers
                     return BadRequest("Los parámetros de solicitud son requeridos");
                 }
 
-                // Si es SUPERADMIN (IdFlexoftUsuario null y Depositos null), no aplicar filtros
-                bool esSuperAdmin = request.IdFlexoftUsuario == null && (request.Depositos == null || !request.Depositos.Any());
+                // Si es SUPERADMIN (IdFlexoftUsuario null y Depositos vacíos) O el usuario 14,
+                // no aplicar filtros por depósito
+                bool esSuperAdmin = (request.IdFlexoftUsuario == null && (request.Depositos == null || !request.Depositos.Any()))
+                                    || request.IdFlexoftUsuario == 14;
 
                 if (!esSuperAdmin)
                 {
@@ -81,9 +83,7 @@ namespace IMPLANPROD.Server.Controllers
                 // Construir filtro de depósitos (solo si no es SUPERADMIN)
                 var queryBase = esSuperAdmin
                     ? _context.Orfapens
-                    : (request.IdFlexoftUsuario == 14
-                        ? _context.Orfapens.Where(o => request.Depositos.Contains(o.DepoMovi!.Value) || o.DepoMovi.Value >= 30)
-                        : _context.Orfapens.Where(o => request.Depositos.Contains(o.DepoMovi!.Value)));
+                    : _context.Orfapens.Where(o => request.Depositos.Contains(o.DepoMovi!.Value));
 
                 // Aplicar filtro de texto ANTES del GroupBy para mejorar rendimiento
                 if (!string.IsNullOrWhiteSpace(request.Filter))
@@ -360,11 +360,18 @@ namespace IMPLANPROD.Server.Controllers
         /// </summary>
         private async Task ProcesarMovimientoStock(Orfapen datosOrfapen, decimal cantidad, int depositoEntrada)
         {
+            // El lote del producto fabricado se identifica con el IdSubOr de la orden de fabricación
+            // (ej.: "OF-000124-1"). Si IdenLote está vacío en ORFAPEN (cierres anteriores al fix),
+            // se usa DoPriCor (que contiene el IdSubOr) como fallback para garantizar la trazabilidad.
+            string loteMovimiento = !string.IsNullOrWhiteSpace(datosOrfapen.IdenLote)
+                ? datosOrfapen.IdenLote
+                : (datosOrfapen.DoPriCor ?? "");
+
             var movimientoStock = new MoviStockDTO
             {
                 Fecha = datosOrfapen.FechMov ?? DateTime.Now,
                 CodigoInterno = datosOrfapen.Cod_Inte ?? 0,
-                Lote = datosOrfapen.IdenLote ?? "",
+                Lote = loteMovimiento,
                 CodigoMovimiento = datosOrfapen.CodiMovi ?? "OF",
                 DocumentoPrimarioLargo = ProcesarCodigoLongitud(datosOrfapen.DoPriCor ?? ""),
                 DocumentoPrimarioCorto = ProcesarCodigoLongitud(datosOrfapen.DoPriCor ?? ""),

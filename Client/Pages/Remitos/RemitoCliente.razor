@@ -1,6 +1,7 @@
 @page "/remitos/cliente"
 @using IMPLANPROD.Shared.Entities
 @using IMPLANPROD.Shared.DTOs
+@using IMPLANPROD.Shared.DTOs.Impresiones
 @using IMPLANPROD.Client.Repositories
 @using IMPLANPROD.Client.Shared.Components
 @using IMPLANPROD.Client.Services
@@ -9,6 +10,8 @@
 @using Blazored.Modal.Services
 @using static IMPLANPROD.Client.Pages.Remitos.PedidosPendientesModal
 @inject IRepository repository
+@inject HttpClient Http
+@inject IJSRuntime JS
 @inject NavigationManager NavigationManager
 @inject SweetAlertService sweetAlertService
 @inject RemitosConfigService remitosConfigService
@@ -201,9 +204,19 @@ else
             </div>
             <div class="card-body" style="background: linear-gradient(135deg, #e8f5e9 0%, #f1f8f1 100%); box-shadow: inset 0 2px 4px rgba(40, 167, 69, 0.1);">
                 <div class="d-flex justify-content-between mb-3">
-                    <div>
+                    <div class="d-flex gap-2">
                         <button type="button" class="btn btn-primary btn-sm" @onclick="AbrirBuscadorProductos">
                             <i class="oi oi-plus"></i> Agregar Producto
+                        </button>
+                        <button type="button" class="btn btn-info btn-sm" @onclick="MostrarPedidosPendientesAsync"
+                                disabled="@(numeroClienteSeleccionado == null || depositoSeleccionado <= 0 || cargandoPedidosPendientes)"
+                                title="@(numeroClienteSeleccionado == null ? "Seleccione un cliente" : depositoSeleccionado <= 0 ? "Seleccione un depósito" : "Mostrar pedidos pendientes del cliente")">
+                            @* Spinner mientras se cargan los pedidos pendientes (bloquea el botón) *@
+                            @if (cargandoPedidosPendientes)
+                            {
+                                <span class="spinner-border spinner-border-sm me-1"></span>
+                            }
+                            <i class="fas fa-clipboard-list"></i> Mostrar Pedidos Pendientes
                         </button>
                     </div>
                     <div>
@@ -388,11 +401,19 @@ else
 
         <!-- Botones de acción -->
         <div class="d-flex justify-content-end gap-2 mb-3">
-            <button type="button" class="btn btn-secondary" @onclick="Cancelar">
+            <button type="button" class="btn btn-secondary" @onclick="Cancelar" disabled="@guardando">
                 <i class="fas fa-times"></i> Cancelar
             </button>
-            <button type="submit" class="btn btn-success">
-                <i class="fas fa-save"></i> Guardar Remito
+            <button type="submit" class="btn btn-success" disabled="@guardando">
+                @if (guardando)
+                {
+                    <span class="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span>
+                    <span>Guardando...</span>
+                }
+                else
+                {
+                    <i class="fas fa-save"></i> <span>Guardar Remito</span>
+                }
             </button>
         </div>
     </EditForm>
@@ -419,6 +440,59 @@ else
 <SyncConfigModal MostrarModal="mostrarModalSync"
                  OnCerrar="CerrarModalSync"
                  OnGuardado="OnConfigSyncGuardada" />
+
+<!-- Modal de Confirmación de Numeración -->
+@if (mostrarModalNumeracion)
+{
+    <div class="modal fade show" style="display: block" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header bg-primary text-white">
+                    <h5 class="modal-title">
+                        <i class="fas fa-hashtag me-2"></i>Confirmar Numeración del Remito
+                    </h5>
+                    <button type="button" class="btn-close btn-close-white" @onclick="CerrarModalNumeracion" disabled="@validandoNumeracion"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="alert alert-info">
+                        <strong>Remito que se va a generar:</strong>
+                        <div class="fs-5 mt-2">RT-X-@prefijoModal.ToString("D4")-@numeroModal.ToString("D8")</div>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label fw-bold">Punto de Venta (Prefijo):</label>
+                            <input type="number" class="form-control" @bind="prefijoModal" min="0" max="9999" placeholder="0000" disabled="@validandoNumeracion" />
+                            <small class="text-muted">4 dígitos. Puede modificarlo si es necesario.</small>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label fw-bold">Número de Remito:</label>
+                            <input type="number" class="form-control" @bind="numeroModal" min="0" max="99999999" placeholder="00000000" disabled="@validandoNumeracion" />
+                            <small class="text-muted">8 dígitos. Puede modificarlo si es necesario.</small>
+                        </div>
+                    </div>
+                    @if (validandoNumeracion)
+                    {
+                        <div class="d-flex justify-content-center align-items-center" style="min-height: 60px;">
+                            <div class="spinner-border text-primary" role="status">
+                                <span class="visually-hidden">Validando numeración...</span>
+                            </div>
+                            <span class="ms-2">Validando numeración...</span>
+                        </div>
+                    }
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" @onclick="CerrarModalNumeracion" disabled="@validandoNumeracion">
+                        <i class="fas fa-times me-1"></i>Cancelar
+                    </button>
+                    <button type="button" class="btn btn-success" @onclick="ConfirmarNumeracionAsync" disabled="@validandoNumeracion">
+                        <i class="fas fa-check me-1"></i>Confirmar y Guardar
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="modal-backdrop fade show"></div>
+}
 
 <!-- Componente de Impresión de Remito -->
 <ImpresionRemito @ref="impresionRemito"
@@ -460,7 +534,18 @@ else
     // Control del modal de configuración
     private bool mostrarModalConfiguracion = false;
     private bool mostrarModalSync = false;
+    private bool mostrarModalNumeracion = false;
     private bool validando = true;
+    private bool validandoNumeracion = false;
+
+    // Control de guardado: evita doble clic y duplicación del remito.
+    // Permanece true desde HandleValidSubmit hasta que termina todo el proceso
+    // (modal de numeración, GuardarRemito, impresión y limpieza) o si se cancela el modal.
+    private bool guardando = false;
+
+    // Variables del modal de numeración
+    private int prefijoModal = 0;
+    private int numeroModal = 0;
 
     // Variables para impresión del remito
     private string nciImpresion = "";
@@ -477,6 +562,10 @@ else
     private string observacionesImpresion = "";
     private string valorDeclaradoImpresion = "";
     private int bultosImpresion = 1;
+
+    // Variables para impresión por plantilla REMITOCLIENTE
+    private const string NombrePlantillaRemitoCliente = "REMITOCLIENTE";
+    private int? plantillaRemitoClienteId;
 
     // Control del modal de selección de lotes
     private bool mostrarModalLotes = false;
@@ -694,8 +783,9 @@ else
                 await sweetAlertService.FireAsync("Advertencia", "No se pudieron cargar todos los datos del cliente", SweetAlertIcon.Warning);
             }
 
-            // Verificar si el cliente tiene pedidos pendientes
-            await VerificarPedidosPendientes(cliente.NumeCli);
+            // Los pedidos pendientes se muestran a pedido del usuario mediante el
+            // botón "Mostrar Pedidos Pendientes", que requiere además un depósito
+            // seleccionado para poder consultar el stock de cada producto.
 
             StateHasChanged();
         }
@@ -704,6 +794,34 @@ else
             Console.WriteLine($"[RemitoCliente] Error al cargar datos del cliente: {ex.Message}");
             await sweetAlertService.FireAsync("Error", $"Error al cargar datos del cliente: {ex.Message}", SweetAlertIcon.Error);
         }
+    }
+
+    /// <summary>
+    /// Punto de entrada del botón "Mostrar Pedidos Pendientes".
+    /// Valida que haya un cliente y un depósito seleccionados antes de abrir el modal.
+    /// Mientras carga, el botón queda bloqueado con spinner (cargandoPedidosPendientes).
+    /// </summary>
+    private bool cargandoPedidosPendientes = false;
+
+    private async Task MostrarPedidosPendientesAsync()
+    {
+        if (numeroClienteSeleccionado == null)
+        {
+            await sweetAlertService.FireAsync("Atención", "Debe seleccionar un cliente antes de ver los pedidos pendientes.", SweetAlertIcon.Warning);
+            return;
+        }
+
+        if (depositoSeleccionado <= 0)
+        {
+            await sweetAlertService.FireAsync("Atención", "Debe seleccionar un depósito antes de ver los pedidos pendientes.", SweetAlertIcon.Warning);
+            return;
+        }
+
+        // Bloquear el botón con spinner hasta que se muestre el modal
+        cargandoPedidosPendientes = true;
+        StateHasChanged();
+
+        await VerificarPedidosPendientes(numeroClienteSeleccionado.Value);
     }
 
     /// <summary>
@@ -730,9 +848,11 @@ else
             {
                 Console.WriteLine($"[RemitoCliente] Se encontraron {pedidosPendientes.Count} items pendientes");
 
-                // Convertir a PeddetaConCantidad
-                var pedidosConCantidad = pedidosPendientes
-                    .Select(p => new PeddetaConCantidad
+                // Convertir a PeddetaConCantidad y cargar el stock del depósito seleccionado
+                var pedidosConCantidad = new List<PeddetaConCantidad>();
+                foreach (var p in pedidosPendientes)
+                {
+                    var item = new PeddetaConCantidad
                     {
                         PeddetaId = p.PeddetaId,
                         NroPed = p.NroPed,
@@ -748,12 +868,37 @@ else
                         NroOcom = p.NroOcom,
                         NuOrItem = p.NuOrItem,
                         CantidadARemitir = 0
-                    })
-                    .ToList();
+                    };
+
+                    // Cargar stock del producto en el depósito seleccionado
+                    if (p.CodiInt.HasValue && p.CodiInt.Value > 0 && depositoSeleccionado > 0)
+                    {
+                        try
+                        {
+                            var respStock = await repository.Get<decimal>($"api/stock/stockdeposito/{p.CodiInt.Value}/{depositoSeleccionado}");
+                            if (!respStock.Error)
+                            {
+                                item.StockDeposito = respStock.Response;
+                            }
+                        }
+                        catch (Exception exStock)
+                        {
+                            Console.WriteLine($"[RemitoCliente] Error al cargar stock para producto {p.CodiInt}: {exStock.Message}");
+                        }
+                    }
+
+                    pedidosConCantidad.Add(item);
+                }
+
+                // Obtener nombres para mostrar en el encabezado del modal
+                var nombreCliente = razonSocial;
+                var nombreDeposito = depositos.FirstOrDefault(d => d.Id == depositoSeleccionado)?.Descripcion ?? "";
 
                 // Mostrar modal con pedidos pendientes
                 var parameters = new ModalParameters();
                 parameters.Add(nameof(PedidosPendientesModal.pedidosPendientes), pedidosConCantidad);
+                parameters.Add(nameof(PedidosPendientesModal.NombreCliente), nombreCliente);
+                parameters.Add(nameof(PedidosPendientesModal.NombreDeposito), nombreDeposito);
 
                 var modal = modalService.Show<PedidosPendientesModal>("Pedidos Pendientes", parameters, new ModalOptions
                 {
@@ -761,6 +906,11 @@ else
                     DisableBackgroundCancel = true,
                     HideCloseButton = false
                 });
+
+                // El modal ya está visible: liberar el spinner/botón antes de
+                // esperar el resultado (el usuario puede tardar en elegir)
+                cargandoPedidosPendientes = false;
+                StateHasChanged();
 
                 var result = await modal.Result;
 
@@ -775,12 +925,21 @@ else
             }
             else
             {
-                Console.WriteLine($"[RemitoCliente] No se encontraron pedidos pendientes");
+                await sweetAlertService.FireAsync("Información", "No se encontraron pedidos pendientes para este cliente.", SweetAlertIcon.Info);
             }
         }
         catch (Exception ex)
         {
             Console.WriteLine($"[RemitoCliente] Error al verificar pedidos pendientes: {ex.Message}");
+        }
+        finally
+        {
+            // Si salió sin mostrar el modal (error o sin pendientes), liberar el botón
+            if (cargandoPedidosPendientes)
+            {
+                cargandoPedidosPendientes = false;
+                StateHasChanged();
+            }
         }
     }
 
@@ -868,11 +1027,18 @@ else
     /// </summary>
     private async Task HandleValidSubmit()
     {
+        // Evitar doble clic: si ya está guardando, ignorar el submit
+        if (guardando) return;
+
+        guardando = true;
+
         try
         {
             // Validación 1: Cliente seleccionado
             if (!numeroClienteSeleccionado.HasValue)
             {
+                guardando = false;
+                StateHasChanged();
                 await sweetAlertService.FireAsync("Advertencia", "Debe seleccionar un cliente", SweetAlertIcon.Warning);
                 return;
             }
@@ -880,6 +1046,8 @@ else
             // Validación 2: Debe haber detalle
             if (productosRemito.Count == 0)
             {
+                guardando = false;
+                StateHasChanged();
                 await sweetAlertService.FireAsync("Advertencia", "Debe agregar al menos un producto al remito", SweetAlertIcon.Warning);
                 return;
             }
@@ -888,6 +1056,8 @@ else
             var productosSinCantidad = productosRemito.Where(p => p.Cantidad <= 0).ToList();
             if (productosSinCantidad.Any())
             {
+                guardando = false;
+                StateHasChanged();
                 await sweetAlertService.FireAsync("Advertencia", "Todos los productos deben tener cantidad mayor a 0", SweetAlertIcon.Warning);
                 return;
             }
@@ -896,6 +1066,8 @@ else
             var productosTrazablesSinLotes = productosRemito.Where(p => p.Trazable == 1 && !p.Lotes.Any()).ToList();
             if (productosTrazablesSinLotes.Any())
             {
+                guardando = false;
+                StateHasChanged();
                 var productos = string.Join(", ", productosTrazablesSinLotes.Select(p => p.Codigo));
                 await sweetAlertService.FireAsync("Advertencia", 
                     $"Los siguientes productos trazables deben tener lotes asignados: {productos}", 
@@ -903,124 +1075,20 @@ else
                 return;
             }
 
-            // Obtener el tipo de numeración configurado
-            var tipoNumeracion = await remitosConfigService.ObtenerTipoNumeracionRemitosAsync();
-            Console.WriteLine($"[RemitoCliente] Tipo de numeración: {tipoNumeracion}");
-
-            // Si es AUTONUME, mostrar confirmación del número que se va a usar
-            if (tipoNumeracion == "AUTONUME")
-            {
-                // Obtener la fecha de nueva numeración configurada
-                var fechaNuevaNumeracion = await remitosConfigService.ObtenerFechaNuevaNumeracionAsync();
-                
-                // Obtener el siguiente número disponible
-                var ultimoNumero = await remitosConfigService.ObtenerUltimoNumeroRemitoAsync();
-                var siguienteNumero = ultimoNumero + 1;
-                
-                // Obtener código de movimiento configurado
-                var codigoMovimiento = await remitosConfigService.ObtenerCodigoMovimientoAsync();
-                
-                // Verificar si es la primera ejecución después de la fecha de nueva numeración
-                // Esto ocurre cuando:
-                // 1. La fecha configurada NO es la fecha por defecto (01/01/1980)
-                // 2. La fecha configurada es >= hoy (fecha reciente)
-                // 3. No hay remitos desde esa fecha (ultimoNumero == 0)
-                bool esFechaDefecto = fechaNuevaNumeracion.Date == new DateTime(1980, 1, 1).Date;
-                bool esFechaReciente = fechaNuevaNumeracion.Date >= DateTime.Now.Date;
-                bool noHayRemitosDesdeEsaFecha = ultimoNumero == 0;
-                
-                bool esPrimeraEjecucionPostFecha = !esFechaDefecto && esFechaReciente && noHayRemitosDesdeEsaFecha;
-                
-                Console.WriteLine($"[RemitoCliente] Verificación primera ejecución: FechaConfig={fechaNuevaNumeracion:dd/MM/yyyy}, EsDefecto={esFechaDefecto}, EsReciente={esFechaReciente}, NoHayRemitos={noHayRemitosDesdeEsaFecha}, EsPrimera={esPrimeraEjecucionPostFecha}");
-                
-                if (esPrimeraEjecucionPostFecha)
-                {
-                    // Primera ejecución post-fecha: permitir ingreso manual del número
-                    Console.WriteLine($"[RemitoCliente] Primera ejecución post-fecha {fechaNuevaNumeracion:dd/MM/yyyy}. Solicitando número de remito al usuario.");
-                    
-                    var remitoSugerido = $"{codigoMovimiento}-X-{ObtenerPrefijoFormateado()}-{siguienteNumero.ToString("D8")}";
-                    
-                    var result = await sweetAlertService.FireAsync(new SweetAlertOptions
-                    {
-                        Title = "Iniciar Nueva Numeración",
-                        Html = $"Se ha configurado una nueva fecha de numeración: <strong>{fechaNuevaNumeracion:dd/MM/yyyy}</strong><br><br>" +
-                               $"Número de remito sugerido:<br><strong style='font-size: 1.2em; color: #28a745;'>{remitoSugerido}</strong><br><br>" +
-                               $"Ingrese el número de remito para iniciar la numeración:",
-                        Icon = SweetAlertIcon.Question,
-                        Input = SweetAlertInputType.Number,
-                        InputValue = siguienteNumero.ToString(),
-                        ShowCancelButton = true,
-                        ConfirmButtonText = "Confirmar",
-                        CancelButtonText = "Cancelar",
-                        ConfirmButtonColor = "#28a745",
-                        CancelButtonColor = "#dc3545"
-                    });
-
-                    if (!result.IsConfirmed || string.IsNullOrEmpty(result.Value))
-                    {
-                        Console.WriteLine("[RemitoCliente] Generación de remito cancelada por el usuario");
-                        return;
-                    }
-
-                    // Validar y usar el número ingresado por el usuario
-                    if (int.TryParse(result.Value, out int numeroIngresado) && numeroIngresado > 0)
-                    {
-                        numeroRemito = numeroIngresado;
-                        Console.WriteLine($"[RemitoCliente] Usuario ingresó número de remito: {numeroRemito}");
-                    }
-                    else
-                    {
-                        await sweetAlertService.FireAsync("Error", "Debe ingresar un número válido mayor a 0", SweetAlertIcon.Error);
-                        return;
-                    }
-                }
-                else
-                {
-                    // Ejecución normal: mostrar confirmación estándar
-                    var remitoCompleto = $"{codigoMovimiento}-X-{ObtenerPrefijoFormateado()}-{siguienteNumero.ToString("D8")}";
-                    
-                    Console.WriteLine($"[RemitoCliente] Mostrando confirmación para remito: {remitoCompleto}");
-                    
-                    var result = await sweetAlertService.FireAsync(new SweetAlertOptions
-                    {
-                        Title = "Confirmar Generación de Remito",
-                        Html = $"Se va a generar el remito número:<br><br><strong style='font-size: 1.2em; color: #28a745;'>{remitoCompleto}</strong><br><br>¿Desea continuar?",
-                        Icon = SweetAlertIcon.Question,
-                        ShowCancelButton = true,
-                        ConfirmButtonText = "Sí, continuar",
-                        CancelButtonText = "Cancelar",
-                        ConfirmButtonColor = "#28a745",
-                        CancelButtonColor = "#dc3545"
-                    });
-
-                    if (!result.IsConfirmed)
-                    {
-                        Console.WriteLine("[RemitoCliente] Generación de remito cancelada por el usuario");
-                        return;
-                    }
-                    
-                    // Usar el siguiente número automático
-                    numeroRemito = siguienteNumero;
-                }
-            }
-
-            Console.WriteLine($"[RemitoCliente] Guardando remito para cliente {numeroClienteSeleccionado}");
-            
-            // Guardar el remito (incluye validación de duplicados)
-            await GuardarRemito();
-            
-            await sweetAlertService.FireAsync("Éxito", "Remito guardado correctamente", SweetAlertIcon.Success);
-            
-            // Preparar e imprimir el remito
-            await PrepararEImprimirRemito();
-            
-            // Limpiar formulario o navegar
-            LimpiarFormulario();
+            // Abrir modal de numeración para que el usuario confirme o modifique
+            // el punto de venta (prefijo) y el número de remito antes de guardar.
+            // El modal se encarga de validar que el par prefijo/número esté libre.
+            // Nota: guardando permanece true mientras el modal está abierto y durante
+            // todo el proceso de guardado. Se libera en CerrarModalNumeracion (cancelación)
+            // o al finalizar ConfirmarNumeracionAsync (éxito o error).
+            await AbrirModalNumeracionAsync();
         }
         catch (Exception ex)
         {
             Console.WriteLine($"[RemitoCliente] Error al guardar: {ex.Message}");
             await sweetAlertService.FireAsync("Error", $"Error al guardar el remito: {ex.Message}", SweetAlertIcon.Error);
+            guardando = false;
+            StateHasChanged();
         }
     }
 
@@ -1284,6 +1352,180 @@ else
     }
 
     /// <summary>
+    /// Abre el modal de numeración con el punto de venta y número sugeridos.
+    /// Permite al usuario confirmar o modificar ambos valores antes de guardar.
+    /// </summary>
+    private async Task AbrirModalNumeracionAsync()
+    {
+        try
+        {
+            // Cargar el prefijo por defecto si no está cargado
+            if (prefijoRemito <= 0)
+            {
+                await CargarPrefijoDefecto();
+            }
+
+            var tipoNumeracion = await remitosConfigService.ObtenerTipoNumeracionRemitosAsync();
+            Console.WriteLine($"[RemitoCliente] Tipo de numeración: {tipoNumeracion}");
+
+            if (numeroRemito <= 0 || tipoNumeracion == "AUTONUME")
+            {
+                // Obtener el siguiente número libre según el tipo de numeración
+                var ultimoNumero = await remitosConfigService.ObtenerUltimoNumeroRemitoAsync();
+                numeroModal = ultimoNumero + 1;
+            }
+            else
+            {
+                numeroModal = numeroRemito;
+            }
+
+            // El punto de venta inicial es el prefijo del formulario
+            prefijoModal = prefijoRemito > 0 ? prefijoRemito : 0;
+            if (prefijoModal <= 0)
+            {
+                await CargarPrefijoDefecto();
+                prefijoModal = prefijoRemito;
+            }
+
+            // Limitar el número dentro del rango válido
+            if (numeroModal > 99999999) numeroModal = 99999999;
+            if (numeroModal < 0) numeroModal = 0;
+
+            mostrarModalNumeracion = true;
+            StateHasChanged();
+            Console.WriteLine($"[RemitoCliente] Modal de numeración abierto: prefijo={prefijoModal}, numero={numeroModal}");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[RemitoCliente] Error al abrir modal de numeración: {ex.Message}");
+            await sweetAlertService.FireAsync("Error", $"Error al preparar numeración: {ex.Message}", SweetAlertIcon.Error);
+        }
+    }
+
+    /// <summary>
+    /// Cierra el modal de numeración sin guardar.
+    /// Libera el flag guardando para permitir un nuevo intento.
+    /// </summary>
+    private void CerrarModalNumeracion()
+    {
+        mostrarModalNumeracion = false;
+        validandoNumeracion = false;
+        guardando = false;
+        StateHasChanged();
+        Console.WriteLine("[RemitoCliente] Modal de numeración cerrado");
+    }
+
+    /// <summary>
+    /// Valida el prefijo y número del modal. Si están ocupados, propone el siguiente libre.
+    /// Si están libres, guarda el remito con la numeración seleccionada.
+    /// </summary>
+    private async Task ConfirmarNumeracionAsync()
+    {
+        try
+        {
+            // Validar rango de los campos
+            if (prefijoModal < 0 || prefijoModal > 9999)
+            {
+                await sweetAlertService.FireAsync("Error", "El punto de venta debe estar entre 0 y 9999", SweetAlertIcon.Error);
+                return;
+            }
+
+            if (numeroModal <= 0 || numeroModal > 99999999)
+            {
+                await sweetAlertService.FireAsync("Error", "El número de remito debe estar entre 1 y 99999999", SweetAlertIcon.Error);
+                return;
+            }
+
+            validandoNumeracion = true;
+            StateHasChanged();
+
+            // Verificar si el par prefijo/número está ocupado
+            var responseValidacion = await repository.Get<bool>($"api/movistock/validar-remito/{prefijoModal}/{numeroModal}");
+            if (responseValidacion.Error)
+            {
+                var error = await responseValidacion.GetErrorMessageAsync();
+                throw new Exception($"Error al validar remito: {error}");
+            }
+
+            if (responseValidacion.Response)
+            {
+                // El remito está ocupado: obtener el último número para ese prefijo y proponer el siguiente
+                var responseUltimo = await repository.Get<int>($"api/movistock/ultimo-numero-prefijo/{prefijoModal}");
+                var ultimoNumero = responseUltimo.Error ? 0 : (responseUltimo.Response <= 0 ? 0 : responseUltimo.Response);
+                var sugerido = ultimoNumero + 1;
+                if (sugerido > 99999999) sugerido = 99999999;
+
+                validandoNumeracion = false;
+                StateHasChanged();
+
+                var result = await sweetAlertService.FireAsync(new SweetAlertOptions
+                {
+                    Title = "Remito Ocupado",
+                    Html = $"El remito <strong>RT-X-{prefijoModal.ToString("D4")}-{numeroModal.ToString("D8")}</strong> ya existe para el punto de venta <strong>{prefijoModal}</strong>.<br><br>" +
+                           $"Último número usado: <strong>{ultimoNumero}</strong><br>" +
+                           $"Número libre sugerido: <strong>{sugerido}</strong><br><br>" +
+                           $"¿Desea usar el número sugerido o modificarlo manualmente?",
+                    Icon = SweetAlertIcon.Warning,
+                    ShowCancelButton = true,
+                    ShowConfirmButton = true,
+                    ConfirmButtonText = $"Usar {sugerido}",
+                    CancelButtonText = "Modificar",
+                    ConfirmButtonColor = "#28a745",
+                    CancelButtonColor = "#dc3545"
+                });
+
+                if (result.IsConfirmed)
+                {
+                    numeroModal = sugerido;
+                    StateHasChanged();
+                    // Reintentar confirmación con el número sugerido
+                    await ConfirmarNumeracionAsync();
+                }
+                else
+                {
+                    // El usuario vuelve al modal para modificarlo manualmente
+                    Console.WriteLine("[RemitoCliente] Usuario optó por modificar la numeración manualmente");
+                }
+
+                return;
+            }
+
+            // Numeración libre: aplicar al formulario y guardar
+            prefijoRemito = prefijoModal;
+            numeroRemito = numeroModal;
+            mostrarModalNumeracion = false;
+            validandoNumeracion = false;
+            StateHasChanged();
+
+            Console.WriteLine($"[RemitoCliente] Guardando remito para cliente {numeroClienteSeleccionado} con prefijo {prefijoRemito} y número {numeroRemito}");
+
+            // Guardar el remito (incluye validación de duplicados)
+            await GuardarRemito();
+
+            await sweetAlertService.FireAsync("Éxito", "Remito guardado correctamente", SweetAlertIcon.Success);
+
+            // Preparar e imprimir el remito
+            await PrepararEImprimirRemito();
+
+            // Limpiar formulario o navegar
+            LimpiarFormulario();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[RemitoCliente] Error al confirmar numeración: {ex.Message}");
+            await sweetAlertService.FireAsync("Error", $"Error al confirmar numeración: {ex.Message}", SweetAlertIcon.Error);
+        }
+        finally
+        {
+            validandoNumeracion = false;
+            // Liberar el bloqueo del botón Guardar: el proceso completo terminó
+            // (ya sea por éxito, error o cancelación del modal de numeración).
+            guardando = false;
+            StateHasChanged();
+        }
+    }
+
+    /// <summary>
     /// Guarda el remito registrando los movimientos de stock
     /// Replica la lógica de VB6 para generar remitos de cliente
     /// </summary>
@@ -1293,135 +1535,32 @@ else
         {
             Console.WriteLine("[RemitoCliente] Iniciando guardado de remito...");
 
-            // Obtener el tipo de numeración configurado
-            var tipoNumeracion = await remitosConfigService.ObtenerTipoNumeracionRemitosAsync();
-            Console.WriteLine($"[RemitoCliente] Tipo de numeración: {tipoNumeracion}");
-
-            // Variable para controlar reintentos
-            int intentos = 0;
-            const int maxIntentos = 5;
-            bool numeroAsignado = false;
-
-            // Si es AUTONUME, obtener el siguiente número automáticamente con validación
-            if (tipoNumeracion == "AUTONUME")
+            // La numeración fue confirmada/modificada por el usuario en el modal de numeración.
+            // Se realiza una validación final antes de grabar para detectar posibles duplicados concurrentes.
+            if (prefijoRemito <= 0)
             {
-                while (!numeroAsignado && intentos < maxIntentos)
-                {
-                    intentos++;
-                    
-                    // Obtener el siguiente número disponible
-                    var ultimoNumero = await remitosConfigService.ObtenerUltimoNumeroRemitoAsync();
-                    numeroRemito = ultimoNumero + 1;
-                    Console.WriteLine($"[RemitoCliente] Intento {intentos}: Número de remito propuesto: {numeroRemito}");
-
-                    // Validar que el número no esté ocupado antes de grabar
-                    var responseValidacion = await repository.Get<bool>($"api/movistock/validar-remito/{prefijoRemito}/{numeroRemito}");
-                    
-                    if (!responseValidacion.Error && responseValidacion.Response)
-                    {
-                        // El número ya fue ocupado por otro usuario/proceso
-                        Console.WriteLine($"[RemitoCliente] Número {numeroRemito} ya ocupado, reintentando...");
-                        
-                        if (intentos >= maxIntentos)
-                        {
-                            // Mostrar advertencia al usuario
-                            var codigoMovimiento = await remitosConfigService.ObtenerCodigoMovimientoAsync();
-                            var remitoCompleto = $"{codigoMovimiento}-X-{ObtenerPrefijoFormateado()}-{numeroRemito.ToString("D8")}";
-                            
-                            var result = await sweetAlertService.FireAsync(new SweetAlertOptions
-                            {
-                                Title = "Número de Remito Ocupado",
-                                Html = $"El número de remito <strong>{remitoCompleto}</strong> fue ocupado por otro usuario.<br><br>" +
-                                       $"Se han realizado {maxIntentos} intentos.<br><br>¿Desea reintentar con el siguiente número disponible?",
-                                Icon = SweetAlertIcon.Warning,
-                                ShowCancelButton = true,
-                                ConfirmButtonText = "Sí, reintentar",
-                                CancelButtonText = "Cancelar",
-                                ConfirmButtonColor = "#28a745",
-                                CancelButtonColor = "#dc3545"
-                            });
-
-                            if (result.IsConfirmed)
-                            {
-                                intentos = 0; // Reiniciar contador de intentos
-                                continue;
-                            }
-                            else
-                            {
-                                Console.WriteLine("[RemitoCliente] Guardado cancelado por el usuario después de múltiples intentos");
-                                return;
-                            }
-                        }
-                        
-                        // Esperar un momento antes de reintentar
-                        await Task.Delay(100);
-                        continue;
-                    }
-                    
-                    // Número disponible, continuar con el guardado
-                    numeroAsignado = true;
-                    Console.WriteLine($"[RemitoCliente] Número de remito {numeroRemito} validado y disponible");
-                }
+                throw new Exception("El punto de venta (prefijo) debe ser mayor a 0");
             }
-            // Si es PREIMPRE, validar que se haya ingresado un número
-            else if (tipoNumeracion == "PREIMPRE")
+
+            if (numeroRemito <= 0)
             {
-                if (numeroRemito <= 0)
-                {
-                    // Obtener el último número para proponer
-                    var ultimoNumero = await remitosConfigService.ObtenerUltimoNumeroRemitoAsync();
-                    var siguienteNumero = ultimoNumero + 1;
-
-                    // Mostrar mensaje con opción de asignar el siguiente número
-                    var result = await sweetAlertService.FireAsync(new SweetAlertOptions
-                    {
-                        Title = "Número de Remito Requerido",
-                        Html = $"Debe ingresar un número de remito manualmente.<br><br>¿Desea asignar el siguiente número disponible?<br><strong>Número sugerido: {siguienteNumero}</strong>",
-                        Icon = SweetAlertIcon.Warning,
-                        ShowCancelButton = true,
-                        ConfirmButtonText = "Sí, asignar",
-                        CancelButtonText = "No, cancelar",
-                        ConfirmButtonColor = "#28a745",
-                        CancelButtonColor = "#dc3545"
-                    });
-
-                    if (result.IsConfirmed)
-                    {
-                        numeroRemito = siguienteNumero;
-                        Console.WriteLine($"[RemitoCliente] Número de remito asignado: {numeroRemito}");
-                    }
-                    else
-                    {
-                        Console.WriteLine("[RemitoCliente] Guardado cancelado por el usuario");
-                        return;
-                    }
-                }
-                
-                // Validar que el número no esté duplicado antes de grabar
-                Console.WriteLine($"[RemitoCliente] Validando si el remito {prefijoRemito}-{numeroRemito} ya existe...");
-                var responseValidacion = await repository.Get<bool>($"api/movistock/validar-remito/{prefijoRemito}/{numeroRemito}");
-                
-                if (!responseValidacion.Error && responseValidacion.Response)
-                {
-                    // El remito ya existe
-                    var codigoMovimiento = await remitosConfigService.ObtenerCodigoMovimientoAsync();
-                    var remitoCompleto = $"{codigoMovimiento}-X-{ObtenerPrefijoFormateado()}-{numeroRemito.ToString("D8")}";
-                    
-                    await sweetAlertService.FireAsync(new SweetAlertOptions
-                    {
-                        Title = "Remito Duplicado",
-                        Html = $"El número de remito <strong>{remitoCompleto}</strong> ya existe en el sistema.<br><br>Por favor, ingrese un número diferente.",
-                        Icon = SweetAlertIcon.Error,
-                        ConfirmButtonText = "Entendido",
-                        ConfirmButtonColor = "#dc3545"
-                    });
-                    
-                    Console.WriteLine($"[RemitoCliente] Remito duplicado detectado: {prefijoRemito}-{numeroRemito}");
-                    return;
-                }
-                
-                Console.WriteLine($"[RemitoCliente] Número de remito validado: {numeroRemito}");
+                throw new Exception("El número de remito debe ser mayor a 0");
             }
+
+            Console.WriteLine($"[RemitoCliente] Validando remito {prefijoRemito}-{numeroRemito} antes de grabar...");
+            var responseValidacionFinal = await repository.Get<bool>($"api/movistock/validar-remito/{prefijoRemito}/{numeroRemito}");
+            if (responseValidacionFinal.Error)
+            {
+                var error = await responseValidacionFinal.GetErrorMessageAsync();
+                throw new Exception($"Error al validar remito: {error}");
+            }
+
+            if (responseValidacionFinal.Response)
+            {
+                throw new Exception($"El remito RT-X-{ObtenerPrefijoFormateado()}-{numeroRemito.ToString("D8")} ya fue ocupado por otro usuario.");
+            }
+
+            Console.WriteLine($"[RemitoCliente] Numeración validada: prefijo={prefijoRemito}, número={numeroRemito}");
 
             // Construir el remito completo formateado: RT-X-PPPP-NNNNNNNN
             // Donde X es un separador, PPPP es el prefijo de 4 dígitos, NNNNNNNN es el número de 8 dígitos
@@ -1469,10 +1608,105 @@ else
             }
 
             Console.WriteLine($"[RemitoCliente] Remito guardado exitosamente. Total items: {nuorItem}");
+
+            // Guardar datos adicionales del remito en EXTRAS_REMITO
+            await GuardarExtrasRemitoAsync(remitoLargo);
+
+            // Registrar la anotación automática "Items Remitidos" en el anotador de
+            // cada pedido asociado al remito (MOVISTO.NuPedCli > 0). Solo se anotan
+            // los ítems vinculados a pedido; el resto queda excluido.
+            await RegistrarAnotacionItemsRemitidosAsync(remitoLargo);
         }
         catch (Exception ex)
         {
             Console.WriteLine($"[RemitoCliente] Error en GuardarRemito: {ex.Message}");
+            throw;
+        }
+    }
+
+    /// <summary>
+    /// Registra la anotación "Items Remitidos" en el anotador de los pedidos
+    /// asociados al remito recién generado (solo ítems con pedido, NuPedCli &gt; 0).
+    /// Si falla, se informa por consola sin interrumpir el circuito del remito.
+    /// </summary>
+    /// <param name="remitoLargo">Documento largo del remito (MOVISTO.DoPriLar)</param>
+    private async Task RegistrarAnotacionItemsRemitidosAsync(string remitoLargo)
+    {
+        try
+        {
+            // Solo invocar si el remito tiene al menos un ítem asociado a un pedido
+            if (!productosRemito.Any(p => p.NroPedido.HasValue && p.NroPedido.Value > 0))
+            {
+                return;
+            }
+
+            var response = await repository.Post("api/pedenca/registrar-items-remitidos",
+                new RegistrarItemsRemitidosDTO { RemitoLargo = remitoLargo });
+
+            if (response.Error)
+            {
+                var error = await response.GetErrorMessageAsync();
+                Console.WriteLine($"[RemitoCliente] Error al registrar anotación de ítems remitidos: {error}");
+            }
+            else
+            {
+                Console.WriteLine($"[RemitoCliente] Anotación 'Items Remitidos' registrada para remito {remitoLargo}");
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[RemitoCliente] Error en RegistrarAnotacionItemsRemitidosAsync: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// Guarda los datos adicionales del remito en la tabla EXTRAS_REMITO
+    /// </summary>
+    private async Task GuardarExtrasRemitoAsync(string doprilar)
+    {
+        try
+        {
+            if (string.IsNullOrWhiteSpace(doprilar) || !numeroClienteSeleccionado.HasValue || numeroClienteSeleccionado.Value <= 0)
+            {
+                Console.WriteLine("[RemitoCliente] No se guarda ExtrasRemito: faltan datos obligatorios");
+                return;
+            }
+
+            int? bultos = null;
+            if (int.TryParse(numeroBultos, out var bultosParsed))
+            {
+                bultos = bultosParsed;
+            }
+
+            decimal? valorDecimal = null;
+            if (!string.IsNullOrWhiteSpace(valorDeclarado) &&
+                decimal.TryParse(valorDeclarado, System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out var valorParsed))
+            {
+                valorDecimal = valorParsed;
+            }
+
+            var extrasRemito = new ExtrasRemito
+            {
+                NumeClie = numeroClienteSeleccionado.Value,
+                Fechmov = fechaRemito,
+                Doprilar = doprilar,
+                Observaciones = observaciones ?? string.Empty,
+                Bultos = bultos,
+                ValorDeclarado = valorDecimal
+            };
+
+            var response = await repository.Post<ExtrasRemito>("api/ExtrasRemito", extrasRemito);
+            if (response.Error)
+            {
+                var error = await response.GetErrorMessageAsync();
+                throw new Exception($"Error al guardar datos adicionales del remito: {error}");
+            }
+
+            Console.WriteLine($"[RemitoCliente] ExtrasRemito guardado para remito {doprilar}");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[RemitoCliente] Error al guardar ExtrasRemito: {ex.Message}");
             throw;
         }
     }
@@ -1522,7 +1756,8 @@ else
                 ValorUnitario = 0, // No se maneja precio en remitos
                 OrdenCompraRetornoAbierto = ordenCompra,
                 NumeroRemito = numeroRemito, // Campo numérico para MOVISTO.DOPRINUM (últimos 8 dígitos)
-                PrefijoRemito = (short)prefijoRemito // Campo numérico para MOVISTO.NUMPVTA (primeros 4 dígitos)
+                PrefijoRemito = (short)prefijoRemito, // Campo numérico para MOVISTO.NUMPVTA (primeros 4 dígitos)
+                TipoTransferencia = transportistaId > 0 ? (short?)transportistaId : null // Código del transportista (TRANSPORTES.Codi_Tra) -> MOVISTO.TipoTran
             };
 
             Console.WriteLine($"[RemitoCliente] Registrando movimiento: Producto {producto.Codigo}, Cantidad {cantidad}, Lote '{lote}', NroPedido: {producto.NroPedido}, NuOrItem: {producto.NuOrItemPedido}");
@@ -1625,7 +1860,7 @@ else
             // Obtener código de movimiento
             var codigoMovimiento = await remitosConfigService.ObtenerCodigoMovimientoAsync();
 
-            // Preparar número de remito completo
+            // Preparar número de remito completo (DoPriLar)
             numeroRemitoImpresion = $"{codigoMovimiento}-X-{ObtenerPrefijoFormateado()}-{numeroRemito.ToString("D8")}";
             
             // Preparar fecha
@@ -1703,16 +1938,110 @@ else
             // Esperar un momento para que se actualice el DOM
             await Task.Delay(100);
             
-            // Imprimir
-            await impresionRemito.Imprimir();
+            // Imprimir usando la plantilla REMITOCLIENTE guardada en ReportePersonalizado
+            // Se envían también Nume_Clie y Fechmov para filtrar datos de la plantilla.
+            await ImprimirRemitoClientePorPlantillaAsync(
+                numeroRemitoImpresion,
+                numeroClienteSeleccionado,
+                fechaRemito);
             
-            Console.WriteLine("[RemitoCliente] Impresión iniciada");
+            Console.WriteLine("[RemitoCliente] Impresión por plantilla iniciada");
         }
         catch (Exception ex)
         {
             Console.WriteLine($"[RemitoCliente] Error al preparar impresión: {ex.Message}");
             // No mostramos error al usuario para no interrumpir el flujo
         }
+    }
+
+    /// <summary>
+    /// Imprime un remito de cliente usando la plantilla REMITOCLIENTE guardada en ReportePersonalizado.
+    /// El parámetro doprilar corresponde al DoPriCor/DoPriLar del remito.
+    /// Además se envían Nume_Clie y Fechmov para que la plantilla pueda filtrar por cliente y fecha.
+    /// </summary>
+    private async Task ImprimirRemitoClientePorPlantillaAsync(string? doPriCor, int? numeClie = null, DateTime? fechMov = null)
+    {
+        if (string.IsNullOrWhiteSpace(doPriCor))
+        {
+            await sweetAlertService.FireAsync("Atención", "El remito no tiene número para imprimir.", SweetAlertIcon.Warning);
+            return;
+        }
+
+        var plantillaId = await GetPlantillaRemitoClienteIdAsync();
+        if (!plantillaId.HasValue)
+        {
+            return;
+        }
+
+        var queryParams = new List<string>
+        {
+            $"Doprilar={Uri.EscapeDataString(doPriCor.Trim())}"
+        };
+
+        if (numeClie.HasValue)
+        {
+            queryParams.Add($"Nume_Clie={numeClie.Value}");
+        }
+
+        if (fechMov.HasValue && fechMov.Value > DateTime.MinValue)
+        {
+            queryParams.Add($"Fechmov={Uri.EscapeDataString(fechMov.Value.ToString("yyyy-MM-dd"))}");
+        }
+
+        var endpoint = $"api/impresiones/remito-plantillas/{plantillaId.Value}/pdf?{string.Join("&", queryParams)}";
+        var responsePdf = await Http.GetAsync(endpoint);
+
+        if (!responsePdf.IsSuccessStatusCode)
+        {
+            var message = await responsePdf.Content.ReadAsStringAsync();
+            await sweetAlertService.FireAsync("Error", $"No se pudo generar el PDF del remito: {message}", SweetAlertIcon.Error);
+            return;
+        }
+
+        var pdfBytes = await responsePdf.Content.ReadAsByteArrayAsync();
+        if (pdfBytes.Length == 0)
+        {
+            await sweetAlertService.FireAsync("Error", "El PDF generado está vacío.", SweetAlertIcon.Error);
+            return;
+        }
+
+        var base64 = Convert.ToBase64String(pdfBytes);
+        var opened = await JS.InvokeAsync<bool>("openPdfInNewTab", base64);
+        if (!opened)
+        {
+            await sweetAlertService.FireAsync("Atención", "No se pudo abrir el PDF en una nueva pestaña. Verificá el bloqueador de pop-ups.", SweetAlertIcon.Warning);
+        }
+    }
+
+    /// <summary>
+    /// Busca el Id de la plantilla REMITOCLIENTE en ReportePersonalizado.
+    /// </summary>
+    private async Task<int?> GetPlantillaRemitoClienteIdAsync()
+    {
+        if (plantillaRemitoClienteId.HasValue)
+        {
+            return plantillaRemitoClienteId;
+        }
+
+        var response = await repository.Get<List<RemitoPlantillaItemDto>>("api/impresiones/remito-plantillas");
+        if (response.Error || response.Response == null)
+        {
+            var message = await response.GetErrorMessageAsync();
+            await sweetAlertService.FireAsync("Error", $"No se pudo obtener el listado de plantillas de remito: {message}", SweetAlertIcon.Error);
+            return null;
+        }
+
+        var plantilla = response.Response
+            .FirstOrDefault(x => string.Equals(x.Nombre?.Trim(), NombrePlantillaRemitoCliente, StringComparison.OrdinalIgnoreCase));
+
+        if (plantilla == null)
+        {
+            await sweetAlertService.FireAsync("Atención", $"No se encontró la plantilla '{NombrePlantillaRemitoCliente}'.", SweetAlertIcon.Warning);
+            return null;
+        }
+
+        plantillaRemitoClienteId = plantilla.Id;
+        return plantillaRemitoClienteId;
     }
 
     /// <summary>

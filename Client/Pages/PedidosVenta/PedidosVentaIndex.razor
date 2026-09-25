@@ -1,12 +1,14 @@
 @page "/pedidos-venta"
 @using IMPLANPROD.Shared.Entities
 @using IMPLANPROD.Shared.DTOs
+@using IMPLANPROD.Shared.DTOs.Impresiones
 @using IMPLANPROD.Client.Repositories
 @using IMPLANPROD.Client.Shared.Components
 @using IMPLANPROD.Client.Services
 @using IMPLANPROD.Client.Pages.Reportes
 @using Microsoft.AspNetCore.Components.Web
 @inject IRepository repository
+@inject HttpClient Http
 @inject NavigationManager navigationManager
 @inject SweetAlertService sweetAlertService
 @inject FiltrosPedidosService filtrosService
@@ -46,6 +48,15 @@ else
                 <div class="modal-body">
                     <div class="row g-2 mb-3">
                         <div class="col-md-12 text-end d-flex align-items-end justify-content-end gap-2">
+                            @* Filtro por exclusión: si el N° de Cliente es > 0 se envía
+                               excluirNroClie al backend (nroclie <> @n). Vacío o <= 0
+                               no filtra (comportamiento anterior). *@
+                            <div class="d-flex align-items-center gap-2 me-auto">
+                                <label class="form-label mb-0 text-nowrap">No Mostrar pedidos de Cliente N°:</label>
+                                <InputNumeroLimpio TValue="int?" @bind-Value="filtroPendExcluirNroClie"
+                                                   Class="form-control form-control-sm" style="max-width: 120px;"
+                                                   Placeholder="N° Cliente" />
+                            </div>
                             <button class="btn btn-primary" @onclick="AplicarFiltroPendientesAsync" disabled="@cargandoPendientes">
                                 <i class="fas fa-search"></i> Aplicar filtros
                             </button>
@@ -78,14 +89,20 @@ else
                             <table class="table table-striped table-hover table-sm">
                                 <thead class="table-dark sticky-top">
                                     <tr>
-                                        <th style="cursor:pointer" @onclick="(() => OrdenarPendientesAsync(nameof(PedidoVentaPendienteDetalleDTO.NroPed)))">
-                                            N° Pedido <span class="ms-1">@GetOrdenIcono(nameof(PedidoVentaPendienteDetalleDTO.NroPed))</span>
+                                        <th style="cursor:pointer" @onclick="(() => OrdenarPendientesAsync(nameof(PedidoVentaPendienteDetalleDTO.NroClie)))">
+                                            N° Cliente <span class="ms-1">@GetOrdenIcono(nameof(PedidoVentaPendienteDetalleDTO.NroClie))</span>
+                                        </th>
+                                        <th style="cursor:pointer" @onclick="(() => OrdenarPendientesAsync(nameof(PedidoVentaPendienteDetalleDTO.Rasoclie)))">
+                                            Razón Social <span class="ms-1">@GetOrdenIcono(nameof(PedidoVentaPendienteDetalleDTO.Rasoclie))</span>
                                         </th>
                                         <th style="cursor:pointer" @onclick="(() => OrdenarPendientesAsync(nameof(PedidoVentaPendienteDetalleDTO.Codigo)))">
                                             Código <span class="ms-1">@GetOrdenIcono(nameof(PedidoVentaPendienteDetalleDTO.Codigo))</span>
                                         </th>
                                         <th style="cursor:pointer" @onclick="(() => OrdenarPendientesAsync(nameof(PedidoVentaPendienteDetalleDTO.Descripcion)))">
                                             Descripción <span class="ms-1">@GetOrdenIcono(nameof(PedidoVentaPendienteDetalleDTO.Descripcion))</span>
+                                        </th>
+                                        <th style="cursor:pointer" @onclick="(() => OrdenarPendientesAsync(nameof(PedidoVentaPendienteDetalleDTO.NroPed)))">
+                                            N° Pedido <span class="ms-1">@GetOrdenIcono(nameof(PedidoVentaPendienteDetalleDTO.NroPed))</span>
                                         </th>
                                         <th class="text-end" style="cursor:pointer" @onclick="(() => OrdenarPendientesAsync(nameof(PedidoVentaPendienteDetalleDTO.CantSolicitada)))">
                                             Cant. Sol. <span class="ms-1">@GetOrdenIcono(nameof(PedidoVentaPendienteDetalleDTO.CantSolicitada))</span>
@@ -105,13 +122,19 @@ else
                                     </tr>
                                     <tr>
                                         <th>
-                                            <input type="number" class="form-control form-control-sm" @bind="filtroPendNroPed" placeholder="N°" />
+                                            <input type="number" class="form-control form-control-sm" @bind="filtroPendNroClie" placeholder="N°" />
+                                        </th>
+                                        <th>
+                                            <input type="text" class="form-control form-control-sm" @bind="filtroPendRasoclie" placeholder="Razón Social" />
                                         </th>
                                         <th>
                                             <input type="text" class="form-control form-control-sm" @bind="filtroPendCodigo" placeholder="Código" />
                                         </th>
                                         <th>
                                             <input type="text" class="form-control form-control-sm" @bind="filtroPendDescripcion" placeholder="Descripción" />
+                                        </th>
+                                        <th>
+                                            <input type="number" class="form-control form-control-sm" @bind="filtroPendNroPed" placeholder="N°" />
                                         </th>
                                         <th>
                                             <div class="d-flex gap-1">
@@ -146,9 +169,11 @@ else
                                     @foreach (var it in pendientesDetalle)
                                     {
                                         <tr>
-                                            <td><strong>@it.NroPed</strong></td>
+                                            <td>@it.NroClie</td>
+                                            <td>@it.Rasoclie</td>
                                             <td>@it.Codigo</td>
                                             <td>@it.Descripcion</td>
+                                            <td><strong>@it.NroPed</strong></td>
                                             <td class="text-end">@it.CantSolicitada.ToString("N2")</td>
                                             <td>@it.UMedida</td>
                                             <td class="text-end">@it.CantEntregada.ToString("N2")</td>
@@ -159,7 +184,7 @@ else
                                 </tbody>
                                 <tfoot class="table-light sticky-bottom">
                                     <tr>
-                                        <th colspan="3" class="text-end">Totales:</th>
+                                        <th colspan="5" class="text-end">Totales:</th>
                                         <th class="text-end">@TotalCantSolicitada.ToString("N2")</th>
                                         <th></th>
                                         <th class="text-end">@TotalCantEntregada.ToString("N2")</th>
@@ -192,6 +217,548 @@ else
                     OnCerrar="ResetearImpresionPendientes" />
 }
 
+@* ═══════════════════════════════════════════════════════════════════════
+   Reporte "Entregas de Pedidos" (PEDDETA.CantEnt), opción del botón "Reportes".
+   Mismo criterio de tabla/filtros/ordenamiento que "Pedidos Pendientes", pero
+   mostrando ítems que tuvieron alguna entrega registrada, con Fecha, Código,
+   Descripción, Cant. Pedida, Cant. Entregada y Saldo. Filtros: cliente, pedido
+   y rango de fechas del pedido.
+   ═══════════════════════════════════════════════════════════════════════ *@
+@if (mostrarModalEntregas)
+{
+    <div class="modal fade show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5);">
+        <div class="modal-dialog" style="width: 85vw; max-width: 85vw;">
+            <div class="modal-content">
+                <div class="modal-header bg-primary text-white">
+                    <h5 class="modal-title">
+                        <i class="fas fa-truck-loading"></i> Entregas de Pedidos
+                    </h5>
+                    <button type="button" class="btn-close btn-close-white" @onclick="CerrarModalEntregas"></button>
+                </div>
+
+                <div class="modal-body">
+                    <div class="row g-2 mb-3">
+                        <div class="col-md-4">
+                            <label class="form-label">Cliente:</label>
+                            <div class="input-group">
+                                <input type="text" class="form-control" value="@filtroEntCliente" readonly placeholder="Todos los clientes" />
+                                <button class="btn btn-outline-secondary" @onclick="LimpiarClienteEntregas">
+                                    <i class="fas fa-times"></i>
+                                </button>
+                                <button class="btn btn-outline-primary" @onclick="AbrirSelectorClientesEntregas" title="Seleccionar Cliente">
+                                    <i class="fas fa-users"></i>
+                                </button>
+                            </div>
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label">N° Pedido:</label>
+                            <input type="number" class="form-control" @bind="filtroEntNroPed" placeholder="N° Pedido" />
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label">Fecha Pedido Desde:</label>
+                            <input type="date" class="form-control" @bind="filtroEntFechaDesde" />
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label">Fecha Pedido Hasta:</label>
+                            <input type="date" class="form-control" @bind="filtroEntFechaHasta" />
+                        </div>
+                        <div class="col-md-2 d-flex align-items-end gap-2">
+                            <button class="btn btn-primary w-100" @onclick="AplicarFiltroEntregasAsync" disabled="@cargandoEntregas">
+                                <i class="fas fa-search"></i> Aplicar
+                            </button>
+                        </div>
+                    </div>
+                    <div class="row g-2 mb-3">
+                        <div class="col-md-12 text-end d-flex align-items-end justify-content-end gap-2">
+                            @* Filtro por exclusión: si el N° de Cliente es > 0 se envía
+                               excluirNroClie al backend (nroclie <> @n). Vacío o <= 0
+                               no filtra (comportamiento anterior). *@
+                            <div class="d-flex align-items-center gap-2 me-auto">
+                                <label class="form-label mb-0 text-nowrap">No Mostrar pedidos de Cliente N°:</label>
+                                <InputNumeroLimpio TValue="int?" @bind-Value="filtroEntExcluirNroClie"
+                                                   Class="form-control form-control-sm" style="max-width: 120px;"
+                                                   Placeholder="N° Cliente" />
+                            </div>
+                            <button class="btn btn-outline-secondary" @onclick="LimpiarFiltroEntregasAsync" disabled="@cargandoEntregas">
+                                <i class="fas fa-eraser"></i> Limpiar
+                            </button>
+                            <button class="btn btn-outline-success" @onclick="ConfirmarImpresionEntregasAsync" disabled="@isPrintingEntregas">
+                                <i class="oi oi-print"></i> Imprimir/Exp.Excel
+                            </button>
+                        </div>
+                    </div>
+
+                    @if (cargandoEntregas)
+                    {
+                        <div class="text-center">
+                            <div class="spinner-border" role="status">
+                                <span class="visually-hidden">Cargando...</span>
+                            </div>
+                        </div>
+                    }
+                    else if (entregasDetalle == null || !entregasDetalle.Any())
+                    {
+                        <div class="alert alert-info text-center">
+                            <i class="fas fa-info-circle"></i> No se encontraron entregas de pedidos.
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="table-responsive" style="max-height: 60vh; overflow-y: auto;">
+                            <table class="table table-striped table-hover table-sm">
+                                <thead class="table-dark sticky-top">
+                                    <tr>
+                                        <th style="cursor:pointer" @onclick="(() => OrdenarEntregasAsync(nameof(PedidoVentaEntregaDetalleDTO.NroPed)))">
+                                            N° Pedido <span class="ms-1">@GetOrdenIconoEntregas(nameof(PedidoVentaEntregaDetalleDTO.NroPed))</span>
+                                        </th>
+                                        <th style="cursor:pointer" @onclick="(() => OrdenarEntregasAsync(nameof(PedidoVentaEntregaDetalleDTO.Fecha)))">
+                                            Fecha <span class="ms-1">@GetOrdenIconoEntregas(nameof(PedidoVentaEntregaDetalleDTO.Fecha))</span>
+                                        </th>
+                                        <th style="cursor:pointer" @onclick="(() => OrdenarEntregasAsync(nameof(PedidoVentaEntregaDetalleDTO.Cliente)))">
+                                            Cliente <span class="ms-1">@GetOrdenIconoEntregas(nameof(PedidoVentaEntregaDetalleDTO.Cliente))</span>
+                                        </th>
+                                        <th style="cursor:pointer" @onclick="(() => OrdenarEntregasAsync(nameof(PedidoVentaEntregaDetalleDTO.Codigo)))">
+                                            Código <span class="ms-1">@GetOrdenIconoEntregas(nameof(PedidoVentaEntregaDetalleDTO.Codigo))</span>
+                                        </th>
+                                        <th style="cursor:pointer" @onclick="(() => OrdenarEntregasAsync(nameof(PedidoVentaEntregaDetalleDTO.Descripcion)))">
+                                            Descripción <span class="ms-1">@GetOrdenIconoEntregas(nameof(PedidoVentaEntregaDetalleDTO.Descripcion))</span>
+                                        </th>
+                                        <th class="text-end" style="cursor:pointer" @onclick="(() => OrdenarEntregasAsync(nameof(PedidoVentaEntregaDetalleDTO.CanPed)))">
+                                            Cant. Pedida <span class="ms-1">@GetOrdenIconoEntregas(nameof(PedidoVentaEntregaDetalleDTO.CanPed))</span>
+                                        </th>
+                                        <th class="text-end" style="cursor:pointer" @onclick="(() => OrdenarEntregasAsync(nameof(PedidoVentaEntregaDetalleDTO.CantEnt)))">
+                                            Cant. Entregada <span class="ms-1">@GetOrdenIconoEntregas(nameof(PedidoVentaEntregaDetalleDTO.CantEnt))</span>
+                                        </th>
+                                        <th>N° Remito</th>
+                                        <th class="text-end" style="cursor:pointer" @onclick="(() => OrdenarEntregasAsync(nameof(PedidoVentaEntregaDetalleDTO.Saldo)))">
+                                            Saldo <span class="ms-1">@GetOrdenIconoEntregas(nameof(PedidoVentaEntregaDetalleDTO.Saldo))</span>
+                                        </th>
+                                    </tr>
+                                    <tr>
+                                        <th>
+                                            <input type="number" class="form-control form-control-sm" @bind="filtroEntNroPed" placeholder="N°" />
+                                        </th>
+                                        <th></th>
+                                        <th></th>
+                                        <th>
+                                            <input type="text" class="form-control form-control-sm" @bind="filtroEntCodigo" placeholder="Código" />
+                                        </th>
+                                        <th>
+                                            <input type="text" class="form-control form-control-sm" @bind="filtroEntDescripcion" placeholder="Descripción" />
+                                        </th>
+                                        <th></th>
+                                        <th></th>
+                                        <th></th>
+                                        <th></th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var it in entregasDetalle)
+                                    {
+                                        <tr>
+                                            <td>
+                                                <strong>@it.NroPed</strong>
+                                                @* Pedido anulado (PEDENCA.Status >= 9): la fila se marca
+                                                   con la etiqueta ANULADO *@
+                                                @if (it.Anulado)
+                                                {
+                                                    <span class="badge bg-danger ms-1">ANULADO</span>
+                                                }
+                                            </td>
+                                            <td>@(it.Fecha?.ToString("dd/MM/yyyy") ?? "")</td>
+                                            <td>@it.Cliente</td>
+                                            <td>@it.Codigo</td>
+                                            <td>@it.Descripcion</td>
+                                            <td class="text-end">@it.CanPed.ToString("N2")</td>
+                                            <td class="text-end">@it.CantEnt.ToString("N2")</td>
+                                            <td>
+                                                @* Cada remito funciona como link: abre la vista impresa
+                                                   del remito (PDF por plantilla REMITOCLIENTE) *@
+                                                @if (it.RemitosDetalle?.Any() == true)
+                                                {
+                                                    @for (var i = 0; i < it.RemitosDetalle.Count; i++)
+                                                    {
+                                                        var r = it.RemitosDetalle[i];
+                                                        <a href="javascript:void(0)" title="Ver remito impreso"
+                                                           @onclick="() => ImprimirRemitoEntregaAsync(it, r)" @onclick:preventDefault>@r.Remito</a>@(i < it.RemitosDetalle.Count - 1 ? ", " : "")
+                                                        @if (remitoEntregaImprimiendo == r.Remito)
+                                                        {
+                                                            <span class="spinner-border spinner-border-sm ms-1"></span>
+                                                        }
+                                                    }
+                                                }
+                                                else
+                                                {
+                                                    @it.Remito
+                                                }
+                                            </td>
+                                            <td class="text-end"><strong>@it.Saldo.ToString("N2")</strong></td>
+                                        </tr>
+                                    }
+                                </tbody>
+                                <tfoot class="table-light sticky-bottom">
+                                    <tr>
+                                        <th colspan="5" class="text-end">Totales:</th>
+                                        <th class="text-end">@TotalCanPedEntregas.ToString("N2")</th>
+                                        <th class="text-end">@TotalCantEntEntregas.ToString("N2")</th>
+                                        <th></th>
+                                        <th class="text-end">@TotalSaldoEntregas.ToString("N2")</th>
+                                    </tr>
+                                </tfoot>
+                            </table>
+                        </div>
+                    }
+                </div>
+
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" @onclick="CerrarModalEntregas">Cerrar</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@if (entregasDetalle != null && entregasDetalle.Any())
+{
+    <ImpresionLista TItem="PedidoVentaEntregaDetalleDTO"
+                    Datos="entregasDetalle"
+                    Titulo="@TituloReporteEntregas"
+                    UrlExportarExcel="api/excel/exportar-pedidos-entregas-detalle"
+                    Encabezados="encabezadosEntregas"
+                    ModoDirecto="false"
+                    MostrarModal="mostrarModalImpresionEntregas"
+                    OnCerrar="ResetearImpresionEntregas" />
+}
+
+@* ═══════════════════════════════════════════════════════════════════════
+   Reporte "PEDIDOS C/O.Compra x Fechas", opción del botón "Reportes".
+   Lee directamente el encabezado PEDENCA (sin ir al detalle), filtrando por
+   rango de fecha de emisión. Excluye siempre el cliente "998" (venta
+   mostrador / genérico). Mismo criterio de modal/filtros/ordenamiento que
+   "Pedidos Pendientes" y "Entregas de Pedidos".
+   ═══════════════════════════════════════════════════════════════════════ *@
+@if (mostrarModalOcom)
+{
+    <div class="modal fade show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5);">
+        <div class="modal-dialog" style="width: 80vw; max-width: 80vw;">
+            <div class="modal-content">
+                <div class="modal-header bg-primary text-white">
+                    <h5 class="modal-title">
+                        <i class="fas fa-file-contract"></i> Pedidos C/O.Compra x Fechas
+                    </h5>
+                    <button type="button" class="btn-close btn-close-white" @onclick="CerrarModalOcom"></button>
+                </div>
+
+                <div class="modal-body">
+                    <div class="row g-2 mb-3">
+                        <div class="col-md-4">
+                            <label class="form-label">Cliente:</label>
+                            <div class="input-group">
+                                <input type="text" class="form-control" value="@filtroOcomCliente" readonly placeholder="Todos los clientes" />
+                                <button class="btn btn-outline-secondary" @onclick="LimpiarClienteOcom">
+                                    <i class="fas fa-times"></i>
+                                </button>
+                                <button class="btn btn-outline-primary" @onclick="AbrirSelectorClientesOcom" title="Seleccionar Cliente">
+                                    <i class="fas fa-users"></i>
+                                </button>
+                            </div>
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label">N° Pedido:</label>
+                            <input type="number" class="form-control" @bind="filtroOcomNroPed" placeholder="N° Pedido" />
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label">Fecha Emisión Desde:</label>
+                            <input type="date" class="form-control" @bind="filtroOcomFechaDesde" />
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label">Fecha Emisión Hasta:</label>
+                            <input type="date" class="form-control" @bind="filtroOcomFechaHasta" />
+                        </div>
+                        <div class="col-md-2 d-flex align-items-end gap-2">
+                            <button class="btn btn-primary w-100" @onclick="AplicarFiltroOcomAsync" disabled="@cargandoOcom">
+                                <i class="fas fa-search"></i> Aplicar
+                            </button>
+                        </div>
+                    </div>
+                    <div class="row g-2 mb-3">
+                        <div class="col-md-12 text-end d-flex align-items-end justify-content-end gap-2">
+                            <button class="btn btn-outline-secondary" @onclick="LimpiarFiltroOcomAsync" disabled="@cargandoOcom">
+                                <i class="fas fa-eraser"></i> Limpiar
+                            </button>
+                            <button class="btn btn-outline-success" @onclick="ConfirmarImpresionOcomAsync" disabled="@isPrintingOcom">
+                                <i class="oi oi-print"></i> Imprimir/Exp.Excel
+                            </button>
+                        </div>
+                    </div>
+
+                    @if (cargandoOcom)
+                    {
+                        <div class="text-center">
+                            <div class="spinner-border" role="status">
+                                <span class="visually-hidden">Cargando...</span>
+                            </div>
+                        </div>
+                    }
+                    else if (ocomDetalle == null || !ocomDetalle.Any())
+                    {
+                        <div class="alert alert-info text-center">
+                            <i class="fas fa-info-circle"></i> No se encontraron pedidos para el rango de fechas seleccionado.
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="table-responsive" style="max-height: 60vh; overflow-y: auto;">
+                            <table class="table table-striped table-hover table-sm">
+                                <thead class="table-dark sticky-top">
+                                    <tr>
+                                        <th style="cursor:pointer" @onclick="(() => OrdenarOcomAsync(nameof(PedidoVentaConOcomDTO.FechEmis)))">
+                                            Fecha Emisión <span class="ms-1">@GetOrdenIconoOcom(nameof(PedidoVentaConOcomDTO.FechEmis))</span>
+                                        </th>
+                                        <th style="cursor:pointer" @onclick="(() => OrdenarOcomAsync(nameof(PedidoVentaConOcomDTO.NroPed)))">
+                                            N° Pedido <span class="ms-1">@GetOrdenIconoOcom(nameof(PedidoVentaConOcomDTO.NroPed))</span>
+                                        </th>
+                                        <th style="cursor:pointer" @onclick="(() => OrdenarOcomAsync(nameof(PedidoVentaConOcomDTO.NroClie)))">
+                                            N° Cliente <span class="ms-1">@GetOrdenIconoOcom(nameof(PedidoVentaConOcomDTO.NroClie))</span>
+                                        </th>
+                                        <th style="cursor:pointer" @onclick="(() => OrdenarOcomAsync(nameof(PedidoVentaConOcomDTO.RasoClie)))">
+                                            Cliente <span class="ms-1">@GetOrdenIconoOcom(nameof(PedidoVentaConOcomDTO.RasoClie))</span>
+                                        </th>
+                                        <th style="cursor:pointer" @onclick="(() => OrdenarOcomAsync(nameof(PedidoVentaConOcomDTO.NroOcom)))">
+                                            N° O.Compra <span class="ms-1">@GetOrdenIconoOcom(nameof(PedidoVentaConOcomDTO.NroOcom))</span>
+                                        </th>
+                                    </tr>
+                                    <tr>
+                                        <th></th>
+                                        <th></th>
+                                        <th></th>
+                                        <th>
+                                            <input type="text" class="form-control form-control-sm" @bind="filtroOcomRasoClie" placeholder="Cliente" />
+                                        </th>
+                                        <th>
+                                            <input type="text" class="form-control form-control-sm" @bind="filtroOcomNroOcom" placeholder="N° O.Compra" />
+                                        </th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var it in ocomDetalle)
+                                    {
+                                        <tr>
+                                            <td>@(it.FechEmis?.ToString("dd/MM/yyyy") ?? "")</td>
+                                            <td><strong>@it.NroPed</strong></td>
+                                            <td>@it.NroClie</td>
+                                            <td>@it.RasoClie</td>
+                                            <td>@it.NroOcom</td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    }
+                </div>
+
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" @onclick="CerrarModalOcom">Cerrar</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@if (ocomDetalle != null && ocomDetalle.Any())
+{
+    <ImpresionLista TItem="PedidoVentaConOcomDTO"
+                    Datos="ocomDetalle"
+                    Titulo="@TituloReporteOcom"
+                    UrlExportarExcel="api/excel/exportar-pedidos-con-ocom-por-fechas"
+                    Encabezados="encabezadosOcom"
+                    ModoDirecto="false"
+                    MostrarModal="mostrarModalImpresionOcom"
+                    OnCerrar="ResetearImpresionOcom" />
+}
+
+@* ═══════════════════════════════════════════════════════════════════════
+   Utilidad "Anular Items de Pedido" (menú Utilidades).
+   Lista los pedidos que tienen al menos un ítem de PEDDETA pendiente de
+   entrega (regla VB6: PEDDETA.Status < 8, CantEnt < CanPed - 0.005 y
+   PEDENCA.Status < 9). Filtros: N° de pedido exacto o texto libre sobre la
+   referencia compuesta (N° pedido / N° OC / razón social).
+   Al seleccionar un pedido se muestran sus ítems pendientes (solo lectura);
+   la transacción de anulación se implementa en el paso siguiente.
+   ═══════════════════════════════════════════════════════════════════════ *@
+@if (mostrarModalAnularItems)
+{
+    <div class="modal fade show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5);">
+        <div class="modal-dialog" style="width: 85vw; max-width: 85vw;">
+            <div class="modal-content">
+                <div class="modal-header bg-primary text-white">
+                    <h5 class="modal-title">
+                        <i class="fas fa-ban"></i> Anular Items de Pedido
+                    </h5>
+                    <button type="button" class="btn-close btn-close-white" @onclick="CerrarModalAnularItems"></button>
+                </div>
+
+                <div class="modal-body">
+                    <div class="row g-2 mb-3">
+                        <div class="col-md-2">
+                            <label class="form-label">N° Pedido:</label>
+                            <InputNumeroLimpio TValue="int?" @bind-Value="filtroAnuNroPed" Class="form-control" Placeholder="Todos" />
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Referencia:</label>
+                            <input type="text" class="form-control" @bind="filtroAnuTexto" placeholder="N° pedido, N° OC o razón social..." />
+                        </div>
+                        <div class="col-md-6 d-flex align-items-end justify-content-end gap-2">
+                            <button class="btn btn-primary" @onclick="(() => CargarPedidosAnulablesAsync())" disabled="@cargandoAnularItems">
+                                <i class="fas fa-search"></i> Aplicar
+                            </button>
+                            <button class="btn btn-outline-secondary" @onclick="LimpiarFiltroAnularItemsAsync" disabled="@cargandoAnularItems">
+                                <i class="fas fa-eraser"></i> Limpiar
+                            </button>
+                        </div>
+                    </div>
+
+                    @if (cargandoAnularItems)
+                    {
+                        <div class="text-center py-4">
+                            <div class="spinner-border text-primary" role="status"></div>
+                            <p class="mt-2 text-muted">Cargando pedidos...</p>
+                        </div>
+                    }
+                    else if (pedidosAnulables == null || !pedidosAnulables.Any())
+                    {
+                        <div class="alert alert-info">
+                            <i class="fas fa-info-circle"></i> No se encontraron pedidos con ítems pendientes.
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="table-responsive" style="max-height: 40vh; overflow-y: auto;">
+                            <table class="table table-striped table-hover table-sm">
+                                <thead class="table-dark">
+                                    <tr>
+                                        <th>N° Pedido</th>
+                                        <th>N° O.C.</th>
+                                        <th>Fecha Emisión</th>
+                                        <th>N° Cliente</th>
+                                        <th>Razón Social</th>
+                                        <th></th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var p in pedidosAnulables)
+                                    {
+                                        <tr class="@(pedidoAnulSeleccionado?.NroPed == p.NroPed ? "table-primary" : "")">
+                                            <td><strong>@p.NroPed</strong></td>
+                                            <td>@p.NroOcom</td>
+                                            <td>@p.FechEmis?.ToString("dd/MM/yyyy")</td>
+                                            <td>@p.NroClie</td>
+                                            <td>@p.RasoClie</td>
+                                            <td class="text-end">
+                                                <button class="btn btn-sm @(pedidoAnulSeleccionado?.NroPed == p.NroPed ? "btn-primary" : "btn-outline-primary")"
+                                                        @onclick="(() => SeleccionarPedidoAnulacionAsync(p))">
+                                                    <i class="fas fa-check"></i> Seleccionar
+                                                </button>
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    }
+
+                    @* Ítems pendientes del pedido seleccionado (misma query VB6 del
+                       SELITPED: Status < 8, Status <> 3, CantEnt < CanPed - 0.005
+                       y saldo >= 0.05). Cada fila tiene check para seleccionar y el
+                       encabezado permite marcar todos; "Marcar Cumplidos" pone
+                       PEDDETA.Status = 8 en los ítems tildados. *@
+                    @if (pedidoAnulSeleccionado != null)
+                    {
+                        <hr />
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <h6 class="text-primary mb-0">
+                                <i class="fas fa-list-ul me-2"></i>
+                                Ítems pendientes del pedido N° @pedidoAnulSeleccionado.NroPed
+                            </h6>
+                            <button class="btn btn-danger btn-sm" @onclick="MarcarItemsCumplidosAsync"
+                                    disabled="@(!itemsAnulSeleccionados.Any() || cargandoItemsAnul)"
+                                    title="Marcar los ítems seleccionados como cumplidos (Status = 8)">
+                                <i class="fas fa-check-double"></i> Marcar Cumplidos
+                            </button>
+                        </div>
+
+                        @if (cargandoItemsAnul)
+                        {
+                            <div class="text-center py-3">
+                                <div class="spinner-border spinner-border-sm text-primary" role="status"></div>
+                            </div>
+                        }
+                        else if (itemsAnulables == null || !itemsAnulables.Any())
+                        {
+                            <div class="alert alert-info">
+                                <i class="fas fa-info-circle"></i> El pedido no tiene ítems pendientes.
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="table-responsive" style="max-height: 30vh; overflow-y: auto;">
+                                <table class="table table-striped table-sm">
+                                    <thead class="table-dark">
+                                        <tr>
+                                            <th style="width: 40px;">
+                                                <input type="checkbox" class="form-check-input"
+                                                       checked="@TodosItemsAnulSeleccionados"
+                                                       @onchange="SeleccionarTodosItemsAnul"
+                                                       title="Seleccionar todos" />
+                                            </th>
+                                            <th>Ítem</th>
+                                            <th>Código</th>
+                                            <th>Descripción</th>
+                                            <th class="text-end">Cant. Pedida</th>
+                                            <th class="text-end">Cant. Entregada</th>
+                                            <th class="text-end">Saldo</th>
+                                            <th>Fecha Entrega</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach (var it in itemsAnulables)
+                                        {
+                                            <tr>
+                                                <td>
+                                                    <input type="checkbox" class="form-check-input"
+                                                           checked="@itemsAnulSeleccionados.Contains(it.NuOrItem ?? 0)"
+                                                           @onchange="(e => ToggleItemAnul(it, e))" />
+                                                </td>
+                                                <td>@it.NuOrItem</td>
+                                                <td>@it.CodiExt</td>
+                                                <td>@it.Descrip</td>
+                                                <td class="text-end">@((it.CanPed ?? 0m).ToString("N2"))</td>
+                                                <td class="text-end">@((it.CantEnt ?? 0m).ToString("N2"))</td>
+                                                <td class="text-end"><strong>@(((it.CanPed ?? 0m) - (it.CantEnt ?? 0m)).ToString("N2"))</strong></td>
+                                                <td>@it.FeSolEnt?.ToString("dd/MM/yyyy")</td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+                        }
+                    }
+                </div>
+
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" @onclick="CerrarModalAnularItems">Cerrar</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+<!-- Componente selector de clientes para el filtro de Pedidos C/O.Compra x Fechas -->
+<SelectorClientes @ref="selectorClientesOcom" OnClienteSeleccionado="OnClienteSeleccionadoOcom" />
+
+<!-- Componente selector de clientes para el filtro de Entregas de Pedidos -->
+<SelectorClientes @ref="selectorClientesEntregas" OnClienteSeleccionado="OnClienteSeleccionadoEntregas" />
+
     <div class="row mb-3">
         <div class="col-auto">
             <button class="btn btn-info me-2" @onclick="AbrirGraficos">
@@ -202,13 +769,48 @@ else
             </button>
         </div>
         <div class="col text-end">
-            <button class="btn btn-outline-primary" @onclick="AbrirPedidosPendientesAsync" disabled="@cargandoPendientes">
-                @if (cargandoPendientes)
-                {
-                    <span class="spinner-border spinner-border-sm me-2"></span>
-                }
-                <i class="fas fa-clock"></i> Pedidos Pendientes
-            </button>
+            <div class="btn-group me-2">
+                <button class="btn btn-outline-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false" disabled="@cargandoAnularItems">
+                    @if (cargandoAnularItems)
+                    {
+                        <span class="spinner-border spinner-border-sm me-2"></span>
+                    }
+                    <i class="fas fa-tools"></i> Utilidades
+                </button>
+                <ul class="dropdown-menu dropdown-menu-end">
+                    <li>
+                        <button class="dropdown-item" @onclick="AbrirAnularItemsAsync">
+                            <i class="fas fa-ban me-2"></i>Anular Items de Pedido
+                        </button>
+                    </li>
+                </ul>
+            </div>
+            <div class="btn-group">
+                <button class="btn btn-outline-primary dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false" disabled="@(cargandoPendientes || cargandoEntregas || cargandoOcom)">
+                    @if (cargandoPendientes || cargandoEntregas || cargandoOcom)
+                    {
+                        <span class="spinner-border spinner-border-sm me-2"></span>
+                    }
+                    <i class="fas fa-chart-pie"></i> Reportes
+                </button>
+                <ul class="dropdown-menu dropdown-menu-end">
+                    <li>
+                        <button class="dropdown-item" @onclick="AbrirPedidosPendientesAsync">
+                            <i class="fas fa-clock me-2"></i>Pedidos Pendientes
+                        </button>
+                    </li>
+                    <li>
+                        <button class="dropdown-item" @onclick="AbrirEntregasPedidosAsync">
+                            <i class="fas fa-truck-loading me-2"></i>Entregas de Pedidos
+                        </button>
+                    </li>
+                    <li>
+                        <button class="dropdown-item" @onclick="AbrirPedidosConOcomAsync">
+                            <i class="fas fa-file-contract me-2"></i>Pedidos C/O.Compra x Fechas
+                        </button>
+                    </li>
+                </ul>
+            </div>
         </div>
     </div>
 
@@ -228,6 +830,10 @@ else
                         </button>
                     </div>
                 </div>
+                <div class="col-md-2">
+                    <label class="form-label">N° Pedido:</label>
+                    <InputNumeroLimpio TValue="int?" @bind-Value="filtroNroPed" Class="form-control" Placeholder="Todos" />
+                </div>
                 <div class="col-md-3">
                     <label class="form-label">Buscar:</label>
                     <input type="text" class="form-control" @bind="Filter" @bind:event="oninput" placeholder="N° OC, Referencia..." />
@@ -241,6 +847,8 @@ else
                         <option value="9">Anulados</option>
                     </select>
                 </div>
+            </div>
+            <div class="row mt-3 align-items-end">
                 <div class="col-md-2">
                     <label class="form-label">Fecha Desde:</label>
                     <input type="date" class="form-control" @bind="fechaDesde" @bind:event="oninput" />
@@ -249,9 +857,7 @@ else
                     <label class="form-label">Fecha Hasta:</label>
                     <input type="date" class="form-control" @bind="fechaHasta" @bind:event="oninput" />
                 </div>
-            </div>
-            <div class="row mt-3">
-                <div class="col-12 text-end">
+                <div class="col-md-8 text-end">
                     <button class="btn btn-primary" @onclick="ApplyFilterAsync">
                         <i class="fas fa-filter"></i> Filtrar
                     </button>
@@ -411,6 +1017,7 @@ else
 @code {
     private List<Pedenca>? pedidos;
     private string filtroEstado = string.Empty;
+    private int? filtroNroPed;
     private DateTime? fechaDesde;
     private DateTime? fechaHasta;
     private string clienteSeleccionado = string.Empty;
@@ -429,6 +1036,8 @@ else
     private bool ordenarPendientesAsc = true;
 
     private int? filtroPendNroPed;
+    private int? filtroPendNroClie;
+    private string filtroPendRasoclie = string.Empty;
     private string filtroPendCodigo = string.Empty;
     private string filtroPendDescripcion = string.Empty;
     private string filtroPendUMedida = string.Empty;
@@ -440,6 +1049,9 @@ else
     private decimal? filtroPendCantEntMax;
     private decimal? filtroPendSaldoMin;
     private decimal? filtroPendSaldoMax;
+    // Filtro por exclusión de cliente ("No Mostrar pedidos de Cliente N°"):
+    // si tiene valor > 0 excluye los ítems cuyo nroclie sea ese cliente.
+    private int? filtroPendExcluirNroClie;
 
     private bool isPrintingPendientes = false;
     private bool mostrarModalImpresionPendientes = false;
@@ -515,6 +1127,11 @@ else
             parametros.Add($"clienteId={clienteSeleccionadoId.Value}");
         }
         
+        if (filtroNroPed.HasValue)
+        {
+            parametros.Add($"nroPed={filtroNroPed.Value}");
+        }
+        
         if (!string.IsNullOrEmpty(filtroEstado))
         {
             parametros.Add($"estado={filtroEstado}");
@@ -548,6 +1165,7 @@ else
     {
         Filter = string.Empty;
         filtroEstado = string.Empty;
+        filtroNroPed = null;
         clienteSeleccionado = string.Empty;
         clienteSeleccionadoId = null;
         // Restablecer fechas por defecto: últimos 15 días
@@ -679,6 +1297,7 @@ else
             clienteSeleccionado,
             clienteSeleccionadoId,
             filtroEstado,
+            filtroNroPed,
             fechaDesde,
             fechaHasta,
             currentPage
@@ -696,6 +1315,7 @@ else
             clienteSeleccionado = filtrosService.ClienteSeleccionado;
             clienteSeleccionadoId = filtrosService.ClienteSeleccionadoId;
             filtroEstado = filtrosService.FiltroEstado;
+            filtroNroPed = filtrosService.NroPed;
             fechaDesde = filtrosService.FechaDesde;
             fechaHasta = filtrosService.FechaHasta;
             currentPage = filtrosService.PaginaActual;
@@ -721,9 +1341,11 @@ else
 
     Dictionary<string, string> encabezadosPendientes = new()
     {
-        { nameof(PedidoVentaPendienteDetalleDTO.NroPed), "N° Pedido" },
+        { nameof(PedidoVentaPendienteDetalleDTO.NroClie), "N° Cliente" },
+        { nameof(PedidoVentaPendienteDetalleDTO.Rasoclie), "Razón Social" },
         { nameof(PedidoVentaPendienteDetalleDTO.Codigo), "Código" },
         { nameof(PedidoVentaPendienteDetalleDTO.Descripcion), "Descripción" },
+        { nameof(PedidoVentaPendienteDetalleDTO.NroPed), "N° Pedido" },
         { nameof(PedidoVentaPendienteDetalleDTO.CantSolicitada), "Cant. Solicitada" },
         { nameof(PedidoVentaPendienteDetalleDTO.UMedida), "U. Medida" },
         { nameof(PedidoVentaPendienteDetalleDTO.CantEntregada), "Cant. Entregada" },
@@ -756,6 +1378,16 @@ else
             if (filtroPendNroPed.HasValue)
             {
                 parametros.Add($"nroPed={filtroPendNroPed.Value}");
+            }
+
+            if (filtroPendNroClie.HasValue)
+            {
+                parametros.Add($"nroClie={filtroPendNroClie.Value}");
+            }
+
+            if (!string.IsNullOrWhiteSpace(filtroPendRasoclie))
+            {
+                parametros.Add($"rasoclie={Uri.EscapeDataString(filtroPendRasoclie)}");
             }
 
             if (!string.IsNullOrWhiteSpace(filtroPendCodigo))
@@ -813,6 +1445,12 @@ else
                 parametros.Add($"saldoMax={Uri.EscapeDataString(filtroPendSaldoMax.Value.ToString())}");
             }
 
+            // Exclusión de cliente: solo se envía si es > 0 (nroclie <> @n en el backend).
+            if (filtroPendExcluirNroClie.HasValue && filtroPendExcluirNroClie.Value > 0)
+            {
+                parametros.Add($"excluirNroClie={filtroPendExcluirNroClie.Value}");
+            }
+
             parametros.Add($"orderBy={Uri.EscapeDataString(ordenarPendientesPor)}");
             parametros.Add($"asc={(ordenarPendientesAsc ? "true" : "false")}");
 
@@ -855,6 +1493,8 @@ else
     private async Task LimpiarFiltroPendientesAsync()
     {
         filtroPendNroPed = null;
+        filtroPendNroClie = null;
+        filtroPendRasoclie = string.Empty;
         filtroPendCodigo = string.Empty;
         filtroPendDescripcion = string.Empty;
         filtroPendUMedida = string.Empty;
@@ -864,6 +1504,7 @@ else
         filtroPendCantEntMax = null;
         filtroPendSaldoMin = null;
         filtroPendSaldoMax = null;
+        filtroPendExcluirNroClie = null;
         await CargarPendientesDetalleAsync();
     }
 
@@ -922,6 +1563,809 @@ else
         StateHasChanged();
     }
 
+    // ═══════════════════════════════════════════════════════════════════════
+    // REPORTE "ENTREGAS DE PEDIDOS" (PEDDETA.CantEnt)
+    // Mismo criterio de tabla/filtros/ordenamiento que "Pedidos Pendientes".
+    // ═══════════════════════════════════════════════════════════════════════
+
+    private bool mostrarModalEntregas = false;
+    private bool cargandoEntregas = false;
+    private List<PedidoVentaEntregaDetalleDTO>? entregasDetalle;
+    private string ordenarEntregasPor = nameof(PedidoVentaEntregaDetalleDTO.Fecha);
+    private bool ordenarEntregasAsc = false;
+
+    private int? filtroEntNroPed;
+    private string filtroEntCliente = string.Empty;
+    private int? filtroEntClienteId;
+    private string filtroEntCodigo = string.Empty;
+    private string filtroEntDescripcion = string.Empty;
+    private DateTime? filtroEntFechaDesde;
+    private DateTime? filtroEntFechaHasta;
+    // Filtro por exclusión de cliente ("No Mostrar pedidos de Cliente N°"):
+    // si tiene valor > 0 excluye los ítems cuyo nroclie sea ese cliente.
+    private int? filtroEntExcluirNroClie;
+
+    // Vista impresa del remito clickeado en la columna "N° Remito" del reporte
+    // Entregas de Pedidos (PDF por plantilla REMITOCLIENTE, como en /remitos).
+    private bool imprimiendoRemitoEntrega = false;
+    private string? remitoEntregaImprimiendo = null;
+    private const string NombrePlantillaRemitoCliente = "REMITOCLIENTE";
+    private int? plantillaRemitoClienteId;
+
+    private bool isPrintingEntregas = false;
+    private bool mostrarModalImpresionEntregas = false;
+    private string TituloReporteEntregas => "Entregas de Pedidos (Detalle)";
+
+    private decimal TotalCanPedEntregas => entregasDetalle?.Sum(x => x.CanPed) ?? 0m;
+    private decimal TotalCantEntEntregas => entregasDetalle?.Sum(x => x.CantEnt) ?? 0m;
+    private decimal TotalSaldoEntregas => entregasDetalle?.Sum(x => x.Saldo) ?? 0m;
+
+    /// <summary>Selector de clientes dedicado al filtro del reporte de Entregas (independiente del filtro principal).</summary>
+    private SelectorClientes? selectorClientesEntregas;
+
+    Dictionary<string, string> encabezadosEntregas = new()
+    {
+        { nameof(PedidoVentaEntregaDetalleDTO.NroPed), "N° Pedido" },
+        { nameof(PedidoVentaEntregaDetalleDTO.Fecha), "Fecha" },
+        { nameof(PedidoVentaEntregaDetalleDTO.Cliente), "Cliente" },
+        { nameof(PedidoVentaEntregaDetalleDTO.Codigo), "Código" },
+        { nameof(PedidoVentaEntregaDetalleDTO.Descripcion), "Descripción" },
+        { nameof(PedidoVentaEntregaDetalleDTO.CanPed), "Cant. Pedida" },
+        { nameof(PedidoVentaEntregaDetalleDTO.CantEnt), "Cant. Entregada" },
+        { nameof(PedidoVentaEntregaDetalleDTO.Remito), "N° Remito" },
+        { nameof(PedidoVentaEntregaDetalleDTO.Saldo), "Saldo" },
+        { nameof(PedidoVentaEntregaDetalleDTO.Estado), "Estado" }
+    };
+
+    private async Task AbrirEntregasPedidosAsync()
+    {
+        mostrarModalEntregas = true;
+        if (filtroEntFechaDesde == null && filtroEntFechaHasta == null)
+        {
+            filtroEntFechaDesde = DateTime.Today.AddYears(-1);
+            filtroEntFechaHasta = DateTime.Today;
+        }
+        await CargarEntregasDetalleAsync();
+    }
+
+    private void CerrarModalEntregas()
+    {
+        mostrarModalEntregas = false;
+    }
+
+    private async Task CargarEntregasDetalleAsync()
+    {
+        cargandoEntregas = true;
+        StateHasChanged();
+
+        try
+        {
+            var parametros = new List<string>();
+
+            if (filtroEntNroPed.HasValue)
+            {
+                parametros.Add($"nroPed={filtroEntNroPed.Value}");
+            }
+
+            if (filtroEntClienteId.HasValue)
+            {
+                parametros.Add($"clienteId={filtroEntClienteId.Value}");
+            }
+
+            if (!string.IsNullOrWhiteSpace(filtroEntCodigo))
+            {
+                parametros.Add($"codigo={Uri.EscapeDataString(filtroEntCodigo)}");
+            }
+
+            if (!string.IsNullOrWhiteSpace(filtroEntDescripcion))
+            {
+                parametros.Add($"descripcion={Uri.EscapeDataString(filtroEntDescripcion)}");
+            }
+
+            if (filtroEntFechaDesde.HasValue)
+            {
+                parametros.Add($"fechaEmisDesde={Uri.EscapeDataString(filtroEntFechaDesde.Value.ToString("yyyy-MM-dd"))}");
+            }
+
+            if (filtroEntFechaHasta.HasValue)
+            {
+                parametros.Add($"fechaEmisHasta={Uri.EscapeDataString(filtroEntFechaHasta.Value.ToString("yyyy-MM-dd"))}");
+            }
+
+            // Exclusión de cliente: solo se envía si es > 0 (nroclie <> @n en el backend).
+            if (filtroEntExcluirNroClie.HasValue && filtroEntExcluirNroClie.Value > 0)
+            {
+                parametros.Add($"excluirNroClie={filtroEntExcluirNroClie.Value}");
+            }
+
+            parametros.Add($"orderBy={Uri.EscapeDataString(ordenarEntregasPor)}");
+            parametros.Add($"asc={(ordenarEntregasAsc ? "true" : "false")}");
+
+            var url = "api/peddeta/entregas-detalle";
+            if (parametros.Any())
+            {
+                url += "?" + string.Join("&", parametros);
+            }
+
+            var resp = await repository.Get<List<PedidoVentaEntregaDetalleDTO>>(url);
+            entregasDetalle = resp.Response ?? new List<PedidoVentaEntregaDetalleDTO>();
+        }
+        catch (Exception ex)
+        {
+            await sweetAlertService.FireAsync("Error", $"Error al cargar entregas de pedidos: {ex.Message}", SweetAlertIcon.Error);
+            entregasDetalle = new List<PedidoVentaEntregaDetalleDTO>();
+        }
+        finally
+        {
+            cargandoEntregas = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task OrdenarEntregasAsync(string campo)
+    {
+        if (ordenarEntregasPor == campo)
+        {
+            ordenarEntregasAsc = !ordenarEntregasAsc;
+        }
+        else
+        {
+            ordenarEntregasPor = campo;
+            ordenarEntregasAsc = true;
+        }
+
+        await CargarEntregasDetalleAsync();
+    }
+
+    private async Task LimpiarFiltroEntregasAsync()
+    {
+        filtroEntNroPed = null;
+        filtroEntCliente = string.Empty;
+        filtroEntClienteId = null;
+        filtroEntCodigo = string.Empty;
+        filtroEntDescripcion = string.Empty;
+        filtroEntExcluirNroClie = null;
+        filtroEntFechaDesde = DateTime.Today.AddYears(-1);
+        filtroEntFechaHasta = DateTime.Today;
+        await CargarEntregasDetalleAsync();
+    }
+
+    /// <summary>
+    /// Abre la vista impresa del remito clickeado en la columna "N° Remito" del
+    /// reporte Entregas de Pedidos. Genera el PDF con la plantilla REMITOCLIENTE
+    /// (igual que el link/botón Imprimir de /remitos) y lo abre en una pestaña
+    /// nueva. Se envían Doprilar + Nume_Clie + Fechmov (fecha real de la entrega
+    /// en MOVISTO) para filtrar correctamente los datos de la plantilla.
+    /// </summary>
+    private async Task ImprimirRemitoEntregaAsync(PedidoVentaEntregaDetalleDTO fila, RemitoEntregaDTO remito)
+    {
+        if (imprimiendoRemitoEntrega || string.IsNullOrWhiteSpace(remito.Remito)) return;
+
+        imprimiendoRemitoEntrega = true;
+        remitoEntregaImprimiendo = remito.Remito;
+        try
+        {
+            var plantillaId = await GetPlantillaRemitoClienteIdAsync();
+            if (!plantillaId.HasValue) return;
+
+            var queryParams = new List<string>
+            {
+                $"Doprilar={Uri.EscapeDataString(remito.Remito.Trim())}"
+            };
+            if (fila.NroClie.GetValueOrDefault() > 0)
+            {
+                queryParams.Add($"Nume_Clie={fila.NroClie.Value}");
+            }
+            if (remito.FechaRemito.HasValue && remito.FechaRemito.Value > DateTime.MinValue)
+            {
+                queryParams.Add($"Fechmov={Uri.EscapeDataString(remito.FechaRemito.Value.ToString("yyyy-MM-dd"))}");
+            }
+
+            var endpoint = $"api/impresiones/remito-plantillas/{plantillaId.Value}/pdf?{string.Join("&", queryParams)}";
+            var responsePdf = await Http.GetAsync(endpoint);
+            if (!responsePdf.IsSuccessStatusCode)
+            {
+                var message = await responsePdf.Content.ReadAsStringAsync();
+                await sweetAlertService.FireAsync("Error", $"No se pudo generar el PDF del remito: {message}", SweetAlertIcon.Error);
+                return;
+            }
+
+            var pdfBytes = await responsePdf.Content.ReadAsByteArrayAsync();
+            if (pdfBytes.Length == 0)
+            {
+                await sweetAlertService.FireAsync("Error", "El PDF generado está vacío.", SweetAlertIcon.Error);
+                return;
+            }
+
+            var base64 = Convert.ToBase64String(pdfBytes);
+            var opened = await JS.InvokeAsync<bool>("openPdfInNewTab", base64);
+            if (!opened)
+            {
+                await sweetAlertService.FireAsync("Atención", "No se pudo abrir el PDF en una nueva pestaña. Verificá el bloqueador de pop-ups.", SweetAlertIcon.Warning);
+            }
+        }
+        catch (Exception ex)
+        {
+            await sweetAlertService.FireAsync("Error", $"Error al imprimir el remito: {ex.Message}", SweetAlertIcon.Error);
+        }
+        finally
+        {
+            imprimiendoRemitoEntrega = false;
+            remitoEntregaImprimiendo = null;
+            StateHasChanged();
+        }
+    }
+
+    /// <summary>
+    /// Busca el Id de la plantilla REMITOCLIENTE en ReportePersonalizado
+    /// (mismo criterio que /remitos).
+    /// </summary>
+    private async Task<int?> GetPlantillaRemitoClienteIdAsync()
+    {
+        if (plantillaRemitoClienteId.HasValue)
+        {
+            return plantillaRemitoClienteId;
+        }
+
+        var response = await repository.Get<List<RemitoPlantillaItemDto>>("api/impresiones/remito-plantillas");
+        if (response.Error || response.Response == null)
+        {
+            var message = await response.GetErrorMessageAsync();
+            await sweetAlertService.FireAsync("Error", $"No se pudo obtener el listado de plantillas de remito: {message}", SweetAlertIcon.Error);
+            return null;
+        }
+
+        var plantilla = response.Response
+            .FirstOrDefault(x => string.Equals(x.Nombre?.Trim(), NombrePlantillaRemitoCliente, StringComparison.OrdinalIgnoreCase));
+        if (plantilla == null)
+        {
+            await sweetAlertService.FireAsync("Atención", $"No se encontró la plantilla '{NombrePlantillaRemitoCliente}'.", SweetAlertIcon.Warning);
+            return null;
+        }
+
+        plantillaRemitoClienteId = plantilla.Id;
+        return plantillaRemitoClienteId;
+    }
+
+    private async Task AplicarFiltroEntregasAsync()
+    {
+        await CargarEntregasDetalleAsync();
+    }
+
+    private string GetOrdenIconoEntregas(string campo)
+    {
+        if (ordenarEntregasPor != campo)
+        {
+            return "↕";
+        }
+
+        return ordenarEntregasAsc ? "▲" : "▼";
+    }
+
+    /// <summary>Abre el selector de clientes propio del filtro de Entregas de Pedidos.</summary>
+    private async Task AbrirSelectorClientesEntregas()
+    {
+        if (selectorClientesEntregas != null)
+        {
+            await selectorClientesEntregas.AbrirModal();
+        }
+    }
+
+    private async Task OnClienteSeleccionadoEntregas(SelectorClientes.ClienteSeleccionado cliente)
+    {
+        filtroEntCliente = $"{cliente.NumeCli} - {cliente.RazonSocial}";
+        filtroEntClienteId = cliente.NumeCli;
+        await CargarEntregasDetalleAsync();
+    }
+
+    private async Task LimpiarClienteEntregas()
+    {
+        filtroEntCliente = string.Empty;
+        filtroEntClienteId = null;
+        await CargarEntregasDetalleAsync();
+    }
+
+    private async Task ConfirmarImpresionEntregasAsync()
+    {
+        isPrintingEntregas = true;
+        StateHasChanged();
+
+        try
+        {
+            var cantidadTotal = entregasDetalle?.Count ?? 0;
+            var result = await sweetAlertService.FireAsync(new SweetAlertOptions
+            {
+                Title = "Confirmar impresión",
+                Text = $"Se van a imprimir {cantidadTotal} registros (según filtros aplicados).\n¿Desea continuar?",
+                Icon = SweetAlertIcon.Warning,
+                ShowCancelButton = true,
+                ConfirmButtonText = "Sí, imprimir",
+                CancelButtonText = "Cancelar"
+            });
+
+            if (result.IsConfirmed)
+            {
+                mostrarModalImpresionEntregas = true;
+            }
+        }
+        catch (Exception ex)
+        {
+            await sweetAlertService.FireAsync("Error", ex.Message, SweetAlertIcon.Error);
+        }
+        finally
+        {
+            isPrintingEntregas = false;
+            StateHasChanged();
+        }
+    }
+
+    private void ResetearImpresionEntregas()
+    {
+        mostrarModalImpresionEntregas = false;
+        StateHasChanged();
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // REPORTE "PEDIDOS C/O.Compra x Fechas" (encabezado PEDENCA)
+    // Mismo criterio de modal/filtros/ordenamiento que "Entregas de Pedidos",
+    // pero leyendo directamente PEDENCA (sin ir al detalle PEDDETA).
+    // ═══════════════════════════════════════════════════════════════════════
+
+    private bool mostrarModalOcom = false;
+    private bool cargandoOcom = false;
+    private List<PedidoVentaConOcomDTO>? ocomDetalle;
+    private string ordenarOcomPor = nameof(PedidoVentaConOcomDTO.FechEmis);
+    private bool ordenarOcomAsc = false;
+
+    private int? filtroOcomNroPed;
+    private string filtroOcomCliente = string.Empty;
+    private int? filtroOcomClienteId;
+    private string filtroOcomRasoClie = string.Empty;
+    private string filtroOcomNroOcom = string.Empty;
+    private DateTime? filtroOcomFechaDesde;
+    private DateTime? filtroOcomFechaHasta;
+
+    private bool isPrintingOcom = false;
+    private bool mostrarModalImpresionOcom = false;
+    private string TituloReporteOcom => "Pedidos C/O.Compra x Fechas";
+
+    /// <summary>Selector de clientes dedicado al filtro del reporte "Pedidos C/O.Compra x Fechas".</summary>
+    private SelectorClientes? selectorClientesOcom;
+
+    Dictionary<string, string> encabezadosOcom = new()
+    {
+        { nameof(PedidoVentaConOcomDTO.FechEmis), "Fecha Emisión" },
+        { nameof(PedidoVentaConOcomDTO.NroPed), "N° Pedido" },
+        { nameof(PedidoVentaConOcomDTO.NroClie), "N° Cliente" },
+        { nameof(PedidoVentaConOcomDTO.RasoClie), "Cliente" },
+        { nameof(PedidoVentaConOcomDTO.NroOcom), "N° O.Compra" }
+    };
+
+    private async Task AbrirPedidosConOcomAsync()
+    {
+        mostrarModalOcom = true;
+        if (filtroOcomFechaDesde == null && filtroOcomFechaHasta == null)
+        {
+            filtroOcomFechaDesde = DateTime.Today.AddYears(-1);
+            filtroOcomFechaHasta = DateTime.Today;
+        }
+        await CargarOcomDetalleAsync();
+    }
+
+    private void CerrarModalOcom()
+    {
+        mostrarModalOcom = false;
+    }
+
+    private async Task CargarOcomDetalleAsync()
+    {
+        cargandoOcom = true;
+        StateHasChanged();
+
+        try
+        {
+            var parametros = new List<string>();
+
+            if (filtroOcomNroPed.HasValue)
+            {
+                parametros.Add($"nroPed={filtroOcomNroPed.Value}");
+            }
+
+            if (filtroOcomClienteId.HasValue)
+            {
+                parametros.Add($"clienteId={filtroOcomClienteId.Value}");
+            }
+
+            if (!string.IsNullOrWhiteSpace(filtroOcomRasoClie))
+            {
+                parametros.Add($"rasoClie={Uri.EscapeDataString(filtroOcomRasoClie)}");
+            }
+
+            if (!string.IsNullOrWhiteSpace(filtroOcomNroOcom))
+            {
+                parametros.Add($"nroOcom={Uri.EscapeDataString(filtroOcomNroOcom)}");
+            }
+
+            if (filtroOcomFechaDesde.HasValue)
+            {
+                parametros.Add($"fechaDesde={Uri.EscapeDataString(filtroOcomFechaDesde.Value.ToString("yyyy-MM-dd"))}");
+            }
+
+            if (filtroOcomFechaHasta.HasValue)
+            {
+                parametros.Add($"fechaHasta={Uri.EscapeDataString(filtroOcomFechaHasta.Value.ToString("yyyy-MM-dd"))}");
+            }
+
+            parametros.Add($"orderBy={Uri.EscapeDataString(ordenarOcomPor)}");
+            parametros.Add($"asc={(ordenarOcomAsc ? "true" : "false")}");
+
+            var url = "api/pedenca/con-ocom-por-fechas";
+            if (parametros.Any())
+            {
+                url += "?" + string.Join("&", parametros);
+            }
+
+            var resp = await repository.Get<List<PedidoVentaConOcomDTO>>(url);
+            ocomDetalle = resp.Response ?? new List<PedidoVentaConOcomDTO>();
+        }
+        catch (Exception ex)
+        {
+            await sweetAlertService.FireAsync("Error", $"Error al cargar pedidos con O.Compra por fechas: {ex.Message}", SweetAlertIcon.Error);
+            ocomDetalle = new List<PedidoVentaConOcomDTO>();
+        }
+        finally
+        {
+            cargandoOcom = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task OrdenarOcomAsync(string campo)
+    {
+        if (ordenarOcomPor == campo)
+        {
+            ordenarOcomAsc = !ordenarOcomAsc;
+        }
+        else
+        {
+            ordenarOcomPor = campo;
+            ordenarOcomAsc = true;
+        }
+
+        await CargarOcomDetalleAsync();
+    }
+
+    private async Task LimpiarFiltroOcomAsync()
+    {
+        filtroOcomNroPed = null;
+        filtroOcomCliente = string.Empty;
+        filtroOcomClienteId = null;
+        filtroOcomRasoClie = string.Empty;
+        filtroOcomNroOcom = string.Empty;
+        filtroOcomFechaDesde = DateTime.Today.AddYears(-1);
+        filtroOcomFechaHasta = DateTime.Today;
+        await CargarOcomDetalleAsync();
+    }
+
+    private async Task AplicarFiltroOcomAsync()
+    {
+        await CargarOcomDetalleAsync();
+    }
+
+    private string GetOrdenIconoOcom(string campo)
+    {
+        if (ordenarOcomPor != campo)
+        {
+            return "↕";
+        }
+
+        return ordenarOcomAsc ? "▲" : "▼";
+    }
+
+    // ═══════════════════════════════════════════════════════════════════
+    // Utilidad "Anular Items de Pedido" (menú Utilidades)
+    // Replica el selector de pedidos del VB6 (recordset Pedianuittemp):
+    // pedidos con al menos un ítem pendiente de entrega. La transacción de
+    // anulación de ítems se implementa en el paso siguiente.
+    // ═══════════════════════════════════════════════════════════════════
+    private bool mostrarModalAnularItems = false;
+    private bool cargandoAnularItems = false;
+    private List<PedidoConItemsPendientesDTO>? pedidosAnulables;
+    private PedidoConItemsPendientesDTO? pedidoAnulSeleccionado;
+    private List<Peddeta>? itemsAnulables;
+    private bool cargandoItemsAnul = false;
+
+    /// <summary>
+    /// NuOrItem de los ítems tildados en la grilla de pendientes del pedido.
+    /// Por defecto ninguno seleccionado (como el List2 del VB6).
+    /// </summary>
+    private HashSet<int> itemsAnulSeleccionados = new();
+
+    private int? filtroAnuNroPed;
+    private string filtroAnuTexto = string.Empty;
+
+    private async Task AbrirAnularItemsAsync()
+    {
+        mostrarModalAnularItems = true;
+        pedidoAnulSeleccionado = null;
+        itemsAnulables = null;
+        itemsAnulSeleccionados.Clear();
+        await CargarPedidosAnulablesAsync();
+    }
+
+    private void CerrarModalAnularItems()
+    {
+        mostrarModalAnularItems = false;
+        pedidoAnulSeleccionado = null;
+        itemsAnulables = null;
+        itemsAnulSeleccionados.Clear();
+    }
+
+    private async Task CargarPedidosAnulablesAsync(bool mantenerSeleccion = false)
+    {
+        cargandoAnularItems = true;
+        if (!mantenerSeleccion)
+        {
+            pedidoAnulSeleccionado = null;
+            itemsAnulables = null;
+            itemsAnulSeleccionados.Clear();
+        }
+        StateHasChanged();
+
+        try
+        {
+            var parametros = new List<string>();
+
+            if (filtroAnuNroPed.HasValue)
+            {
+                parametros.Add($"nroPed={filtroAnuNroPed.Value}");
+            }
+
+            if (!string.IsNullOrWhiteSpace(filtroAnuTexto))
+            {
+                parametros.Add($"texto={Uri.EscapeDataString(filtroAnuTexto)}");
+            }
+
+            var url = "api/pedenca/pedidos-con-items-pendientes";
+            if (parametros.Any())
+            {
+                url += "?" + string.Join("&", parametros);
+            }
+
+            var resp = await repository.Get<List<PedidoConItemsPendientesDTO>>(url);
+            pedidosAnulables = resp.Response ?? new List<PedidoConItemsPendientesDTO>();
+        }
+        catch (Exception ex)
+        {
+            await sweetAlertService.FireAsync("Error", $"Error al cargar pedidos con ítems pendientes: {ex.Message}", SweetAlertIcon.Error);
+            pedidosAnulables = new List<PedidoConItemsPendientesDTO>();
+        }
+        finally
+        {
+            cargandoAnularItems = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task LimpiarFiltroAnularItemsAsync()
+    {
+        filtroAnuNroPed = null;
+        filtroAnuTexto = string.Empty;
+        await CargarPedidosAnulablesAsync();
+    }
+
+    /// <summary>
+    /// Carga el detalle de ítems pendientes del pedido seleccionado replicando la
+    /// query del VB6 (SELITPED):
+    ///   PEDDETA.Status &lt; 8               -- no anulada ni cumplida
+    ///   PEDDETA.Status &lt;&gt; 3           -- el VB6 excluye además el estado 3
+    ///   PEDDETA.CantEnt &lt; CanPed - 0.005 -- con saldo pendiente
+    ///   PEDENCA.Status &lt; 9               -- pedido no anulado (ya garantizado por la lista)
+    /// Y como en el VB6 (CAN = CanPed - CantEnt; solo se lista si CAN &gt;= 0.05),
+    /// se descartan los ítems con saldo menor a 0.05.
+    /// </summary>
+    private async Task SeleccionarPedidoAnulacionAsync(PedidoConItemsPendientesDTO pedido)
+    {
+        pedidoAnulSeleccionado = pedido;
+        itemsAnulables = null;
+        itemsAnulSeleccionados.Clear();
+        cargandoItemsAnul = true;
+        StateHasChanged();
+
+        try
+        {
+            var resp = await repository.Get<List<Peddeta>>($"api/pedenca/detalle/{pedido.NroPed}");
+            itemsAnulables = (resp.Response ?? new List<Peddeta>())
+                .Where(d => d.Status < 8
+                         && d.Status != 3
+                         && (d.CantEnt ?? 0m) < (d.CanPed ?? 0m) - 0.005m
+                         && (d.CanPed ?? 0m) - (d.CantEnt ?? 0m) >= 0.05m)
+                .OrderBy(d => d.NuOrItem)
+                .ToList();
+        }
+        catch (Exception ex)
+        {
+            await sweetAlertService.FireAsync("Error", $"Error al cargar ítems del pedido: {ex.Message}", SweetAlertIcon.Error);
+            itemsAnulables = new List<Peddeta>();
+        }
+        finally
+        {
+            cargandoItemsAnul = false;
+            StateHasChanged();
+        }
+    }
+
+    /// <summary>Indica si todos los ítems pendientes mostrados están tildados.</summary>
+    private bool TodosItemsAnulSeleccionados =>
+        itemsAnulables != null && itemsAnulables.Any() &&
+        itemsAnulables.All(i => itemsAnulSeleccionados.Contains(i.NuOrItem ?? 0));
+
+    /// <summary>Tilda/destilda un ítem individual de la grilla de pendientes.</summary>
+    private void ToggleItemAnul(Peddeta item, ChangeEventArgs e)
+    {
+        var nuOrItem = item.NuOrItem ?? 0;
+        if ((bool)(e.Value ?? false))
+        {
+            itemsAnulSeleccionados.Add(nuOrItem);
+        }
+        else
+        {
+            itemsAnulSeleccionados.Remove(nuOrItem);
+        }
+    }
+
+    /// <summary>Tilda/destilda todos los ítems pendientes mostrados (check del encabezado).</summary>
+    private void SeleccionarTodosItemsAnul(ChangeEventArgs e)
+    {
+        itemsAnulSeleccionados.Clear();
+        if ((bool)(e.Value ?? false) && itemsAnulables != null)
+        {
+            foreach (var item in itemsAnulables)
+            {
+                itemsAnulSeleccionados.Add(item.NuOrItem ?? 0);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Botón "Marcar Cumplidos": pone PEDDETA.Status = 8 en los ítems tildados del
+    /// pedido seleccionado (endpoint api/pedenca/marcar-items-cumplidos) y refresca
+    /// el detalle y la lista de pedidos. Si el pedido se queda sin ítems pendientes,
+    /// desaparece de la lista (ya no cumple el WHERE del recordset VB6).
+    /// </summary>
+    private async Task MarcarItemsCumplidosAsync()
+    {
+        if (pedidoAnulSeleccionado == null || !itemsAnulSeleccionados.Any())
+        {
+            return;
+        }
+
+        var confirmacion = await sweetAlertService.FireAsync(new SweetAlertOptions
+        {
+            Title = "Marcar ítems como cumplidos",
+            Text = $"Se marcarán {itemsAnulSeleccionados.Count} ítem(s) del pedido N° {pedidoAnulSeleccionado.NroPed} como cumplidos (Status = 8).\n¿Desea continuar?",
+            Icon = SweetAlertIcon.Warning,
+            ShowCancelButton = true,
+            ConfirmButtonText = "Sí, marcar",
+            CancelButtonText = "Cancelar"
+        });
+
+        if (!confirmacion.IsConfirmed)
+        {
+            return;
+        }
+
+        cargandoItemsAnul = true;
+        StateHasChanged();
+
+        try
+        {
+            var dto = new MarcarItemsCumplidosDTO
+            {
+                NroPed = pedidoAnulSeleccionado.NroPed,
+                NuOrItems = itemsAnulSeleccionados.ToList()
+            };
+
+            var resp = await repository.Post<MarcarItemsCumplidosDTO, object>("api/pedenca/marcar-items-cumplidos", dto);
+            if (resp.Error)
+            {
+                var mensaje = await resp.GetErrorMessageAsync();
+                await sweetAlertService.FireAsync("Error", mensaje, SweetAlertIcon.Error);
+                return;
+            }
+
+            await sweetAlertService.FireAsync("Éxito", "Ítems marcados como cumplidos", SweetAlertIcon.Success);
+
+            itemsAnulSeleccionados.Clear();
+
+            // Recargar el detalle del pedido (los ítems cumplidos ya no aparecen)
+            await SeleccionarPedidoAnulacionAsync(pedidoAnulSeleccionado);
+
+            // Refrescar la lista de pedidos sin perder la selección actual
+            var nroPedSeleccionado = pedidoAnulSeleccionado?.NroPed;
+            await CargarPedidosAnulablesAsync(mantenerSeleccion: true);
+            if (nroPedSeleccionado.HasValue
+                && pedidosAnulables?.All(p => p.NroPed != nroPedSeleccionado.Value) == true)
+            {
+                // El pedido ya no tiene ítems pendientes: sale de la lista y se limpia el detalle
+                pedidoAnulSeleccionado = null;
+                itemsAnulables = null;
+            }
+        }
+        catch (Exception ex)
+        {
+            await sweetAlertService.FireAsync("Error", $"Error al marcar ítems: {ex.Message}", SweetAlertIcon.Error);
+        }
+        finally
+        {
+            cargandoItemsAnul = false;
+            StateHasChanged();
+        }
+    }
+
+    /// <summary>Abre el selector de clientes propio del filtro de "Pedidos C/O.Compra x Fechas".</summary>
+    private async Task AbrirSelectorClientesOcom()
+    {
+        if (selectorClientesOcom != null)
+        {
+            await selectorClientesOcom.AbrirModal();
+        }
+    }
+
+    private async Task OnClienteSeleccionadoOcom(SelectorClientes.ClienteSeleccionado cliente)
+    {
+        filtroOcomCliente = $"{cliente.NumeCli} - {cliente.RazonSocial}";
+        filtroOcomClienteId = cliente.NumeCli;
+        await CargarOcomDetalleAsync();
+    }
+
+    private async Task LimpiarClienteOcom()
+    {
+        filtroOcomCliente = string.Empty;
+        filtroOcomClienteId = null;
+        await CargarOcomDetalleAsync();
+    }
+
+    private async Task ConfirmarImpresionOcomAsync()
+    {
+        isPrintingOcom = true;
+        StateHasChanged();
+
+        try
+        {
+            var cantidadTotal = ocomDetalle?.Count ?? 0;
+            var result = await sweetAlertService.FireAsync(new SweetAlertOptions
+            {
+                Title = "Confirmar impresión",
+                Text = $"Se van a imprimir {cantidadTotal} registros (según filtros aplicados).\n¿Desea continuar?",
+                Icon = SweetAlertIcon.Warning,
+                ShowCancelButton = true,
+                ConfirmButtonText = "Sí, imprimir",
+                CancelButtonText = "Cancelar"
+            });
+
+            if (result.IsConfirmed)
+            {
+                mostrarModalImpresionOcom = true;
+            }
+        }
+        catch (Exception ex)
+        {
+            await sweetAlertService.FireAsync("Error", ex.Message, SweetAlertIcon.Error);
+        }
+        finally
+        {
+            isPrintingOcom = false;
+            StateHasChanged();
+        }
+    }
+
+    private void ResetearImpresionOcom()
+    {
+        mostrarModalImpresionOcom = false;
+        StateHasChanged();
+    }
+
     /// <summary>
     /// Obtiene TODOS los pedidos que coincidan con los filtros actuales, sin paginación
     /// Utiliza los mismos filtros que LoadAsync pero sin límite de página
@@ -941,6 +2385,11 @@ else
             if (clienteSeleccionadoId.HasValue)
             {
                 parametros.Add($"clienteId={clienteSeleccionadoId.Value}");
+            }
+            
+            if (filtroNroPed.HasValue)
+            {
+                parametros.Add($"nroPed={filtroNroPed.Value}");
             }
             
             if (!string.IsNullOrEmpty(filtroEstado))

@@ -73,6 +73,9 @@ namespace IMPLANPROD.Shared.Entities
         [NotMapped] // Esta propiedad no se mapeará a la base de datos
         public decimal? LoteMaximo { get; set; }
 
+        [NotMapped] // Componentes editados por el usuario en el alta, enviados desde el cliente
+        public List<IMPLANPROD.Shared.DTOs.FormulaComponenteDTO>? Componentes { get; set; }
+
         // ===================================================================
         // CAMPOS DE TIMESTAMP AUTOMÁTICOS - Implementación de ITimestampEntity
         // ===================================================================

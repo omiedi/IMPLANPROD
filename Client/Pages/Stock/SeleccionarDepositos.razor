@@ -1,4 +1,6 @@
 @page "/stock/seleccionardepositos"
+@using Microsoft.AspNetCore.Authorization
+@attribute [Authorize]
 @using IMPLANPROD.Shared.Entities
 @inject IRepository repository
 @inject NavigationManager NavigationManager

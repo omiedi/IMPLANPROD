@@ -335,9 +335,10 @@ else
             Console.WriteLine($"[AnulaRemito] Anulando remito: {remito.DoPriCor}");
 
             // Preparar request para anulación
+            // La búsqueda en el backend se realiza por DoPriLar + Nume_Clie + FechMov
             var request = new AnularRemitoRequest
             {
-                NumeroRemito = remito.DoPriCor ?? "",
+                NumeroRemito = remito.DoPriLar ?? "",
                 NumeroCliente = remito.NumeClie,
                 FechaMovimiento = remito.FechMov
             };

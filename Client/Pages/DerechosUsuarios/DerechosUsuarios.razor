@@ -1,4 +1,6 @@
 @page "/derechos-usuarios/{UsuarioId:int}/{IdFlexoft:int}"
+@using Microsoft.AspNetCore.Authorization
+@attribute [Authorize(Roles = "SUPERADMIN")]
 @using IMPLANPROD.Shared.DTOs
 @using IMPLANPROD.Shared.Entities
 @using IMPLANPROD.Client.Shared.Components

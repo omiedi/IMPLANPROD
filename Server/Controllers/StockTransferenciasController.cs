@@ -418,6 +418,205 @@ namespace IMPLANPROD.Server.Controllers
                 return StatusCode(500, $"Error interno del servidor: {ex.Message}");
             }
         }
+
+        /// <summary>
+        /// Realiza una transferencia con transformación de código:
+        /// sale una cantidad del producto origen (CantSalid) e ingresa la misma cantidad
+        /// del producto destino (CantIngre), posiblemente en depósitos distintos.
+        /// </summary>
+        [HttpPost("transformacion")]
+        public async Task<ActionResult<ValeTransferenciaDTO>> RealizarTransferenciaTransformacion([FromBody] StockTransferenciaTransformacionDTO transferencia)
+        {
+            if (!ModelState.IsValid)
+            {
+                return BadRequest(ModelState);
+            }
+
+            if (transferencia == null)
+            {
+                return BadRequest("Los datos de transferencia son nulos");
+            }
+
+            using var transaction = await _context.Database.BeginTransactionAsync();
+            try
+            {
+                var fecha = transferencia.Fecha;
+                var secuencialCompleto = await _documentNumberGenerator.GenerateNextDocumentNumberAsync("TR");
+                var numeroSecuencial = int.Parse(secuencialCompleto.Split('.').Last());
+                var anioCorto = fecha.Year % 100;
+                var seccion = $"{anioCorto:D2}{fecha:MMdd}";
+
+                int? idFlexoft = _userContextService.GetCurrentUserId();
+                short? codigoEmpresa = _userContextService.GetCurrentCodigoEmpresa();
+
+                if (!_userContextService.IsAuthenticated())
+                {
+                    return BadRequest("Sesión Caducada - Debe cerrar sesión y loguearse nuevamente.");
+                }
+
+                // Validar existencia de producto origen
+                var productoOrigen = await _context.masters
+                    .Where(m => m.Codint == transferencia.CodigoOrigenInt)
+                    .Select(m => new { m.Codint, m.Codigo, m.Trazable, m.Umedida })
+                    .FirstOrDefaultAsync();
+
+                if (productoOrigen == null)
+                {
+                    return BadRequest($"El producto origen con código interno {transferencia.CodigoOrigenInt} no existe.");
+                }
+
+                // Validar existencia de producto destino
+                var productoDestino = await _context.masters
+                    .Where(m => m.Codint == transferencia.CodigoDestinoInt)
+                    .Select(m => new { m.Codint, m.Codigo, m.Trazable, m.Umedida })
+                    .FirstOrDefaultAsync();
+
+                if (productoDestino == null)
+                {
+                    return BadRequest($"El producto destino con código interno {transferencia.CodigoDestinoInt} no existe.");
+                }
+
+                // Validar lote del producto origen cuando es trazable
+                if (productoOrigen.Trazable == 1)
+                {
+                    if (string.IsNullOrWhiteSpace(transferencia.Lote))
+                    {
+                        return BadRequest($"El producto origen '{productoOrigen.Codigo}' es trazable y requiere que se especifique un lote obligatoriamente.");
+                    }
+
+                    var loteExiste = await _context.Movistos
+                        .AnyAsync(m => m.Cod_Inte == transferencia.CodigoOrigenInt
+                                    && m.IdenLote == transferencia.Lote
+                                    && m.CantIngre.HasValue
+                                    && m.CantIngre.Value > 0);
+
+                    if (!loteExiste)
+                    {
+                        return BadRequest($"El lote '{transferencia.Lote}' no existe para el producto '{productoOrigen.Codigo}'. Debe existir al menos un ingreso previo con ese lote.");
+                    }
+                }
+                else
+                {
+                    // Si se ingresó un lote, validar que exista para el producto origen
+                    if (!string.IsNullOrWhiteSpace(transferencia.Lote))
+                    {
+                        var loteExiste = await _context.Movistos
+                            .AnyAsync(m => m.Cod_Inte == transferencia.CodigoOrigenInt
+                                        && m.IdenLote == transferencia.Lote
+                                        && m.CantIngre.HasValue
+                                        && m.CantIngre.Value > 0);
+
+                        if (!loteExiste)
+                        {
+                            return BadRequest($"El lote '{transferencia.Lote}' no existe para el producto '{productoOrigen.Codigo}'. Debe existir al menos un ingreso previo con ese lote.");
+                        }
+                    }
+                }
+
+                // Registro de salida del depósito origen
+                var movimientoSalida = new Movisto
+                {
+                    FeReMovi = fecha,
+                    FechMov = fecha,
+                    CodiMovi = "TR",
+                    CantSalid = transferencia.Cantidad,
+                    DepoMovi = transferencia.DepositoSalida,
+                    Cod_Inte = transferencia.CodigoOrigenInt,
+                    Cod_Exte = transferencia.CodigoOrigenExt,
+                    Descrip = transferencia.DescripcionOrigen,
+                    DoPriCor = $"TR.{numeroSecuencial}",
+                    DoPriLar = $"TR.{numeroSecuencial}",
+                    DoSecCor = $"TR.{seccion}",
+                    DoSecLar = $"TR.{seccion}",
+                    NumUsuar = idFlexoft,
+                    CodiEmpr = codigoEmpresa,
+                    ReferCor = transferencia.Referencia,
+                    IdenLote = transferencia.Lote
+                };
+
+                // Registro de ingreso al depósito destino
+                var movimientoIngreso = new Movisto
+                {
+                    FeReMovi = fecha,
+                    FechMov = fecha,
+                    CodiMovi = "TR",
+                    CantIngre = transferencia.Cantidad,
+                    DepoMovi = transferencia.DepositoIngreso,
+                    Cod_Inte = transferencia.CodigoDestinoInt,
+                    Cod_Exte = transferencia.CodigoDestinoExt,
+                    Descrip = transferencia.DescripcionDestino,
+                    DoPriCor = $"TR.{numeroSecuencial}",
+                    DoPriLar = $"TR.{numeroSecuencial}",
+                    DoSecCor = $"TR.{seccion}",
+                    DoSecLar = $"TR.{seccion}",
+                    NumUsuar = idFlexoft,
+                    CodiEmpr = codigoEmpresa,
+                    ReferCor = transferencia.Referencia,
+                    IdenLote = transferencia.Lote
+                };
+
+                _context.Movistos.Add(movimientoSalida);
+                _context.Movistos.Add(movimientoIngreso);
+                await _context.SaveChangesAsync();
+                await transaction.CommitAsync();
+
+                var origen = await _context.Tadeposi
+                    .AsNoTracking()
+                    .Where(d => d.CodigoDepo == transferencia.DepositoSalida)
+                    .Select(d => d.Descripcion)
+                    .FirstOrDefaultAsync();
+
+                var destino = await _context.Tadeposi
+                    .AsNoTracking()
+                    .Where(d => d.CodigoDepo == transferencia.DepositoIngreso)
+                    .Select(d => d.Descripcion)
+                    .FirstOrDefaultAsync();
+
+                var umedidas = new Dictionary<int, string>
+                {
+                    { productoOrigen.Codint, productoOrigen.Umedida ?? string.Empty },
+                    { productoDestino.Codint, productoDestino.Umedida ?? string.Empty }
+                };
+
+                var vale = new ValeTransferenciaDTO
+                {
+                    Numero = $"TR.{numeroSecuencial}",
+                    DoSecCor = $"TR.{seccion}",
+                    Fecha = fecha,
+                    DepositoOrigen = transferencia.DepositoSalida,
+                    DepositoOrigenNombre = origen ?? transferencia.DepositoSalida.ToString(),
+                    DepositoDestino = transferencia.DepositoIngreso,
+                    DepositoDestinoNombre = destino ?? transferencia.DepositoIngreso.ToString(),
+                    Motivo = transferencia.Referencia ?? string.Empty,
+                    Items = new List<ValeTransferenciaItemDTO>
+                    {
+                        new ValeTransferenciaItemDTO
+                        {
+                            CodigoExterno = transferencia.CodigoOrigenExt ?? string.Empty,
+                            Descripcion = $"(SALIDA) {transferencia.DescripcionOrigen}",
+                            UnidadMedida = umedidas.GetValueOrDefault(productoOrigen.Codint, string.Empty),
+                            Cantidad = transferencia.Cantidad,
+                            Lote = transferencia.Lote
+                        },
+                        new ValeTransferenciaItemDTO
+                        {
+                            CodigoExterno = transferencia.CodigoDestinoExt ?? string.Empty,
+                            Descripcion = $"(INGRESO) {transferencia.DescripcionDestino}",
+                            UnidadMedida = umedidas.GetValueOrDefault(productoDestino.Codint, string.Empty),
+                            Cantidad = transferencia.Cantidad,
+                            Lote = transferencia.Lote
+                        }
+                    }
+                };
+
+                return Ok(vale);
+            }
+            catch (Exception ex)
+            {
+                await transaction.RollbackAsync();
+                return StatusCode(500, $"Error interno del servidor: {ex.Message}");
+            }
+        }
     }
 }
 // codiempr = dependenciaId* 100 + empresaId;

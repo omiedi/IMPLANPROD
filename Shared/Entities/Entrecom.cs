@@ -258,6 +258,27 @@ ORDER BY ORDINAL_POSITION;
 GO
 
 ===============================================================================
+INSTRUCCIONES SQL PARA AGREGAR CAMPO Cantingre
+===============================================================================
+
+-- 11. Agregar campo Cantingre (cantidad ingresada) de tipo decimal(18,4)
+IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID(N'[dbo].[ENTRECOM]') AND name = 'Cantingre')
+BEGIN
+    ALTER TABLE [dbo].[ENTRECOM]
+    ADD [Cantingre] decimal(18,4) NULL;
+END
+GO
+
+-- 12. Agregar campo CantSalid (cantidad salida) de tipo decimal(18,4)
+IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID(N'[dbo].[ENTRECOM]') AND name = 'CantSalid')
+BEGIN
+    ALTER TABLE [dbo].[ENTRECOM]
+    ADD [CantSalid] decimal(18,4) NULL;
+END
+GO
+
+
+===============================================================================
 NOTAS IMPORTANTES
 ===============================================================================
 

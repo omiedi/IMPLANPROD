@@ -1,8 +1,16 @@
 @page "/trazabilidad-of-serie"
 @using IMPLANPROD.Client.Shared.Components
+@using IMPLANPROD.Client.Services
+@inject PageAccessService PageAccess
 
 <PageTitle>Trazabilidad O.F.-Serie</PageTitle>
 
+@if (validando)
+{
+    <p>Validando acceso...</p>
+}
+else
+{
 <div class="container-fluid">
     <div class="d-flex justify-content-between align-items-center mb-3">
         <h3 class="mb-0">
@@ -13,3 +21,15 @@
     @* Se deja un único bloque visual de datos en el selector para evitar repetición. *@
     <SelectorOrdenFabricacionAbierta />
 </div>
+}
+
+@code {
+    private bool validando = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        // Sin autenticación redirige a /login; sin permiso de la ruta, a /acceso-denegado.
+        await PageAccess.RequiereAccesoAsync("/trazabilidad-of-serie");
+        validando = false;
+    }
+}

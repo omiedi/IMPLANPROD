@@ -1,5 +1,7 @@
 @page "/pedido-impresion/{NroPedido:int}"
 @page "/pedido-impresion/{NroPedido:int}/{TipoImpresion}"
+@using Microsoft.AspNetCore.Authorization
+@attribute [Authorize]
 @using IMPLANPROD.Shared.Entities
 @using IMPLANPROD.Shared.DTOs
 @using System.Linq
@@ -64,7 +66,8 @@
     .col-it { width: 5%; text-align: left; }
     .col-cantidad { width: 10%; text-align: right; }
     .col-codigo { width: 15%; text-align: left; }
-    .col-descripcion { width: 50%; text-align: left; }
+    .col-descripcion { width: 40%; text-align: left; }
+    .col-fentrega { width: 10%; text-align: center; }
     .col-precio { width: 10%; text-align: right; }
     .col-importe { width: 10%; text-align: right; }
 
@@ -260,6 +263,7 @@
                     <th class="col-cantidad">Cantidad</th>
                     <th class="col-codigo">Código</th>
                     <th class="col-descripcion">Descripción</th>
+                    <th class="col-fentrega">F. Entrega</th>
                     @if (!EsOrdenDespacho)
                     {
                         <th class="col-precio">Pr. Unit.</th>
@@ -280,6 +284,7 @@
                                 <td class="col-cantidad">@item.CanPed?.ToString("F2")</td>
                                 <td class="col-codigo">@item.CodiExt</td>
                                 <td class="col-descripcion">@item.Descrip</td>
+                                <td class="col-fentrega">@(item.FeSolEnt?.ToString("dd/MM/yy") ?? "")</td>
                                 @if (!EsOrdenDespacho)
                                 {
                                     <td class="col-precio">@item.PreUnid?.ToString("F2")</td>
@@ -292,6 +297,7 @@
                                 <td class="col-cantidad"></td>
                                 <td class="col-codigo"></td>
                                 <td class="col-descripcion"></td>
+                                <td class="col-fentrega"></td>
                                 @if (!EsOrdenDespacho)
                                 {
                                     <td class="col-precio"></td>
@@ -334,7 +340,14 @@
         <div class="control-section">
             <div class="observaciones">
                 <strong>OBSERVACIONES</strong><br />
-                <div style="height: 80px;"></div>
+                @if (!string.IsNullOrWhiteSpace(pedido.Observa))
+                {
+                    <div style="white-space: pre-wrap;">@pedido.Observa</div>
+                }
+                else
+                {
+                    <div style="height: 80px;"></div>
+                }
             </div>
             <div class="checkboxes">
                 <div class="checkbox-row">

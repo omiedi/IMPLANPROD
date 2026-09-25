@@ -3,6 +3,7 @@
 @using IMPLANPROD.Shared.Entities
 @using IMPLANPROD.Shared.DTOs
 @using IMPLANPROD.Client.Shared.Components
+@using IMPLANPROD.Client.Pages.Reportes
 @using Microsoft.AspNetCore.Components.Authorization
 @inject IRepository repository
 @inject HttpClient Http
@@ -45,7 +46,15 @@ else
         <div class="card-header bg-light">
             <div class="d-flex justify-content-between align-items-center">
                 <h5 class="mb-0">Gestión de Componentes</h5>
-                <button class="btn btn-success" @onclick="ReturnAction">Regresar</button>
+                <div class="d-flex gap-2">
+                    @if (componentesAsignados.Any())
+                    {
+                        <button class="btn btn-outline-success" @onclick="ConfirmarImpresionAsync" disabled="@isPrinting">
+                            <i class="oi oi-print"></i> Imprimir/Exp.Excel
+                        </button>
+                    }
+                    <button class="btn btn-success" @onclick="ReturnAction">Regresar</button>
+                </div>
             </div>
         </div>
         <div class="card-body">
@@ -152,10 +161,18 @@ else
             }
             else
             {
+                @if (!formulaBloqueada)
+                {
+                    <div class="text-muted small mb-1">
+                        <i class="fas fa-arrows-alt-v me-1"></i>
+                        Podés arrastrar las filas desde <i class="fas fa-grip-vertical"></i> para cambiar el orden. El nuevo orden se guarda al presionar "Guardar Cambios".
+                    </div>
+                }
                 <div class="table-responsive">
                     <table class="table table-striped">
                         <thead>
                             <tr>
+                                <th style="width: 32px;"></th>
                                 <th>Códint</th>
                                 <th>Código</th>
                                 <th>Descripción</th>
@@ -167,8 +184,22 @@ else
                         <tbody>
                             @for (var indice = 0; indice < componentesAsignados.Count; indice++)
                             {
-                                var componente = componentesAsignados[indice];
-                                <tr id="@ObtenerIdFila(indice)" class="@GetFilaClass(indice)">
+                                var indiceFila = indice; // captura local para los lambdas de drag & drop
+                                var componente = componentesAsignados[indiceFila];
+                                <tr id="@ObtenerIdFila(indiceFila)"
+                                    class="@GetFilaClass(indiceFila)"
+                                    draggable="@(!formulaBloqueada)"
+                                    @ondragstart="() => OnDragStart(indiceFila)"
+                                    @ondragover="OnDragOver" @ondragover:preventDefault
+                                    @ondrop="() => OnDrop(indiceFila)"
+                                    @ondragend="OnDragEnd"
+                                    style="@(indiceArrastrado == indiceFila ? "opacity:0.5;" : "")">
+                                    <td class="text-center align-middle" style="cursor: @(formulaBloqueada ? "default" : "grab");" title="@(formulaBloqueada ? "" : "Arrastrar para reordenar")">
+                                        @if (!formulaBloqueada)
+                                        {
+                                            <i class="fas fa-grip-vertical text-muted"></i>
+                                        }
+                                    </td>
                                     <td>@componente.CodiElem</td>
                                     <td>@componente.CodXElem</td>
                                     <td>@componente.MasterDescripcion</td>
@@ -203,6 +234,19 @@ else
 
 @implements IAsyncDisposable
 
+<!-- Componente de Impresión/Exportación a Excel de Componentes -->
+@if (componentesAsignados.Any())
+{
+    <ImpresionLista TItem="Formulas"
+                    Datos="componentesAsignados"
+                    Titulo="@TituloImpresion"
+                    UrlExportarExcel="api/excel/exportar-componentes"
+                    Encabezados="encabezadosComponentes"
+                    ModoDirecto="false"
+                    MostrarModal="mostrarModalImpresion"
+                    OnCerrar="ResetearImpresion" />
+}
+
 @code {
     [Parameter]
     public string? Id { get; set; }
@@ -225,6 +269,27 @@ else
     private int indiceCoincidenciaActual = 0;
     private int coincidencias = 0;
     private int? filaResaltada = null;
+
+    // ── Drag & Drop para reordenar filas ────────────────────────────────────
+    // Índice de la fila que se está arrastrando actualmente (null si no hay drag en curso).
+    private int? indiceArrastrado = null;
+
+    // ── Impresión / Exportación a Excel ─────────────────────────────────────
+    // Sigue el patrón del sistema: botón "Imprimir/Exp.Excel" que abre el modal
+    // del componente ImpresionLista, el cual permite elegir columnas, imprimir
+    // y exportar a Excel. El endpoint api/excel/exportar-componentes ya existe
+    // en ExcelController y recibe List<Formulas>.
+    private bool isPrinting = false;
+    private bool mostrarModalImpresion = false;
+    private string TituloImpresion => $"Componentes del Producto: {resultado}";
+    private Dictionary<string, string> encabezadosComponentes = new()
+    {
+        { "CodiElem", "Códint" },
+        { "CodXElem", "Código" },
+        { "MasterDescripcion", "Descripción" },
+        { "UsoBruto", "Cantidad" },
+        { "UMED_FORM", "Unidad" }
+    };
 
     // Validar que el usuario tenga permiso para acceder a esta página antes de mostrar el contenido
     protected override async Task OnInitializedAsync()
@@ -301,7 +366,14 @@ else
                     componente.MasterDescripcion = await ObtenerDescripcion(componente.CodiElem.Value);
                 }
             }
-            
+
+            // El servidor ya devuelve los componentes ordenados por NuorIt
+            // (ver FormulasController.GetComponentesConjuntoAsync).
+            // No reordenar alfabéticamente aquí, porque eso pisaría el orden
+            // personalizado que el usuario guardó mediante drag & drop.
+            // Si los NuorIt vienen en NULL (sin orden asignado), se mantienen
+            // en el orden original de la base de datos.
+
             // Cargar el selector de componentes
             CargarSelectorComponentes();
         }
@@ -321,11 +393,14 @@ else
             return;
         }
 
-        // Agrupar por código externo para mostrar los valores posibles
+        // Agrupar por código externo para mostrar los valores posibles.
+        // Se ordena alfabéticamente por la descripción del componente (requerimiento del usuario),
+        // no por el código externo.
         var agrupados = componentesAsignados
             .Where(c => !string.IsNullOrEmpty(c.CodXElem))
             .GroupBy(c => c.CodXElem)
-            .OrderBy(g => g.Key);
+            .OrderBy(g => g.First().MasterDescripcion ?? "Sin descripción",
+                     StringComparer.CurrentCultureIgnoreCase);
 
         foreach (var grupo in agrupados)
         {
@@ -497,6 +572,84 @@ else
         }
     }
 
+    // ═══════════════════════════════════════════════════════════════════════
+    // DRAG & DROP: reordenamiento visual de filas
+    // ───────────────────────────────────────────────────────────────────────
+    // Implementado con eventos nativos de HTML5 Drag & Drop (draggable + on
+    // dragstart/dragover/drop), sin JS interop adicional: el índice de origen
+    // se guarda en el propio componente (indiceArrastrado) durante "dragstart"
+    // y se usa en "drop" para mover el elemento dentro de la lista en memoria.
+    //
+    // IMPORTANTE: esto solo modifica el orden en memoria (componentesAsignados)
+    // y recalcula NuorIt localmente. La persistencia en SQL Server (FORMULAS)
+    // sigue ocurriendo únicamente al presionar "Guardar Cambios" (GuardarCambios
+    // -> POST /api/formulas/conjunto/{codigoConjunto}), que ya guarda la lista
+    // completa en el orden en que se encuentra en ese momento.
+    // ═══════════════════════════════════════════════════════════════════════
+
+    /// <summary>Se dispara al empezar a arrastrar una fila: recuerda su índice de origen.</summary>
+    private void OnDragStart(int indice)
+    {
+        if (formulaBloqueada) return;
+        indiceArrastrado = indice;
+    }
+
+    /// <summary>
+    /// Necesario para que el navegador permita soltar (drop) sobre la fila;
+    /// el preventDefault ya se aplica desde el markup con @ondragover:preventDefault.
+    /// </summary>
+    private void OnDragOver()
+    {
+        // Intencionalmente vacío: sólo se usa para habilitar el evento "drop".
+    }
+
+    /// <summary>
+    /// Mueve la fila arrastrada a la posición de la fila destino dentro de la lista
+    /// en memoria y recalcula NuorIt según la nueva posición de cada elemento.
+    /// </summary>
+    private void OnDrop(int indiceDestino)
+    {
+        if (formulaBloqueada || indiceArrastrado == null || componentesAsignados == null)
+        {
+            indiceArrastrado = null;
+            return;
+        }
+
+        var indiceOrigen = indiceArrastrado.Value;
+        indiceArrastrado = null;
+
+        if (indiceOrigen == indiceDestino ||
+            indiceOrigen < 0 || indiceOrigen >= componentesAsignados.Count ||
+            indiceDestino < 0 || indiceDestino >= componentesAsignados.Count)
+        {
+            return;
+        }
+
+        var elemento = componentesAsignados[indiceOrigen];
+        componentesAsignados.RemoveAt(indiceOrigen);
+
+        // Si el origen estaba antes que el destino, al quitarlo la posición destino
+        // se corre un lugar hacia atrás.
+        var destinoAjustado = indiceOrigen < indiceDestino ? indiceDestino - 1 : indiceDestino;
+        componentesAsignados.Insert(destinoAjustado, elemento);
+
+        // Recalcular NuorIt en memoria según el nuevo orden visual.
+        // No se persiste hasta que el usuario presione "Guardar Cambios".
+        ReordenarComponentes();
+
+        // El resaltado por búsqueda de componente quedó apuntando a un índice
+        // que ya no corresponde a la misma fila; se limpia para evitar confusión.
+        filaResaltada = null;
+
+        StateHasChanged();
+    }
+
+    /// <summary>Se dispara siempre al finalizar el drag (con o sin drop válido); limpia el estado.</summary>
+    private void OnDragEnd()
+    {
+        indiceArrastrado = null;
+    }
+
     private async Task GuardarCambios()
     {
         if (componentesAsignados == null || productoTerminado == null) return;
@@ -517,6 +670,60 @@ else
         {
             await sweetAlertService.FireAsync("Error", ex.Message, SweetAlertIcon.Error);
         }
+    }
+
+    /// <summary>
+    /// Muestra el modal de impresión/exportación a Excel con los componentes asignados.
+    /// Sigue el mismo patrón usado en /remitos/traslado-index, /remitos, /pedidos-venta, etc.
+    /// </summary>
+    private async Task ConfirmarImpresionAsync()
+    {
+        if (componentesAsignados == null || !componentesAsignados.Any())
+        {
+            await sweetAlertService.FireAsync("Información", "No hay componentes para imprimir.", SweetAlertIcon.Info);
+            return;
+        }
+
+        isPrinting = true;
+        StateHasChanged();
+
+        try
+        {
+            var cantidadTotal = componentesAsignados.Count;
+
+            var result = await sweetAlertService.FireAsync(new SweetAlertOptions
+            {
+                Title = "Confirmar impresión",
+                Text = $"Se van a imprimir/exportar {cantidadTotal} componentes del producto '{resultado}'.\n¿Desea continuar?",
+                Icon = SweetAlertIcon.Warning,
+                ShowCancelButton = true,
+                ConfirmButtonText = "Sí, continuar",
+                CancelButtonText = "Cancelar"
+            });
+
+            if (result.IsConfirmed)
+            {
+                mostrarModalImpresion = true;
+            }
+        }
+        catch (Exception ex)
+        {
+            await sweetAlertService.FireAsync("Error", ex.Message, SweetAlertIcon.Error);
+        }
+        finally
+        {
+            isPrinting = false;
+            StateHasChanged();
+        }
+    }
+
+    /// <summary>
+    /// Cierra el modal de impresión y resetea el flag.
+    /// </summary>
+    private void ResetearImpresion()
+    {
+        mostrarModalImpresion = false;
+        StateHasChanged();
     }
 
     private void ReturnAction()

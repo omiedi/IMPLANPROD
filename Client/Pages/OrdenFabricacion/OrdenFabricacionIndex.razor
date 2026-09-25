@@ -68,7 +68,9 @@ else
                         <ul>
                             <li><strong>Estado:</strong> Todas, Abiertas, Cerradas o Anuladas.</li>
                             <li><strong>Fecha desde / hasta:</strong> acota por fecha de generación.</li>
-                            <li><strong>Filtro:</strong> busca por texto (por ejemplo ID, descripción o código).</li>
+                            <li><strong>Orden:</strong> busca por número de orden de fabricación.</li>
+                            <li><strong>Código:</strong> busca por código de producto (Cod_Exte).</li>
+                            <li><strong>Descripción:</strong> busca por descripción de producto.</li>
                             <li><strong>Consultar:</strong> ejecuta la búsqueda.</li>
                         </ul>
 
@@ -193,9 +195,9 @@ else
         </div>
         <div class="col-md-3">
             <div class="mb-3">
-                <label>Filtro:</label>
+                <label>Orden:</label>
                 <div class="input-group">
-                    <input type="text" class="form-control" @bind-value="filter" @bind-value:event="oninput" placeholder="Buscar..." />
+                    <input type="text" class="form-control" @bind-value="filter" @bind-value:event="oninput" placeholder="N° orden..." />
                     <button class="btn btn-outline-primary" type="button" @onclick="ApplyFilterAsync">
                         <i class="oi oi-magnifying-glass"></i>
                     </button>
@@ -207,10 +209,24 @@ else
         </div>
     </div>
     <div class="row">
-        <div class="col-md-12 text-end">
-            <button class="btn btn-primary" @onclick="ConsultarAsync">
-                <i class="oi oi-magnifying-glass"></i> Consultar
-            </button>
+        <div class="col-md-4">
+            <div class="mb-3">
+                <label>Código:</label>
+                <input type="text" class="form-control" @bind-value="filterCodigo" @bind-value:event="oninput" placeholder="Código producto..." />
+            </div>
+        </div>
+        <div class="col-md-5">
+            <div class="mb-3">
+                <label>Descripción:</label>
+                <input type="text" class="form-control" @bind-value="filterDescripcion" @bind-value:event="oninput" placeholder="Descripción producto..." />
+            </div>
+        </div>
+        <div class="col-md-3 text-end d-flex align-items-end">
+            <div class="mb-3 w-100">
+                <button class="btn btn-primary w-100" @onclick="ConsultarAsync">
+                    <i class="oi oi-magnifying-glass"></i> Consultar
+                </button>
+            </div>
         </div>
     </div>
 </div>
@@ -264,10 +280,10 @@ else
                         <div class="d-flex flex-column gap-1">
                             @* Fila superior: Editar y Ver Anotaciones *@
                             <div class="d-flex">
-                                <a class="btn btn-warning btn-sm" href="/orden-fabricacion-edit/@orden.Id">
+                                <a class="btn btn-warning btn-sm" href="/orden-fabricacion-edit/@orden.Id" title="Editar O.F.">
                                     <i class="oi oi-pencil"></i>
                                 </a>
-                                <button class="btn btn-info btn-sm ms-1" @onclick="() => VerAnotaciones(orden.Id)">
+                                <button class="btn btn-info btn-sm ms-1" @onclick="() => VerAnotaciones(orden.Id)" title="Detalle">
                                     <i class="oi oi-eye"></i>
                                 </button>
                             </div>
@@ -650,16 +666,17 @@ else
                                             <th class="text-end">Uso Unitario</th>
                                             <th class="text-end">Cantidad</th>
                                             <th class="text-end">Stock Actual</th>
-                                            <th class="text-end">Falta</th>
+                                            <th class="text-end">Saldo Proy.</th>
                                         </tr>
                                     </thead>
                                     <tbody>
                                         @foreach (var componente in componentesFormula)
                                         {
-                                            @* Calcular si falta stock basándose en la cantidad a utilizar (editable) *@
-                                            decimal falta = componente.CantidadAUtilizar - componente.Stock;
+                                            @* Calcular el saldo: Stock Actual - Cantidad a utilizar.
+                                               Positivo cuando sobra stock (verde), negativo cuando falta (rojo). *@
+                                            decimal falta = componente.Stock - componente.CantidadAUtilizar;
 
-                                            <tr class="@(falta > 0 ? "table-warning" : "")">
+                                            <tr class="@(falta < 0 ? "table-warning" : "")">
                                                 <td>@componente.CodXElem</td>
                                                 <td>@componente.Descripcion</td>
                                                 <td>UN</td> @* Por ahora fijo, se puede obtener del master si está disponible *@
@@ -673,7 +690,7 @@ else
                                                                  @onchange="StateHasChanged" />
                                                 </td>
                                                 <td class="text-end">@FormatDecimal(componente.Stock)</td>
-                                                <td class="text-end @(falta > 0 ? "text-danger fw-bold" : "text-success")">
+                                                <td class="text-end @(falta < 0 ? "text-danger fw-bold" : "text-success")">
                                                     @FormatDecimal(falta)
                                                 </td>
                                             </tr>
@@ -749,6 +766,12 @@ else
                                                 </div>
                                             </div>
 
+                                            @* Depósitos utilizados en el cierre (Dep. Entrada / Dep. Salida) *@
+                                            <div class="mb-1">
+                                                <div>Depósito de Ingreso: @TextoDepositoVale(depositoEntradaSeleccionado)</div>
+                                                <div>Depósito de Consumo: @TextoDepositoVale(depositoConsumoSeleccionado)</div>
+                                            </div>
+
                                             <div style="border-top: 1px solid black; margin: 10px 0;"></div>
 
                                             <div class="row mb-2" style="font-weight: bold;">
@@ -816,6 +839,11 @@ else
                     <div style="font-size: 16px; font-weight: bold;">
                         Fecha de Cierre: @DateTime.Now.ToString("dd/MM/yyyy")
                     </div>
+                </div>
+                @* Depósitos utilizados en el cierre (Dep. Entrada / Dep. Salida) *@
+                <div style="margin-top: 10px; font-size: 14px;">
+                    <div><strong>Depósito de Ingreso:</strong> @TextoDepositoVale(depositoEntradaSeleccionado)</div>
+                    <div><strong>Depósito de Consumo:</strong> @TextoDepositoVale(depositoConsumoSeleccionado)</div>
                 </div>
             </div>
 
@@ -921,6 +949,8 @@ else
     private int recordsNumber = 10;
     private List<OrdefabrIndexDTO>? ordenesFabricacion;
     private string filter = string.Empty;
+    private string filterCodigo = string.Empty;
+    private string filterDescripcion = string.Empty;
     private int estadoSeleccionado = 1; // Por defecto muestra abiertas (StatuOrf < 3)
     private DateTime? fechaDesde;
     private DateTime? fechaHasta;
@@ -1059,6 +1089,8 @@ else
             var filtros = new
             {
                 filter,
+                filterCodigo,
+                filterDescripcion,
                 estadoSeleccionado,
                 fechaDesde,
                 fechaHasta,
@@ -1093,6 +1125,18 @@ else
                         && filtroGuardado.ValueKind == JsonValueKind.String)
                     {
                         filter = filtroGuardado.GetString() ?? string.Empty;
+                    }
+
+                    if (filtrosGuardados.TryGetValue("filterCodigo", out var filtroCodigoGuardado)
+                        && filtroCodigoGuardado.ValueKind == JsonValueKind.String)
+                    {
+                        filterCodigo = filtroCodigoGuardado.GetString() ?? string.Empty;
+                    }
+
+                    if (filtrosGuardados.TryGetValue("filterDescripcion", out var filtroDescripcionGuardado)
+                        && filtroDescripcionGuardado.ValueKind == JsonValueKind.String)
+                    {
+                        filterDescripcion = filtroDescripcionGuardado.GetString() ?? string.Empty;
                     }
 
                     if (filtrosGuardados.TryGetValue("estadoSeleccionado", out var estadoGuardado)
@@ -1225,8 +1269,22 @@ else
             // Agregar filtro de texto si existe
             if (!string.IsNullOrWhiteSpace(filter))
             {
-                url1 += $"&filter={filter}";
-                url2 += $"&filter={filter}";
+                url1 += $"&filter={Uri.EscapeDataString(filter)}";
+                url2 += $"&filter={Uri.EscapeDataString(filter)}";
+            }
+
+            // Agregar filtro por código de producto si existe
+            if (!string.IsNullOrWhiteSpace(filterCodigo))
+            {
+                url1 += $"&filterCodigo={Uri.EscapeDataString(filterCodigo)}";
+                url2 += $"&filterCodigo={Uri.EscapeDataString(filterCodigo)}";
+            }
+
+            // Agregar filtro por descripción de producto si existe
+            if (!string.IsNullOrWhiteSpace(filterDescripcion))
+            {
+                url1 += $"&filterDescripcion={Uri.EscapeDataString(filterDescripcion)}";
+                url2 += $"&filterDescripcion={Uri.EscapeDataString(filterDescripcion)}";
             }
 
             // Realizar las peticiones en paralelo
@@ -1640,6 +1698,8 @@ else
     private async Task CleanFilterAsync()
     {
         filter = string.Empty;
+        filterCodigo = string.Empty;
+        filterDescripcion = string.Empty;
         Page = string.Empty;
         await LoadAsync(1);
     }
@@ -2507,6 +2567,21 @@ else
     }
 
     /// <summary>
+    /// Devuelve el texto "código - descripción" del depósito para mostrar en el
+    /// Vale Interno de cierre (Dep. Entrada / Dep. Salida). Si el depósito no
+    /// está en el combo cargado, muestra solo el código; si es <= 0, "-".
+    /// </summary>
+    private string TextoDepositoVale(int codigoDeposito)
+    {
+        if (codigoDeposito <= 0) return "-";
+        if (depositosDisponibles != null && depositosDisponibles.TryGetValue(codigoDeposito, out var texto))
+        {
+            return texto;
+        }
+        return codigoDeposito.ToString();
+    }
+
+    /// <summary>
     /// Carga los datos de la orden para el modal
     /// </summary>
     private async Task CargarDatosOrdenParaCierre()
@@ -2633,7 +2708,19 @@ else
             
             if (!string.IsNullOrWhiteSpace(filter))
             {
-                parametros.Add($"filter={filter}");
+                parametros.Add($"filter={Uri.EscapeDataString(filter)}");
+            }
+
+            // Filtro por código de producto
+            if (!string.IsNullOrWhiteSpace(filterCodigo))
+            {
+                parametros.Add($"filterCodigo={Uri.EscapeDataString(filterCodigo)}");
+            }
+
+            // Filtro por descripción de producto
+            if (!string.IsNullOrWhiteSpace(filterDescripcion))
+            {
+                parametros.Add($"filterDescripcion={Uri.EscapeDataString(filterDescripcion)}");
             }
 
             // Agregar parámetros para obtener todos los registros (sin paginación)

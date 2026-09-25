@@ -31,6 +31,7 @@ namespace IMPLANPROD.Shared.DTOs
         public int? MotivoRechazo { get; set; }
         public int? DestinoRechazo { get; set; }
         public string? ObservacionesRechazo { get; set; }
+        public string? Observa { get; set; }
 
     }
 }

@@ -6,9 +6,16 @@
 @inject IRepository repository
 @inject NavigationManager navigationManager
 @inject SweetAlertService sweetAlertService
+@inject PageAccessService PageAccess
 
 <PageTitle>Recepción de Bombas para Evaluación</PageTitle>
 
+@if (validando)
+{
+    <p>Validando acceso...</p>
+}
+else
+{
 <div class="container-fluid">
     <!-- Título de la página -->
     <div class="mb-4">
@@ -301,8 +308,10 @@
                   CantidadDefault="1"
                   OnProductoSeleccionado="OnProductoCodGenericoSeleccionado"
                   OnClose="OnCloseSelectorProductoCodGenerico" />
+}
 
 @code {
+    private bool validando = true;
     private List<Repara>? recepciones;
     private int currentPage = 1;
     private int totalPages;
@@ -330,6 +339,8 @@
 
     protected override async Task OnInitializedAsync()
     {
+        await PageAccess.RequiereAccesoAsync("/recepcion-bombas-evaluacion");
+        validando = false;
         await LoadAsync();
     }
 

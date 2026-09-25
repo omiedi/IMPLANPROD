@@ -210,6 +210,49 @@ END
 
 */
 // *** --- MIGRACION DE DATOS DESDE BADAMODE A BADAMODE_NOTA --- ***
+// para migrar de la tabla BADAMODE a BADAMODE de arcon a aarcon2
+/*INSERT INTO ARCON2.dbo.BADAMODE
+(
+    Cod_Mod,
+    CodiEmpr,
+    Descripcion,
+    Ubic,
+    CantPiezas,
+    Frecuen,
+    FechUlt_Con,
+    FechPro_Con,
+    Material,
+    Desc_Mat,
+    Cod_Inte,
+    AnotaMod,
+    ObservaMod,
+    Foto1,
+    Foto2,
+    Foto3,
+    Foto4,
+    rowguid
+)
+SELECT
+    Cod_Mod,
+    CodiEmpr,
+    Descripcion,
+    Ubic,
+    CantPiezas,
+    Frecuen,
+    FechUlt_Con,
+    FechPro_Con,
+    Material,
+    Desc_Mat,
+    Cod_Inte,
+    AnotaMod,
+    ObservaMod,
+    Foto1,
+    Foto2,
+    Foto3,
+    Foto4,
+    NEWID()
+FROM ARCON.dbo.BADAMODE;
+*/
 /*  ESTO ES LPARA CARGAR LAS NOTAS EN LA TABLA BADAMODE_NOTA  
  *  --1) Borrar el contenido de la tabla destino
 DELETE FROM arcon2.dbo.BADAMODE_NOTA;

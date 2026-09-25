@@ -2,12 +2,15 @@
 <PageTitle>Consulta de Remitos</PageTitle>
 @using IMPLANPROD.Shared.Entities
 @using IMPLANPROD.Shared.DTOs
+@using IMPLANPROD.Shared.DTOs.Impresiones
 @using IMPLANPROD.Client.Repositories
 @using IMPLANPROD.Client.Shared.Components
 @using IMPLANPROD.Client.Pages.Reportes
 @using IMPLANPROD.Client.Helpers
 @using IMPLANPROD.Client.Services
 @inject IRepository repository
+@inject HttpClient Http
+@inject IJSRuntime JS
 @inject SweetAlertService sweetAlertService
 @inject NavigationManager navigationManager
 @inject PageAccessService PageAccess
@@ -259,6 +262,10 @@ else
     private string valorDeclaradoImpresion = "";
     private int bultosImpresion = 1;
 
+    // Variables para impresión por plantilla REMITOCLIENTE
+    private const string NombrePlantillaRemitoCliente = "REMITOCLIENTE";
+    private int? plantillaRemitoClienteId;
+
     private Dictionary<string, string> encabezadosRemitos = new()
     {
         { "DoPriCor", "Remito" },
@@ -508,10 +515,15 @@ else
             // Esperar un momento para que se actualice el DOM
             await Task.Delay(100);
             
-            // Imprimir
-            await impresionRemito.Imprimir();
+            // Imprimir usando la plantilla REMITOCLIENTE guardada en ReportePersonalizado.
+            // Se usa DoPriLar porque es el número visible en la grilla y DoPriCor viene vacío en este listado.
+            // Se envían también Nume_Clie y Fechmov para filtrar datos de la plantilla.
+            await ImprimirRemitoClientePorPlantillaAsync(
+                remito.DoPriLar,
+                remito.NumeClie > 0 ? remito.NumeClie : null,
+                remito.FechMov > DateTime.MinValue ? remito.FechMov : null);
             
-            Console.WriteLine("[RemitosIndex] Impresión iniciada");
+            Console.WriteLine("[RemitosIndex] Impresión por plantilla iniciada");
         }
         catch (Exception ex)
         {
@@ -523,6 +535,96 @@ else
             imprimiendoRemito = false;
             StateHasChanged();
         }
+    }
+
+    /// <summary>
+    /// Imprime un remito de cliente usando la plantilla REMITOCLIENTE guardada en ReportePersonalizado.
+    /// El parámetro doprilar corresponde al DoPriCor/DoPriLar del remito.
+    /// Además se envían Nume_Clie y Fechmov para que la plantilla pueda filtrar por cliente y fecha.
+    /// </summary>
+    private async Task ImprimirRemitoClientePorPlantillaAsync(string? doPriCor, int? numeClie = null, DateTime? fechMov = null)
+    {
+        if (string.IsNullOrWhiteSpace(doPriCor))
+        {
+            await sweetAlertService.FireAsync("Atención", "El remito no tiene número para imprimir.", SweetAlertIcon.Warning);
+            return;
+        }
+
+        var plantillaId = await GetPlantillaRemitoClienteIdAsync();
+        if (!plantillaId.HasValue)
+        {
+            return;
+        }
+
+        var queryParams = new List<string>
+        {
+            $"Doprilar={Uri.EscapeDataString(doPriCor.Trim())}"
+        };
+
+        if (numeClie.HasValue)
+        {
+            queryParams.Add($"Nume_Clie={numeClie.Value}");
+        }
+
+        if (fechMov.HasValue && fechMov.Value > DateTime.MinValue)
+        {
+            queryParams.Add($"Fechmov={Uri.EscapeDataString(fechMov.Value.ToString("yyyy-MM-dd"))}");
+        }
+
+        var endpoint = $"api/impresiones/remito-plantillas/{plantillaId.Value}/pdf?{string.Join("&", queryParams)}";
+        var responsePdf = await Http.GetAsync(endpoint);
+
+        if (!responsePdf.IsSuccessStatusCode)
+        {
+            var message = await responsePdf.Content.ReadAsStringAsync();
+            await sweetAlertService.FireAsync("Error", $"No se pudo generar el PDF del remito: {message}", SweetAlertIcon.Error);
+            return;
+        }
+
+        var pdfBytes = await responsePdf.Content.ReadAsByteArrayAsync();
+        if (pdfBytes.Length == 0)
+        {
+            await sweetAlertService.FireAsync("Error", "El PDF generado está vacío.", SweetAlertIcon.Error);
+            return;
+        }
+
+        var base64 = Convert.ToBase64String(pdfBytes);
+        var opened = await JS.InvokeAsync<bool>("openPdfInNewTab", base64);
+        if (!opened)
+        {
+            await sweetAlertService.FireAsync("Atención", "No se pudo abrir el PDF en una nueva pestaña. Verificá el bloqueador de pop-ups.", SweetAlertIcon.Warning);
+        }
+    }
+
+    /// <summary>
+    /// Busca el Id de la plantilla REMITOCLIENTE en ReportePersonalizado.
+    /// </summary>
+    private async Task<int?> GetPlantillaRemitoClienteIdAsync()
+    {
+        if (plantillaRemitoClienteId.HasValue)
+        {
+            return plantillaRemitoClienteId;
+        }
+
+        var response = await repository.Get<List<RemitoPlantillaItemDto>>("api/impresiones/remito-plantillas");
+        if (response.Error || response.Response == null)
+        {
+            var message = await response.GetErrorMessageAsync();
+            await sweetAlertService.FireAsync("Error", $"No se pudo obtener el listado de plantillas de remito: {message}", SweetAlertIcon.Error);
+            return null;
+        }
+
+        var plantilla = response.Response
+            .FirstOrDefault(x => string.Equals(x.Nombre?.Trim(), NombrePlantillaRemitoCliente, StringComparison.OrdinalIgnoreCase));
+
+        if (plantilla == null)
+        {
+            await sweetAlertService.FireAsync("Atención", $"No se encontró la plantilla '{NombrePlantillaRemitoCliente}'.", SweetAlertIcon.Warning);
+            return null;
+        }
+
+        plantillaRemitoClienteId = plantilla.Id;
+        return plantillaRemitoClienteId;
     }
 
     /// <summary>

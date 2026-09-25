@@ -58,6 +58,12 @@ namespace IMPLANPROD.Shared.DTOs
         /// <summary>Fecha de revisión formateada para la impresión (dd/MM/yyyy).</summary>
         public string? FerevisFormateada { get; set; }
 
+        /// <summary>
+        /// Revisión del producto tomada de MASTER.Revision (MASTER.Codint = ORDEFABR.Cod_Inte).
+        /// Es el valor que se imprime en el casillero "Revisión" del formulario A4.
+        /// </summary>
+        public string? Revision { get; set; }
+
         // --- Detalle de operaciones (Secoper) ---
 
         /// <summary>Lista de operaciones de fabricación asociadas al producto.</summary>
@@ -127,6 +133,12 @@ namespace IMPLANPROD.Shared.DTOs
 
         /// <summary>Fecha de revisión formateada para la impresión (dd/MM/yyyy).</summary>
         public string? FerevisFormateada { get; set; }
+
+        /// <summary>
+        /// Revisión del producto tomada de MASTER.Revision (MASTER.Codint = ORDEFABR.Cod_Inte).
+        /// Es el valor que se imprime en el casillero "Revisión" del Vale de Materiales.
+        /// </summary>
+        public string? Revision { get; set; }
 
         /// <summary>Lista de materiales reservados para esta OF (Reserva con CantRes > 0).</summary>
         public List<OrdenFabricacionMaterialConsumoDTO> Materiales { get; set; } = new();

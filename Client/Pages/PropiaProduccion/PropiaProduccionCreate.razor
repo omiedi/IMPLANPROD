@@ -1,0 +1,664 @@
+@page "/propia-produccion-create"
+@using IMPLANPROD.Client.Services
+@using IMPLANPROD.Shared.DTOs
+@using IMPLANPROD.Shared.Entities
+@using IMPLANPROD.Client.Shared.Components
+@using IMPLANPROD.Client.Pages.Stock
+@using IMPLANPROD.Client.Pages.StockAjustes
+@inject NavigationManager navigationManager
+@inject IRepository repository
+@inject SweetAlertService sweetAlertService
+@inject PageAccessService PageAccess
+
+<PageTitle>Generar Producción Propia</PageTitle>
+
+@if (validando)
+{
+    <p>Validando acceso...</p>
+}
+else
+{
+    <div class="bg-primary bg-opacity-10 p-3 rounded-3 mb-3">
+        <h3 class="m-0 text-primary">
+            <i class="fas fa-industry me-2"></i>Generar Alta y Consumo por Propia Producción
+        </h3>
+    </div>
+
+    <EditForm Model="modelo" OnValidSubmit="GenerarAsync">
+        <DataAnnotationsValidator />
+
+        <div class="card mb-3">
+            <div class="card-header bg-light">
+                <h4 class="m-0">Nueva Producción Propia</h4>
+            </div>
+            <div class="card-body">
+                @* Búsqueda del producto terminado a fabricar *@
+                <div class="row mb-3">
+                    <div class="col-md-6">
+                        <div class="mb-3">
+                            <label>Código de Producto:</label>
+                            <MasterSearchModal
+                                IsVisible="@showModal"
+                                OnRepuestoSelected="HandleSelection"
+                                OnCloseRequested="@(() => showModal = false)" />
+
+                            <div class="d-flex align-items-center">
+                                <button class="btn btn-sm btn-info me-2" type="button" @onclick="() => showModal = true">
+                                    Buscar producto
+                                </button>
+                                @if (selectedMaster != null)
+                                {
+                                    <div class="input-group" style="max-width: 300px;">
+                                        <input class="form-control" type="text" value="@selectedMaster.Codigo" readonly />
+                                        <span class="input-group-text">@selectedMaster.Codint</span>
+                                    </div>
+                                }
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="mb-3">
+                            <label>Descripción:</label>
+                            <input type="text" class="form-control" value="@selectedMaster?.Descripcion" readonly />
+                        </div>
+                    </div>
+                </div>
+
+                @* Unidad de medida (informativo) *@
+                <div class="row mb-3">
+                    <div class="col-md-4">
+                        <div class="mb-3">
+                            <label>Unidad de Medida:</label>
+                            <input type="text" class="form-control" value="@selectedMaster?.Umedida" readonly />
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="mb-3">
+                            <label>Referencia:</label>
+                            <input type="text" class="form-control" @bind="modelo.Referencia"
+                                   placeholder="Informe de Produccion" maxlength="64" />
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="mb-3">
+                            <label>Fecha:</label>
+                            <input type="date" class="form-control" @bind="modelo.Fecha" />
+                        </div>
+                    </div>
+                </div>
+
+                @* Cantidad a fabricar (sin flechas) y depósitos *@
+                <div class="row mb-3">
+                    <div class="col-md-4">
+                        <div class="mb-3">
+                            <label>Cantidad a Fabricar:</label>
+                            @* Se usa ValueChanged manual (no @bind-Value:after, que InputNumeroLimpio no soporta)
+                               para recalcular las necesidades automáticamente al cambiar la cantidad. *@
+                            <InputNumeroLimpio TValue="decimal?"
+                                               Value="modelo.Cantidad"
+                                               ValueChanged="OnCantidadChangedAsync"
+                                               ValueExpression="() => modelo.Cantidad"
+                                               Class="form-control"
+                                               Placeholder="0"
+                                               step="any" />
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="mb-3">
+                            <label>Depósito de Entrada:</label>
+                            <select class="form-select" @bind="modelo.DepositoEntrada">
+                                <option value="0">-- Seleccione --</option>
+                                @foreach (var deposito in depositos)
+                                {
+                                    <option value="@deposito.Key">@deposito.Value</option>
+                                }
+                            </select>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="mb-3">
+                            <label>Depósito de Consumo:</label>
+                            <select class="form-select" @bind="modelo.DepositoConsumo" @bind:after="ActualizarStockPorDeposito">
+                                <option value="0">-- Seleccione --</option>
+                                @foreach (var deposito in depositos)
+                                {
+                                    <option value="@deposito.Key">@deposito.Value</option>
+                                }
+                            </select>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        @* Botones de acción *@
+        <div class="mb-3">
+            <button type="submit" class="btn btn-primary me-2" disabled="@guardando">
+                @if (guardando)
+                {
+                    <span class="spinner-border spinner-border-sm" aria-hidden="true"></span>
+                    <span> Generando...</span>
+                }
+                else
+                {
+                    <span>Generar Alta y Consumo por Propia Producción</span>
+                }
+            </button>
+            <button type="button" class="btn btn-secondary" @onclick="Return" disabled="@guardando">Volver</button>
+        </div>
+
+        @* Componentes de la fórmula (igual que /orden-fabricacion-create) *@
+        <MasterSearchModal
+            IsVisible="@showModalAgregar"
+            OnRepuestoSelected="HandleAgregarComponenteSelected"
+            OnCloseRequested="@(() => showModalAgregar = false)" />
+
+        <div class="card mt-4">
+            <div class="card-header bg-light d-flex justify-content-between align-items-center">
+                <h5 class="m-0">Componentes de la Fórmula</h5>
+                <button type="button" class="btn btn-sm btn-success" @onclick="AbrirAgregarComponente" disabled="@(selectedMaster == null)">
+                    <i class="oi oi-plus"></i> Agregar Producto
+                </button>
+            </div>
+            <div class="card-body">
+                @if (cargandoFormula)
+                {
+                    <div class="d-flex justify-content-center">
+                        <div class="spinner-border text-primary" role="status">
+                            <span class="visually-hidden">Cargando...</span>
+                        </div>
+                    </div>
+                }
+                else if (componentesFormula != null && componentesFormula.Any())
+                {
+                    <div class="table-responsive" style="max-height: 400px; overflow-y: auto;">
+                        <table class="table table-striped table-hover">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Código</th>
+                                    <th>Descripción</th>
+                                    <th class="text-center">Uso X Unid.</th>
+                                    <th class="text-center">Stock en Depósito</th>
+                                    <th class="text-center">Necesidad Total</th>
+                                    <th class="text-center">Cantidad a Utilizar</th>
+                                    <th class="text-center">Acciones</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var componente in componentesFormula)
+                                {
+                                    <tr>
+                                        <td>@componente.CodXElem</td>
+                                        <td>
+                                            @if (componente.EsRepetido)
+                                            {<span><strong>*</strong> @componente.Descripcion</span>}
+                                            else
+                                            {@componente.Descripcion}
+                                        </td>
+                                        <td class="text-center">@componente.UsoBruto.ToString("N4")</td>
+                                        <td class="text-center">
+                                            @* Stock del componente en el depósito de consumo seleccionado.
+                                               Se actualiza cuando cambia el depósito de consumo. *@
+                                            @if (stockPorComponente.ContainsKey(componente.CodIElem))
+                                            {
+                                                var stock = stockPorComponente[componente.CodIElem];
+                                                <span class="@(stock < componente.CantidadAUtilizar ? "text-danger fw-bold" : "")">
+                                                    @stock.ToString("N2")
+                                                </span>
+                                            }
+                                            else
+                                            {
+                                                <span class="text-muted">-</span>
+                                            }
+                                        </td>
+                                        <td class="text-center">@componente.NecesidadTotal.ToString("N2")</td>
+                                        <td>
+                                            @* Input numérico sin flechas. Se usa <input type="number"> nativo con step="any"
+                                               dentro de .sin-flechas porque InputNumeroLimpio (que usa InputNumber)
+                                               no acepta correctamente decimales (step="1" por defecto). *@
+                                            <div class="sin-flechas">
+                                                <input type="number" step="any"
+                                                       class="form-control form-control-sm"
+                                                       @bind="componente.CantidadAUtilizar"
+                                                       @bind:event="oninput" />
+                                            </div>
+                                        </td>
+                                        <td class="text-center">
+                                            <button type="button" class="btn btn-sm btn-primary me-1" @onclick="() => AbrirHistorico(componente)" title="Histórico">
+                                                <i class="oi oi-clock"></i>
+                                            </button>
+                                            <button type="button" class="btn btn-sm btn-danger" @onclick="() => QuitarComponente(componente)">
+                                                <i class="oi oi-trash"></i>
+                                            </button>
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                    <div class="mt-2">
+                        <small class="text-muted"><strong>*</strong> Indica componente con código repetido en la fórmula</small>
+                    </div>
+                }
+                else
+                {
+                    <div class="alert alert-info">
+                        <i class="oi oi-info"></i> No hay componentes cargados. Seleccione un producto para cargar su fórmula.
+                    </div>
+                }
+            </div>
+        </div>
+    </EditForm>
+
+    @* Modal de Histórico de Movimientos para el componente seleccionado.
+       Mismo patrón que /orden-fabricacion-create. *@
+    @if (mostrarModalHistorico)
+    {
+        <div class="modal fade show" style="display: block" tabindex="-1">
+            <div class="modal-dialog modal-xl">
+                <div class="modal-content">
+                    <div class="modal-header bg-secondary text-white">
+                        <h5 class="modal-title">Histórico de Movimientos</h5>
+                        <button type="button" class="btn-close btn-close-white" @onclick="CerrarHistorico"></button>
+                    </div>
+                    <div class="modal-body p-0">
+                        <HistoricoMovimientosComponent Repuesto="componenteSeleccionado"
+                        ShowInModal="true"
+                        HeaderClass="bg-secondary"
+                        HeaderStyle="margin: -1px;" />
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="modal-backdrop fade show"></div>
+    }
+}
+
+@code {
+    // ── Estado de la página ──────────────────────────────────────────────
+    private bool validando = true;
+    private bool guardando = false;
+
+    // ── Modelo del formulario ───────────────────────────────────────────
+    private GenerarPropiaProduccionDTO modelo = new()
+    {
+        Fecha = DateTime.Today,
+        Componentes = new()
+    };
+
+    // ── Producto seleccionado (Master) ─────────────────────────────────
+    private Master? selectedMaster;
+
+    // ── Modales de búsqueda ─────────────────────────────────────────────
+    private bool showModal = false;
+    private bool showModalAgregar = false;
+
+    // ── Componentes de la fórmula ───────────────────────────────────────
+    private List<FormulaComponenteDTO>? componentesFormula;
+    private bool cargandoFormula = false;
+
+    // ── Depósitos (combo, mismo origen que el modal de Histórico de Movimientos) ──
+    private Dictionary<int, string> depositos = new();
+
+    // ── Stock de cada componente en el depósito de consumo seleccionado ──
+    // Key: CodIElem (código interno del componente), Value: stock disponible
+    private Dictionary<int, decimal> stockPorComponente = new();
+
+    // ── Modal de Histórico de Movimientos ──────────────────────────────
+    private bool mostrarModalHistorico = false;
+    private ProductoConSaldoDTO? componenteSeleccionado;
+
+    protected override async Task OnInitializedAsync()
+    {
+        // Validar acceso a la página
+        await PageAccess.RequiereAccesoAsync("/propia-produccion-create");
+        validando = false;
+
+        // Cargar combo de depósitos (api/tadeposi/combo)
+        await CargarDepositos();
+    }
+
+    /// <summary>
+    /// Carga la lista de depósitos para los combos de selección.
+    /// Sigue el mismo patrón que el modal "Histórico de Movimientos" de /StockInfGeneral.
+    /// </summary>
+    private async Task CargarDepositos()
+    {
+        try
+        {
+            var response = await repository.Get<Dictionary<int, string>>("api/tadeposi/combo");
+            if (!response.Error && response.Response != null)
+            {
+                depositos = response.Response;
+            }
+            else
+            {
+                depositos = new Dictionary<int, string>();
+            }
+        }
+        catch
+        {
+            depositos = new Dictionary<int, string>();
+        }
+    }
+
+    /// <summary>
+    /// Maneja la selección de un producto desde el buscador.
+    /// Carga la fórmula del producto seleccionado, igual que /orden-fabricacion-create.
+    /// </summary>
+    private async Task HandleSelection(Master master)
+    {
+        selectedMaster = master;
+        if (master == null || string.IsNullOrEmpty(master.Codigo) || master.Codint <= 0) return;
+
+        modelo.Cod_Inte = master.Codint;
+
+        // Cargar la fórmula del producto seleccionado
+        await CargarComponentesFormula(master.Codint);
+
+        showModal = false;
+        StateHasChanged();
+    }
+
+    /// <summary>
+    /// Carga los componentes de la fórmula del producto seleccionado.
+    /// Calcula la necesidad total y la cantidad a utilizar según la cantidad a fabricar.
+    /// </summary>
+    private async Task CargarComponentesFormula(int codigoInternoProducto)
+    {
+        try
+        {
+            cargandoFormula = true;
+            StateHasChanged();
+
+            var response = await repository.Get<List<FormulaComponenteDTO>>($"api/formulas/componentes/{codigoInternoProducto}");
+
+            if (response.Error)
+            {
+                var errorMessage = await response.GetErrorMessageAsync();
+                await sweetAlertService.FireAsync("Error", errorMessage, SweetAlertIcon.Error);
+                componentesFormula = null;
+            }
+            else
+            {
+                componentesFormula = response.Response;
+
+                // Calcular necesidad total y cantidad a utilizar según la cantidad a fabricar
+                if (componentesFormula != null && componentesFormula.Any())
+                {
+                    foreach (var componente in componentesFormula)
+                    {
+                        if (modelo.Cantidad.HasValue && modelo.Cantidad.Value > 0)
+                        {
+                            componente.NecesidadTotal = componente.UsoBruto * modelo.Cantidad.Value;
+                            componente.CantidadAUtilizar = componente.NecesidadTotal;
+                        }
+                        else
+                        {
+                            componente.NecesidadTotal = 0;
+                            componente.CantidadAUtilizar = 0;
+                        }
+                    }
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            await sweetAlertService.FireAsync("Error", ex.Message, SweetAlertIcon.Error);
+            componentesFormula = null;
+        }
+        finally
+        {
+            cargandoFormula = false;
+            StateHasChanged();
+        }
+    }
+
+    /// <summary>
+    /// Callback que se ejecuta cuando cambia la cantidad a fabricar.
+    /// Recibe el nuevo valor, lo asigna al modelo y recalcula las necesidades.
+    /// Se usa con ValueChanged manual porque InputNumeroLimpio no soporta @bind-Value:after.
+    /// </summary>
+    private async Task OnCantidadChangedAsync(decimal? valor)
+    {
+        modelo.Cantidad = valor;
+        OnCantidadChanged();
+        await InvokeAsync(StateHasChanged);
+    }
+
+    /// <summary>
+    /// Recalcula las necesidades totales cuando cambia la cantidad a fabricar.
+    /// </summary>
+    private void OnCantidadChanged()
+    {
+        if (componentesFormula != null && componentesFormula.Any() && modelo.Cantidad.HasValue && modelo.Cantidad.Value > 0)
+        {
+            foreach (var componente in componentesFormula)
+            {
+                componente.NecesidadTotal = componente.UsoBruto * modelo.Cantidad.Value;
+                componente.CantidadAUtilizar = componente.NecesidadTotal;
+            }
+        }
+        else if (componentesFormula != null)
+        {
+            foreach (var componente in componentesFormula)
+            {
+                componente.NecesidadTotal = 0;
+                componente.CantidadAUtilizar = 0;
+            }
+        }
+        StateHasChanged();
+    }
+
+    /// <summary>
+    /// Abre el buscador para agregar un componente manualmente.
+    /// </summary>
+    private void AbrirAgregarComponente()
+    {
+        showModalAgregar = true;
+    }
+
+    /// <summary>
+    /// Agrega un componente seleccionado desde el buscador a la lista.
+    /// </summary>
+    private void HandleAgregarComponenteSelected(Master master)
+    {
+        if (master == null || master.Codint <= 0)
+        {
+            showModalAgregar = false;
+            return;
+        }
+
+        if (componentesFormula == null)
+        {
+            componentesFormula = new List<FormulaComponenteDTO>();
+        }
+
+        var cantidadBase = (modelo.Cantidad.HasValue && modelo.Cantidad.Value > 0) ? modelo.Cantidad.Value : 1m;
+        var nuevoComponente = new FormulaComponenteDTO
+        {
+            CodIElem = master.Codint,
+            CodXElem = master.Codigo ?? "",
+            Descripcion = master.Descripcion ?? "",
+            UsoBruto = 1m,
+            NecesidadTotal = cantidadBase,
+            CantidadAUtilizar = cantidadBase,
+            EsRepetido = componentesFormula.Any(c => c.CodIElem == master.Codint)
+        };
+
+        componentesFormula.Add(nuevoComponente);
+        showModalAgregar = false;
+        StateHasChanged();
+    }
+
+    /// <summary>
+    /// Quita un componente de la lista.
+    /// </summary>
+    private void QuitarComponente(FormulaComponenteDTO componente)
+    {
+        if (componentesFormula != null)
+        {
+            componentesFormula.Remove(componente);
+            StateHasChanged();
+        }
+    }
+
+    /// <summary>
+    /// Genera el alta y consumo de producción propia.
+    /// Llama al endpoint api/movisto/generar-propia-produccion que:
+    ///   1. Calcula la numeración OF-XXXX
+    ///   2. Registra el movimiento PF (ingreso del producto terminado)
+    ///   3. Registra los movimientos CF (consumo de cada componente)
+    /// Todo en una sola transacción.
+    /// </summary>
+    private async Task GenerarAsync()
+    {
+        // Validaciones previas
+        if (modelo.Cod_Inte <= 0)
+        {
+            await sweetAlertService.FireAsync("Error", "Debe seleccionar un producto a fabricar.", SweetAlertIcon.Warning);
+            return;
+        }
+
+        if (modelo.Cantidad == null || modelo.Cantidad <= 0)
+        {
+            await sweetAlertService.FireAsync("Error", "La cantidad a fabricar debe ser mayor a 0.", SweetAlertIcon.Warning);
+            return;
+        }
+
+        if (modelo.DepositoEntrada <= 0)
+        {
+            await sweetAlertService.FireAsync("Error", "Debe seleccionar un depósito de entrada.", SweetAlertIcon.Warning);
+            return;
+        }
+
+        if (modelo.DepositoConsumo <= 0)
+        {
+            await sweetAlertService.FireAsync("Error", "Debe seleccionar un depósito de consumo.", SweetAlertIcon.Warning);
+            return;
+        }
+
+        if (componentesFormula == null || !componentesFormula.Any())
+        {
+            await sweetAlertService.FireAsync("Error", "No hay componentes para consumir. Debe existir una fórmula.", SweetAlertIcon.Warning);
+            return;
+        }
+
+        // Confirmación antes de generar
+        var confirmResult = await sweetAlertService.FireAsync(new SweetAlertOptions
+        {
+            Title = "Confirmar generación",
+            Text = $"Se va a generar el alta y consumo de producción propia para el producto '{selectedMaster?.Descripcion}' con una cantidad de {modelo.Cantidad:N2}. ¿Desea continuar?",
+            Icon = SweetAlertIcon.Warning,
+            ShowCancelButton = true,
+            ConfirmButtonText = "Sí, generar",
+            CancelButtonText = "Cancelar"
+        });
+
+        if (!confirmResult.IsConfirmed)
+        {
+            return;
+        }
+
+        // Asignar los componentes al modelo
+        modelo.Componentes = componentesFormula ?? new();
+
+        guardando = true;
+        StateHasChanged();
+
+        try
+        {
+            var response = await repository.Post<GenerarPropiaProduccionDTO, object>("api/movisto/generar-propia-produccion", modelo);
+
+            if (response.Error)
+            {
+                var mensaje = await response.HttpResponseMessage.Content.ReadAsStringAsync();
+                await sweetAlertService.FireAsync("Error", mensaje, SweetAlertIcon.Error);
+                return;
+            }
+
+            await sweetAlertService.FireAsync("Éxito", "Producción propia generada correctamente.", SweetAlertIcon.Success);
+            Return();
+        }
+        catch (Exception ex)
+        {
+            await sweetAlertService.FireAsync("Error", ex.Message, SweetAlertIcon.Error);
+        }
+        finally
+        {
+            guardando = false;
+            StateHasChanged();
+        }
+    }
+
+    /// <summary>
+    /// Actualiza el stock de cada componente cuando cambia el depósito de consumo.
+    /// Consulta el endpoint api/movisto/stock/{codint} para cada componente de la fórmula.
+    /// </summary>
+    private async Task ActualizarStockPorDeposito()
+    {
+        if (componentesFormula == null || !componentesFormula.Any() || modelo.DepositoConsumo <= 0)
+        {
+            stockPorComponente.Clear();
+            return;
+        }
+
+        stockPorComponente.Clear();
+        StateHasChanged();
+
+        // Consultar el stock de cada componente en el depósito de consumo seleccionado.
+        // Se hacen las consultas en paralelo para reducir latencia.
+        var tareas = componentesFormula.Select(async componente =>
+        {
+            try
+            {
+                var response = await repository.Get<List<StockDepositoDTO>>($"api/movisto/stock/{componente.CodIElem}");
+                if (!response.Error && response.Response != null)
+                {
+                    // Buscar el stock del depósito de consumo seleccionado
+                    var stockDeposito = response.Response
+                        .FirstOrDefault(s => s.Deposito.GetValueOrDefault() == modelo.DepositoConsumo);
+                    var stock = stockDeposito?.Stock ?? 0;
+                    stockPorComponente[componente.CodIElem] = Math.Round(stock, 4, MidpointRounding.AwayFromZero);
+                }
+            }
+            catch { }
+        });
+
+        await Task.WhenAll(tareas);
+        await InvokeAsync(StateHasChanged);
+    }
+
+    /// <summary>
+    /// Abre el modal de histórico de movimientos para el componente seleccionado.
+    /// Convierte el componente de fórmula a ProductoConSaldoDTO para usar con HistoricoMovimientosComponent.
+    /// </summary>
+    private void AbrirHistorico(FormulaComponenteDTO componente)
+    {
+        componenteSeleccionado = new ProductoConSaldoDTO
+        {
+            Cod_inte = componente.CodIElem,
+            Codigo = componente.CodXElem,
+            Descripcion = componente.Descripcion
+        };
+
+        mostrarModalHistorico = true;
+    }
+
+    /// <summary>
+    /// Cierra el modal de histórico.
+    /// </summary>
+    private void CerrarHistorico()
+    {
+        mostrarModalHistorico = false;
+        componenteSeleccionado = null;
+    }
+
+    /// <summary>
+    /// Vuelve a la página de listado de producción propia.
+    /// </summary>
+    private void Return()
+    {
+        navigationManager.NavigateTo("/propia-produccion");
+    }
+}

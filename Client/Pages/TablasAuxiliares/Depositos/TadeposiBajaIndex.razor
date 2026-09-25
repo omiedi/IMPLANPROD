@@ -1,4 +1,6 @@
 ﻿@page "/TablasAuxiliares/Depositos/TadeposiBaja"
+@using Microsoft.AspNetCore.Authorization
+@attribute [Authorize]
 @inject NavigationManager navigationManager
 @inject IRepository repository
 @inject SweetAlertService sweetAlertService

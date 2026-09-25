@@ -72,14 +72,31 @@ namespace IMPLANPROD.Server.Services
         Task<int> ObtenerUltimoNumeroRemitoAsync(DateTime? fechaNuevaNumeracion = null, string codigoMovimiento = "RT");
 
         /// <summary>
+        /// Obtiene el último número de remito registrado en MOVISTO para un prefijo (NUMPVTA) específico.
+        /// Se usa para proponer el siguiente número libre de un punto de venta.
+        /// </summary>
+        /// <param name="prefijo">Prefijo del punto de venta</param>
+        /// <returns>Último número de remito para ese prefijo</returns>
+        Task<int> ObtenerUltimoNumeroPorPrefijoAsync(short prefijo);
+
+        /// <summary>
         /// Anula un remito específico
         /// Replica la funcionalidad de anulación de remitos de VB6
         /// 1. Determina si el remito está en MOVISTO o MOVIREPA según CodiMovi
         /// 2. Actualiza los pedidos vinculados (reduce cantidad entregada)
-        /// 3. Marca el remito como anulado (CantSalid=0, ReferCor con prefijo "(Anul)")
+        /// 3. Marca el remito como anulado (CantSalid=0, CantIngre=0, PESOKG=0, METROS=0, ReferCor con prefijo "(Anul)")
         /// </summary>
         /// <param name="request">Datos del remito a anular</param>
         /// <returns>Resultado de la anulación</returns>
         Task<AnularRemitoResponse> AnularRemitoAsync(AnularRemitoRequest request);
+
+        /// <summary>
+        /// Obtiene la cantidad de filas (items) que componen un remito.
+        /// Se usa para mostrar en el mensaje de confirmación antes de anular.
+        /// La búsqueda se realiza por DoPriLar + Nume_Clie + FechMov en MOVISTO o MOVIREPA.
+        /// </summary>
+        /// <param name="request">Datos del remito a consultar</param>
+        /// <returns>Cantidad de filas del remito (0 si no se encuentra)</returns>
+        Task<int> ObtenerCantidadFilasRemitoAsync(AnularRemitoRequest request);
     }
 }

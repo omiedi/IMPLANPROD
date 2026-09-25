@@ -74,7 +74,11 @@ namespace MantenimientoImp.Server.Controllers
                 }
 
                 // Actualizar la tabla bolrecep
+                // Se recolectan las entidades actualizadas para usarlas luego en la generación
+                // de movimientos de stock, en lugar de releer toda la recepción. Esto permite
+                // la aprobación parcial: solo se procesan los items enviados en esta llamada.
                 int itemsActualizados = 0;
+                var bolrecepsActualizados = new List<Bolrecep>();
                 foreach (var item in items)
                 {
                     Console.WriteLine($"[BolrecepMovisto] Procesando item CodInt: {item.CodigoInterno} - Apro:{item.CanToApro}, Rech:{item.CantidadRechazada}, Falta:{item.CantidadFaltante}");
@@ -103,6 +107,7 @@ namespace MantenimientoImp.Server.Controllers
                             Console.WriteLine($"[BolrecepMovisto] 📝 Rechazo registrado - Destino:{item.DestinoRechazo}, Motivo:{item.MotivoRechazo}");
                         }
                         
+                        bolrecepsActualizados.Add(bolrecep);
                         itemsActualizados++;
                         Console.WriteLine($"[BolrecepMovisto] ✓ Item actualizado: {item.CodigoInterno}");
                     }
@@ -115,12 +120,10 @@ namespace MantenimientoImp.Server.Controllers
                 Console.WriteLine($"[BolrecepMovisto] Items actualizados en Bolrecep: {itemsActualizados}");
                 await _context.SaveChangesAsync();
 
-                // Leer la tabla bolrecep para obtener los datos necesarios para los movimientos de stock.
-                // Se filtra por NumOC para generar movimientos SOLO de la orden de compra aprobada.
-                var itemsRecepcion = await _context.Bolreceps
-                    .Where(b => b.NumeBoRe == numeroRecepcionDecimal
-                                && (numeroOrdenCompra == null || b.NumOC == numeroOrdenCompra))
-                    .ToListAsync();
+                // Usar las entidades actualizadas en esta llamada para generar los movimientos
+                // de stock. Esto evita reprocesar items aprobados en llamadas anteriores y
+                // permite la aprobación parcial de la recepción.
+                var itemsRecepcion = bolrecepsActualizados;
 
                 bool apruebaCalidad = await ObtenerApruebaCalidadAsync();
 
@@ -143,6 +146,11 @@ namespace MantenimientoImp.Server.Controllers
                 int movimientosCreados = 0;
                 foreach (var material in itemsRecepcion)
                 {
+                    // Buscamos el item del DTO recibido para respetar el depósito de ingreso
+                    // que el usuario pudo modificar en la solapa "Aprueba Calidad".
+                    var itemDto = items.FirstOrDefault(i => i.CodigoInterno == material.CodInte);
+                    var depositoIngreso = itemDto?.CodigoDeposito ?? material.DepoEnt ?? 0;
+
                     // Datos base de documentos y lote para todos los movimientos del material.
                     int numeroBoleta = (int)Math.Floor(material.NumeBoRe ?? 0m);
                     string remitoProveedor = material.NumRemProv ?? string.Empty;
@@ -166,7 +174,7 @@ namespace MantenimientoImp.Server.Controllers
                             DocumentoSecundarioLargo = remitoProveedor,
                             DocumentoSecundarioCorto = remitoProveedor,
                             Referencia = $"Rto.{remitoProveedor}",
-                            Deposito = material.DepoEnt ?? 0,
+                            Deposito = depositoIngreso,
                             Cantidad = material.CanToApro ?? 0, // Positivo = Ingreso
                             NumeroCliente = material.NumProv.HasValue ? -material.NumProv.Value : 0, // Negativo = Proveedor
                             ValorUnitario = material.ValoUnit ?? 0,
@@ -201,7 +209,7 @@ namespace MantenimientoImp.Server.Controllers
                                     DocumentoSecundarioLargo = remitoProveedor,
                                     DocumentoSecundarioCorto = remitoProveedor,
                                     Referencia = $"Rto.{remitoProveedor}",
-                                    Deposito = material.DepoEnt ?? 0,
+                                    Deposito = depositoIngreso,
                                     Cantidad = rechFal,
                                     NumeroCliente = material.NumProv.HasValue ? -material.NumProv.Value : 0,
                                     ValorUnitario = material.ValoUnit ?? 0,
@@ -314,7 +322,7 @@ namespace MantenimientoImp.Server.Controllers
                             DocumentoSecundarioLargo = remitoProveedor,
                             DocumentoSecundarioCorto = remitoProveedor,
                             Referencia = referenciaFaltante,
-                            Deposito = material.DepoEnt ?? 0,
+                            Deposito = depositoIngreso,
                             Cantidad = cantidadFaltante, // Positivo = Ingreso
                             NumeroCliente = material.NumProv.HasValue ? -material.NumProv.Value : 0,
                             ValorUnitario = material.ValoUnit ?? 0
@@ -339,7 +347,7 @@ namespace MantenimientoImp.Server.Controllers
                             DocumentoSecundarioLargo = remitoProveedor,
                             DocumentoSecundarioCorto = remitoProveedor,
                             Referencia = referenciaFaltante,
-                            Deposito = material.DepoEnt ?? 0,
+                            Deposito = depositoIngreso,
                             Cantidad = -cantidadFaltante, // Negativo = Salida
                             NumeroCliente = material.NumProv.HasValue ? -material.NumProv.Value : 0,
                             ValorUnitario = material.ValoUnit ?? 0

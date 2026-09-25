@@ -6,7 +6,7 @@ namespace IMPLANPROD.Shared.DTOs
     public class AnularRemitoRequest
     {
         /// <summary>
-        /// Número de remito a anular (DoPriCor)
+        /// Número de remito a anular (DoPriLar)
         /// </summary>
         public string NumeroRemito { get; set; } = string.Empty;
 

@@ -875,6 +875,9 @@
                         Sql = x.Sql,
                         MaxRows = x.MaxRows > 0 ? x.MaxRows : 500
                     })
+                    .ToList(),
+                Parameters = (source.Parameters ?? new List<RemitoPlantillaParameterDto>())
+                    .Select(x => new RemitoPlantillaParameterDto { Name = x.Name, Value = x.Value })
                     .ToList()
             };
 
@@ -891,7 +894,8 @@
                 Id = saveResponse.Response,
                 Nombre = copyName,
                 LienzoJson = source.LienzoJson,
-                Datasets = copyDto.Datasets
+                Datasets = copyDto.Datasets,
+                Parameters = copyDto.Parameters
             };
 
             ApplyLoadedTemplate(newTemplateData);
@@ -910,6 +914,8 @@
         modelo.Id = 0;
         modelo.Nombre = string.Empty;
         datasetItems = CreateDefaultDatasetItems();
+        parameters.Clear();
+        parameters.Add(new ParameterItemDto { Name = "Doprilar", Value = "rt-x-0001-0002020" });
         design = CreateDefaultDesign();
         SelectOnly(design.Elements.FirstOrDefault()?.Id);
         SyncModelLienzoJson();
@@ -937,6 +943,16 @@
         {
             datasetItems = CreateDefaultDatasetItems();
         }
+
+        parameters.Clear();
+        if (data.Parameters?.Any() == true)
+        {
+            parameters.AddRange(data.Parameters.Select(p => new ParameterItemDto { Name = p.Name, Value = p.Value }));
+        }
+        else
+        {
+            parameters.Add(new ParameterItemDto { Name = "Doprilar", Value = "rt-x-0001-0002020" });
+        }
     }
 
     private async Task GuardarAsync()
@@ -952,6 +968,7 @@
 
             SyncModelLienzoJson();
             modelo.Datasets = datasets;
+            modelo.Parameters = BuildParameters();
             var response = await repository.Post<RemitoPlantillaUpsertDto, int>("api/impresiones/remito-plantillas", modelo);
             if (response.Error)
             {

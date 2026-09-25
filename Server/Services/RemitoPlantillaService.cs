@@ -85,6 +85,7 @@ namespace IMPLANPROD.Server.Services
                 Nombre = entity.Nombre.Replace(Prefix, string.Empty),
                 LienzoJson = config.LienzoJson,
                 Datasets = config.Datasets,
+                Parameters = config.Parameters ?? new List<RemitoPlantillaParameterDto>(),
                 FechaCreacion = entity.FechaCreacion,
                 FechaModificacion = entity.FechaModificacion
             };
@@ -103,7 +104,8 @@ namespace IMPLANPROD.Server.Services
             var config = new RemitoPlantillaConfigStorageDto
             {
                 LienzoJson = dto.LienzoJson,
-                Datasets = dto.Datasets ?? new List<RemitoPlantillaDatasetDto>()
+                Datasets = dto.Datasets ?? new List<RemitoPlantillaDatasetDto>(),
+                Parameters = dto.Parameters ?? new List<RemitoPlantillaParameterDto>()
             };
 
             var userId = _userContextService.GetCurrentUserId();

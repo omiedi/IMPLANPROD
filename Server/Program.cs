@@ -148,7 +148,8 @@ using (IServiceScope? scope = scopedFactory!.CreateScope())
     service!.SeedAsync().Wait();
 }
 
-app.UseCors(c => c.AllowAnyHeader().AllowAnyOrigin().AllowAnyMethod());
+app.UseCors(c => c.AllowAnyHeader().AllowAnyOrigin().AllowAnyMethod()
+    .WithExposedHeaders("X-Renewed-Token"));
 
 // Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())
@@ -202,6 +203,11 @@ app.UseAuthentication();
 app.UseUserContext();
 
 app.UseAuthorization();
+
+// Middleware de renovación de token con actividad (sliding expiration).
+// Se coloca después de UseAuthorization para que el token ya esté validado.
+// Si al token le quedan menos de 24 horas, genera uno nuevo y lo envía en el header X-Renewed-Token.
+app.UseMiddleware<TokenRenewalMiddleware>();
 
 app.MapRazorPages();
 app.MapControllers();

@@ -46,7 +46,7 @@ else
                         Ruta de carpeta compartida (Intercambio) para sincronizar Pedidos de reposición de sucursal
                     </label>
                     <div class="input-group">
-                        <input type="text" class="form-control" @bind="syncConfig.RutaIntercambioPedidosReposicion" placeholder="Ej: \\servidor\carpeta\intercambio" />
+                        <input type="text" class="form-control" @bind="syncConfig.RutaIntercambioPedidosReposicion" placeholder="Ej: \\servidor\carpeta, C:\PedidosReposicion, E:\Carpeta, Z:\Carpeta" />
                         <button class="btn btn-outline-primary" type="button" @onclick="ValidarRuta">
                             <i class="fas fa-check"></i> Validar
                         </button>
@@ -137,13 +137,34 @@ else
             return;
         }
 
-        if (!syncConfig.RutaIntercambioPedidosReposicion.StartsWith(@"\\"))
+        try
         {
-            await sweetAlertService.FireAsync("Advertencia", "La ruta debe ser una ruta UNC (ej: \\\\servidor\\carpeta)", SweetAlertIcon.Warning);
-            return;
-        }
+            // Consultar al backend porque Blazor WASM no puede acceder directamente al sistema de archivos.
+            // La validación se realiza en el servidor, que es quien leerá/escribirá la carpeta de intercambio.
+            var request = new ValidarRutaDTO { Ruta = syncConfig.RutaIntercambioPedidosReposicion };
+            var response = await repository.Post<ValidarRutaDTO, ValidarRutaResponseDTO>("api/sync/validar-ruta", request);
 
-        await sweetAlertService.FireAsync("Éxito", $"Ruta validada: {syncConfig.RutaIntercambioPedidosReposicion}", SweetAlertIcon.Success);
+            if (response.Error)
+            {
+                var mensajeError = await response.GetErrorMessageAsync();
+                await sweetAlertService.FireAsync("Error", $"No se pudo validar la ruta: {mensajeError}", SweetAlertIcon.Error);
+                return;
+            }
+
+            if (response.Response != null && response.Response.Valida)
+            {
+                await sweetAlertService.FireAsync("Éxito", response.Response.Mensaje, SweetAlertIcon.Success);
+            }
+            else
+            {
+                var mensaje = response.Response?.Mensaje ?? "La ruta no existe o no es accesible";
+                await sweetAlertService.FireAsync("Advertencia", mensaje, SweetAlertIcon.Warning);
+            }
+        }
+        catch (Exception ex)
+        {
+            await sweetAlertService.FireAsync("Error", $"Error inesperado al validar la ruta: {ex.Message}", SweetAlertIcon.Error);
+        }
     }
 
     private async Task GuardarConfiguracionSincronizacion()

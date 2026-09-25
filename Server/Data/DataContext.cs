@@ -343,6 +343,11 @@ namespace IMPLANPROD.Server.Data
         public DbSet<Brecepen> Brecepens { get; set; }
 
         /// <summary>
+        /// Tabla EXTRAS_REMITO - Datos adicionales de remitos
+        /// </summary>
+        public DbSet<ExtrasRemito> ExtrasRemitos { get; set; }
+
+        /// <summary>
         /// Tabla de DestinoRechazoRecepcion  DESTINOS DE LOS RECHAZOS DE RECEPCION VINCULADOS CON UN DEPOSITO
         /// </summary>
         public DbSet<DestinoRechazoRecepcion> DestinoRechazoRecepciones { get; set; }
@@ -546,6 +551,11 @@ namespace IMPLANPROD.Server.Data
         /// Tabla SOLICITUDES_AVANCES - Historial de avances de solicitudes
         /// </summary>
         public required DbSet<SolicitudAvance> SolicitudesAvances { get; set; }
+
+        /// <summary>
+        /// Tabla ANOTAPED - Anotaciones de pedidos estructuradas
+        /// </summary>
+        public DbSet<Anotaped> Anotapeds { get; set; }
 
         #endregion
 

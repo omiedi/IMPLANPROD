@@ -2,14 +2,14 @@
 @using Microsoft.AspNetCore.Components.Authorization
 @using IMPLANPROD.Client.Services
 @inject AuthenticationStateProvider AuthStateProvider
-@inject InactivityService InactivityService
 @inject NotificationService NotificationService
 @inject CurrentUserService CurrentUserService
+@inject NavigationManager NavigationManager
 @using Blazored.Modal.Services
 @inject IModalService Modal
 @implements IDisposable
 
-<div class="page" @onmousemove="OnUserActivity" @onkeydown="OnUserActivity" @onclick="OnUserActivity">
+<div class="page">
     <div class="sidebar">
         <NavMenu />
     </div>
@@ -20,6 +20,11 @@
                 <Authorized>
                     <div class="d-flex w-100 align-items-center justify-content-between">
                         <span>Bienvenido, @context.User.Identity?.Name</span>
+
+                        <button type="button" class="btn btn-outline-primary btn-sm" title="Volver al inicio"
+                                @onclick="IrInicio">
+                            <i class="oi oi-home"></i> Inicio
+                        </button>
 
                         <button type="button" class="btn btn-link text-decoration-none position-relative" title="Notificaciones" @onclick="OpenNotifications">
                             <i class="fas fa-bell"></i>
@@ -64,11 +69,10 @@
         ((AuthenticationStateProvider)AuthStateProvider).AuthenticationStateChanged += AuthenticationStateChanged;
         NotificationService.OnChange += OnNotificationsChanged;
 
-        // Verificar si el usuario está autenticado para iniciar el monitoreo
+        // Verificar si el usuario está autenticado para cargar datos iniciales
         var authState = await AuthStateProvider.GetAuthenticationStateAsync();
         if (authState.User.Identity?.IsAuthenticated == true)
         {
-            InactivityService.StartMonitoring();
             await LoadUserIdFlexoftAsync();
             await RefreshNotificationsAsync();
             StartUnreadPolling();
@@ -162,6 +166,12 @@
         Modal.Show<IMPLANPROD.Client.Shared.Components.NotificationsModal>(string.Empty);
     }
 
+    // Navega a la página de inicio (Index.razor) donde están las etiquetas/accesos directos.
+    private void IrInicio()
+    {
+        NavigationManager.NavigateTo("/");
+    }
+
     /// <summary>
     /// Método que se ejecuta cuando cambia el estado de autenticación
     /// </summary>
@@ -169,18 +179,14 @@
     {
         var authState = await task;
         
-        // Si el usuario se autentica, iniciar monitoreo de inactividad
         if (authState.User.Identity?.IsAuthenticated == true)
         {
-            InactivityService.StartMonitoring();
             await LoadUserIdFlexoftAsync();
             await RefreshNotificationsAsync();
             StartUnreadPolling();
         }
         else
         {
-            // Si cierra sesión, detener monitoreo
-            InactivityService.StopMonitoring();
             _userId = 0;
             _unreadCount = 0;
             StopUnreadPolling();
@@ -191,17 +197,6 @@
     }
 
     /// <summary>
-    /// Registra actividad del usuario (mouse, teclado, clicks)
-    /// </summary>
-    private void OnUserActivity()
-    {
-        if (InactivityService.IsMonitoring)
-        {
-            InactivityService.RegisterActivity();
-        }
-    }
-
-    /// <summary>
     /// Método para liberar recursos cuando se destruye el componente
     /// </summary>
     public void Dispose()
@@ -209,9 +204,6 @@
         // Cancelar la suscripción a los cambios de estado de autenticación
         ((AuthenticationStateProvider)AuthStateProvider).AuthenticationStateChanged -= AuthenticationStateChanged;
         NotificationService.OnChange -= OnNotificationsChanged;
-        
-        // Detener el monitoreo de inactividad
-        InactivityService.StopMonitoring();
 
         StopUnreadPolling();
     }

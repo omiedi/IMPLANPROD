@@ -1,4 +1,6 @@
 @page "/ejemplos/derechos-usuario"
+@using Microsoft.AspNetCore.Authorization
+@attribute [Authorize]
 @using IMPLANPROD.Client.Services
 @inject DerechosUsuarioClientService derechosService
 @inject NavigationManager navigationManager

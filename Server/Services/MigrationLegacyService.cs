@@ -1841,5 +1841,213 @@ namespace IMPLANPROD.Server.Services
                 throw;
             }
         }
+
+        /// <summary>
+        /// Previsualiza los registros del archivo legacy REPLACOP.DAT sin migrarlos.
+        ///
+        /// ESTRUCTURA DEL ARCHIVO REPLACOP.DAT (128 bytes por registro):
+        /// - Posición  1, longitud  2: Número de cliente (Int16 - CVI en VB6)
+        /// - Posición  3, longitud  2: Código interno    (Int16 - CVI en VB6)
+        /// - Posición  5, longitud 28: Código de cliente (string, Windows-1252)
+        /// - Posición 33, longitud 96: Observaciones     (string, Windows-1252)
+        ///
+        /// CVI en VB6 = BitConverter.ToInt16 en C# (little-endian, 2 bytes).
+        /// Los offsets en C# (base 0) son: N-1 respecto a las posiciones VB6 (base 1).
+        /// </summary>
+        /// <param name="basePath">Ruta de la carpeta que contiene el archivo .DAT</param>
+        /// <returns>Lista de registros previsualizados</returns>
+        public async Task<List<ReplacopPreviewDTO>> PreviewReplacopAsync(string? basePath = null)
+        {
+            try
+            {
+                string path = basePath
+                    ?? _configuration["LegacyDataPath:BasePath"]
+                    ?? @"C:\Users\Omar\source\repos\omardemaio\IMPLANPROD\Legacy_VB6\ArchivosDat";
+                string filePath = Path.Combine(path, "REPLACOP.DAT");
+
+                if (!File.Exists(filePath))
+                {
+                    _logger.LogError($"Archivo no encontrado: {filePath}");
+                    throw new FileNotFoundException($"No se encontró el archivo de datos: {filePath}");
+                }
+
+                // Longitud del registro: 128 bytes
+                // 2 (numCliente CVI) + 2 (codInterno CVI) + 28 (codCliente) + 96 (observaciones) = 128
+                const int RECORD_LENGTH = 128;
+
+                // Offsets (base 0) derivados de las posiciones VB6 (base 1): offset = posicion - 1
+                const int NUMERO_CLIENTE_OFFSET = 0;   // VB6 pos 1, len 2 → CVI (Int16)
+                const int CODIGO_INTERNO_OFFSET = 2;   // VB6 pos 3, len 2 → CVI (Int16)
+                const int CODIGO_CLIENTE_OFFSET = 4;   // VB6 pos 5, len 28 → string
+                const int CODIGO_CLIENTE_LENGTH = 28;
+                const int OBSERVACIONES_OFFSET  = 32;  // VB6 pos 33, len 96 → string
+                const int OBSERVACIONES_LENGTH  = 96;
+
+                var fileBytes = await File.ReadAllBytesAsync(filePath);
+                var data = new List<ReplacopPreviewDTO>();
+
+                // Procesar el archivo en bloques de tamaño fijo
+                for (int i = 0; i < fileBytes.Length; i += RECORD_LENGTH)
+                {
+                    int remainingBytes = fileBytes.Length - i;
+                    if (remainingBytes < RECORD_LENGTH) break;
+
+                    // Decodificar el registro completo como Windows-1252 (mismo encoding que VB6)
+                    string record = System.Text.Encoding.GetEncoding(1252)
+                        .GetString(fileBytes, i, RECORD_LENGTH);
+
+                    // Número de cliente: CVI (Int16 little-endian) en pos 1-2
+                    short numeroCliente = BitConverter.ToInt16(fileBytes, i + NUMERO_CLIENTE_OFFSET);
+
+                    // Código interno: CVI (Int16 little-endian) en pos 3-4
+                    short codigoInterno = BitConverter.ToInt16(fileBytes, i + CODIGO_INTERNO_OFFSET);
+
+                    // Código de cliente: string de 28 chars en pos 5-32
+                    string codigoCliente = record.Substring(CODIGO_CLIENTE_OFFSET, CODIGO_CLIENTE_LENGTH).Trim();
+
+                    // Observaciones: string de 96 chars en pos 33-128
+                    // Los registros pueden tener bytes 0x00 (NULL) que el navegador
+                    // renderiza como cuadraditos. Se reemplazan por espacios y se
+                    // hace Trim para limpiar el resultado.
+                    string observaciones = record.Substring(OBSERVACIONES_OFFSET, OBSERVACIONES_LENGTH)
+                        .Replace('\0', ' ')
+                        .Trim();
+
+                    // Saltar registros vacíos (ambos campos CVI en cero y sin código de cliente)
+                    if (numeroCliente == 0 && codigoInterno == 0 && string.IsNullOrEmpty(codigoCliente))
+                        continue;
+
+                    data.Add(new ReplacopPreviewDTO
+                    {
+                        NumeroCliente = numeroCliente,
+                        CodigoInterno = codigoInterno,
+                        CodigoCliente = codigoCliente,
+                        Observaciones = observaciones
+                    });
+                }
+
+                _logger.LogInformation($"Se previsualizaron {data.Count} registros de REPLACOP.DAT");
+                return data;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error durante la previsualización de Replacop");
+                throw;
+            }
+        }
+
+        /// <summary>
+        /// Migra los datos del archivo legacy REPLACOP.DAT a la tabla SQL REPLACO.
+        ///
+        /// ESTRUCTURA DEL ARCHIVO (128 bytes por registro):
+        /// - Posición  1, longitud  2: NUME_PROV      (Int16 - CVI en VB6)
+        /// - Posición  3, longitud  2: COD_INTE       (Int16 - CVI en VB6)
+        /// - Posición  5, longitud 28: REFERENCIA     (string, Windows-1252)
+        /// - Posición 33, longitud 96: OBSERVACIONES  (string, Windows-1252)
+        ///
+        /// Solo se migra si la tabla destino está vacía (mismo criterio que BRECEPEN).
+        /// CVI en VB6 = BitConverter.ToInt16 en C# (little-endian, 2 bytes).
+        /// </summary>
+        /// <param name="basePath">Ruta de la carpeta que contiene el archivo .DAT</param>
+        /// <returns>Cantidad de registros migrados</returns>
+        public async Task<int> MigrateReplacopAsync(string? basePath = null)
+        {
+            try
+            {
+                // Validar que la tabla esté vacía (mismo criterio que BRECEPEN)
+                if (await _context.Replacos.AnyAsync())
+                {
+                    _logger.LogInformation("La tabla REPLACO no está vacía. Se omite la migración.");
+                    return 0;
+                }
+
+                string path = basePath
+                    ?? _configuration["LegacyDataPath:BasePath"]
+                    ?? @"C:\Users\Omar\source\repos\omardemaio\IMPLANPROD\Legacy_VB6\ArchivosDat";
+                string filePath = Path.Combine(path, "REPLACOP.DAT");
+
+                if (!File.Exists(filePath))
+                {
+                    _logger.LogError($"Archivo no encontrado: {filePath}");
+                    throw new FileNotFoundException($"No se encontró el archivo de datos: {filePath}");
+                }
+
+                // Longitud del registro: 128 bytes
+                // 2 (numProv CVI) + 2 (codInte CVI) + 28 (referencia) + 96 (observaciones) = 128
+                const int RECORD_LENGTH = 128;
+
+                // Offsets (base 0) derivados de las posiciones VB6 (base 1): offset = posicion - 1
+                const int NUME_PROV_OFFSET      = 0;   // VB6 pos 1, len 2 → CVI (Int16)
+                const int COD_INTE_OFFSET        = 2;   // VB6 pos 3, len 2 → CVI (Int16)
+                const int REFERENCIA_OFFSET       = 4;   // VB6 pos 5, len 28 → string
+                const int REFERENCIA_LENGTH       = 28;
+                const int OBSERVACIONES_OFFSET    = 32;  // VB6 pos 33, len 96 → string
+                const int OBSERVACIONES_LENGTH    = 96;
+
+                var fileBytes = await File.ReadAllBytesAsync(filePath);
+                int count = 0;
+                var entities = new List<Replaco>();
+
+                // Procesar el archivo en bloques de tamaño fijo
+                for (int i = 0; i < fileBytes.Length; i += RECORD_LENGTH)
+                {
+                    int remainingBytes = fileBytes.Length - i;
+                    if (remainingBytes < RECORD_LENGTH) break;
+
+                    // Decodificar el registro completo como Windows-1252 (mismo encoding que VB6)
+                    string record = System.Text.Encoding.GetEncoding(1252)
+                        .GetString(fileBytes, i, RECORD_LENGTH);
+
+                    // Número de proveedor: CVI (Int16 little-endian) en pos 1-2
+                    short numeProv = BitConverter.ToInt16(fileBytes, i + NUME_PROV_OFFSET);
+
+                    // Código interno: CVI (Int16 little-endian) en pos 3-4
+                    short codInte = BitConverter.ToInt16(fileBytes, i + COD_INTE_OFFSET);
+
+                    // Referencia: string de 28 chars en pos 5-32
+                    string referencia = record.Substring(REFERENCIA_OFFSET, REFERENCIA_LENGTH).Trim();
+
+                    // Observaciones: string de 96 chars en pos 33-128
+                    // Los registros pueden tener bytes 0x00 (NULL) que el navegador
+                    // renderiza como cuadraditos. Se reemplazan por espacios y se
+                    // hace Trim para limpiar el resultado.
+                    string observaciones = record.Substring(OBSERVACIONES_OFFSET, OBSERVACIONES_LENGTH)
+                        .Replace('\0', ' ')
+                        .Trim();
+
+                    // Saltar registros vacíos (ambos campos CVI en cero y sin referencia)
+                    if (numeProv == 0 && codInte == 0 && string.IsNullOrEmpty(referencia))
+                        continue;
+
+                    var entity = new Replaco
+                    {
+                        NumeProv = numeProv,
+                        CodInte = codInte,
+                        Referencia = referencia,
+                        Observaciones = observaciones,
+                        NumeCli = null,     // No hay dato de NUME_CLI en el archivo REPLACOP.DAT
+                        CodiEmprNet = 0,    // Por convención del proyecto, siempre 0
+                        NumUsuar = 0        // Migración legacy: sin usuario activo
+                    };
+
+                    entities.Add(entity);
+                    count++;
+                }
+
+                if (entities.Any())
+                {
+                    await _context.Replacos.AddRangeAsync(entities);
+                    await _context.SaveChangesAsync();
+                }
+
+                _logger.LogInformation($"Se migraron {count} registros a la tabla REPLACO.");
+                return count;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error durante la migración de Replacop");
+                throw;
+            }
+        }
     }
 }

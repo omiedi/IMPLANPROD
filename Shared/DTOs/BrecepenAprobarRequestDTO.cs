@@ -9,5 +9,8 @@ namespace IMPLANPROD.Shared.DTOs
         public string? Doprilar { get; set; }
         public int CodInte { get; set; }
         public decimal CantidadAprobar { get; set; }
+        // Depósito de ingreso elegido por el usuario en la confirmación de aprobación.
+        // Si viene null o 0, se conserva el depósito original de cada registro BRECEPEN (Depomovi).
+        public int? DepositoIngreso { get; set; }
     }
 }

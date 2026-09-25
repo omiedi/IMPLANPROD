@@ -550,6 +550,96 @@
                         </div>
                     </div>
                 </div>
+
+                <!-- Card Previsualización REPLACOP -->
+                <div class="col-12 mb-4">
+                    <div class="card shadow">
+                        <div class="card-header bg-info text-white">
+                            <h6 class="mb-0"><i class="fas fa-eye me-2"></i>Tabla REPLACOP (Previsualización)</h6>
+                        </div>
+                        <div class="card-body">
+                            <p class="text-muted small">
+                                Previsualiza los registros del archivo <code>REPLACOP.DAT</code> antes de migrarlos.
+                            </p>
+                            <p class="text-muted small">
+                                Estructura (128 bytes por registro):
+                                N° Cliente (pos 1, 2 - CVI) ·
+                                Cod. Interno (pos 3, 2 - CVI) ·
+                                Cod. Cliente (pos 5, 28) ·
+                                Observaciones (pos 33, 96).
+                            </p>
+
+                            <div class="mb-3">
+                                @if (loadingPreviewReplacop)
+                                {
+                                    <button class="btn btn-info" disabled>
+                                        <span class="spinner-border spinner-border-sm me-2"></span>
+                                        Cargando datos...
+                                    </button>
+                                }
+                                else
+                                {
+                                    <button class="btn btn-info" @onclick="PreviewReplacop">
+                                        <i class="fas fa-eye me-2"></i> Mostrar datos a migrar
+                                    </button>
+                                }
+                            </div>
+
+                            @if (replacopPreviewData != null && replacopPreviewData.Any())
+                            {
+                                <div class="table-responsive" style="max-height: 400px; overflow-y: auto;">
+                                    <table class="table table-striped table-sm table-bordered">
+                                        <thead class="table-dark sticky-top">
+                                            <tr>
+                                                <th>N° Cliente</th>
+                                                <th>Cod. Interno</th>
+                                                <th>Cod. Cliente</th>
+                                                <th>Observaciones</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            @foreach (var item in replacopPreviewData)
+                                            {
+                                                <tr>
+                                                    <td>@item.NumeroCliente</td>
+                                                    <td>@item.CodigoInterno</td>
+                                                    <td>@item.CodigoCliente</td>
+                                                    <td>@item.Observaciones</td>
+                                                </tr>
+                                            }
+                                        </tbody>
+                                    </table>
+                                </div>
+                                <p class="text-muted small mt-2">
+                                    <strong>Total registros:</strong> @replacopPreviewData.Count()
+                                </p>
+                            }
+
+                            @if (!string.IsNullOrEmpty(messageReplacop))
+                            {
+                                <div class="alert @alertClassReplacop mt-3" role="alert">
+                                    @messageReplacop
+                                </div>
+                            }
+
+                            <div class="mt-3">
+                                @if (loadingReplacop)
+                                {
+                                    <button class="btn btn-success" disabled>
+                                        <span class="spinner-border spinner-border-sm me-2"></span>
+                                        Migrando...
+                                    </button>
+                                }
+                                else
+                                {
+                                    <button class="btn btn-success" @onclick="MigrateReplacop">
+                                        <i class="fas fa-database me-2"></i> Iniciar Migración
+                                    </button>
+                                }
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
@@ -606,6 +696,13 @@
 
     private bool loadingPreviewBrecepen = false;
     private List<IMPLANPROD.Shared.DTOs.BrecepenPreviewDTO> brecepenPreviewData = new List<IMPLANPROD.Shared.DTOs.BrecepenPreviewDTO>();
+
+    // ── Previsualización REPLACOP ──────────────────────────────────────────
+    private bool loadingPreviewReplacop = false;
+    private bool loadingReplacop = false;
+    private string messageReplacop = "";
+    private string alertClassReplacop = "alert-info";
+    private List<IMPLANPROD.Shared.DTOs.ReplacopPreviewDTO> replacopPreviewData = new List<IMPLANPROD.Shared.DTOs.ReplacopPreviewDTO>();
 
     // Ruta base para archivos de migración
     private string migrationBasePath = @"C:\Users\Omar\source\repos\omardemaio\IMPLANPROD\Legacy_VB6\ArchivosDat";
@@ -1008,6 +1105,91 @@
         finally
         {
             loadingPreviewBrecepen = false;
+            StateHasChanged();
+        }
+    }
+
+    /// <summary>
+    /// Previsualiza los registros del archivo REPLACOP.DAT llamando al endpoint
+    /// api/Migration/replacop/preview. Muestra los datos en una tabla HTML sin
+    /// migrarlos, respetando la ruta mapeada en la página.
+    /// </summary>
+    private async Task PreviewReplacop()
+    {
+        try
+        {
+            loadingPreviewReplacop = true;
+            messageReplacop = "";
+            replacopPreviewData = new List<IMPLANPROD.Shared.DTOs.ReplacopPreviewDTO>();
+            StateHasChanged();
+
+            var response = await Repository.Get<List<IMPLANPROD.Shared.DTOs.ReplacopPreviewDTO>>(
+                $"api/Migration/replacop/preview?basePath={Uri.EscapeDataString(migrationBasePath)}");
+
+            if (!response.Error && response.Response != null)
+            {
+                replacopPreviewData = response.Response;
+                if (!replacopPreviewData.Any())
+                {
+                    alertClassReplacop = "alert-warning";
+                    messageReplacop = "No se encontraron registros para migrar en el archivo REPLACOP.DAT.";
+                }
+            }
+            else
+            {
+                var content = await response.HttpResponseMessage.Content.ReadAsStringAsync();
+                alertClassReplacop = "alert-danger";
+                messageReplacop = $"Error: {content}";
+            }
+        }
+        catch (Exception ex)
+        {
+            alertClassReplacop = "alert-danger";
+            messageReplacop = $"Error de conexión: {ex.Message}";
+        }
+        finally
+        {
+            loadingPreviewReplacop = false;
+            StateHasChanged();
+        }
+    }
+
+    /// <summary>
+    /// Ejecuta la migración del archivo REPLACOP.DAT a la tabla SQL REPLACO.
+    /// Solo migra si la tabla destino está vacía (mismo criterio que BRECEPEN).
+    /// </summary>
+    private async Task MigrateReplacop()
+    {
+        try
+        {
+            loadingReplacop = true;
+            messageReplacop = "";
+            StateHasChanged();
+
+            var response = await Repository.Post<object>(
+                $"api/Migration/replacop?basePath={Uri.EscapeDataString(migrationBasePath)}", new { });
+
+            if (!response.Error)
+            {
+                var content = await response.HttpResponseMessage.Content.ReadAsStringAsync();
+                alertClassReplacop = "alert-success";
+                messageReplacop = content;
+            }
+            else
+            {
+                var content = await response.HttpResponseMessage.Content.ReadAsStringAsync();
+                alertClassReplacop = "alert-danger";
+                messageReplacop = $"Error: {content}";
+            }
+        }
+        catch (Exception ex)
+        {
+            alertClassReplacop = "alert-danger";
+            messageReplacop = $"Error de conexión: {ex.Message}";
+        }
+        finally
+        {
+            loadingReplacop = false;
             StateHasChanged();
         }
     }

@@ -15,5 +15,10 @@ namespace IMPLANPROD.Shared.DTOs
         public int? NumeroRecepcion { get; set; }
         // Fecha de recepción para validación de tolerancia
         public DateTime? FechaRecepcion { get; set; }
+        // Depósito de ingreso actual del lote (BRECEPEN.Depomovi), usado como valor por defecto
+        // al aprobar; el usuario puede cambiarlo antes de confirmar la aprobación.
+        public int? DepositoIngreso { get; set; }
+        // Descripción del depósito de ingreso (Tadeposi.Descripcion), para mostrar en el mensaje de confirmación.
+        public string? NombreDepositoIngreso { get; set; }
     }
 }

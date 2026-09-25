@@ -105,7 +105,17 @@
                             @foreach (var movimiento in movimientos)
                             {
                                 <tr>
-                                    <td>@movimiento.Fecha.ToShortDateString()</td>
+                                    <td>
+                                        @* Link subrayado en la primer columna (Fecha) que al hacer clic
+                                           muestra la fecha y hora real del movimiento (FeReMovi) y el
+                                           usuario que lo registró. Equivalente al MsgBox del VB6. *@
+                                        <a href="javascript:void(0)"
+                                           class="text-decoration-underline"
+                                           style="cursor: pointer; color: #0d6efd;"
+                                           @onclick="() => MostrarDetalleMovimiento(movimiento)">
+                                            @movimiento.Fecha.ToShortDateString()
+                                        </a>
+                                    </td>
                                     <td>@movimiento.TipoMovimiento</td>
                                     <td>@movimiento.DocumentoNumero</td>
                                     <td>@movimiento.Transaccion</td>
@@ -185,6 +195,23 @@
         }
 
 
+    }
+
+    // Al renderizar el componente, posiciona la tabla de movimientos al final
+    // (último movimiento = el más reciente). Solo en la primera renderización.
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender && movimientos != null && movimientos.Any())
+        {
+            try
+            {
+                await JS.InvokeVoidAsync("scrollToBottom", "tablaScroll");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error al hacer scroll al final: {ex.Message}");
+            }
+        }
     }
 
     private async Task CargarDepositos()
@@ -312,6 +339,26 @@
     {
         currentPage = 1;
         await CargarMovimientos();
+    }
+
+    /// <summary>
+    /// Muestra la fecha y hora real del movimiento (FeReMovi) y el usuario que lo registró.
+    /// Equivalente al MsgBox de VB6:
+    ///   MsgBox "Fecha y Hora Real del Movimiento  " & vbCrLf & vbCrLf & FECHAYHORA & vbCrLf & "Usuario: " & USERNAM$(NUMEROUSUARIO%)
+    /// </summary>
+    private async Task MostrarDetalleMovimiento(MovimientoHistoricoDTO movimiento)
+    {
+        var fechaHora = movimiento.FeReMovi?.ToString("dd/MM/yyyy HH:mm:ss") ?? "Sin fecha registrada";
+        var usuario = string.IsNullOrEmpty(movimiento.NombreUsuario)
+            ? $"Usuario Nº: {movimiento.NumUsuar ?? 0}"
+            : movimiento.NombreUsuario;
+
+        await sweetAlertService.FireAsync(new SweetAlertOptions
+        {
+            Title = "Fecha y Hora Real del Movimiento",
+            Text = $"{fechaHora}\n\nUsuario: {usuario}",
+            Icon = SweetAlertIcon.Info
+        });
     }
 
     private async Task RevertirMovimiento(MovimientoHistoricoDTO movimiento)

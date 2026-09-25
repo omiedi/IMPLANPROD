@@ -34,6 +34,7 @@ namespace IMPLANPROD.Shared.DTOs
         public int Numebore { get; set; }
         public decimal? CanToApro { get; set; }
         public int? Status { get; set; }
+        public string? Observa { get; set; }
 
 
     }

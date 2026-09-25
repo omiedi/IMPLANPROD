@@ -6,7 +6,7 @@
 @using IMPLANPROD.Shared.Entities
 
 
-<EditForm Model="ordenFabricacion" OnValidSubmit="OnValidSubmit">
+<EditForm Model="ordenFabricacion" OnValidSubmit="HandleValidSubmit">
     <DataAnnotationsValidator />
 
     <div class="card mb-3">
@@ -107,8 +107,8 @@
                 </div>
                 <div class="col-md-4">
                     <div class="mb-3">
-                        <label>Stock Máximo:</label>
-                        <input type="text" class="form-control" value=" @LoteMaximo" readonly />
+                        <label>Lote Economico:</label>
+                        <input type="text" class="form-control" value="@LoteEconomico" readonly />
                     </div>
                 </div>
                 <div class="col-md-4">
@@ -152,11 +152,19 @@
     </div>
 
     @* Mostrar componentes de fórmula para crear nueva orden *@
-    @if (!IsEdit && componentesFormula != null && componentesFormula.Any())
+    @if (!IsEdit)
     {
+        <MasterSearchModal
+            IsVisible="@showModalAgregar"
+            OnRepuestoSelected="HandleAgregarComponenteSelected"
+            OnCloseRequested="@(() => showModalAgregar = false)" />
+
         <div class="card mt-4">
-            <div class="card-header bg-light">
-                <h5>Componentes de la Fórmula</h5>
+            <div class="card-header bg-light d-flex justify-content-between align-items-center">
+                <h5 class="m-0">Componentes de la Fórmula</h5>
+                <button type="button" class="btn btn-sm btn-success" @onclick="AbrirAgregarComponente">
+                    <i class="oi oi-plus"></i> Agregar Producto
+                </button>
             </div>
             <div class="card-body">
                 @if (cargandoFormula)
@@ -167,7 +175,7 @@
                         </div>
                     </div>
                 }
-                else
+                else if (componentesFormula != null && componentesFormula.Any())
                 {
                     <div class="table-responsive" style="max-height: 400px; overflow-y: auto;">
                         <table class="table table-striped table-hover">
@@ -177,8 +185,8 @@
                                     <th>Descripción</th>
                                     <th class="text-center">Uso X Unid.</th>
                                     <th class="text-center">Necesidad Total</th>
-@*                                     <th class="text-center">Cantidad a Utilizar</th>
- *@                                    <th class="text-center">Acciones</th>
+                                    <th class="text-center">Cantidad a Utilizar</th>
+                                    <th class="text-center">Acciones</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -192,16 +200,25 @@
                                             else
                                             {@componente.Descripcion}
                                         </td>
-                                        <td class="text-center">@componente.UsoBruto.ToString("N4")</td>
-                                        <td class="text-center">@componente.NecesidadTotal.ToString("N2")</td>
-                                        @* <td>
-                                            <input type="number" class="form-control form-control-sm" 
-                                                   value="@componente.CantidadAUtilizar" 
-                                                   @onchange="@(e => componente.CantidadAUtilizar = Convert.ToDecimal(e.Value))" />
-                                        </td> *@
                                         <td class="text-center">
-                                            <button type="button" class="btn btn-sm btn-primary" @onclick="() => AbrirHistorico(componente)">
-                                                <i class="oi oi-clock"></i> Histórico
+                                            @componente.UsoBruto.ToString("N4")
+                                        </td>
+                                        <td class="text-center">@componente.NecesidadTotal.ToString("N2")</td>
+                                        <td>
+                                            <input type="number"
+                                                   class="form-control form-control-sm"
+                                                   style="width: 120px; margin: 0 auto;"
+                                                   step="0.01"
+                                                   min="0"
+                                                   @bind="componente.CantidadAUtilizar"
+                                                   @bind:after="() => StateHasChanged()" />
+                                        </td>
+                                        <td class="text-center">
+                                            <button type="button" class="btn btn-sm btn-primary me-1" @onclick="() => AbrirHistorico(componente)">
+                                                <i class="oi oi-clock"></i>
+                                            </button>
+                                            <button type="button" class="btn btn-sm btn-danger" @onclick="() => QuitarComponente(componente)">
+                                                <i class="oi oi-trash"></i>
                                             </button>
                                         </td>
                                     </tr>
@@ -211,6 +228,12 @@
                     </div>
                     <div class="mt-2">
                         <small class="text-muted"><strong>*</strong> Indica componente con código repetido en la fórmula</small>
+                    </div>
+                }
+                else
+                {
+                    <div class="alert alert-info">
+                        <i class="oi oi-info"></i> No hay componentes cargados.
                     </div>
                 }
             </div>
@@ -332,8 +355,9 @@
     private MasterFuncionesDTO? masterFunciones;
     private string descripcionTipoMaterial = "No especificado";
     private bool showModal = false;
+    private bool showModalAgregar = false;
     private int seccionProductivaSeleccionada;
-    private decimal? LoteMaximo = 1;
+    private decimal? LoteEconomico = 1;
     
     // Lista de componentes de la fórmula
     private List<FormulaComponenteDTO>? componentesFormula;
@@ -457,11 +481,7 @@
         ordenFabricacion.Cod_Exte = master.Codigo;
         ordenFabricacion.Descrip = master.Descripcion;
         ordenFabricacion.Unidad = master.Umedida;
-        LoteMaximo = master.Stomax;
-        if (master.Stomax.HasValue)
-        {
-            ordenFabricacion.CanProy = master.Stomax.Value;
-        }
+        // No se asigna CanProy por defecto; el usuario debe ingresar la cantidad a fabricar.
         
         // Actualizar la descripción del tipo de material
         if (master.Timate.HasValue)
@@ -608,13 +628,23 @@
             {
                 componentesFormula = response.Response;
                 
-                // Calcular la necesidad total para cada componente
-                if (componentesFormula != null && componentesFormula.Any() && ordenFabricacion.CanProy.HasValue)
+                // Calcular la necesidad total para cada componente si ya hay cantidad a fabricar.
+                // Si CanProy es null (el usuario aún no ingresó cantidad), la necesidad y
+                // cantidad a utilizar quedan en 0 hasta que se ingrese un valor.
+                if (componentesFormula != null && componentesFormula.Any())
                 {
                     foreach (var componente in componentesFormula)
                     {
-                        componente.NecesidadTotal = componente.UsoBruto * ordenFabricacion.CanProy.Value;
-                        componente.CantidadAUtilizar = componente.NecesidadTotal; // Por defecto igual a la necesidad total
+                        if (ordenFabricacion.CanProy.HasValue && ordenFabricacion.CanProy.Value > 0)
+                        {
+                            componente.NecesidadTotal = componente.UsoBruto * ordenFabricacion.CanProy.Value;
+                            componente.CantidadAUtilizar = componente.NecesidadTotal;
+                        }
+                        else
+                        {
+                            componente.NecesidadTotal = 0;
+                            componente.CantidadAUtilizar = 0;
+                        }
                     }
                 }
             }
@@ -685,7 +715,10 @@
     }
     
     /// <summary>
-    /// Actualiza las necesidades totales cuando cambia la cantidad a fabricar
+    /// Actualiza las necesidades totales y las cantidades a utilizar cuando cambia la
+    /// cantidad a fabricar. La necesidad total = UsoBruto * CanProy, y la cantidad a
+    /// utilizar se inicializa igual a la necesidad total para que el usuario pueda
+    /// ajustarla manualmente después si lo desea.
     /// </summary>
     private void ActualizarNecesidadesTotales()
     {
@@ -694,17 +727,17 @@
             foreach (var componente in componentesFormula)
             {
                 componente.NecesidadTotal = componente.UsoBruto * ordenFabricacion.CanProy.Value;
-                // Solo actualizamos la cantidad a utilizar si no ha sido modificada manualmente
-                if (componente.CantidadAUtilizar == 0 || componente.CantidadAUtilizar == componente.NecesidadTotal / ordenFabricacion.CanProy.Value * (ordenFabricacion.CanProy.Value - 1))
-                {
-                    componente.CantidadAUtilizar = componente.NecesidadTotal;
-                }
+                // La cantidad a utilizar se actualiza automáticamente con la necesidad total
+                // cada vez que cambia la cantidad a fabricar.
+                componente.CantidadAUtilizar = componente.NecesidadTotal;
             }
         }
     }
     
     /// <summary>
-    /// Obtiene el stock máximo (Stomax) del producto seleccionado y lo asigna a la cantidad a fabricar si es una nueva orden
+    /// Obtiene el lote económico (Lorepos) del producto seleccionado desde master.
+    /// El lote económico se muestra como referencia, pero NO se asigna por defecto
+    /// a la cantidad a fabricar; el usuario debe ingresarla manualmente.
     /// </summary>
     /// <param name="codint">Código interno del producto</param>
     private async Task ObtenerStomax(int codint)
@@ -717,13 +750,8 @@
             if (!response.Error && response.Response != null)
             {
                 masterFunciones = response.Response;
-                LoteMaximo = masterFunciones!.Stomax;
-                
-                // Si no es una edición, asignar el valor de LoteMaximo a CanProy
-                if (!IsEdit && LoteMaximo.HasValue)
-                {
-                    ordenFabricacion.CanProy = LoteMaximo.Value;
-                }
+                // El lote económico proviene de master.Lorepos (no de Stomax).
+                LoteEconomico = masterFunciones!.Lorepos;
             }
         }
     }
@@ -746,11 +774,14 @@
     }
     
     /// <summary>
-    /// Método que se ejecuta cuando cambia la cantidad a fabricar
+    /// Método que se ejecuta cuando cambia la cantidad a fabricar.
+    /// Recalcula la necesidad total y la cantidad a utilizar de cada componente,
+    /// y fuerza la re-renderización para que los inputs se actualicen visualmente.
     /// </summary>
     private void OnCantidadChanged()
     {
         ActualizarNecesidadesTotales();
+        StateHasChanged();
     }
 
     /// <summary>
@@ -882,7 +913,102 @@
             Codigo = reserva.Cod_Exte ?? "",
             Descripcion = reserva.Descrip ?? ""
         };
-        
+
         mostrarModalHistorico = true;
+    }
+
+    /// <summary>
+    /// Prepara la orden con el detalle de componentes editado antes de invocar el submit del padre.
+    /// </summary>
+    private async Task HandleValidSubmit()
+    {
+        ordenFabricacion.Componentes = componentesFormula ?? new List<FormulaComponenteDTO>();
+        await OnValidSubmit.InvokeAsync();
+    }
+
+    /// <summary>
+    /// Abre el buscador de productos para agregar un componente manual.
+    /// </summary>
+    private void AbrirAgregarComponente()
+    {
+        showModalAgregar = true;
+    }
+
+    /// <summary>
+    /// Agrega el producto seleccionado a la lista de componentes.
+    /// </summary>
+    /// <param name="master">Producto seleccionado del buscador</param>
+    private void HandleAgregarComponenteSelected(Master master)
+    {
+        if (master == null || master.Codint <= 0)
+        {
+            showModalAgregar = false;
+            return;
+        }
+
+        if (componentesFormula == null)
+        {
+            componentesFormula = new List<FormulaComponenteDTO>();
+        }
+
+        var cantidadBase = ordenFabricacion.CanProy ?? 1m;
+        var nuevoComponente = new FormulaComponenteDTO
+        {
+            CodIElem = master.Codint,
+            CodXElem = master.Codigo ?? "",
+            Descripcion = master.Descripcion ?? "",
+            UsoBruto = 1m,
+            NecesidadTotal = cantidadBase,
+            CantidadAUtilizar = cantidadBase,
+            EsRepetido = componentesFormula.Any(c => c.CodIElem == master.Codint)
+        };
+
+        componentesFormula.Add(nuevoComponente);
+        showModalAgregar = false;
+        StateHasChanged();
+    }
+
+    /// <summary>
+    /// Quita un componente de la lista editada.
+    /// </summary>
+    /// <param name="componente">Componente a eliminar</param>
+    private void QuitarComponente(FormulaComponenteDTO componente)
+    {
+        componentesFormula?.Remove(componente);
+        StateHasChanged();
+    }
+
+    /// <summary>
+    /// Actualiza el uso por unidad y recalcula la necesidad total del componente.
+    /// Se usa cuando se agrega un componente manualmente.
+    /// </summary>
+    /// <param name="componente">Componente editado</param>
+    /// <param name="e">Valor ingresado</param>
+    private void ActualizarUsoBruto(FormulaComponenteDTO componente, ChangeEventArgs e)
+    {
+        if (decimal.TryParse(e.Value?.ToString(), out decimal nuevoUso))
+        {
+            componente.UsoBruto = nuevoUso;
+            if (ordenFabricacion.CanProy.HasValue)
+            {
+                componente.NecesidadTotal = componente.UsoBruto * ordenFabricacion.CanProy.Value;
+                componente.CantidadAUtilizar = componente.NecesidadTotal;
+            }
+        }
+        StateHasChanged();
+    }
+
+    /// <summary>
+    /// Actualiza la cantidad a utilizar/reservar del componente.
+    /// </summary>
+    /// <param name="componente">Componente editado</param>
+    /// <param name="e">Valor ingresado</param>
+    private void ActualizarCantidadAUtilizar(FormulaComponenteDTO componente, ChangeEventArgs e)
+    {
+        if (decimal.TryParse(e.Value?.ToString(), out decimal nuevaCantidad))
+        {
+            componente.CantidadAUtilizar = nuevaCantidad;
+        }
+        StateHasChanged();
     }
 }

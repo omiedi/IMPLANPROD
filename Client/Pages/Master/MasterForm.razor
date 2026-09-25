@@ -1,4 +1,6 @@
 @page "/masterForm"
+@using Microsoft.AspNetCore.Authorization
+@attribute [Authorize]
 @inject SweetAlertService sweetAlertService
 @using IMPLANPROD.Shared.Entities
 @using IMPLANPROD.Shared.DTOs
@@ -36,6 +38,13 @@
                 @onclick="AbrirImplosion">
             <i class="fas fa-arrow-up me-1"></i>Implosión
         </button>
+        @if (puedeVolverImplosion)
+        {
+            <button type="button" class="btn btn-outline-warning btn-sm" title="Volver al modal de Implosión del producto anterior"
+                    @onclick="VolverAImplosion">
+                <i class="fas fa-arrow-left me-1"></i>Volver a Implosión
+            </button>
+        }
     </div>
 
     <!-- Cabecera del formulario -->
@@ -375,7 +384,8 @@
                       OnCloseRequested="CerrarImplosion"
                       Codint="@master.Codint"
                       CodigoProducto="@master.Codigo"
-                      DescripcionProducto="@master.Descripcion" />
+                      DescripcionProducto="@master.Descripcion"
+                      OnSeleccionarProducto="SeleccionarProductoImplosion" />
 
 @if (mostrarModalAltaXCopia)
 {
@@ -472,6 +482,27 @@
     [Parameter]
     public bool IsEdit { get; set; }
 
+    /// <summary>
+    /// Si true, indica que se llegó a este producto desde el modal de implosión
+    /// de otro producto. Habilita el botón "Volver a Implosión".
+    /// </summary>
+    [Parameter]
+    public bool VolverImplosion { get; set; } = false;
+
+    /// <summary>
+    /// Codint del producto origen desde cuyo modal de implosión se navegó.
+    /// Se usa para volver al producto origen y reabrir el modal.
+    /// </summary>
+    [Parameter]
+    public int CodintOrigenImplosion { get; set; } = 0;
+
+    /// <summary>
+    /// Si true, abre automáticamente el modal de implosión al cargar.
+    /// Se usa cuando se vuelve desde un producto seleccionado.
+    /// </summary>
+    [Parameter]
+    public bool AbrirImplosionAutomatico { get; set; } = false;
+
     public bool FormPostedSuccessfully { get; set; } = false;
 
     private bool mostrarModalAltaXCopia = false;
@@ -483,6 +514,14 @@
 
     // Variables para el modal de implosión
     private bool mostrarModalImplosion = false;
+
+    // Variables para el flujo de selección desde implosión:
+    // - puedeVolverImplosion: true si llegamos a este producto desde el modal de implosión de otro
+    // - codintOrigenImplosion: Codint del producto desde cuyo modal de implosión llegamos
+    // - abrirImplosionAutomatico: si true, abre el modal automáticamente al cargar
+    private bool puedeVolverImplosion = false;
+    private int codintOrigenImplosion = 0;
+    private bool abrirImplosionAutomatico = false;
 
     private void AbrirImplosion()
     {
@@ -499,12 +538,102 @@
         mostrarModalImplosion = false;
     }
 
+    /// <summary>
+    /// Cuando el usuario selecciona un producto en el modal de implosión,
+    /// navega a /master/edit/{Id} del producto seleccionado pasando por query:
+    /// - volverImplosion=true: indica que se puede volver al modal
+    /// - codintOrigen={Codint}: el Codint del producto actual (origen del modal)
+    /// </summary>
+    private void SeleccionarProductoImplosion((int IdProductoSeleccionado, int CodintOrigen) seleccion)
+    {
+        // Cerrar el modal antes de navegar
+        mostrarModalImplosion = false;
+
+        // Navegar a la edición del producto seleccionado con parámetros de retorno
+        navigation.NavigateTo(
+            $"/master/edit/{seleccion.IdProductoSeleccionado}" +
+            $"?volverImplosion=true&codintOrigen={seleccion.CodintOrigen}");
+    }
+
+    /// <summary>
+    /// Vuelve a la edición del producto origen y abre automáticamente el modal de implosión.
+    /// </summary>
+    private void VolverAImplosion()
+    {
+        if (codintOrigenImplosion <= 0) return;
+
+        // Buscar el Id del producto origen por su Codint y navegar con abrirImplosion=true
+        // Primero navegamos al master-index con un query que dispare la búsqueda, o
+        // directamente navegamos al master/edit del producto origen.
+        // Como tenemos el Codint, necesitamos el Id. Lo buscamos vía API.
+        _ = VolverAImplosionAsync();
+    }
+
+    private async Task VolverAImplosionAsync()
+    {
+        try
+        {
+            var response = await repository.Get<Master>($"api/master/xCodint{codintOrigenImplosion}");
+            if (!response.Error && response.Response != null)
+            {
+                var masterOrigen = response.Response;
+                navigation.NavigateTo(
+                    $"/master/edit/{masterOrigen.Id}?abrirImplosion=true");
+            }
+            else
+            {
+                await sweetAlertService.FireAsync("Error", "No se pudo encontrar el producto origen.", SweetAlertIcon.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            await sweetAlertService.FireAsync("Error", $"Error al volver: {ex.Message}", SweetAlertIcon.Error);
+        }
+    }
+
     protected async override Task OnInitializedAsync()
     {
         master.Grupiva ??= 0;
         editContext = new(master);//ojo el orden si esta primero como en este caso la declaracion debe ir primero si no da error de carga en la pantalla
         await CargarCombos();
         CalcularValorPesos(); // Calcular valor inicial en pesos
+
+        // Procesar parámetros de navegación desde implosión
+        puedeVolverImplosion = VolverImplosion;
+        codintOrigenImplosion = CodintOrigenImplosion;
+
+        // Si se indicó abrir implosión automáticamente (vuelta desde producto seleccionado)
+        if (AbrirImplosionAutomatico && IsEdit && master != null)
+        {
+            mostrarModalImplosion = true;
+        }
+    }
+
+    /// <summary>
+    /// Se ejecuta cuando cambian los parámetros del componente.
+    /// Cuando MasterEdit recarga el producto Master (por cambio de Id en la ruta),
+    /// el parámetro Master cambia y necesitamos recrear el editContext y
+    /// reprocesar los parámetros de implosión.
+    /// </summary>
+    protected override void OnParametersSet()
+    {
+        // Recrear el editContext si el Master cambió (distinto Codint)
+        if (master != null && (editContext == null || editContext.Model != master))
+        {
+            master.Grupiva ??= 0;
+            editContext = new(master);
+            CalcularValorPesos();
+        }
+
+        // Reprocesar parámetros de implosión
+        puedeVolverImplosion = VolverImplosion;
+        codintOrigenImplosion = CodintOrigenImplosion;
+
+        // Abrir implosión automáticamente si se indicó
+        if (AbrirImplosionAutomatico && IsEdit && master != null && !mostrarModalImplosion)
+        {
+            mostrarModalImplosion = true;
+        }
     }
 
     private void AbrirAltaXCopiaModal()

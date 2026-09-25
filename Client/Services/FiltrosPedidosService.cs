@@ -29,6 +29,11 @@ namespace IMPLANPROD.Client.Services
         public string FiltroEstado { get; set; } = string.Empty;
 
         /// <summary>
+        /// Número de pedido para filtrar (coincidencia exacta)
+        /// </summary>
+        public int? NroPed { get; set; }
+
+        /// <summary>
         /// Fecha desde para filtrar
         /// </summary>
         public DateTime? FechaDesde { get; set; }
@@ -52,6 +57,7 @@ namespace IMPLANPROD.Client.Services
             ClienteSeleccionado = string.Empty;
             ClienteSeleccionadoId = null;
             FiltroEstado = string.Empty;
+            NroPed = null;
             FechaDesde = null;
             FechaHasta = null;
             PaginaActual = 1;
@@ -61,12 +67,13 @@ namespace IMPLANPROD.Client.Services
         /// Guarda el estado actual de los filtros
         /// </summary>
         public void GuardarEstado(string filter, string clienteSeleccionado, int? clienteSeleccionadoId, 
-            string filtroEstado, DateTime? fechaDesde, DateTime? fechaHasta, int paginaActual)
+            string filtroEstado, int? nroPed, DateTime? fechaDesde, DateTime? fechaHasta, int paginaActual)
         {
             Filter = filter;
             ClienteSeleccionado = clienteSeleccionado;
             ClienteSeleccionadoId = clienteSeleccionadoId;
             FiltroEstado = filtroEstado;
+            NroPed = nroPed;
             FechaDesde = fechaDesde;
             FechaHasta = fechaHasta;
             PaginaActual = paginaActual;
@@ -80,6 +87,7 @@ namespace IMPLANPROD.Client.Services
             return !string.IsNullOrEmpty(Filter) ||
                    !string.IsNullOrEmpty(ClienteSeleccionado) ||
                    !string.IsNullOrEmpty(FiltroEstado) ||
+                   NroPed.HasValue ||
                    FechaDesde.HasValue ||
                    FechaHasta.HasValue;
         }

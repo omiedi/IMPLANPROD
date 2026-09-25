@@ -10,6 +10,7 @@ namespace IMPLANPROD.Shared.DTOs
         public string NumeroRemito { get; set; }  // numRem_Prov
         public int NumeroProveedor { get; set; }  // bolrecep.numprov
         public string RazonSocial { get; set; }  // Proveedor.razonsocial
+        public string? Observa { get; set; }  // bolrecep.observa
     }
 
     /// <summary>

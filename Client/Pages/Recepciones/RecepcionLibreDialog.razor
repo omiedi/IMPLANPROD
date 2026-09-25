@@ -76,9 +76,14 @@
                         </table>
                     </div>
 
+                    <div class="form-group mb-3">
+                        <label>Observación:</label>
+                        <InputTextArea class="form-control" @bind-Value="RecepcionLibre.Observa" rows="3" />
+                    </div>
+
                     <div class="text-end mb-3">
                         <button type="button" class="btn btn-success" @onclick="AgregarItem">
-                            <i class="oi oi-plus"></i> Agregar Repuesto
+                            <i class="oi oi-plus"></i> Agregar Producto
                         </button>
                     </div>
                 </div>
@@ -159,9 +164,9 @@
     {
         var parameters = new ModalParameters()
             .Add(nameof(RecepcionDetalleDialog.Detalle), new RecepcionItemDTO())
-            .Add(nameof(RecepcionDetalleDialog.Title), "Agregar Repuesto");
+            .Add(nameof(RecepcionDetalleDialog.Title), "Agregar Producto");
 
-        var modal = modalService.Show<RecepcionDetalleDialog>("Agregar Repuesto", parameters);
+        var modal = modalService.Show<RecepcionDetalleDialog>("Agregar Producto", parameters);
         var result = await modal.Result;
 
         if (!result.Cancelled)
@@ -178,7 +183,8 @@
                 NombreDeposito = RecepcionLibre.NombreDeposito,
                 NumeroProveedor = RecepcionLibre.NumeroProveedor,
                 RazonSocialProveedor = RecepcionLibre.RazonSocialProveedor,
-                NumeroRemito = RecepcionLibre.NumeroRemito
+                NumeroRemito = RecepcionLibre.NumeroRemito,
+                Observa = RecepcionLibre.Observa
             });
             StateHasChanged();
         }
@@ -213,6 +219,13 @@
         {
             await sweetAlertService.FireAsync("Error", "Debe agregar al menos un repuesto", SweetAlertIcon.Error);
             return;
+        }
+
+        // Propaga la observación a todos los ítems, independientemente de cuándo se haya escrito
+        var observacion = RecepcionLibre.Observa ?? "";
+        foreach (var item in Items)
+        {
+            item.Observa = observacion;
         }
 
         await BlazoredModal.CloseAsync(ModalResult.Ok(Items));

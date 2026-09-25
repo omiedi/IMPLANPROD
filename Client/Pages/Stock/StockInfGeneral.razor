@@ -1,6 +1,7 @@
 @page "/StockInfGeneral/{Codint:int}"
 @using Microsoft.AspNetCore.Authorization
 @using IMPLANPROD.Shared.DTOs
+@using IMPLANPROD.Shared.Entities
 @using IMPLANPROD.Client.Shared.Components
 @using System.Web
 @using IMPLANPROD.Client.Pages.StockAjustes
@@ -9,82 +10,423 @@
 @inject IRepository repository
 @inject SweetAlertService sweetAlertService
 @inject NavigationManager NavigationManager
+@inject IJSRuntime JSRuntime
 
 <PageTitle>Stock - Inf.General</PageTitle>
 
 <div class="container-fluid">
-    <div class="mb-4">
-        <h2 class="text-center fw-bold text-primary">
-            <i class="fas fa-info-circle me-2"></i>
-            INFORMACIÓN GENERAL DE STOCK
+    <div class="mb-2 d-flex align-items-center flex-wrap gap-2">
+        <h2 class="fw-bold text-primary mb-0 me-3">
+            <i class="fas fa-info-circle me-2"></i>INF. DE STOCK
         </h2>
-        <hr class="border-primary border-2 opacity-50" />
+
+        <button type="button" class="btn btn-secondary btn-sm" @onclick="Regresar">
+            <i class="oi oi-arrow-left"></i> Regresar
+        </button>
+
+        <div class="d-flex align-items-center flex-wrap gap-2 ms-auto">
+            <button type="button" class="btn btn-warning btn-sm" @onclick="MostrarStockPorDepositoAsync" disabled="@(producto == null || Codint <= 0)">
+                <i class="oi oi-eye"></i> X Depósito + Ajustes
+            </button>
+
+            <button type="button" class="btn btn-info btn-sm" @onclick="AbrirTransferencias" disabled="@(producto == null || Codint <= 0)">
+                <i class="oi oi-transfer"></i> Transferencia Item
+            </button>
+
+            <button type="button" class="btn btn-success btn-sm" @onclick="AbrirTransferenciaMultiple">
+                <i class="oi oi-list"></i> Transf. Múltiple
+            </button>
+
+            <button type="button" class="btn btn-secondary btn-sm" @onclick="AbrirHistorico" disabled="@(producto == null || Codint <= 0)">
+                <i class="oi oi-clock"></i> Histórico
+            </button>
+        </div>
     </div>
+    <hr class="border-primary border-2 opacity-50 mt-0 mb-2" />
 
-    <div class="card shadow-sm border border-2 bg-light mb-3">
-        <div class="card-body">
-            <div class="d-flex align-items-start justify-content-between gap-3">
-                <div class="d-flex align-items-start gap-3">
-                    <div class="text-primary" style="font-size: 1.6rem; line-height: 1;">
-                        <i class="fas fa-box"></i>
+    @* Buscador de productos con búsqueda combinada por '+' *@
+    <MasterSearchModal IsVisible="@mostrarBuscador"
+                       OnRepuestoSelected="OnProductoBuscadoSelected"
+                       OnCloseRequested="@(() => mostrarBuscador = false)" />
+
+    <div class="card shadow-sm border border-2 bg-light mb-2 py-1">
+        <div class="card-body p-2">
+            @* Fila única: Código + input + lupa + descripción + Accesos Directos (derecha) *@
+            <div class="d-flex align-items-center gap-2 flex-wrap mb-0">
+                @* Rótulo "Código:" al margen izquierdo *@
+                <span class="fw-bold text-primary" style="font-size: 1.1rem;">Código:</span>
+
+                @* Input de código editable, a la derecha del rótulo *@
+                <input type="text"
+                       class="form-control"
+                       style="width: 200px; font-size: 1.1rem; font-weight: bold;"
+                       @bind="codigoManual"
+                       @bind:event="oninput"
+                       @onkeyup="OnCodigoManualKeyUp"
+                       placeholder="Código..."
+                       @ref="inputCodigoRef" />
+
+                @* Botón lupa (solo ícono, sin texto) *@
+                <button type="button" class="btn btn-outline-primary btn-sm p-1" @onclick="AbrirBuscador" title="Buscar producto">
+                    <i class="oi oi-magnifying-glass" style="font-size: 1.1rem;"></i>
+                </button>
+
+                @* Descripción a la derecha del botón lupa *@
+                <span class="fw-bold text-dark" style="font-size: 1.1rem;">
+                    @(producto?.Descripcion ?? string.Empty)
+                </span>
+
+                @* "Accesos Directos" empujado al extremo derecho de la fila *@
+                <div class="ms-auto">
+                    <div class="dropdown">
+                        <button class="btn btn-sm btn-outline-primary dropdown-toggle" type="button" data-bs-toggle="dropdown">
+                            <i class="oi oi-external-link me-1"></i> Accesos Directos
+                        </button>
+                        <ul class="dropdown-menu dropdown-menu-end">
+                            <li>
+                                <button type="button" class="dropdown-item" @onclick="AbrirAccesosDirectos">
+                                    <i class="fas fa-eye me-1"></i> Anotador de Pedidos
+                                </button>
+                            </li>
+                        </ul>
                     </div>
-
-                    <div>
-                        <div class="text-muted small">Producto</div>
-
-                        <div class="fw-bold" style="font-size: 1.15rem;">
-                            @(producto?.Descripcion ?? string.Empty)
-                        </div>
-
-                        <div class="mt-2 d-flex flex-wrap gap-2">
-                            <span class="badge bg-primary">
-                                Cód. Interno: @Codint
-                            </span>
-
-                            @if (!string.IsNullOrWhiteSpace(producto?.Codigo))
-                            {
-                                <span class="fw-bold" style="font-size: 1.15rem;">
-                                    Código: @producto!.Codigo
-                                </span>
-                            }
-                        </div>
-                    </div>
-                </div>
-
-                <div class="text-end">
-                    <div class="text-muted small">Stock</div>
-                    <div class="badge bg-info text-dark">Inf. General</div>
                 </div>
             </div>
         </div>
     </div>
 
-    <div class="mb-3 d-flex align-items-center flex-wrap gap-2 justify-content-between">
-        <button type="button" class="btn btn-secondary" @onclick="Regresar">
-            <i class="oi oi-arrow-left"></i> Regresar
-        </button>
+    @* Spinner overlay mientras se cargan los datos del producto *@
+    @if (isLoading)
+    {
+        <div class="position-fixed top-0 start-0 w-100 h-100 d-flex justify-content-center align-items-center"
+             style="background-color: rgba(255,255,255,0.7); z-index: 1050;">
+            <div class="text-center">
+                <div class="spinner-border text-primary mb-2" role="status" style="width: 3rem; height: 3rem;">
+                    <span class="visually-hidden">Cargando...</span>
+                </div>
+                <div class="fw-semibold text-primary">Cargando información del producto...</div>
+            </div>
+        </div>
+    }
 
-        <div class="d-flex align-items-center flex-wrap gap-2 ms-auto">
-            <button type="button" class="btn btn-warning" @onclick="MostrarStockPorDepositoAsync" disabled="@(producto == null || Codint <= 0)">
-                <i class="oi oi-eye"></i> X Depósito + Ajustes
-            </button>
+    @* Existencias a ancho completo *@
+    <div class="row g-2 mb-2">
+        @* 
+           Existencias: tabla con stock por depósito.
+           Nota de UI: usamos borde oscuro y más grueso para que el marco sea "notorio" y consistente con el resto de la pantalla.
+        *@
+        <div class="col-12">
+            <div class="card shadow-sm border border-dark" style="border-width: 2px;">
+                <div class="card-header bg-primary text-white border-bottom border-2 py-1">
+                    Existencias
+                </div>
+                <div class="card-body bg-white p-2">
+                    @if (isLoading)
+                    {
+                        <div class="spinner-border text-primary" role="status">
+                            <span class="sr-only">Cargando...</span>
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="table-responsive" style="max-height: 230px; overflow-y: auto;">
+                            <table class="table table-striped table-hover table-bordered align-middle mb-0">
+                                <thead class="sticky-top" style="background-color: #000; color: #fff;">
+                                    <tr>
+                                        <th style="background-color: #000; color: #fff;">Depósito</th>
+                                        <th style="background-color: #000; color: #fff;">Descripción</th>
+                                        <th class="text-end" style="background-color: #000; color: #fff;">Stock</th>
+                                        <th style="background-color: #000; color: #fff;">No Disponible</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @if (existencias == null || existencias.Count == 0)
+                                    {
+                                        <tr>
+                                            <td colspan="4">Sin existencias para mostrar.</td>
+                                        </tr>
+                                    }
+                                    else
+                                    {
+                                        @foreach (var row in existencias)
+                                        {
+                                            <tr>
+                                                <td>@row.Deposito</td>
+                                                <td>@row.Descripcion</td>
+                                                <td class="text-end">@row.Stock.ToString("N2")</td>
+                                                <td>@(row.NoDisponible ? "(x)" : string.Empty)</td>
+                                            </tr>
+                                        }
 
-            <button type="button" class="btn btn-info" @onclick="AbrirTransferencias" disabled="@(producto == null || Codint <= 0)">
-                <i class="oi oi-transfer"></i> Transferencia Item
-            </button>
+                                        @if (TORECEP > 0.05m)
+                                        {
+                                            <tr class="table-info">
+                                                <td colspan="2">RECEPC.</td>
+                                                <td class="text-end">@TORECEP.ToString("N2")</td>
+                                                <td></td>
+                                            </tr>
+                                        }
 
-            <button type="button" class="btn btn-success" @onclick="AbrirTransferenciaMultiple">
-                <i class="oi oi-list"></i> Transf. Múltiple
-            </button>
+                                        @if (Math.Abs(STOTER) >= 0.005m)
+                                        {
+                                            <tr class="table-info">
+                                                <td colspan="2">TERCEROS</td>
+                                                <td class="text-end">@STOTER.ToString("N2")</td>
+                                                <td></td>
+                                            </tr>
+                                        }
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
 
-            <button type="button" class="btn btn-secondary" @onclick="AbrirHistorico" disabled="@(producto == null || Codint <= 0)">
-                <i class="oi oi-clock"></i> Histórico
-            </button>
+                        <div class="mt-1 d-flex justify-content-end">
+                            <span class="badge bg-secondary" style="font-size: 0.95rem;">
+                                Total depósitos: @TotalStockDepositos.ToString("N2")
+                            </span>
+                        </div>
+                    }
+                </div>
+            </div>
         </div>
     </div>
-    <!-- Instructivos colapsables -->
+
+    @*
+       Stock Proyectado: grilla cronológica con los movimientos pendientes y el acumulado proyectado.
+       Nota de UI: borde destacado para que el usuario identifique el bloque rápidamente.
+    *@
+    <div class="card shadow-sm border border-dark mb-3" style="border-width: 3px;">
+        <div class="card-header bg-primary text-white border-bottom border-2">
+            Stock Proyectado
+        </div>
+        <div class="card-body bg-white">
+            <div class="table-responsive" style="max-height: 230px; overflow-y: auto;">
+                <table class="table table-striped table-hover table-bordered align-middle mb-0">
+                    <thead class="sticky-top" style="background-color: #000; color: #fff;">
+                        <tr>
+                            <th style="background-color: #000; color: #fff;">Comprobante</th>
+                            <th style="background-color: #000; color: #fff;">Referencia</th>
+                            <th class="text-end" style="background-color: #000; color: #fff;">Entra</th>
+                            <th class="text-end" style="background-color: #000; color: #fff;">Sale</th>
+                            <th class="text-end" style="background-color: #000; color: #fff;">Proyectado</th>
+                            <th style="background-color: #000; color: #fff;">Fecha</th>
+                            <th style="background-color: #000; color: #fff;">Observaciones</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @if (stockProyectado == null || stockProyectado.Count == 0)
+                        {
+                            <tr>
+                                <td colspan="7">Sin datos para mostrar.</td>
+                            </tr>
+                        }
+                        else
+                        {
+                            @foreach (var row in stockProyectado)
+                            {
+                                <tr>
+                                    <td>@row.Comprobante</td>
+                                    <td>@row.Referencia</td>
+                                    <td class="text-end">@row.Entra.ToString("N1")</td>
+                                    <td class="text-end">@row.Sale.ToString("N1")</td>
+                                    <td class="text-end">@row.Proyectado.ToString("N1")</td>
+                                    <td>@row.Fecha</td>
+                                    <td>@row.Observaciones</td>
+                                </tr>
+                            }
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    @* Métricas resumidas en 6 columnas (Parámetros, Stock, Comprometido, Ingresar, Situación, Ubicaciones) *@
+    <div class="row g-1 mb-2">
+        @* Parámetros *@
+        <div class="col-12 col-md-6 col-xl">
+            <div class="border border-dark rounded p-2 h-100" style="border-width: 2px;">
+                <div class="fw-bold mb-1">Parámetros</div>
+                <div class="row g-1 align-items-center">
+                    <div class="col-7">
+                        <label class="form-label mb-0">Mínimo</label>
+                    </div>
+                    <div class="col-5">
+                        <input class="form-control form-control-sm text-end" readonly value="@($"{Stomin:N2}")" />
+                    </div>
+                    <div class="col-7">
+                        <label class="form-label mb-0">Económico</label>
+                    </div>
+                    <div class="col-5">
+                        <input class="form-control form-control-sm text-end" readonly value="@($"{Leconom:N2}")" />
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        @* Stock *@
+        <div class="col-12 col-md-6 col-xl">
+            <div class="border border-dark rounded p-2 h-100" style="border-width: 2px;">
+                <div class="fw-bold mb-1">Stock</div>
+                <div class="row g-1 align-items-center">
+                    <div class="col-7">
+                        <label class="form-label mb-0">Propio</label>
+                    </div>
+                    <div class="col-5">
+                        <input class="form-control form-control-sm text-end" readonly value="@($"{StoProp:N2}")" />
+                    </div>
+                    <div class="col-7">
+                        <label class="form-label mb-0">Remoto</label>
+                    </div>
+                    <div class="col-5">
+                        <input class="form-control form-control-sm text-end" readonly value="@($"{StoRemo:N2}")" />
+                    </div>
+                    <div class="col-7">
+                        <label class="form-label mb-0">Total</label>
+                    </div>
+                    <div class="col-5">
+                        <input class="form-control form-control-sm text-end" readonly value="@($"{StoTot:N2}")" />
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        @* Comprometido *@
+        <div class="col-12 col-md-6 col-xl">
+            <div class="border border-dark rounded p-2 h-100" style="border-width: 2px;">
+                <div class="fw-bold mb-1">Comprometido</div>
+                <div class="row g-1 align-items-center">
+                    <div class="col-7">
+                        <label class="form-label mb-0">Pedidos</label>
+                    </div>
+                    <div class="col-5">
+                        <input class="form-control form-control-sm text-end" readonly value="@($"{ToPedid:N2}")" />
+                    </div>
+                    <div class="col-7">
+                        <label class="form-label mb-0">Asign. y Reservas</label>
+                    </div>
+                    <div class="col-5">
+                        <input class="form-control form-control-sm text-end" readonly value="@($"{ToReser:N2}")" />
+                    </div>
+                    <div class="col-7">
+                        <label class="form-label mb-0">Total</label>
+                    </div>
+                    <div class="col-5">
+                        <input class="form-control form-control-sm text-end" readonly value="@($"{ToCompr:N2}")" />
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        @* Ingresar *@
+        <div class="col-12 col-md-6 col-xl">
+            <div class="border border-dark rounded p-2 h-100" style="border-width: 2px;">
+                <div class="fw-bold mb-1">Ingresar</div>
+                <div class="row g-1 align-items-center">
+                    <div class="col-7">
+                        <label class="form-label mb-0">Compras</label>
+                    </div>
+                    <div class="col-5">
+                        <input class="form-control form-control-sm text-end" readonly value="@($"{ToSumin:N2}")" />
+                    </div>
+                    <div class="col-7">
+                        <label class="form-label mb-0">Fabricación</label>
+                    </div>
+                    <div class="col-5">
+                        <input class="form-control form-control-sm text-end" readonly value="@($"{ToFabri:N2}")" />
+                    </div>
+                    <div class="col-7">
+                        <label class="form-label mb-0">Total</label>
+                    </div>
+                    <div class="col-5">
+                        <input class="form-control form-control-sm text-end" readonly value="@($"{ToInPre:N2}")" />
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        @* Situación: inputs apilados verticalmente *@
+        <div class="col-12 col-md-6 col-xl">
+            <div class="border border-dark rounded p-2 h-100" style="border-width: 2px;">
+                <div class="fw-bold mb-1">Situación</div>
+                <div class="d-flex flex-column gap-1">
+                    <div>
+                        <label class="form-label mb-0">Neto</label>
+                        <input class="form-control form-control-sm text-end" readonly value="@($"{StoNet:N2}")" />
+                    </div>
+                    <div>
+                        <label class="form-label mb-0">Disponible</label>
+                        <input class="form-control form-control-sm text-end" readonly value="@($"{StoDis:N2}")" />
+                    </div>
+                    <div>
+                        <label class="form-label mb-0">Faltantes</label>
+                        <input class="form-control form-control-sm text-end" readonly value="@($"{StoFal:N2}")" />
+                    </div>
+                    <div>
+                        <label class="form-label mb-0">No Reservado</label>
+                        <input class="form-control form-control-sm text-end" readonly value="@($"{NoReservado:N2}")" />
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        @* Ubicaciones: lista compacta con scroll si supera 5 registros *@
+        <div class="col-12 col-md-6 col-xl">
+            <div class="border border-dark rounded p-2 h-100" style="border-width: 2px;">
+                <div class="d-flex justify-content-between mb-1">
+                    <div class="fw-bold">Ubicaciones</div>
+                    <div class="d-flex gap-1">
+                        <button type="button" class="btn btn-sm btn-danger py-0 px-1" @onclick="AbrirModalUbicacionesBaja" disabled="@(Codint <= 0)"
+                                title="Ubicaciones del código activo dadas de baja" data-bs-toggle="tooltip" data-bs-placement="top">
+                            Bajas
+                        </button>
+                        <button type="button" class="btn btn-sm btn-success py-0 px-1" @onclick="AbrirModalNuevaUbicacion" disabled="@(Codint <= 0)">
+                            <i class="oi oi-plus"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <div class="overflow-auto" style="max-height: 180px;">
+                    <table class="table table-sm table-striped mb-0">
+                        <tbody>
+                            @if (ubicacionesProducto == null)
+                            {
+                                <tr><td class="text-muted">Cargando...</td></tr>
+                            }
+                            else if (!ubicacionesProducto.Any())
+                            {
+                                <tr><td class="text-muted">(Sin ubicaciones)</td></tr>
+                            }
+                            else
+                            {
+                                @foreach (var u in ubicacionesProducto)
+                                {
+                                    <tr>
+                                        <td class="py-0">@u.Codiubica</td>
+                                        <td class="text-end py-0" style="white-space: nowrap;">
+                                            <div class="d-inline-flex align-items-center gap-1">
+                                                <button type="button" class="btn btn-sm btn-outline-primary py-0 px-1" @onclick="() => AbrirModalEditarUbicacion(u)">
+                                                    <i class="oi oi-pencil"></i>
+                                                </button>
+                                                <button type="button" class="btn btn-sm btn-outline-danger py-0 px-1" @onclick="async () => await EliminarUbicacionAsync(u)">
+                                                    <i class="oi oi-trash"></i>
+                                                </button>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                }
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Instructivos colapsables (al final de la página, en dos columnas) -->
     <div class="row mb-3">
-        <div class="col-12">
+        @* Columna izquierda: Instructivo para el Usuario *@
+        <div class="col-12 col-lg-6">
             <div class="card mb-2">
                 <div class="card-header bg-info text-white p-2">
                     <button class="btn btn-link text-white text-decoration-none w-100 text-start p-0"
@@ -108,7 +450,7 @@
                         <ul>
                             <li><strong>Regresar:</strong> vuelve a la pantalla desde la que ingresaste (si corresponde) o a la lista de stock.</li>
                             <li><strong>X Depósito + Ajustes:</strong> muestra el stock por depósito y permite registrar un ajuste en el depósito elegido.</li>
-                            <li><strong>Transferencias:</strong> permite transferir stock entre depósitos.</li>
+                            <li><strong>Transferencias:</strong> permite transferir stock entre depósitos. El botón "Transferencia Item" ofrece "Item único" (mismo código entre depósitos) o "Transf. C/Transformación de Código" (sale el código actual e ingresa otro código por la misma cantidad).</li>
                             <li><strong>Histórico:</strong> permite consultar movimientos históricos filtrando por depósito y rango de fechas.</li>
                         </ul>
 
@@ -144,6 +486,10 @@
                     </div>
                 }
             </div>
+        </div>
+
+        @* Columna derecha: Instructivo para el Desarrollador *@
+        <div class="col-12 col-lg-6">
             <InstructivoDesarrollador @key="InstructivoDevKey">
                 <h6 class="text-info"><i class="fas fa-code"></i> Objetivo técnico</h6>
                 <p>
@@ -220,351 +566,97 @@
                         </ul>
                     </li>
                 </ul>
-                </InstructivoDesarrollador>
-        </div>
-    </div>
-
-    <div class="card shadow-sm border border-2 mb-3">
-        <div class="card-header bg-light border-bottom border-2">
-            Métricas
-        </div>
-        <div class="card-body bg-white">
-            <div class="row g-3">
-                <div class="col-12 col-lg-3">
-                    <div class="border border-dark rounded p-3 h-100" style="border-width: 3px;">
-                        <div class="fw-bold mb-2">Parámetros</div>
-
-                        <div class="row g-2 align-items-center">
-                            <div class="col-7">
-                                <label class="form-label mb-0">Mínimo</label>
-                            </div>
-                            <div class="col-5">
-                                <input class="form-control form-control-sm text-end" readonly value="@($"{Stomin:N2}")" />
-                            </div>
-
-                            <div class="col-7">
-                                <label class="form-label mb-0">Económico</label>
-                            </div>
-                            <div class="col-5">
-                                <input class="form-control form-control-sm text-end" readonly value="@($"{Leconom:N2}")" />
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="col-12 col-lg-3">
-                    <div class="border border-dark rounded p-3 h-100" style="border-width: 3px;">
-                        <div class="fw-bold mb-2">Stock</div>
-
-                        <div class="row g-2 align-items-center">
-                            <div class="col-7">
-                                <label class="form-label mb-0">Propio</label>
-                            </div>
-                            <div class="col-5">
-                                <input class="form-control form-control-sm text-end" readonly value="@($"{StoProp:N2}")" />
-                            </div>
-
-                            <div class="col-7">
-                                <label class="form-label mb-0">Remoto</label>
-                            </div>
-                            <div class="col-5">
-                                <input class="form-control form-control-sm text-end" readonly value="@($"{StoRemo:N2}")" />
-                            </div>
-
-                            <div class="col-7">
-                                <label class="form-label mb-0">Total</label>
-                            </div>
-                            <div class="col-5">
-                                <input class="form-control form-control-sm text-end" readonly value="@($"{StoTot:N2}")" />
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="col-12 col-lg-3">
-                    <div class="border border-dark rounded p-3 h-100" style="border-width: 3px;">
-                        <div class="fw-bold mb-2">Comprometido</div>
-
-                        <div class="row g-2 align-items-center">
-                            <div class="col-7">
-                                <label class="form-label mb-0">Pedidos</label>
-                            </div>
-                            <div class="col-5">
-                                <input class="form-control form-control-sm text-end" readonly value="@($"{ToPedid:N2}")" />
-                            </div>
-
-                            <div class="col-7">
-                                <label class="form-label mb-0">Asignados y Reservas</label>
-                            </div>
-                            <div class="col-5">
-                                <input class="form-control form-control-sm text-end" readonly value="@($"{ToReser:N2}")" />
-                            </div>
-
-                            <div class="col-7">
-                                <label class="form-label mb-0">Total</label>
-                            </div>
-                            <div class="col-5">
-                                <input class="form-control form-control-sm text-end" readonly value="@($"{ToCompr:N2}")" />
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="col-12 col-lg-3">
-                    <div class="border border-dark rounded p-3 h-100" style="border-width: 3px;">
-                        <div class="fw-bold mb-2">Ingresar</div>
-
-                        <div class="row g-2 align-items-center">
-                            <div class="col-7">
-                                <label class="form-label mb-0">Compras</label>
-                            </div>
-                            <div class="col-5">
-                                <input class="form-control form-control-sm text-end" readonly value="@($"{ToSumin:N2}")" />
-                            </div>
-
-                            <div class="col-7">
-                                <label class="form-label mb-0">Fabricación</label>
-                            </div>
-                            <div class="col-5">
-                                <input class="form-control form-control-sm text-end" readonly value="@($"{ToFabri:N2}")" />
-                            </div>
-
-                            <div class="col-7">
-                                <label class="form-label mb-0">Total</label>
-                            </div>
-                            <div class="col-5">
-                                <input class="form-control form-control-sm text-end" readonly value="@($"{ToInPre:N2}")" />
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                @* 
-                   Existencias (60% del ancho): tabla con stock por depósito.
-                   Nota de UI: usamos borde oscuro y más grueso para que el marco sea "notorio" y consistente con el resto de la pantalla.
-                *@
-                <div class="col-12 col-lg-8" style="flex: 0 0 60%; max-width: 60%;">
-                    <div class="card shadow-sm border border-dark" style="border-width: 3px;">
-                        <div class="card-header bg-primary text-white border-bottom border-2">
-                            Existencias
-                        </div>
-                        <div class="card-body bg-white">
-                            @if (isLoading)
-                            {
-                                <div class="spinner-border text-primary" role="status">
-                                    <span class="sr-only">Cargando...</span>
-                                </div>
-                            }
-                            else
-                            {
-                                <div class="table-responsive">
-                                    <table class="table table-striped table-hover table-bordered align-middle">
-                                        <thead>
-                                            <tr>
-                                                <th>Depósito</th>
-                                                <th>Descripción</th>
-                                                <th class="text-end">Stock</th>
-                                                <th>No Disponible</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            @if (existencias == null || existencias.Count == 0)
-                                            {
-                                                <tr>
-                                                    <td colspan="4">Sin existencias para mostrar.</td>
-                                                </tr>
-                                            }
-                                            else
-                                            {
-                                                @foreach (var row in existencias)
-                                                {
-                                                    <tr>
-                                                        <td>@row.Deposito</td>
-                                                        <td>@row.Descripcion</td>
-                                                        <td class="text-end">@row.Stock.ToString("N2")</td>
-                                                        <td>@(row.NoDisponible ? "(x)" : string.Empty)</td>
-                                                    </tr>
-                                                }
-
-                                                @if (TORECEP > 0.05m)
-                                                {
-                                                    <tr class="table-info">
-                                                        <td colspan="2">RECEPC.</td>
-                                                        <td class="text-end">@TORECEP.ToString("N2")</td>
-                                                        <td></td>
-                                                    </tr>
-                                                }
-
-                                                @if (Math.Abs(STOTER) >= 0.005m)
-                                                {
-                                                    <tr class="table-info">
-                                                        <td colspan="2">TERCEROS</td>
-                                                        <td class="text-end">@STOTER.ToString("N2")</td>
-                                                        <td></td>
-                                                    </tr>
-                                                }
-                                            }
-                                        </tbody>
-                                    </table>
-                                </div>
-
-                                <div class="mt-2 d-flex justify-content-end">
-                                    <span class="badge bg-secondary" style="font-size: 0.95rem;">
-                                        Total depósitos: @TotalStockDepositos.ToString("N2")
-                                    </span>
-                                </div>
-                            }
-                        </div>
-                    </div>
-                </div>
-
-                <div class="col-12 col-lg-4" style="flex: 0 0 40%; max-width: 40%;">
-                    <div class="border border-dark rounded p-3" style="border-width: 3px;">
-                        <div class="d-flex justify-content-between mb-2">
-                            <div class="fw-bold">Ubicaciones</div>
-                            <div class="d-flex gap-2">
-                                <button type="button" class="btn btn-sm btn-danger" @onclick="AbrirModalUbicacionesBaja" disabled="@(Codint <= 0)"
-                                        title="Ubicaciones del código activo dadas de baja" data-bs-toggle="tooltip" data-bs-placement="top">
-                                    Ubicaciones de baja
-                                </button>
-                                <button type="button" class="btn btn-sm btn-success" @onclick="AbrirModalNuevaUbicacion" disabled="@(Codint <= 0)">
-                                    <i class="oi oi-plus"></i> Agregar Ubicación
-                                </button>
-                            </div>
-                        </div>
-
-                        <div class="table-responsive" style="max-height: 140px; overflow-y: auto;">
-                            <table class="table table-sm table-striped mb-0">
-                                <thead>
-                                    <tr>
-                                        <th>Ubicación</th>
-                                        <th style="width: 1%;"></th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    @if (ubicacionesProducto == null)
-                                    {
-                                        <tr>
-                                            <td colspan="2" class="text-muted">Cargando...</td>
-                                        </tr>
-                                    }
-                                    else if (!ubicacionesProducto.Any())
-                                    {
-                                        <tr>
-                                            <td colspan="2" class="text-muted">(Sin ubicaciones)</td>
-                                        </tr>
-                                    }
-                                    else
-                                    {
-                                        @foreach (var u in ubicacionesProducto)
-                                        {
-                                            <tr>
-                                                <td>@u.Codiubica</td>
-                                                <td class="text-end" style="white-space: nowrap;">
-                                                    <div class="d-inline-flex align-items-center gap-1">
-                                                        <button type="button" class="btn btn-sm btn-outline-primary" @onclick="() => AbrirModalEditarUbicacion(u)">
-                                                            <i class="oi oi-pencil"></i>
-                                                        </button>
-                                                        <button type="button" class="btn btn-sm btn-outline-danger" @onclick="async () => await EliminarUbicacionAsync(u)">
-                                                            <i class="oi oi-trash"></i>
-                                                        </button>
-                                                    </div>
-                                                </td>
-                                            </tr>
-                                        }
-                                    }
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-                </div>
-
-                @*
-                   Situación: resumen de métricas calculadas (Neto/Disponible/Faltantes/No Reservado).
-                   Nota de UI: borde más grueso para reforzar visualmente el bloque de resumen.
-                *@
-                <div class="col-12">
-                    <div class="border border-dark rounded p-3" style="border-width: 3px;">
-                        <div class="fw-bold mb-2">Situación</div>
-
-                        <div class="row g-2 align-items-center">
-                            <div class="col-12 col-md-3">
-                                <label class="form-label mb-0">Neto</label>
-                                <input class="form-control form-control-sm text-end" readonly value="@($"{StoNet:N2}")" />
-                            </div>
-
-                            <div class="col-12 col-md-3">
-                                <label class="form-label mb-0">Disponible</label>
-                                <input class="form-control form-control-sm text-end" readonly value="@($"{StoDis:N2}")" />
-                            </div>
-
-                            <div class="col-12 col-md-3">
-                                <label class="form-label mb-0">Faltantes</label>
-                                <input class="form-control form-control-sm text-end" readonly value="@($"{StoFal:N2}")" />
-                            </div>
-
-                            <div class="col-12 col-md-3">
-                                <label class="form-label mb-0">No Reservado</label>
-                                <input class="form-control form-control-sm text-end" readonly value="@($"{NoReservado:N2}")" />
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    @*
-       Stock Proyectado: grilla cronológica con los movimientos pendientes y el acumulado proyectado.
-       Nota de UI: borde destacado para que el usuario identifique el bloque rápidamente.
-    *@
-    <div class="card shadow-sm border border-dark mb-3" style="border-width: 3px;">
-        <div class="card-header bg-primary text-white border-bottom border-2">
-            Stock Proyectado
-        </div>
-        <div class="card-body bg-white">
-            <div class="table-responsive">
-                <table class="table table-striped table-hover table-bordered align-middle">
-                    <thead>
-                        <tr>
-                            <th>Comprobante</th>
-                            <th>Referencia</th>
-                            <th class="text-end">Entra</th>
-                            <th class="text-end">Sale</th>
-                            <th class="text-end">Proyectado</th>
-                            <th>Fecha</th>
-                            <th>Observaciones</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        @if (stockProyectado == null || stockProyectado.Count == 0)
-                        {
-                            <tr>
-                                <td colspan="7">Sin datos para mostrar.</td>
-                            </tr>
-                        }
-                        else
-                        {
-                            @foreach (var row in stockProyectado)
-                            {
-                                <tr>
-                                    <td>@row.Comprobante</td>
-                                    <td>@row.Referencia</td>
-                                    <td class="text-end">@row.Entra.ToString("N1")</td>
-                                    <td class="text-end">@row.Sale.ToString("N1")</td>
-                                    <td class="text-end">@row.Proyectado.ToString("N1")</td>
-                                    <td>@row.Fecha</td>
-                                    <td>@row.Observaciones</td>
-                                </tr>
-                            }
-                        }
-                    </tbody>
-                </table>
-            </div>
+            </InstructivoDesarrollador>
         </div>
     </div>
 
 </div>
+
+<!-- Modal Accesos Directos (Buscador de Pedidos -> Anotador) -->
+@if (mostrarModalAccesosDirectos)
+{
+    <div class="modal fade show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5);">
+        <div class="modal-dialog modal-xl modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header bg-info text-white">
+                    <h5 class="modal-title">
+                        <i class="oi oi-external-link me-2"></i>Accesos Directos - Anotador de Pedidos
+                    </h5>
+                    <button type="button" class="btn-close btn-close-white" @onclick="CerrarAccesosDirectos"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="row g-3 align-items-end mb-3">
+                        <div class="col-md-8">
+                            <label class="form-label">Buscar pedido (N°, cliente, referencia...)</label>
+                            <input type="text" class="form-control" placeholder="Ingrese texto a buscar..."
+                                   @bind-value="filtroPedidosAccesosDirectos" @bind-value:event="oninput" @onkeyup="BuscarPedidosAccesosDirectos" />
+                        </div>
+                        <div class="col-md-4">
+                            <button type="button" class="btn btn-primary" @onclick="BuscarPedidosAccesosDirectos">
+                                <i class="fas fa-search"></i> Buscar
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="table-responsive" style="max-height: 500px; overflow-y: auto;">
+                        <table class="table table-striped table-hover table-sm">
+                            <thead class="table-primary sticky-top">
+                                <tr>
+                                    <th>Nro. Pedido</th>
+                                    <th>Fecha</th>
+                                    <th>Cta. (N° Cliente)</th>
+                                    <th>Razón Social</th>
+                                    <th class="text-center">Acciones</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @if (cargandoPedidosAccesosDirectos)
+                                {
+                                    <tr>
+                                        <td colspan="5" class="text-center">
+                                            <div class="spinner-border spinner-border-sm text-primary" role="status">
+                                                <span class="visually-hidden">Buscando...</span>
+                                            </div>
+                                            <span class="ms-2">Buscando pedidos...</span>
+                                        </td>
+                                    </tr>
+                                }
+                                else if (pedidosAccesosDirectos.Any())
+                                {
+                                    @foreach (var pedido in pedidosAccesosDirectos)
+                                    {
+                                        <tr>
+                                            <td>@pedido.NroPed</td>
+                                            <td>@(pedido.FechEmis?.ToString("dd/MM/yyyy") ?? "-")</td>
+                                            <td>@(pedido.NroClie?.ToString() ?? "-")</td>
+                                            <td>@pedido.RasoClie</td>
+                                            <td class="text-center">
+                                                <button type="button" class="btn btn-sm btn-outline-info" title="Anotador de Pedidos" @onclick="() => VerAnotadorPedido(pedido.NroPed ?? 0)">
+                                                    <i class="fas fa-eye"></i> Ver
+                                                </button>
+                                            </td>
+                                        </tr>
+                                    }
+                                }
+                                else
+                                {
+                                    <tr>
+                                        <td colspan="5" class="text-center text-muted">
+                                            Ingrese un texto y presione Buscar para buscar pedidos.
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" @onclick="CerrarAccesosDirectos">Cerrar</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
 
 @if (mostrarDetalleDeposito)
 {
@@ -798,6 +890,23 @@
     [SupplyParameterFromQuery]
     public string? returnUrl { get; set; }
 
+    /// <summary>
+    /// Indica si se debe reabrir el modal de Accesos Directos al cargar la página.
+    /// Se usa cuando se regresa desde el anotador de pedidos para elegir otro pedido.
+    /// </summary>
+    [Parameter]
+    [SupplyParameterFromQuery(Name = "abrirAccesosDirectos")]
+    public bool ReabrirAccesosDirectos { get; set; }
+
+    // Variables para Accesos Directos (Anotador de Pedidos)
+    private bool mostrarModalAccesosDirectos = false;
+    private string filtroPedidosAccesosDirectos = string.Empty;
+    private List<Pedenca> pedidosAccesosDirectos = new();
+    private bool cargandoPedidosAccesosDirectos = false;
+    // Trackea el Codint para el cual ya se procesó la reapertura del modal,
+    // evitando un bucle infinito de renders en OnParametersSetAsync.
+    private int? _codintReaperturaProcesada = null;
+
     private bool isLoading = true;
     private List<ExistenciaRow>? existencias;
     private Master? producto;
@@ -820,6 +929,22 @@
     private decimal TORESER;
     private decimal TORESER_TERC;
     private decimal STOTER;
+
+    // Bandera para mostrar/ocultar el modal de búsqueda de productos.
+    private bool mostrarBuscador = false;
+
+    // Valor editable del campo "Código" en el card de producto.
+    // Permite al usuario escribir un código y buscar coincidencias en master.
+    private string codigoManual = string.Empty;
+
+    // Referencia al input de código para gestionar el foco y el cursor.
+    private ElementReference inputCodigoRef;
+
+    // Timer para debounce: espera 200ms tras la última tecla antes de buscar.
+    private CancellationTokenSource? debounceCts;
+
+    // Flag para enfocar el input de código después de seleccionar del buscador.
+    private bool focoPendiente = false;
 
     private List<UbicacionProductoDTO>? ubicacionesProducto;
     private bool mostrarModalNuevaUbicacion;
@@ -1231,7 +1356,10 @@
 
     private async Task GuardarTransferenciaAsync()
     {
-        mostrarModalTransferencia = false;
+        // No cerrar el modal aquí: el StockTransferenciaModal muestra
+        // internamente el ValeTransferenciaModal después de guardar,
+        // igual que en StockIndex. El modal se cierra cuando el usuario
+        // presiona el botón de cerrar (OnClose → CerrarModalTransferencia).
         await CargarExistenciasAsync();
     }
 
@@ -1289,6 +1417,40 @@
 
     protected override async Task OnParametersSetAsync()
     {
+        // Activar spinner al inicio de la carga para que el usuario vea feedback
+        // inmediato al cambiar de producto desde el buscador.
+        isLoading = true;
+        StateHasChanged();
+
+        try
+        {
+            await RecargarTodoAsync();
+        }
+        finally
+        {
+            isLoading = false;
+            StateHasChanged();
+        }
+
+        // Si se regresa desde el anotador de pedidos, reabrir el modal para seleccionar otro pedido.
+        // Se procesa una sola vez por Codint para evitar un bucle de renders (OnParametersSetAsync
+        // se ejecuta en cada render, y ReabrirAccesosDirectos viene del query string que no cambia).
+        if (ReabrirAccesosDirectos && _codintReaperturaProcesada != Codint)
+        {
+            _codintReaperturaProcesada = Codint;
+            AbrirAccesosDirectos();
+            await BuscarPedidosAccesosDirectos();
+        }
+    }
+
+    /// <summary>
+    /// Ejecuta la secuencia completa de carga de datos del producto:
+    /// producto, ubicaciones, existencias, pendientes y stock proyectado.
+    /// Se reutiliza tanto en OnParametersSetAsync como cuando el usuario
+    /// vuelve a escribir un código que corresponde al mismo Codint de la página.
+    /// </summary>
+    private async Task RecargarTodoAsync()
+    {
         mostrarInstructivoUsuario = false;
         await CargarProductoAsync();
         repuestoSeleccionado = BuildRepuestoSeleccionado();
@@ -1303,6 +1465,21 @@
         await CargarReservasPendientesAsync();
         await CargarTercerosPendientesAsync();
         RecalcularStockProyectado();
+    }
+
+    /// <summary>
+    /// Después de cada render, si hay un foco pendiente (por ejemplo, tras
+    /// seleccionar un producto del buscador), coloca el foco y el cursor
+    /// al final del input de código editable.
+    /// </summary>
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (focoPendiente)
+        {
+            focoPendiente = false;
+            await FocusCodigoInputAsync();
+        }
+        await base.OnAfterRenderAsync(firstRender);
     }
 
     private async Task CargarUbicacionesProductoAsync()
@@ -1623,7 +1800,9 @@
 
             stockProyectado.Add(new StockProyectadoRow
             {
-                Comprobante = $"PA.{recepAprob.Numebore}",
+                // Comprobante: mostramos el IDENLOTE (ej. "BR-19902-1") en lugar del Id,
+                // porque el lote es el identificador visible de la recepción en VB6.
+                Comprobante = recepAprob.Lote ?? string.Empty,
                 Referencia = $"{recepAprob.Proveedor} (Pend. Aprob.)",
                 Entra = recepAprob.CantPendiente,
                 Sale = 0m,
@@ -1704,7 +1883,7 @@
 
             stockProyectado.Add(new StockProyectadoRow
             {
-                Comprobante = $"PD.{pedido.NroPed:000000}",
+                Comprobante = $"NV.{pedido.NroPed}",
                 Referencia = pedido.Cliente,
                 Entra = 0m,
                 Sale = pedido.CantPendiente,
@@ -1966,6 +2145,7 @@
 
         if (Codint <= 0)
         {
+            codigoManual = string.Empty;
             return;
         }
 
@@ -1975,11 +2155,14 @@
             if (!responseProducto.Error)
             {
                 producto = responseProducto.Response;
+                // Sincronizar el input editable con el código del producto cargado.
+                codigoManual = producto?.Codigo ?? string.Empty;
             }
         }
         catch
         {
             producto = null;
+            codigoManual = string.Empty;
         }
     }
 
@@ -2112,6 +2295,208 @@
         NavigationManager.NavigateTo("/Stock-index");
     }
 
+    /// <summary>
+    /// Abre el modal de búsqueda de productos (MasterSearchModal) que soporta
+    /// búsqueda combinada con '+' (AND entre términos).
+    /// </summary>
+    private void AbrirBuscador()
+    {
+        mostrarBuscador = true;
+    }
+
+    /// <summary>
+    /// Se ejecuta cuando el usuario selecciona un producto del buscador.
+    /// Navega a /StockInfGeneral con el nuevo Codint, manteniendo el returnUrl
+    /// original para que el botón "Regresar" siga funcionando.
+    /// </summary>
+    /// <param name="master">Producto seleccionado en el buscador</param>
+    private void OnProductoBuscadoSelected(Master master)
+    {
+        if (master == null || master.Codint <= 0) return;
+
+        // Si es el mismo producto, no recargar
+        if (master.Codint == Codint)
+        {
+            // Aun siendo el mismo, enfocar el input
+            focoPendiente = true;
+            return;
+        }
+
+        // Marcar que después de cargar, el foco debe ir al input de código.
+        focoPendiente = true;
+
+        // Preservar returnUrl si existe
+        var url = !string.IsNullOrWhiteSpace(returnUrl)
+            ? $"/StockInfGeneral/{master.Codint}?returnUrl={Uri.EscapeDataString(returnUrl)}"
+            : $"/StockInfGeneral/{master.Codint}";
+
+        NavigationManager.NavigateTo(url, forceLoad: false);
+    }
+
+    /// <summary>
+    /// Se ejecuta al soltar una tecla en el input de Código (onkeyup).
+    /// Implementa un debounce de 200ms: si el usuario sigue escribiendo, se cancela
+    /// la búsqueda anterior y se reinicia la espera. Solo se ejecuta la búsqueda
+    /// cuando el usuario hace una pausa (supuestamente terminó de escribir).
+    /// El valor del input ya está sincronizado con codigoManual gracias a
+    /// @bind:event="oninput", por lo que aquí solo gestionamos el debounce.
+    /// </summary>
+    private void OnCodigoManualKeyUp(KeyboardEventArgs e)
+    {
+        // Cancelar búsqueda pendiente anterior.
+        debounceCts?.Cancel();
+        debounceCts = new CancellationTokenSource();
+        var token = debounceCts.Token;
+
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                // Esperar 200ms (dos décimas de segundo) antes de buscar.
+                // Si el usuario sigue escribiendo, se cancela y reinicia la espera.
+                await Task.Delay(200, token);
+
+                // Si no fue cancelado, ejecutar la búsqueda.
+                if (!token.IsCancellationRequested)
+                {
+                    await InvokeAsync(async () =>
+                    {
+                        await BuscarPorCodigoManualAsync();
+                    });
+                }
+            }
+            catch (TaskCanceledException)
+            {
+                // Ignorar: el debounce fue cancelado porque el usuario siguió escribiendo.
+            }
+        });
+    }
+
+    /// <summary>
+    /// Busca el producto por el código externo escrito manualmente.
+    /// Consulta el endpoint por-codigo para coincidencia exacta.
+    /// Si encuentra coincidencia:
+    ///   - Si el Codint es diferente al de la página actual, navega a la nueva URL.
+    ///   - Si el Codint es el mismo (ej: se borró y se volvió a escribir), recarga todos los datos.
+    /// Si no encuentra coincidencia, limpia todos los casilleros de información.
+    /// </summary>
+    private async Task BuscarPorCodigoManualAsync()
+    {
+        var codigo = (codigoManual ?? string.Empty).Trim();
+
+        if (string.IsNullOrWhiteSpace(codigo))
+        {
+            LimpiarInformacionProducto();
+            // No forzar foco ni cursor aquí: el usuario está editando el input
+            // y forzar el cursor al final provocaría que se "adelante".
+            return;
+        }
+
+        // Si tiene 3 caracteres o menos, no buscar todavía
+        if (codigo.Length <= 3)
+        {
+            return;
+        }
+
+        try
+        {
+            var response = await repository.Get<Master>($"api/master/por-codigo/{Uri.EscapeDataString(codigo)}");
+
+            if (!response.Error && response.Response != null)
+            {
+                var master = response.Response;
+
+                // No sobrescribir codigoManual con el código canónico del producto:
+                // hacerlo re-renderiza el input con un valor distinto al que el
+                // usuario está escribiendo y el navegador reposiciona el cursor.
+                // Se respeta exactamente lo que el usuario tipeó.
+
+                if (master.Codint == Codint)
+                {
+                    // Mismo Codint de la página actual: los datos pueden haber sido
+                    // limpiados previamente (ej: 123456 → 12345 → 123456).
+                    // Recargar toda la información sin navegar.
+                    isLoading = true;
+                    StateHasChanged();
+
+                    try
+                    {
+                        await RecargarTodoAsync();
+                    }
+                    finally
+                    {
+                        // Asegurar que el spinner se oculte siempre, incluso si
+                        // RecargarTodoAsync lanza una excepción o muestra un SweetAlert.
+                        isLoading = false;
+                        StateHasChanged();
+                    }
+
+                    // No forzar foco/cursor: el usuario sigue editando el input.
+                }
+                else
+                {
+                    // Codint diferente: navegar al nuevo producto preservando returnUrl.
+                    var url = !string.IsNullOrWhiteSpace(returnUrl)
+                        ? $"/StockInfGeneral/{master.Codint}?returnUrl={Uri.EscapeDataString(returnUrl)}"
+                        : $"/StockInfGeneral/{master.Codint}";
+
+                    NavigationManager.NavigateTo(url, forceLoad: false);
+                }
+            }
+            else
+            {
+                // No se encontró el código: limpiar toda la información
+                LimpiarInformacionProducto();
+                StateHasChanged();
+            }
+        }
+        catch
+        {
+            // En caso de error, asegurar que el spinner se oculte y limpiar.
+            isLoading = false;
+            LimpiarInformacionProducto();
+            // No forzar foco/cursor: el usuario sigue editando el input.
+        }
+    }
+
+    /// <summary>
+    /// Limpia todos los casilleros de información del producto cuando el código
+    /// ingresado no coincide con ningún producto existente.
+    /// </summary>
+    private void LimpiarInformacionProducto()
+    {
+        producto = null;
+        existencias = new List<ExistenciaRow>();
+        stockProyectado = new List<StockProyectadoRow>();
+        ubicacionesProducto = new List<UbicacionProductoDTO>();
+        repuestoSeleccionado = null;
+        SALSTO = 0;
+        TORECEP = 0;
+        TOPEDID = 0;
+        TOCOMPR = 0;
+        TOFABRI = 0;
+        TORESER = 0;
+        TORESER_TERC = 0;
+        STOTER = 0;
+       
+    }
+
+    /// <summary>
+    /// Coloca el foco y el cursor al final del input de código editable.
+    /// Se llama después de seleccionar un producto desde el buscador modal.
+    /// </summary>
+    private async Task FocusCodigoInputAsync()
+    {
+        try
+        {
+            await JSRuntime.InvokeVoidAsync("focusCodigoInput", inputCodigoRef);
+        }
+        catch
+        {
+            // Ignorar errores de foco
+        }
+    }
+
     private sealed class ExistenciaRow
     {
         public int Deposito { get; set; }
@@ -2130,5 +2515,72 @@
         public string Fecha { get; set; } = string.Empty;
         public string Observaciones { get; set; } = string.Empty;
         public string FechaOrden { get; set; } = string.Empty;
+    }
+
+    // ===================================================================
+    // MÉTODOS PARA ACCESOS DIRECTOS (ANOTADOR DE PEDIDOS)
+    // Replica la misma funcionalidad que /Stock-index: abre un modal con
+    // buscador de pedidos (PEDENCA), y al seleccionar uno navega al
+    // anotador de pedidos (/anotaciones-pedido/{nroPedido}).
+    // Al volver, reabre el modal automáticamente gracias al query param
+    // abrirAccesosDirectos=true.
+    // ===================================================================
+
+    private void AbrirAccesosDirectos()
+    {
+        mostrarModalAccesosDirectos = true;
+        filtroPedidosAccesosDirectos = string.Empty;
+        pedidosAccesosDirectos = new List<Pedenca>();
+    }
+
+    private void CerrarAccesosDirectos()
+    {
+        mostrarModalAccesosDirectos = false;
+        filtroPedidosAccesosDirectos = string.Empty;
+        pedidosAccesosDirectos = new List<Pedenca>();
+    }
+
+    private async Task BuscarPedidosAccesosDirectos()
+    {
+        try
+        {
+            cargandoPedidosAccesosDirectos = true;
+
+            var filtro = Uri.EscapeDataString(filtroPedidosAccesosDirectos ?? string.Empty);
+            var url = $"api/pedenca?page=1&recordsNumber=50&filter={filtro}";
+
+            var response = await repository.Get<List<Pedenca>>(url);
+            if (!response.Error && response.Response != null)
+            {
+                pedidosAccesosDirectos = response.Response;
+            }
+            else
+            {
+                pedidosAccesosDirectos = new List<Pedenca>();
+            }
+        }
+        catch (Exception ex)
+        {
+            await sweetAlertService.FireAsync("Error", $"Error al buscar pedidos: {ex.Message}", SweetAlertIcon.Error);
+            pedidosAccesosDirectos = new List<Pedenca>();
+        }
+        finally
+        {
+            cargandoPedidosAccesosDirectos = false;
+        }
+    }
+
+    private void VerAnotadorPedido(int nroPedido)
+    {
+        CerrarAccesosDirectos();
+
+        // Construir la URL de retorno a /StockInfGeneral preservando el Codint y el returnUrl original.
+        var urlVolver = $"/StockInfGeneral/{Codint}?abrirAccesosDirectos=true";
+        if (!string.IsNullOrWhiteSpace(returnUrl))
+        {
+            urlVolver += $"&returnUrl={Uri.EscapeDataString(returnUrl)}";
+        }
+        var encodedReturnUrl = Uri.EscapeDataString(urlVolver);
+        NavigationManager.NavigateTo($"/anotaciones-pedido/{nroPedido}?returnUrl={encodedReturnUrl}");
     }
 }

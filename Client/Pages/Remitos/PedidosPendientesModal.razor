@@ -10,6 +10,22 @@
     .blazored-modal {
         z-index: 2001 !important;
     }
+
+    .stock-dot {
+        display: inline-block;
+        width: 14px;
+        height: 14px;
+        border-radius: 50%;
+        box-shadow: 0 0 2px rgba(0,0,0,0.3);
+    }
+
+    .stock-dot-ok {
+        background-color: #28a745;
+    }
+
+    .stock-dot-fail {
+        background-color: #dc3545;
+    }
 </style>
 
 <div class="modal-content" style="z-index: 2002;">
@@ -18,6 +34,19 @@
             <i class="fas fa-clipboard-list"></i> Pedidos Pendientes de Entrega
         </h5>
     </div>
+
+    @* Encabezado con cliente y depósito seleccionados *@
+    <div class="px-3 pt-2 pb-1 bg-light border-bottom">
+        <div class="row">
+            <div class="col-md-6">
+                <strong>Cliente:</strong> <span class="text-primary">@NombreCliente</span>
+            </div>
+            <div class="col-md-6">
+                <strong>Depósito:</strong> <span class="text-primary">@NombreDeposito</span>
+            </div>
+        </div>
+    </div>
+
     <div class="modal-body" style="max-height: 600px; overflow-y: auto;">
         @if (pedidosPendientes == null || !pedidosPendientes.Any())
         {
@@ -36,6 +65,8 @@
                             <th>Fecha Entrega</th>
                             <th>Código</th>
                             <th>Descripción</th>
+                            <th class="text-end">Stock</th>
+                            <th class="text-center" title="Indica si el stock alcanza para cubrir lo pendiente o a remitir">¿Alcanza?</th>
                             <th class="text-end">Pendiente</th>
                             <th class="text-end">A Remitir</th>
                         </tr>
@@ -43,6 +74,11 @@
                     <tbody>
                         @foreach (var item in pedidosPendientes.OrderBy(p => p.NroPed).ThenBy(p => p.FeSolEnt))
                         {
+                            // Cantidad efectiva a evaluar: si el usuario ingresó "A Remitir" > 0
+                            // se compara contra esa; si no, se compara contra el pendiente.
+                            var cantidadEvaluar = item.CantidadARemitir > 0 ? item.CantidadARemitir : (item.CanSaldo ?? 0m);
+                            var stockAlcanza = item.StockDeposito >= cantidadEvaluar;
+
                             <tr>
                                 <td>@item.NroPed</td>
                                 <td>
@@ -58,6 +94,11 @@
                                 <td>@(item.FeSolEnt?.ToString("dd/MM/yyyy") ?? "-")</td>
                                 <td>@item.CodiExt</td>
                                 <td>@item.Descrip</td>
+                                <td class="text-end">@item.StockDeposito.ToString("N2")</td>
+                                <td class="text-center">
+                                    <span class="stock-dot @(stockAlcanza ? "stock-dot-ok" : "stock-dot-fail")"
+                                          title="@(stockAlcanza ? "El stock alcanza" : "El stock NO alcanza")"></span>
+                                </td>
                                 <td class="text-end">@item.CanSaldo</td>
                                 <td class="text-end">
                                     <input type="number" 
@@ -66,7 +107,8 @@
                                            min="0" 
                                            max="@item.CanSaldo" 
                                            step="0.01"
-                                           @bind="item.CantidadARemitir" />
+                                           @bind="item.CantidadARemitir"
+                                           @bind:event="oninput" />
                                 </td>
                             </tr>
                         }
@@ -89,6 +131,17 @@
     [CascadingParameter] BlazoredModalInstance Modal { get; set; } = default!;
     [Parameter] public List<PeddetaConCantidad> pedidosPendientes { get; set; } = new();
 
+    /// <summary>
+    /// Nombre del cliente seleccionado, mostrado en el encabezado del modal.
+    /// </summary>
+    [Parameter] public string NombreCliente { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Nombre del depósito seleccionado, mostrado en el encabezado del modal.
+    /// El stock de cada fila corresponde a este depósito.
+    /// </summary>
+    [Parameter] public string NombreDeposito { get; set; } = string.Empty;
+
     private void Cancelar()
     {
         Modal.CancelAsync();
@@ -105,10 +158,15 @@
     }
 
     /// <summary>
-    /// Clase auxiliar para manejar la cantidad a remitir
+    /// Clase auxiliar para manejar la cantidad a remitir y el stock del depósito.
+    /// Hereda de Peddeta para conservar todos los campos del pedido original.
     /// </summary>
     public class PeddetaConCantidad : Peddeta
     {
+        /// <summary>Cantidad a remitir ingresada por el usuario.</summary>
         public decimal CantidadARemitir { get; set; } = 0;
+
+        /// <summary>Stock disponible del producto en el depósito seleccionado.</summary>
+        public decimal StockDeposito { get; set; } = 0;
     }
 }

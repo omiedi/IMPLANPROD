@@ -14,5 +14,6 @@ namespace IMPLANPROD.Shared.DTOs
         public decimal CantidadNominal { get; set; }
         public int Deposito { get; set; }
         public string NombreDeposito { get; set; } = "";
+        public string? Observa { get; set; }
     }
 }

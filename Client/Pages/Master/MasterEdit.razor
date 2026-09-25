@@ -20,7 +20,10 @@ else if (master is null)
 }
 else
 {
-    <MasterForm @ref="masterForm" Master="master" OnValidSubmit="Edit" ReturnAction="Return" IsEdit="true" />
+    <MasterForm @ref="masterForm" Master="master" OnValidSubmit="Edit" ReturnAction="Return" IsEdit="true"
+               VolverImplosion="@(volverImplosion ?? false)"
+               CodintOrigenImplosion="@(codintOrigen ?? 0)"
+               AbrirImplosionAutomatico="@(abrirImplosion ?? false)" />
 }
 
 @code {
@@ -31,15 +34,53 @@ else
     [Parameter]
     public int Id { get; set; }
 
+    // Query params para el flujo de implosión
+    [Parameter]
+    [SupplyParameterFromQuery]
+    public bool? volverImplosion { get; set; }
+
+    [Parameter]
+    [SupplyParameterFromQuery]
+    public int? codintOrigen { get; set; }
+
+    [Parameter]
+    [SupplyParameterFromQuery]
+    public bool? abrirImplosion { get; set; }
+
     [CascadingParameter]
     BlazoredModalInstance BlazoredModal { get; set; } = default!;
 
-    // Validar que el usuario tenga permiso para acceder a esta página antes de mostrar el contenido
+    // Track del último Id cargado para detectar cambios de parámetro de ruta
+    // cuando se navega de /master/edit/{Id1} a /master/edit/{Id2} sin salir de la página.
+    private int _ultimoIdCargado = 0;
+
+    // Validar acceso solo la primera vez
     protected override async Task OnInitializedAsync()
     {
         await PageAccess.RequiereAccesoAsync("/master/edit/{Id}");
         validando = false;
-        
+        await CargarMasterAsync();
+    }
+
+    /// <summary>
+    /// Se ejecuta cuando cambian los parámetros (incluyendo el Id de la ruta).
+    /// Si el Id cambió, recarga el producto. Esto es necesario porque Blazor
+    /// reutiliza la misma instancia de la página cuando solo cambia el parámetro de ruta.
+    /// </summary>
+    protected override async Task OnParametersSetAsync()
+    {
+        // Solo recargar si el Id cambió y ya pasamos la validación inicial
+        if (Id != _ultimoIdCargado && !validando)
+        {
+            await CargarMasterAsync();
+        }
+    }
+
+    /// <summary>
+    /// Carga el producto Master desde el API por su Id.
+    /// </summary>
+    private async Task CargarMasterAsync()
+    {
         var responseHttp = await repository.Get<Master>($"/api/master/{Id}");
         if (responseHttp.Error)
         {
@@ -54,6 +95,7 @@ else
             return;
         }
         master = responseHttp.Response;
+        _ultimoIdCargado = Id;
     }
 
     private async Task Edit()

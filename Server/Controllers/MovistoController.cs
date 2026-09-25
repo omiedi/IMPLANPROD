@@ -8,6 +8,7 @@ using IMPLANPROD.Shared.Entities;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using System.Data;
 using System.Security.Claims;
 
 namespace IMPLANPROD.Server.Controllers
@@ -20,13 +21,15 @@ namespace IMPLANPROD.Server.Controllers
         private readonly ILogger<MasterController> _logger;
         private readonly IUsuarioFlexoftService _UsuarioFlexoftService;
         private readonly ICodiempresa _Codiempresa;
+        private readonly IMoviStockService _moviStockService;
 
-        public MovistoController(DataContext context, ILogger<MasterController> logger, IUsuarioFlexoftService UsuarioFlexoftService, ICodiempresa Codiempresa)
+        public MovistoController(DataContext context, ILogger<MasterController> logger, IUsuarioFlexoftService UsuarioFlexoftService, ICodiempresa Codiempresa, IMoviStockService moviStockService)
         {
             _context = context;
             _logger = logger;
             _UsuarioFlexoftService = UsuarioFlexoftService;
             _Codiempresa = Codiempresa;
+            _moviStockService = moviStockService;
         }
 
         [HttpPost("movistock")]
@@ -619,6 +622,631 @@ namespace IMPLANPROD.Server.Controllers
             catch (Exception ex)
             {
                 return StatusCode(500, $"Error al anular la transferencia: {ex.Message}");
+            }
+        }
+
+        // ===================================================================
+        // PRODUCCIÓN PROPIA
+        // ===================================================================
+        // Estos endpoints alimentan la pantalla /propia-produccion.
+        // En VB6 la producción propia se identificaba en MOVISTO con:
+        //   - CodiMovi = 'pf' (producto fabricado / ingreso de producción)
+        //   - CodiMovi = 'cf' (consumo de fabricación / salida de componentes)
+        // El documento DoPriLar de las 'pf' tiene formato "OF-XXXX" (orden de fabricación).
+        // El campo DoSecLar de las 'cf' vincula el consumo con la producción: "pf-XXXX".
+        // ===================================================================
+
+        /// <summary>
+        /// Obtiene la lista de producciones propias (MOVISTO con CodiMovi = 'pf' y
+        /// DoPriLar LIKE 'OF-%'), ordenadas por número de documento descendente.
+        /// Incluye registros anulados (CantIngre = 0) para que queden visibles en la lista.
+        /// Cada registro representa un producto terminado fabricado e ingresado a stock.
+        /// Soporta paginación y filtros:
+        ///   - Filter: filtro combinado por código (Cod_Exte) y descripción (Descrip) con '+'.
+        ///   - FilterDocumento: filtro por documento (DoPriLar).
+        /// </summary>
+        [HttpGet("propia-produccion")]
+        public async Task<ActionResult<List<PropiaProduccionDTO>>> GetPropiaProduccionAsync(
+            [FromQuery] PaginationDTO pagination,
+            [FromQuery] string? filterDocumento)
+        {
+            try
+            {
+                if (pagination.RecordsNumber <= 0)
+                {
+                    return BadRequest("El número de registros por página debe ser mayor que cero.");
+                }
+
+                // Condición SQL base:
+                // SELECT * FROM MOVISTO WHERE codimovi = 'pf' AND doprilar LIKE 'OF-%'
+                // Se quita la condición CANTINGRE > 0 para incluir las anuladas
+                // (las anuladas tienen CantIngre = 0 pero siguen siendo 'pf' con 'OF-XXXX').
+                var queryable = _context.Movistos
+                    .AsNoTracking()
+                    .Where(m => m.CodiMovi == "pf"
+                             && m.DoPriLar != null && m.DoPriLar.StartsWith("OF-"));
+
+                // Filtro combinado por código y/o descripción (mismo patrón que /Stock-index).
+                // Cada término separado por '+' actúa como un AND.
+                if (!string.IsNullOrWhiteSpace(pagination.Filter))
+                {
+                    var terms = pagination.Filter
+                        .Split('+', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries)
+                        .Select(t => t.Trim().ToLower())
+                        .Where(t => !string.IsNullOrWhiteSpace(t))
+                        .ToList();
+
+                    foreach (var term in terms)
+                    {
+                        var like = $"%{term}%";
+                        queryable = queryable.Where(m =>
+                            EF.Functions.Like((m.Cod_Exte ?? string.Empty).ToLower(), like) ||
+                            EF.Functions.Like((m.Descrip ?? string.Empty).ToLower(), like));
+                    }
+                }
+
+                // Filtro por documento (DoPriLar) — coincide parcial (LIKE %...%).
+                if (!string.IsNullOrWhiteSpace(filterDocumento))
+                {
+                    var likeDoc = $"%{filterDocumento.Trim().ToLower()}%";
+                    queryable = queryable.Where(m =>
+                        EF.Functions.Like((m.DoPriLar ?? string.Empty).ToLower(), likeDoc));
+                }
+
+                // Traer todos los registros filtrados para ordenar por número de documento
+                // (no se puede ordenar por SUBSTRING+TRY_CAST en EF Core de forma eficiente).
+                var todos = await queryable
+                    .Select(m => new PropiaProduccionDTO
+                    {
+                        FechMov = m.FechMov,
+                        DoPriLar = m.DoPriLar,
+                        Cod_Exte = m.Cod_Exte,
+                        Descrip = m.Descrip,
+                        CantIngre = m.CantIngre
+                    })
+                    .ToListAsync();
+
+                // Ordenar por número de documento descendente (extraído de DoPriLar "OF-XXXX").
+                // Los registros anulados tienen CantIngre = 0 pero mantienen su DoPriLar,
+                // por eso quedan visibles en la lista.
+                var ordenados = todos
+                    .OrderByDescending(p =>
+                    {
+                        if (p.DoPriLar != null && p.DoPriLar.StartsWith("OF-")
+                            && int.TryParse(p.DoPriLar.Substring(3), out int nro))
+                        {
+                            return nro;
+                        }
+                        return 0;
+                    })
+                    .ToList();
+
+                // Aplicar paginación en memoria después de ordenar por número de documento.
+                var resultado = ordenados
+                    .Skip((pagination.Page - 1) * pagination.RecordsNumber)
+                    .Take(pagination.RecordsNumber)
+                    .ToList();
+
+                return Ok(resultado);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error al obtener producción propia");
+                return StatusCode(500, $"Error al obtener producción propia: {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// Calcula el total de páginas de producciones propias según los mismos filtros
+        /// del endpoint de listado (Filter + FilterDocumento).
+        /// </summary>
+        [HttpGet("propia-produccion/totalPages")]
+        public async Task<ActionResult<int>> GetPropiaProduccionPagesAsync(
+            [FromQuery] PaginationDTO pagination,
+            [FromQuery] string? filterDocumento)
+        {
+            try
+            {
+                if (pagination.RecordsNumber <= 0)
+                {
+                    return BadRequest("El número de registros por página debe ser mayor que cero.");
+                }
+
+                // Misma condición base que el endpoint de listado: incluye anulados (sin CantIngre > 0).
+                var queryable = _context.Movistos
+                    .AsNoTracking()
+                    .Where(m => m.CodiMovi == "pf"
+                             && m.DoPriLar != null && m.DoPriLar.StartsWith("OF-"));
+
+                // Replicar exactamente la lógica de filtros del endpoint de listado
+                if (!string.IsNullOrWhiteSpace(pagination.Filter))
+                {
+                    var terms = pagination.Filter
+                        .Split('+', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries)
+                        .Select(t => t.Trim().ToLower())
+                        .Where(t => !string.IsNullOrWhiteSpace(t))
+                        .ToList();
+
+                    foreach (var term in terms)
+                    {
+                        var like = $"%{term}%";
+                        queryable = queryable.Where(m =>
+                            EF.Functions.Like((m.Cod_Exte ?? string.Empty).ToLower(), like) ||
+                            EF.Functions.Like((m.Descrip ?? string.Empty).ToLower(), like));
+                    }
+                }
+
+                if (!string.IsNullOrWhiteSpace(filterDocumento))
+                {
+                    var likeDoc = $"%{filterDocumento.Trim().ToLower()}%";
+                    queryable = queryable.Where(m =>
+                        EF.Functions.Like((m.DoPriLar ?? string.Empty).ToLower(), likeDoc));
+                }
+
+                var count = await queryable.CountAsync();
+                var totalPages = count == 0 ? 1 : (int)Math.Ceiling(count / (double)pagination.RecordsNumber);
+
+                return Ok(totalPages);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error al calcular total de páginas de producción propia");
+                return StatusCode(500, $"Error al calcular total de páginas: {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// Obtiene TODAS las producciones propias sin paginar.
+        /// Se usa para el botón Imprimir/Exp.Excel de la pantalla /propia-produccion,
+        /// que necesita todos los registros filtrados (sin paginación) para el reporte.
+        /// </summary>
+        [HttpGet("propia-produccion/todos")]
+        public async Task<ActionResult<List<PropiaProduccionDTO>>> GetPropiaProduccionTodosAsync(
+            [FromQuery] string? filter,
+            [FromQuery] string? filterDocumento)
+        {
+            try
+            {
+                // Misma condición base que el endpoint de listado: incluye anulados.
+                var queryable = _context.Movistos
+                    .AsNoTracking()
+                    .Where(m => m.CodiMovi == "pf"
+                             && m.DoPriLar != null && m.DoPriLar.StartsWith("OF-"));
+
+                // Replicar la misma lógica de filtros del endpoint paginado
+                if (!string.IsNullOrWhiteSpace(filter))
+                {
+                    var terms = filter
+                        .Split('+', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries)
+                        .Select(t => t.Trim().ToLower())
+                        .Where(t => !string.IsNullOrWhiteSpace(t))
+                        .ToList();
+
+                    foreach (var term in terms)
+                    {
+                        var like = $"%{term}%";
+                        queryable = queryable.Where(m =>
+                            EF.Functions.Like((m.Cod_Exte ?? string.Empty).ToLower(), like) ||
+                            EF.Functions.Like((m.Descrip ?? string.Empty).ToLower(), like));
+                    }
+                }
+
+                if (!string.IsNullOrWhiteSpace(filterDocumento))
+                {
+                    var likeDoc = $"%{filterDocumento.Trim().ToLower()}%";
+                    queryable = queryable.Where(m =>
+                        EF.Functions.Like((m.DoPriLar ?? string.Empty).ToLower(), likeDoc));
+                }
+
+                // Traer todos los registros y ordenar por número de documento descendente
+                // (igual que el endpoint de listado).
+                var todos = await queryable
+                    .Select(m => new PropiaProduccionDTO
+                    {
+                        FechMov = m.FechMov,
+                        DoPriLar = m.DoPriLar,
+                        Cod_Exte = m.Cod_Exte,
+                        Descrip = m.Descrip,
+                        CantIngre = m.CantIngre
+                    })
+                    .ToListAsync();
+
+                var resultado = todos
+                    .OrderByDescending(p =>
+                    {
+                        if (p.DoPriLar != null && p.DoPriLar.StartsWith("OF-")
+                            && int.TryParse(p.DoPriLar.Substring(3), out int nro))
+                        {
+                            return nro;
+                        }
+                        return 0;
+                    })
+                    .ToList();
+
+                return Ok(resultado);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error al obtener todas las producciones propias");
+                return StatusCode(500, $"Error al obtener producciones propias: {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// Obtiene los consumos de componentes de una producción propia específica.
+        /// Busca en MOVISTO los registros con CantSalid > 0, CodiMovi = 'cf' y
+        /// DoSecLar igual al identificador de la producción (ej: 'pf-5604').
+        /// Cada registro representa un componente consumido para fabricar el producto terminado.
+        /// </summary>
+        /// <param name="doseclar">Identificador de la producción en DoSecLar (ej: 'pf-5604')</param>
+        [HttpGet("consumos-produccion/{doseclar}")]
+        public async Task<ActionResult<List<ConsumoProduccionDTO>>> GetConsumosProduccionAsync(string doseclar)
+        {
+            try
+            {
+                if (string.IsNullOrWhiteSpace(doseclar))
+                {
+                    return BadRequest("El identificador de la producción es obligatorio");
+                }
+
+                // Condición SQL equivalente:
+                // SELECT * FROM MOVISTO WHERE cantsalid > 0
+                //   AND doseclar = 'pf-5604' AND codimovi = 'cf' ORDER BY FECHMOV DESC
+                var query = _context.Movistos
+                    .AsNoTracking()
+                    .Where(m => m.CantSalid.HasValue && m.CantSalid.Value > 0
+                             && m.DoSecLar == doseclar
+                             && m.CodiMovi == "cf");
+
+                var resultado = await query
+                    .OrderByDescending(m => m.FechMov)
+                    .Select(m => new ConsumoProduccionDTO
+                    {
+                        FechMov = m.FechMov,
+                        Cod_Exte = m.Cod_Exte,
+                        Descrip = m.Descrip,
+                        CantSalid = m.CantSalid
+                    })
+                    .ToListAsync();
+
+                return Ok(resultado);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error al obtener consumos de producción {DoSecLar}", doseclar);
+                return StatusCode(500, $"Error al obtener consumos de producción: {ex.Message}");
+            }
+        }
+
+        // ===================================================================
+        // GENERAR PRODUCCIÓN PROPIA (ALTA + CONSUMO)
+        // ===================================================================
+        // A diferencia del circuito de órdenes de fabricación, este endpoint
+        // genera directamente los movimientos de stock en MOVISTO:
+        //   1. Un movimiento "PF" (producto fabricado) con CantIngre > 0
+        //      que ingresa el producto terminado al depósito de entrada.
+        //   2. N movimientos "CF" (consumo de fabricación) con CantSalid > 0
+        //      que descuentan los componentes del depósito de consumo.
+        //
+        // La numeración del documento (OF-XXXX) se obtiene con:
+        //   SELECT MAX(TRY_CAST(SUBSTRING(DOPRILAR,4,LEN(DOPRILAR)) AS INT))
+        //   FROM MOVISTO WHERE DOPRILAR LIKE 'OF-%' AND DOPRILAR NOT LIKE '%-1'
+        // y se incrementa en 1.
+        //
+        // DoPriLar = "OF-XXXX" (documento primario del ingreso)
+        // DoSecLar = "PF-XXXX" (documento secundario, vincula con los consumos CF)
+        // ===================================================================
+
+        /// <summary>
+        /// Genera el alta y consumo de una producción propia en una sola transacción.
+        /// Equivalente al cierre de una orden de fabricación, pero sin orden previa.
+        /// </summary>
+        [HttpPost("generar-propia-produccion")]
+        public async Task<ActionResult> GenerarPropiaProduccionAsync([FromBody] GenerarPropiaProduccionDTO dto)
+        {
+            // Validaciones básicas
+            if (dto == null)
+            {
+                return BadRequest("No se recibieron datos.");
+            }
+
+            if (dto.Cod_Inte <= 0)
+            {
+                return BadRequest("Debe seleccionar un producto a fabricar.");
+            }
+
+            if (dto.Cantidad == null || dto.Cantidad <= 0)
+            {
+                return BadRequest("La cantidad a fabricar debe ser mayor a 0.");
+            }
+
+            if (dto.DepositoEntrada <= 0)
+            {
+                return BadRequest("Debe seleccionar un depósito de entrada.");
+            }
+
+            if (dto.DepositoConsumo <= 0)
+            {
+                return BadRequest("Debe seleccionar un depósito de consumo.");
+            }
+
+            if (dto.Componentes == null || !dto.Componentes.Any())
+            {
+                return BadRequest("No hay componentes para consumir. Debe existir una fórmula.");
+            }
+
+            // Iniciar transacción: todo o nada. Si falla el ingreso o cualquier consumo, se revierte todo.
+            await using var transaction = await _context.Database.BeginTransactionAsync(IsolationLevel.ReadCommitted);
+
+            try
+            {
+                // ---------------------------------------------------------------
+                // 1. Calcular NRO& (numeración del documento OF-XXXX)
+                // ---------------------------------------------------------------
+                // SQL equivalente:
+                //   SELECT MAX(TRY_CAST(SUBSTRING(DOPRILAR,4,LEN(DOPRILAR)) AS INT))
+                //   FROM MOVISTO WHERE DOPRILAR LIKE 'OF-%' AND DOPRILAR NOT LIKE '%-1'
+                //
+                // En EF no podemos usar TRY_CAST directamente, pero podemos
+                // traer los candidatos y parsear en memoria (la cantidad de
+                // registros con DOPRILAR LIKE 'OF-%' es acotada).
+                // ---------------------------------------------------------------
+                var candidatos = await _context.Movistos
+                    .AsNoTracking()
+                    .Where(m => m.DoPriLar != null
+                             && m.DoPriLar.StartsWith("OF-")
+                             && !m.DoPriLar.EndsWith("-1"))
+                    .Select(m => m.DoPriLar!)
+                    .ToListAsync();
+
+                int nro = 1;
+                foreach (var dop in candidatos)
+                {
+                    // Quitar el prefijo "OF-" y parsear el resto como entero
+                    var resto = dop.Substring(3);
+                    if (int.TryParse(resto, out int valor) && valor >= nro)
+                    {
+                        nro = valor + 1;
+                    }
+                }
+
+                string dopri = $"OF-{nro}";
+                string dosec = $"PF-{nro}";
+
+                // Referencia: si está vacía, usar "Informe de Produccion" (regla VB6)
+                string refe = string.IsNullOrWhiteSpace(dto.Referencia)
+                    ? "Informe de Produccion"
+                    : dto.Referencia.Trim();
+
+                // ---------------------------------------------------------------
+                // 2. Registrar el ALTA del producto terminado (movimiento PF)
+                // ---------------------------------------------------------------
+                // Equivalente VB6:
+                //   CMOV$ = "PF"
+                //   DOPRI$ = "OF-" + NRO
+                //   DOSEC$ = "PF-" + NRO
+                //   Call MOVISTOK(FECHA%, CICONJ%, LOTE$, CMOV$, DOPRI$, DOPRI$,
+                //                 DOSEC$, DOSEC$, REFE$, NUORIT%=0, VUNI#=0,
+                //                 MONEII%=1, NC%=0, DEPX%=DepositoEntrada, CANTI)
+                // ---------------------------------------------------------------
+                var movimientoAlta = new MoviStockDTO
+                {
+                    Fecha = dto.Fecha,
+                    CodigoInterno = dto.Cod_Inte,
+                    Lote = string.Empty, // LOTE$ = ""
+                    CodigoMovimiento = "PF",
+                    DocumentoPrimarioLargo = dopri,
+                    DocumentoPrimarioCorto = dopri,
+                    DocumentoSecundarioLargo = dosec,
+                    DocumentoSecundarioCorto = dosec,
+                    Referencia = refe,
+                    NumeroOrdenItem = 0, // NUORIT% = 0
+                    ValorUnitario = 0,   // VUNI# = 0
+                    Moneda = 1,          // MONEII% = 1
+                    NumeroCliente = 0,   // NC% = 0
+                    Deposito = dto.DepositoEntrada,
+                    Cantidad = dto.Cantidad.Value // Positivo → CantIngre > 0
+                };
+
+                var resultadoAlta = await _moviStockService.RegistrarMovimientoAsync(movimientoAlta, User);
+                if (resultadoAlta is BadRequestObjectResult badAlta)
+                {
+                    await transaction.RollbackAsync();
+                    var msg = badAlta.Value?.ToString() ?? "Error al registrar el alta del producto terminado.";
+                    return BadRequest(msg);
+                }
+
+                // Capturar el ID del movimiento PF generado para vincular los consumos CF
+                // (mismo patrón que el cierre de OF, usando IdenMovi).
+                int? idMovimientoPF = null;
+                if (resultadoAlta is OkObjectResult okAlta && okAlta.Value != null)
+                {
+                    var resultDict = okAlta.Value as dynamic;
+                    idMovimientoPF = resultDict?.Id;
+                }
+
+                _logger.LogInformation($"Alta de producción propia generada: {dopri} (ID={idMovimientoPF})");
+
+                // ---------------------------------------------------------------
+                // 3. Registrar el CONSUMO de cada componente (movimientos CF)
+                // ---------------------------------------------------------------
+                // Equivalente VB6:
+                //   For each componente:
+                //     CMOV$ = "CF"
+                //     REFE$ = "CONSUMO S/DESP. " + CODCON$  (CODCON$ = código externo del PT)
+                //     DEPX% = DepositoConsumo
+                //     NUORIT% = NUORIT% + 1
+                //     Cantidad = -CantidadAUtilizar (negativo → CantSalid > 0)
+                // ---------------------------------------------------------------
+                // Obtener el código externo del producto terminado para la referencia
+                var productoTerminado = await _context.masters
+                    .AsNoTracking()
+                    .Where(m => m.Codint == dto.Cod_Inte)
+                    .Select(m => m.Codigo)
+                    .FirstOrDefaultAsync();
+                string codCon = productoTerminado ?? string.Empty;
+
+                int nuorit = 0;
+                foreach (var componente in dto.Componentes)
+                {
+                    if (componente == null) continue;
+                    if (componente.CodIElem <= 0) continue;
+                    if (componente.CantidadAUtilizar <= 0) continue;
+
+                    nuorit++; // NUORIT% = NUORIT% + 1
+
+                    // Referencia del consumo: "CONSUMO S/DESP. " + código externo del PT
+                    string refeConsumo = $"CONSUMO S/DESP. {codCon}";
+
+                    var movimientoConsumo = new MoviStockDTO
+                    {
+                        Fecha = dto.Fecha,
+                        CodigoInterno = componente.CodIElem,
+                        Lote = string.Empty,
+                        CodigoMovimiento = "CF",
+                        DocumentoPrimarioLargo = dopri,
+                        DocumentoPrimarioCorto = dopri,
+                        DocumentoSecundarioLargo = dosec,
+                        DocumentoSecundarioCorto = dosec,
+                        Referencia = refeConsumo,
+                        NumeroOrdenItem = nuorit,
+                        ValorUnitario = 0,
+                        Moneda = 1,
+                        NumeroCliente = 0,
+                        Deposito = dto.DepositoConsumo,
+                        Cantidad = -Math.Abs(componente.CantidadAUtilizar), // Negativo → CantSalid > 0
+                        // Vinculación con el movimiento PF (mismo patrón que el cierre de OF)
+                        IdentificadorMovimiento = idMovimientoPF.HasValue ? idMovimientoPF.Value.ToString() : null
+                    };
+
+                    var resultadoConsumo = await _moviStockService.RegistrarMovimientoAsync(movimientoConsumo, User);
+                    if (resultadoConsumo is BadRequestObjectResult badConsumo)
+                    {
+                        await transaction.RollbackAsync();
+                        var msg = badConsumo.Value?.ToString() ?? $"Error al consumir el componente {componente.CodXElem}.";
+                        return BadRequest(msg);
+                    }
+
+                    _logger.LogInformation($"Consumo registrado: {componente.CodXElem} x {componente.CantidadAUtilizar} ({dopri})");
+                }
+
+                // Confirmar la transacción: tanto el alta como todos los consumos quedan grabados
+                await transaction.CommitAsync();
+
+                _logger.LogInformation($"Producción propia {dopri} generada exitosamente. Alta + {nuorit} consumos.");
+
+                return Ok(new
+                {
+                    Documento = dopri,
+                    DocumentoSecundario = dosec,
+                    Cantidad = dto.Cantidad.Value,
+                    Consumos = nuorit
+                });
+            }
+            catch (Exception ex)
+            {
+                await transaction.RollbackAsync();
+                _logger.LogError(ex, "Error al generar producción propia");
+                return StatusCode(500, $"Error al generar producción propia: {ex.Message}");
+            }
+        }
+
+        // ===================================================================
+        // ANULAR PRODUCCIÓN PROPIA
+        // ===================================================================
+        // Anula un movimiento de ingreso (PF) y todos sus consumos (CF)
+        // asociados, poniendo en 0 los campos:
+        //   - CantIngre
+        //   - CantSalid
+        //   - PESOKG
+        //   - METROS
+        //
+        // La vinculación entre el PF y sus CF se hace por DoPriLar (OF-XXXX),
+        // ya que ambos comparten el mismo documento primario.
+        // ===================================================================
+
+        /// <summary>
+        /// Anula una producción propia identificada por su documento (OF-XXXX).
+        /// Pone en 0 las cantidades del movimiento de ingreso (PF) y de todos
+        /// los consumos (CF) asociados.
+        /// </summary>
+        /// <param name="documento">Documento primario de la producción (ej: "OF-5604")</param>
+        [HttpPut("anular-propia-produccion/{documento}")]
+        public async Task<ActionResult> AnularPropiaProduccionAsync(string documento)
+        {
+            if (string.IsNullOrWhiteSpace(documento))
+            {
+                return BadRequest("El documento es obligatorio.");
+            }
+
+            await using var transaction = await _context.Database.BeginTransactionAsync(IsolationLevel.ReadCommitted);
+
+            try
+            {
+                // 1. Localizar el movimiento de ingreso (PF) por DoPriLar
+                var movimientoPF = await _context.Movistos
+                    .AsNoTracking()
+                    .FirstOrDefaultAsync(m => m.DoPriLar == documento && m.CodiMovi == "PF");
+
+                if (movimientoPF == null)
+                {
+                    return NotFound($"No se encontró el movimiento de producción con documento {documento}.");
+                }
+
+                if ((movimientoPF.CantIngre ?? 0) <= 0)
+                {
+                    return BadRequest("El movimiento ya está anulado (cantidad en 0).");
+                }
+
+                // 2. Anular el movimiento de ingreso (PF): CantIngre=0, CantSalid=0, PESOKG=null, METROS=null
+                //    y ReferCor = "Anul. " + ReferCor (mismo patrón que el anular-cierre de OF).
+                // Se usa una expresión lambda en SetProperty para concatenar el prefijo
+                // con el valor actual de ReferCor en SQL (funciona para cualquier texto existente).
+                var filasPF = await _context.Movistos
+                    .Where(m => m.DoPriLar == documento && m.CodiMovi == "PF")
+                    .ExecuteUpdateAsync(s => s
+                        .SetProperty(m => m.ReferCor, m => "Anul. " + (m.ReferCor ?? ""))
+                        .SetProperty(m => m.CantIngre, 0m)
+                        .SetProperty(m => m.CantSalid, 0m)
+                        .SetProperty(m => m.PESOKG, (decimal?)null)
+                        .SetProperty(m => m.METROS, (decimal?)null));
+
+                if (filasPF == 0)
+                {
+                    await transaction.RollbackAsync();
+                    return Conflict("No se pudo anular el movimiento de ingreso.");
+                }
+
+                _logger.LogInformation($"Movimiento PF {documento} anulado (cantidades en 0).");
+
+                // 3. Anular todos los consumos (CF) asociados al mismo documento
+                // Los consumos CF comparten el DoPriLar con el movimiento PF.
+                // También se antepone "Anul. " al ReferCor de cada consumo (mismo patrón que el PF).
+                var filasCF = await _context.Movistos
+                    .Where(m => m.DoPriLar == documento && m.CodiMovi == "CF")
+                    .ExecuteUpdateAsync(s => s
+                        .SetProperty(m => m.ReferCor, m => "Anul. " + (m.ReferCor ?? ""))
+                        .SetProperty(m => m.CantIngre, 0m)
+                        .SetProperty(m => m.CantSalid, 0m)
+                        .SetProperty(m => m.PESOKG, (decimal?)null)
+                        .SetProperty(m => m.METROS, (decimal?)null));
+
+                _logger.LogInformation($"Anulados {filasCF} movimientos CF asociados a {documento}.");
+
+                await transaction.CommitAsync();
+
+                return Ok(new
+                {
+                    Documento = documento,
+                    MovimientoPFAnulado = filasPF,
+                    ConsumosCFAnulados = filasCF
+                });
+            }
+            catch (Exception ex)
+            {
+                await transaction.RollbackAsync();
+                _logger.LogError(ex, "Error al anular producción propia {Documento}", documento);
+                return StatusCode(500, $"Error al anular producción propia: {ex.Message}");
             }
         }
     }

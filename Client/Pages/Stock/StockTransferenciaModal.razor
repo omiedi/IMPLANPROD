@@ -7,34 +7,29 @@
 @if (Visible)
 {
     <div class="modal fade show" style="display: block" tabindex="-1">
-        <div class="modal-dialog @(modoTransferencia == "multiple" ? "modal-xl" : "")">
+        <div class="modal-dialog @((modoTransferencia == "multiple" || modoTransferencia == "transformacion") ? "modal-xl" : "")">
             <div class="modal-content">
                 <div class="modal-header bg-info text-white">
                     <h5 class="modal-title">Transferencia de Stock @(Repuesto != null ? $"- {Repuesto.Codigo}" : "")</h5>
                     <button type="button" class="btn-close btn-close-white" @onclick="OnClose"></button>
                 </div>
                 <div class="modal-body">
-                    @if (Repuesto == null)
+                    @if (modosDisponibles.Count > 1)
                     {
                         <div class="mb-3">
                             <label class="form-label fw-bold">Modo de Transferencia</label>
-                            <div class="d-flex gap-3">
-                                <div class="form-check">
-                                    <input class="form-check-input" type="radio" name="modoTransferencia" id="modoUnico"
-                                           checked="@(modoTransferencia == "unico")"
-                                           @onchange="@(() => CambiarModo("unico"))" />
-                                    <label class="form-check-label" for="modoUnico">
-                                        Item único
-                                    </label>
-                                </div>
-                                <div class="form-check">
-                                    <input class="form-check-input" type="radio" name="modoTransferencia" id="modoMultiple"
-                                           checked="@(modoTransferencia == "multiple")"
-                                           @onchange="@(() => CambiarModo("multiple"))" />
-                                    <label class="form-check-label" for="modoMultiple">
-                                        Transf. Multiple
-                                    </label>
-                                </div>
+                            <div class="d-flex gap-3 flex-wrap">
+                                @foreach (var modo in modosDisponibles)
+                                {
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="radio" name="modoTransferencia" id="@($"modo{modo}")"
+                                               checked="@(modoTransferencia == modo)"
+                                               @onchange="@(() => CambiarModo(modo))" />
+                                        <label class="form-check-label" for="@($"modo{modo}")">
+                                            @ObtenerEtiquetaModo(modo)
+                                        </label>
+                                    </div>
+                                }
                             </div>
                         </div>
                     }
@@ -117,7 +112,7 @@
                             </div>
                         </EditForm>
                     }
-                    else
+                    else if (modoTransferencia == "multiple")
                     {
                         <EditForm Model="transferenciaMultiple" OnValidSubmit="OnValidSubmitMultiple">
                             <DataAnnotationsValidator />
@@ -237,6 +232,125 @@
                             </div>
                         </EditForm>
                     }
+                    else if (modoTransferencia == "transformacion")
+                    {
+                        <EditForm Model="transferenciaTransformacion" OnValidSubmit="OnValidSubmitTransformacion">
+                            <DataAnnotationsValidator />
+
+                            <div class="card mb-3">
+                                <div class="card-header bg-light fw-bold">Producto de Salida</div>
+                                <div class="card-body">
+                                    <div class="mb-3">
+                                        <label class="form-label">Código</label>
+                                        <div class="input-group">
+                                            <input type="text" class="form-control" readonly value="@transferenciaTransformacion.CodigoOrigenExt" placeholder="Seleccione un código..." />
+                                            <button type="button" class="btn btn-outline-secondary" @onclick="() => AbrirSelectorProductosTransformacion(origen: true)">
+                                                <i class="oi oi-magnifying-glass"></i>
+                                            </button>
+                                        </div>
+                                        <ValidationMessage For="@(() => transferenciaTransformacion.CodigoOrigenInt)" />
+                                    </div>
+
+                                    <div class="mb-3">
+                                        <label class="form-label">Descripción</label>
+                                        <input type="text" class="form-control" readonly value="@transferenciaTransformacion.DescripcionOrigen" />
+                                    </div>
+
+                                    <div class="mb-3">
+                                        <label class="form-label">Depósito de Salida</label>
+                                        <select class="form-select" @bind="transferenciaTransformacion.DepositoSalida" @bind:after="CargarStockOrigenTransformacion">
+                                            <option value="0">Seleccione un depósito...</option>
+                                            @foreach (var deposito in depositosCombo)
+                                            {
+                                                <option value="@deposito.Key">@deposito.Value</option>
+                                            }
+                                        </select>
+                                        <ValidationMessage For="@(() => transferenciaTransformacion.DepositoSalida)" />
+                                        @if (transferenciaTransformacion.DepositoSalida > 0)
+                                        {
+                                            <div class="form-text">
+                                                Stock disponible: @transferenciaTransformacion.StockOrigen.ToString("N2")
+                                            </div>
+                                        }
+                                    </div>
+
+                                    <div class="mb-3">
+                                        <label class="form-label">Lote</label>
+                                        <InputText class="form-control" @bind-Value="transferenciaTransformacion.Lote" maxlength="20" />
+                                        <ValidationMessage For="@(() => transferenciaTransformacion.Lote)" />
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="card mb-3">
+                                <div class="card-header bg-light fw-bold">Producto de Ingreso</div>
+                                <div class="card-body">
+                                    <div class="mb-3">
+                                        <label class="form-label">Hacia Código</label>
+                                        <div class="input-group">
+                                            <input type="text" class="form-control" readonly value="@transferenciaTransformacion.CodigoDestinoExt" placeholder="Seleccione un código..." />
+                                            <button type="button" class="btn btn-outline-secondary" @onclick="() => AbrirSelectorProductosTransformacion(origen: false)">
+                                                <i class="oi oi-magnifying-glass"></i>
+                                            </button>
+                                        </div>
+                                        <ValidationMessage For="@(() => transferenciaTransformacion.CodigoDestinoInt)" />
+                                    </div>
+
+                                    <div class="mb-3">
+                                        <label class="form-label">Descripción</label>
+                                        <input type="text" class="form-control" readonly value="@transferenciaTransformacion.DescripcionDestino" />
+                                    </div>
+
+                                    <div class="mb-3">
+                                        <label class="form-label">Depósito de Ingreso</label>
+                                        <select class="form-select" @bind="transferenciaTransformacion.DepositoIngreso">
+                                            <option value="0">Seleccione un depósito...</option>
+                                            @foreach (var deposito in depositosCombo)
+                                            {
+                                                <option value="@deposito.Key">@deposito.Value</option>
+                                            }
+                                        </select>
+                                        <ValidationMessage For="@(() => transferenciaTransformacion.DepositoIngreso)" />
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="row">
+                                <div class="col-md-6 mb-3">
+                                    <label class="form-label">Fecha</label>
+                                    <InputDate class="form-control" @bind-Value="transferenciaTransformacion.Fecha" />
+                                    <ValidationMessage For="@(() => transferenciaTransformacion.Fecha)" />
+                                </div>
+
+                                <div class="col-md-6 mb-3">
+                                    <label class="form-label">Cantidad</label>
+                                    <InputNumber class="form-control" @bind-Value="transferenciaTransformacion.Cantidad" />
+                                    <ValidationMessage For="@(() => transferenciaTransformacion.Cantidad)" />
+                                </div>
+                            </div>
+
+                            <div class="mb-3">
+                                <label class="form-label">Referencia <span class="text-danger">*</span></label>
+                                <InputText class="form-control" @bind-Value="transferenciaTransformacion.Referencia" maxlength="32" />
+                                <ValidationMessage For="@(() => transferenciaTransformacion.Referencia)" />
+                            </div>
+
+                            <div class="modal-footer">
+                                <button type="button" class="btn btn-secondary" @onclick="OnClose" disabled="@procesando">Cancelar</button>
+                                <button type="submit" class="btn btn-primary" disabled="@procesando">
+                                    @if (procesando)
+                                    {
+                                        <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
+                                        <span> Procesando...</span>
+                                    }
+                                    else
+                                    {
+                                        <span>Transferir</span>
+                                    }
+                                </button>
+                            </div>
+                        </EditForm>
+                    }
                 </div>
             </div>
         </div>
@@ -245,10 +359,10 @@
 }
 
 <SelectorProductos @ref="selectorProductos"
-                   PermitirCantidad="true"
+                   PermitirCantidad="@selectorPermitirCantidad"
                    CantidadDefault="1"
                    PermitirPrecio="false"
-                   OnProductoSeleccionadoCantidad="OnProductoSeleccionado" />
+                   OnProductoSeleccionadoCantidad="OnProductoSeleccionadoUniversal" />
 
 <ValeTransferenciaModal Vale="valeTransferencia"
                          @bind-Mostrar="mostrarVale"
@@ -257,11 +371,16 @@
 @code {
     private StockTransferenciaDTO transferencia = new();
     private StockTransferenciaMultipleDTO transferenciaMultiple = new() { Fecha = DateTime.Today };
+    private StockTransferenciaTransformacionDTO transferenciaTransformacion = new() { Fecha = DateTime.Today };
     private bool procesando = false;
+
     private string modoTransferencia = "unico";
+    private List<string> modosDisponibles = new();
 
     private Dictionary<int, string> depositosCombo = new();
     private SelectorProductos? selectorProductos;
+    private bool selectorPermitirCantidad = true;
+    private string? campoSelectorProducto;
 
     [Parameter] public ProductoConSaldoDTO? Repuesto { get; set; }
     [Parameter] public EventCallback OnClose { get; set; }
@@ -276,13 +395,19 @@
         await CargarDepositos();
         if (Repuesto != null)
         {
+            modosDisponibles = new List<string> { "unico", "transformacion" };
             modoTransferencia = "unico";
             transferencia.CodigoRepuesto = Repuesto.Cod_inte;
             transferencia.CodExt = Repuesto.Codigo;
             transferencia.Descripcion = Repuesto.Descripcion;
+
+            transferenciaTransformacion.CodigoOrigenInt = Repuesto.Cod_inte;
+            transferenciaTransformacion.CodigoOrigenExt = Repuesto.Codigo;
+            transferenciaTransformacion.DescripcionOrigen = Repuesto.Descripcion;
         }
         else
         {
+            modosDisponibles = new List<string> { "unico", "multiple" };
             modoTransferencia = "unico";
         }
     }
@@ -296,6 +421,17 @@
         }
     }
 
+    private string ObtenerEtiquetaModo(string modo)
+    {
+        return modo switch
+        {
+            "unico" => "Item único",
+            "multiple" => "Transf. Multiple",
+            "transformacion" => "Transf. C/Transformación de Código",
+            _ => modo
+        };
+    }
+
     private void CambiarModo(string modo)
     {
         modoTransferencia = modo;
@@ -303,39 +439,85 @@
         {
             transferenciaMultiple = new StockTransferenciaMultipleDTO { Fecha = DateTime.Today };
         }
-        else
+        else if (modo == "unico")
         {
             transferencia = new StockTransferenciaDTO();
+            if (Repuesto != null)
+            {
+                transferencia.CodigoRepuesto = Repuesto.Cod_inte;
+                transferencia.CodExt = Repuesto.Codigo;
+                transferencia.Descripcion = Repuesto.Descripcion;
+            }
+        }
+        else if (modo == "transformacion")
+        {
+            transferenciaTransformacion = new StockTransferenciaTransformacionDTO { Fecha = DateTime.Today };
+            if (Repuesto != null)
+            {
+                transferenciaTransformacion.CodigoOrigenInt = Repuesto.Cod_inte;
+                transferenciaTransformacion.CodigoOrigenExt = Repuesto.Codigo;
+                transferenciaTransformacion.DescripcionOrigen = Repuesto.Descripcion;
+            }
         }
     }
 
     private async Task AbrirSelectorProductos()
     {
+        campoSelectorProducto = "multiple";
+        selectorPermitirCantidad = true;
         if (selectorProductos != null)
         {
             await selectorProductos.AbrirModal();
         }
     }
 
-    private void OnProductoSeleccionado(SelectorProductos.SeleccionProducto sel)
+    private async Task AbrirSelectorProductosTransformacion(bool origen)
+    {
+        campoSelectorProducto = origen ? "origenTransformacion" : "destinoTransformacion";
+        selectorPermitirCantidad = false;
+        if (selectorProductos != null)
+        {
+            await selectorProductos.AbrirModal();
+        }
+    }
+
+    private void OnProductoSeleccionadoUniversal(SelectorProductos.SeleccionProducto sel)
     {
         var producto = sel.Producto;
-        var cantidad = sel.Cantidad <= 0 ? 1 : sel.Cantidad;
 
-        var itemExistente = transferenciaMultiple.Items.FirstOrDefault(x => x.CodigoInterno == producto.Codint);
-        if (itemExistente != null)
+        switch (campoSelectorProducto)
         {
-            itemExistente.Cantidad += cantidad;
-        }
-        else
-        {
-            transferenciaMultiple.Items.Add(new StockTransferenciaMultipleItemDTO
-            {
-                CodigoInterno = producto.Codint,
-                CodigoExterno = producto.Codigo,
-                Descripcion = producto.Descripcion,
-                Cantidad = cantidad
-            });
+            case "multiple":
+                var cantidad = sel.Cantidad <= 0 ? 1 : sel.Cantidad;
+                var itemExistente = transferenciaMultiple.Items.FirstOrDefault(x => x.CodigoInterno == producto.Codint);
+                if (itemExistente != null)
+                {
+                    itemExistente.Cantidad += cantidad;
+                }
+                else
+                {
+                    transferenciaMultiple.Items.Add(new StockTransferenciaMultipleItemDTO
+                    {
+                        CodigoInterno = producto.Codint,
+                        CodigoExterno = producto.Codigo,
+                        Descripcion = producto.Descripcion,
+                        Cantidad = cantidad
+                    });
+                }
+                break;
+
+            case "origenTransformacion":
+                transferenciaTransformacion.CodigoOrigenInt = producto.Codint;
+                transferenciaTransformacion.CodigoOrigenExt = producto.Codigo;
+                transferenciaTransformacion.DescripcionOrigen = producto.Descripcion;
+                transferenciaTransformacion.StockOrigen = 0m;
+                break;
+
+            case "destinoTransformacion":
+                transferenciaTransformacion.CodigoDestinoInt = producto.Codint;
+                transferenciaTransformacion.CodigoDestinoExt = producto.Codigo;
+                transferenciaTransformacion.DescripcionDestino = producto.Descripcion;
+                break;
         }
     }
 
@@ -353,9 +535,7 @@
 
         try
         {
-            // var response = await repository.Get<List<StockDepositoDTO>>($"api/movisto/stock/{Repuesto.Cod_inte}");
-            int codint = 0;
-            codint = Repuesto.Cod_inte;
+            int codint = Repuesto.Cod_inte;
             var response = await repository.Get<List<StockDepositoDTO>>($"api/stockajustes/stock/{codint}");
 
             if (!response.Error)
@@ -367,6 +547,27 @@
         catch
         {
             transferencia.StockOrigen = 0;
+        }
+    }
+
+    private async Task CargarStockOrigenTransformacion()
+    {
+        if (transferenciaTransformacion.DepositoSalida == 0 || !transferenciaTransformacion.CodigoOrigenInt.HasValue) return;
+
+        try
+        {
+            var codint = transferenciaTransformacion.CodigoOrigenInt.Value;
+            var response = await repository.Get<List<StockDepositoDTO>>($"api/stockajustes/stock/{codint}");
+
+            if (!response.Error)
+            {
+                transferenciaTransformacion.StockOrigen = response.Response?
+                    .FirstOrDefault(s => s.Deposito == transferenciaTransformacion.DepositoSalida)?.Stock ?? 0;
+            }
+        }
+        catch
+        {
+            transferenciaTransformacion.StockOrigen = 0;
         }
     }
 
@@ -445,6 +646,70 @@
         catch (Exception ex)
         {
             await sweetAlertService.FireAsync("Error", "No se pudo realizar la transferencia múltiple", SweetAlertIcon.Error);
+            procesando = false;
+        }
+    }
+
+    private async Task OnValidSubmitTransformacion()
+    {
+        if (procesando) return;
+        procesando = true;
+
+        if (!transferenciaTransformacion.CodigoOrigenInt.HasValue || transferenciaTransformacion.CodigoOrigenInt.Value <= 0)
+        {
+            await sweetAlertService.FireAsync("Error", "Debe seleccionar el código de origen", SweetAlertIcon.Error);
+            procesando = false;
+            return;
+        }
+
+        if (!transferenciaTransformacion.CodigoDestinoInt.HasValue || transferenciaTransformacion.CodigoDestinoInt.Value <= 0)
+        {
+            await sweetAlertService.FireAsync("Error", "Debe seleccionar el código de destino", SweetAlertIcon.Error);
+            procesando = false;
+            return;
+        }
+
+        if (transferenciaTransformacion.DepositoSalida <= 0)
+        {
+            await sweetAlertService.FireAsync("Error", "Debe seleccionar el depósito de salida", SweetAlertIcon.Error);
+            procesando = false;
+            return;
+        }
+
+        if (transferenciaTransformacion.DepositoIngreso <= 0)
+        {
+            await sweetAlertService.FireAsync("Error", "Debe seleccionar el depósito de ingreso", SweetAlertIcon.Error);
+            procesando = false;
+            return;
+        }
+
+        if (transferenciaTransformacion.Cantidad <= 0)
+        {
+            await sweetAlertService.FireAsync("Error", "La cantidad debe ser mayor a 0", SweetAlertIcon.Error);
+            procesando = false;
+            return;
+        }
+
+        try
+        {
+            var response = await repository.Post<StockTransferenciaTransformacionDTO, ValeTransferenciaDTO>("api/stockTransferencia/transformacion", transferenciaTransformacion);
+            if (response.Error)
+            {
+                var mensaje = await response.HttpResponseMessage.Content.ReadAsStringAsync();
+                await sweetAlertService.FireAsync("Error", mensaje, SweetAlertIcon.Error);
+                procesando = false;
+                return;
+            }
+
+            valeTransferencia = response.Response;
+            mostrarVale = true;
+            await sweetAlertService.FireAsync("Éxito", "Transferencia con transformación realizada correctamente", SweetAlertIcon.Success);
+            await OnSave.InvokeAsync();
+            procesando = false;
+        }
+        catch (Exception ex)
+        {
+            await sweetAlertService.FireAsync("Error", "No se pudo realizar la transferencia con transformación", SweetAlertIcon.Error);
             procesando = false;
         }
     }

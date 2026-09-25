@@ -1,6 +1,7 @@
 @page "/remitos/traslado"
 @using IMPLANPROD.Shared.Entities
 @using IMPLANPROD.Shared.DTOs
+@using IMPLANPROD.Shared.DTOs.Impresiones
 @using IMPLANPROD.Client.Repositories
 @using IMPLANPROD.Client.Shared.Components
 @using IMPLANPROD.Client.Services
@@ -9,6 +10,8 @@
 @using Blazored.Modal.Services
 @using static IMPLANPROD.Client.Pages.Remitos.PedidosPendientesModal
 @inject IRepository repository
+@inject HttpClient Http
+@inject IJSRuntime JS
 @inject NavigationManager NavigationManager
 @inject SweetAlertService sweetAlertService
 @inject RemitosConfigService remitosConfigService
@@ -217,9 +220,14 @@ else
             </div>
             <div class="card-body" style="background: linear-gradient(135deg, #e8f5f9 0%, #f1f8f9 100%); box-shadow: inset 0 2px 4px rgba(23, 162, 184, 0.1);">
                 <div class="d-flex justify-content-between mb-3">
-                    <div>
+                    <div class="d-flex gap-2">
                         <button type="button" class="btn btn-primary btn-sm" @onclick="AbrirBuscadorProductos">
                             <i class="oi oi-plus"></i> Agregar Producto
+                        </button>
+                        <button type="button" class="btn btn-info btn-sm" @onclick="MostrarPedidosPendientesAsync"
+                                disabled="@(numeroCliente == 0 || depositoOrigenSeleccionado <= 0)"
+                                title="@(numeroCliente == 0 ? "Seleccione un cliente" : depositoOrigenSeleccionado <= 0 ? "Seleccione un depósito de origen" : "Mostrar pedidos pendientes del cliente")">
+                            <i class="fas fa-clipboard-list"></i> Mostrar Pedidos Pendientes
                         </button>
                     </div>
                     <div>
@@ -320,11 +328,19 @@ else
 
         <!-- Botones de acción -->
         <div class="d-flex justify-content-end gap-2 mb-3">
-            <button type="button" class="btn btn-secondary" @onclick="Cancelar">
+            <button type="button" class="btn btn-secondary" @onclick="Cancelar" disabled="@guardando">
                 <i class="fas fa-times"></i> Cancelar
             </button>
-            <button type="submit" class="btn btn-info">
-                <i class="fas fa-save"></i> Guardar Remito de Traslado
+            <button type="submit" class="btn btn-info" disabled="@guardando">
+                @if (guardando)
+                {
+                    <span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+                    <span>Guardando...</span>
+                }
+                else
+                {
+                    <i class="fas fa-save"></i> <span>Guardar Remito de Traslado</span>
+                }
             </button>
         </div>
     </EditForm>
@@ -381,12 +397,21 @@ else
     private SelectorClientes selectorClientes = null!;
     private ImpresionRemito impresionRemito = null!;
 
+    // ── Impresión por plantilla (Diseñador de Plantillas) ──
+    // La plantilla "RemitoConsignacion2" se genera desde el diseñador de plantillas
+    // y se le pasan 3 parámetros de MOVISTO: DoPriLar, Nume_Clie y Fechmov.
+    private const string NombrePlantillaRemitoConsignacion = "RemitoConsignacion2";
+    private int? plantillaRemitoConsignacionId;
+
     // Control de ciclo de selección de productos
     private bool cicloSeleccionProductos = false;
 
     // Control del modal de configuración
     private bool mostrarModalConfiguracion = false;
     private bool validando = true;
+
+    // Control de guardado: evita doble clic y duplicación del remito
+    private bool guardando = false;
 
     // Control del modal de selección de lotes
     private bool mostrarModalLotes = false;
@@ -1008,23 +1033,114 @@ else
             nciImpresion = "";
             
             Console.WriteLine($"[RemitoTraslado] Datos preparados para impresión: {numeroRemitoImpresion}");
-            
+
             // Forzar actualización del componente
             StateHasChanged();
-            
-            // Esperar un momento para que se actualice el DOM
-            await Task.Delay(100);
-            
-            // Imprimir
-            await impresionRemito.Imprimir();
-            
-            Console.WriteLine("[RemitoTraslado] Impresión iniciada");
+
+            // Imprimir usando la plantilla "RemitoConsignacion2" del Diseñador de Plantillas.
+            // Se pasan 3 parámetros de MOVISTO: DoPriLar (RC.{numero}), Nume_Clie y Fechmov.
+            // El DoPriLar se construye igual que en el servidor (RemitoTrasladoController línea 139):
+            //   string documentoRemito = $"RC.{request.Numero}";
+            var doPriLar = $"RC.{numeroRemito}";
+            await ImprimirRemitoConsignacionPorPlantillaAsync(doPriLar, numeroCliente, fechaRemito);
+
+            Console.WriteLine("[RemitoTraslado] Impresión por plantilla iniciada");
         }
         catch (Exception ex)
         {
             Console.WriteLine($"[RemitoTraslado] Error al preparar impresión: {ex.Message}");
             await sweetAlertService.FireAsync("Error", $"Error al preparar la impresión: {ex.Message}", SweetAlertIcon.Error);
         }
+    }
+
+    /// <summary>
+    /// Imprime un remito de traslado usando la plantilla "RemitoConsignacion2"
+    /// del Diseñador de Plantillas de impresión.
+    /// Parámetros que se le pasan a la plantilla (todos de MOVISTO):
+    ///   - Doprilar: documento primario largo (ej. "RC.1234")
+    ///   - Nume_Clie: número de cliente
+    ///   - Fechmov: fecha del movimiento
+    /// </summary>
+    private async Task ImprimirRemitoConsignacionPorPlantillaAsync(string doPriLar, int numeClie, DateTime fechMov)
+    {
+        if (string.IsNullOrWhiteSpace(doPriLar))
+        {
+            await sweetAlertService.FireAsync("Atención", "El remito no tiene número para imprimir.", SweetAlertIcon.Warning);
+            return;
+        }
+
+        var plantillaId = await GetPlantillaRemitoConsignacionIdAsync();
+        if (!plantillaId.HasValue)
+        {
+            return;
+        }
+
+        var queryParams = new List<string>
+        {
+            $"Doprilar={Uri.EscapeDataString(doPriLar.Trim())}",
+            $"Nume_Clie={numeClie}"
+        };
+
+        if (fechMov > DateTime.MinValue)
+        {
+            queryParams.Add($"Fechmov={Uri.EscapeDataString(fechMov.ToString("yyyy-MM-dd"))}");
+        }
+
+        var endpoint = $"api/impresiones/remito-plantillas/{plantillaId.Value}/pdf?{string.Join("&", queryParams)}";
+        var responsePdf = await Http.GetAsync(endpoint);
+
+        if (!responsePdf.IsSuccessStatusCode)
+        {
+            var message = await responsePdf.Content.ReadAsStringAsync();
+            await sweetAlertService.FireAsync("Error", $"No se pudo generar el PDF del remito: {message}", SweetAlertIcon.Error);
+            return;
+        }
+
+        var pdfBytes = await responsePdf.Content.ReadAsByteArrayAsync();
+        if (pdfBytes.Length == 0)
+        {
+            await sweetAlertService.FireAsync("Error", "El PDF generado está vacío.", SweetAlertIcon.Error);
+            return;
+        }
+
+        var base64 = Convert.ToBase64String(pdfBytes);
+        var opened = await JS.InvokeAsync<bool>("openPdfInNewTab", base64);
+        if (!opened)
+        {
+            await sweetAlertService.FireAsync("Atención", "No se pudo abrir el PDF en una nueva pestaña. Verificá el bloqueador de pop-ups.", SweetAlertIcon.Warning);
+        }
+    }
+
+    /// <summary>
+    /// Busca el Id de la plantilla "RemitoConsignacion2" en el listado de plantillas
+    /// guardadas por el Diseñador de Plantillas.
+    /// </summary>
+    private async Task<int?> GetPlantillaRemitoConsignacionIdAsync()
+    {
+        if (plantillaRemitoConsignacionId.HasValue)
+        {
+            return plantillaRemitoConsignacionId;
+        }
+
+        var response = await repository.Get<List<RemitoPlantillaItemDto>>("api/impresiones/remito-plantillas");
+        if (response.Error || response.Response == null)
+        {
+            var message = await response.GetErrorMessageAsync();
+            await sweetAlertService.FireAsync("Error", $"No se pudo obtener el listado de plantillas de remito: {message}", SweetAlertIcon.Error);
+            return null;
+        }
+
+        var plantilla = response.Response
+            .FirstOrDefault(x => string.Equals(x.Nombre?.Trim(), NombrePlantillaRemitoConsignacion, StringComparison.OrdinalIgnoreCase));
+
+        if (plantilla == null)
+        {
+            await sweetAlertService.FireAsync("Atención", $"No se encontró la plantilla '{NombrePlantillaRemitoConsignacion}'.", SweetAlertIcon.Warning);
+            return null;
+        }
+
+        plantillaRemitoConsignacionId = plantilla.Id;
+        return plantillaRemitoConsignacionId;
     }
 
     /// <summary>
@@ -1077,6 +1193,11 @@ else
     /// </summary>
     private async Task HandleValidSubmit()
     {
+        // Evitar doble clic: si ya está guardando, ignorar el submit
+        if (guardando) return;
+
+        guardando = true;
+
         try
         {
             if (productosRemito.Count == 0)
@@ -1159,13 +1280,21 @@ else
                 // Preparar e imprimir el remito
                 await PrepararEImprimirRemito();
 
+                // Limpiar el detalle del formulario y recalcular el siguiente número de autonumeración
+                // para que el próximo remito proponga el siguiente libre.
                 Cancelar();
+                await CalcularNumeroRemitoAutonumeracion();
             }
         }
         catch (Exception ex)
         {
             Console.WriteLine($"[RemitoTraslado] Error al guardar remito: {ex.Message}");
             await sweetAlertService.FireAsync("Error", $"Error al guardar el remito: {ex.Message}", SweetAlertIcon.Error);
+        }
+        finally
+        {
+            // Liberar el bloqueo siempre, incluso si hubo error o validación fallida
+            guardando = false;
         }
     }
 
@@ -1199,9 +1328,11 @@ else
             var clienteData = response.Response;
 
             // Asignar datos del cliente
+            // Se usa Raso_Cli (razón social) en lugar de Fant_Cli (nombre de fantasía),
+            // que puede estar vacío o no corresponder a la razón social real del cliente.
             numeroCliente = clienteData.Nume_Cli;
-            clienteSeleccionado = clienteData.Nume_Cli.ToString();
-            razonSocial = clienteData.Fant_Cli ?? "";
+            clienteSeleccionado = $"{clienteData.Nume_Cli} - {clienteData.Raso_Cli}";
+            razonSocial = clienteData.Raso_Cli ?? "";
             domicilioCliente = clienteData.Domi_Cli ?? "";
             localidadCliente = clienteData.Loca_Cli ?? "";
             codigoPostalCliente = clienteData.Cpos_Cli ?? "";
@@ -1212,8 +1343,9 @@ else
             // Cerrar el modal
             selectorClientes.CerrarModal();
 
-            // Verificar pedidos pendientes del cliente
-            await VerificarPedidosPendientes(numeroCliente);
+            // Los pedidos pendientes se muestran a pedido del usuario mediante el
+            // botón "Mostrar Pedidos Pendientes", que requiere además un depósito
+            // de origen seleccionado para poder consultar el stock de cada producto.
 
             StateHasChanged();
         }
@@ -1362,6 +1494,27 @@ else
     }
 
     /// <summary>
+    /// Punto de entrada del botón "Mostrar Pedidos Pendientes".
+    /// Valida que haya un cliente y un depósito de origen seleccionados antes de abrir el modal.
+    /// </summary>
+    private async Task MostrarPedidosPendientesAsync()
+    {
+        if (numeroCliente == 0)
+        {
+            await sweetAlertService.FireAsync("Atención", "Debe seleccionar un cliente antes de ver los pedidos pendientes.", SweetAlertIcon.Warning);
+            return;
+        }
+
+        if (depositoOrigenSeleccionado <= 0)
+        {
+            await sweetAlertService.FireAsync("Atención", "Debe seleccionar un depósito de origen antes de ver los pedidos pendientes.", SweetAlertIcon.Warning);
+            return;
+        }
+
+        await VerificarPedidosPendientes(numeroCliente);
+    }
+
+    /// <summary>
     /// Verifica si el cliente tiene pedidos pendientes y muestra el modal
     /// </summary>
     private async Task VerificarPedidosPendientes(int numeroCliente)
@@ -1385,9 +1538,11 @@ else
             {
                 Console.WriteLine($"[RemitoTraslado] Se encontraron {pedidosPendientes.Count} items pendientes");
 
-                // Convertir a PeddetaConCantidad
-                var pedidosConCantidad = pedidosPendientes
-                    .Select(p => new PeddetaConCantidad
+                // Convertir a PeddetaConCantidad y cargar el stock del depósito de origen seleccionado
+                var pedidosConCantidad = new List<PeddetaConCantidad>();
+                foreach (var p in pedidosPendientes)
+                {
+                    var item = new PeddetaConCantidad
                     {
                         PeddetaId = p.PeddetaId,
                         NroPed = p.NroPed,
@@ -1403,12 +1558,37 @@ else
                         NroOcom = p.NroOcom,
                         NuOrItem = p.NuOrItem,
                         CantidadARemitir = 0
-                    })
-                    .ToList();
+                    };
+
+                    // Cargar stock del producto en el depósito de origen seleccionado
+                    if (p.CodiInt.HasValue && p.CodiInt.Value > 0 && depositoOrigenSeleccionado > 0)
+                    {
+                        try
+                        {
+                            var respStock = await repository.Get<decimal>($"api/stock/stockdeposito/{p.CodiInt.Value}/{depositoOrigenSeleccionado}");
+                            if (!respStock.Error)
+                            {
+                                item.StockDeposito = respStock.Response;
+                            }
+                        }
+                        catch (Exception exStock)
+                        {
+                            Console.WriteLine($"[RemitoTraslado] Error al cargar stock para producto {p.CodiInt}: {exStock.Message}");
+                        }
+                    }
+
+                    pedidosConCantidad.Add(item);
+                }
+
+                // Obtener nombres para mostrar en el encabezado del modal
+                var nombreCliente = razonSocial;
+                var nombreDeposito = ObtenerNombreDepositoOrigen();
 
                 // Mostrar modal con pedidos pendientes
                 var parameters = new ModalParameters();
                 parameters.Add(nameof(PedidosPendientesModal.pedidosPendientes), pedidosConCantidad);
+                parameters.Add(nameof(PedidosPendientesModal.NombreCliente), nombreCliente);
+                parameters.Add(nameof(PedidosPendientesModal.NombreDeposito), nombreDeposito);
 
                 var modal = modalService.Show<PedidosPendientesModal>("Pedidos Pendientes", parameters, new ModalOptions
                 {
@@ -1430,7 +1610,7 @@ else
             }
             else
             {
-                Console.WriteLine($"[RemitoTraslado] No se encontraron pedidos pendientes");
+                await sweetAlertService.FireAsync("Información", "No se encontraron pedidos pendientes para este cliente.", SweetAlertIcon.Info);
             }
         }
         catch (Exception ex)

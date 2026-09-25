@@ -1,4 +1,6 @@
 @page "/presupuesto-reparacion/ver/{NumRepa:int}"
+@using Microsoft.AspNetCore.Authorization
+@attribute [Authorize]
 @using IMPLANPROD.Shared.Entities
 @using IMPLANPROD.Client.Repositories
 @using IMPLANPROD.Client.Services

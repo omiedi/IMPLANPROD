@@ -198,6 +198,28 @@ namespace IMPLANPROD.Server.Controllers
         }
 
         /// <summary>
+        /// Obtiene el último número de remito de cliente (RT) para un prefijo (NUMPVTA) específico.
+        /// Se usa para proponer el siguiente número libre en ese punto de venta.
+        /// </summary>
+        /// <param name="prefijo">Prefijo del punto de venta</param>
+        /// <returns>Último número de remito para el prefijo</returns>
+        [HttpGet("ultimo-numero-prefijo/{prefijo}")]
+        public async Task<ActionResult<int>> ObtenerUltimoNumeroPorPrefijo(short prefijo)
+        {
+            try
+            {
+                _logger.LogInformation("Obteniendo último número de remito para prefijo {Prefijo}", prefijo);
+                var ultimoNumero = await _moviStockService.ObtenerUltimoNumeroPorPrefijoAsync(prefijo);
+                return Ok(ultimoNumero);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error al obtener último número de remito para prefijo {Prefijo}", prefijo);
+                return BadRequest($"Error al obtener último número de remito para prefijo {prefijo}: {ex.Message}");
+            }
+        }
+
+        /// <summary>
         /// Obtiene los remitos de traslado del mes (códigos RC y DV)
         /// </summary>
         /// <param name="anio">Año</param>
@@ -256,6 +278,31 @@ namespace IMPLANPROD.Server.Controllers
                     Exitoso = false,
                     Mensaje = $"Error al anular remito: {ex.Message}"
                 });
+            }
+        }
+
+        /// <summary>
+        /// Obtiene la cantidad de filas (items) que componen un remito.
+        /// Se usa para mostrar en el mensaje de confirmación antes de anular.
+        /// La búsqueda se realiza por DoPriLar + Nume_Clie + FechMov en MOVISTO o MOVIREPA.
+        /// </summary>
+        /// <param name="request">Datos del remito a consultar</param>
+        /// <returns>Cantidad de filas del remito (0 si no se encuentra)</returns>
+        [HttpPost("cantidad-filas-remito")]
+        public async Task<ActionResult<int>> ObtenerCantidadFilasRemito([FromBody] AnularRemitoRequest request)
+        {
+            try
+            {
+                _logger.LogInformation("Obteniendo cantidad de filas del remito {NumeroRemito} para cliente {NumeroCliente}",
+                    request.NumeroRemito, request.NumeroCliente);
+
+                var cantidad = await _moviStockService.ObtenerCantidadFilasRemitoAsync(request);
+                return Ok(cantidad);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error al obtener cantidad de filas del remito");
+                return BadRequest($"Error al obtener cantidad de filas: {ex.Message}");
             }
         }
     }

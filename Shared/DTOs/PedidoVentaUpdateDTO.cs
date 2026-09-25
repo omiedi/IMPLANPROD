@@ -46,6 +46,18 @@ namespace IMPLANPROD.Shared.DTOs
         [StringLength(48)]
         public string? TranspEnt { get; set; }
 
+        /// <summary>
+        /// Domicilio de entrega (PEDENCA.DomiEnt)
+        /// </summary>
+        [StringLength(128)]
+        public string? DomiEnt { get; set; }
+
+        /// <summary>
+        /// Localidad de entrega (PEDENCA.LocaEnt)
+        /// </summary>
+        [StringLength(64)]
+        public string? LocaEnt { get; set; }
+
 
 
         // -------------------- DETALLE (PEDDETA) --------------------
