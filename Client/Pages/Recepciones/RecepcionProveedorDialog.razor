@@ -10,6 +10,7 @@
 @using IMPLANPROD.Client.Pages.Reportes
 @using IMPLANPROD.Client.Shared.Components
 @using IMPLANPROD.Client.Services
+@using System.Globalization
 
 @inject IRepository repository
 @inject IModalService modalService
@@ -338,12 +339,14 @@ else
                                         <td>@row.Descripcion</td>
                                         <td class="text-end"><strong>@row.CantidadPendiente</strong></td>
                                         <td class="text-end">
-                                            <input type="number"
-                                                   class="form-control form-control-sm text-end no-spinner"
-                                                   @bind-value="cantidadAprobarPorFila[key]"
-                                                   @bind-value:event="oninput"
-                                                   min="0"
-                                                   step="0.0001" />
+                                            @* Cantidad a aprobar: acepta punto o coma como separador decimal;
+                                               siempre se muestra con coma (convención es-AR). Con type="number"
+                                               el navegador borraba el contenido al tipear '.'. *@
+                                            <input type="text" inputmode="decimal"
+                                                   class="form-control form-control-sm text-end"
+                                                   value="@(cantidadAprobarTextoPorFila.TryGetValue(key, out var txt) ? txt : string.Empty)"
+                                                   @oninput="@((ChangeEventArgs e) => OnCantidadAprobarInput(key, e))"
+                                                   @onblur="@((FocusEventArgs e) => NormalizarCantidadAprobar(key))" />
                                         </td>
                                         <td class="text-center">
                                             <button class="btn btn-sm btn-success"
@@ -1358,6 +1361,12 @@ else
     private List<BrecepenPendienteCalidadDTO>? pendientesCalidad;
     private bool cargandoPendientesCalidad = false;
     private Dictionary<string, decimal> cantidadAprobarPorFila = new();
+    // Texto crudo del input "Aprobar" por fila (permite tipear coma/punto sin que el
+    // navegador borre el contenido, como pasaba con type="number")
+    private Dictionary<string, string> cantidadAprobarTextoPorFila = new();
+
+    // Cultura con coma como separador decimal para los inputs de cantidad a aprobar
+    private static readonly CultureInfo CulturaComaDecimal = CultureInfo.GetCultureInfo("es-AR");
 
     private const string PROBUS_RECEPCION = "RECEPCIO";
     private const string CLABUS_APRUEBA_CALIDAD = "APRUCALI";
@@ -1725,6 +1734,7 @@ else
                 // Ante error dejamos la grilla vacía para no romper el render.
                 pendientesCalidad = new List<BrecepenPendienteCalidadDTO>();
                 cantidadAprobarPorFila = new Dictionary<string, decimal>();
+                cantidadAprobarTextoPorFila = new Dictionary<string, string>();
                 return;
             }
 
@@ -1734,6 +1744,10 @@ else
             cantidadAprobarPorFila = pendientesCalidad.ToDictionary(
                 x => GetPendienteCalidadKey(x),
                 x => x.CantidadPendiente);
+            // El texto del input se inicializa con la misma cantidad, ya formateada con coma
+            cantidadAprobarTextoPorFila = pendientesCalidad.ToDictionary(
+                x => GetPendienteCalidadKey(x),
+                x => x.CantidadPendiente.ToString("0.####", CulturaComaDecimal));
         }
         finally
         {
@@ -1750,14 +1764,66 @@ else
         return $"{row.Idenlote}|{row.CodInte}";
     }
 
+    // ===================================================================
+    // Input "Aprobar" de la solapa Aprueba Almacén con separador decimal coma
+    // El usuario puede tipear indistintamente punto o coma; en pantalla
+    // siempre se representa con coma (es-AR).
+    // ===================================================================
+
+    /// <summary>
+    /// Al tipear: reemplaza '.' por ',' en el texto visible y, si el texto
+    /// es parseable como decimal en cultura es-AR, actualiza la cantidad.
+    /// </summary>
+    private void OnCantidadAprobarInput(string key, ChangeEventArgs e)
+    {
+        var texto = (e.Value?.ToString() ?? string.Empty).Replace('.', ',');
+        cantidadAprobarTextoPorFila[key] = texto;
+        if (decimal.TryParse(texto, NumberStyles.Number, CulturaComaDecimal, out var valor))
+        {
+            cantidadAprobarPorFila[key] = valor;
+        }
+    }
+
+    /// <summary>
+    /// Al salir del campo sanea el texto (solo dígitos y una sola coma) y
+    /// muestra la representación normalizada con coma. Si no es válido,
+    /// restaura la última cantidad conocida de la fila.
+    /// </summary>
+    private void NormalizarCantidadAprobar(string key)
+    {
+        var valorActual = cantidadAprobarPorFila.TryGetValue(key, out var v) ? v : 0m;
+        var texto = cantidadAprobarTextoPorFila.TryGetValue(key, out var t) ? t : string.Empty;
+
+        var limpio = new string(texto.Where(c => char.IsDigit(c) || c == ',').ToArray());
+        var idx = limpio.IndexOf(',');
+        if (idx >= 0)
+        {
+            // Deja solo la primera coma como separador decimal
+            limpio = limpio[..(idx + 1)] + limpio[(idx + 1)..].Replace(",", "");
+        }
+
+        if (!decimal.TryParse(limpio, NumberStyles.Number, CulturaComaDecimal, out var valor))
+        {
+            valor = valorActual;
+        }
+
+        cantidadAprobarPorFila[key] = valor;
+        cantidadAprobarTextoPorFila[key] = valor.ToString("0.####", CulturaComaDecimal);
+    }
+
     // Confirma y ejecuta la aprobación de una fila de la solapa "Aprueba Calidad".
     // Valida la cantidad, permite modificar el depósito de ingreso, pide confirmación
     // al usuario, llama al endpoint POST api/brecepen/aprobar y, si todo sale bien,
     // muestra el Vale Interno listo para imprimir (mismo formato que la O.F.).
     private async Task ConfirmarYAprobarPendienteCalidad(BrecepenPendienteCalidadDTO row)
     {
+        // Guard anti-doble-clic: si ya hay una aprobación en curso, ignorar el click.
         if (procesandoAprobacionCalidad != null) return;
         procesandoAprobacionCalidad = GetPendienteCalidadKey(row);
+        // Forzamos el render inmediato para que el botón quede deshabilitado en el DOM
+        // antes de iniciar cualquier await (evita doble clic durante la grabación).
+        StateHasChanged();
+        await Task.Yield();
         try
         {
             await ConfirmarYAprobarPendienteCalidadCore(row);

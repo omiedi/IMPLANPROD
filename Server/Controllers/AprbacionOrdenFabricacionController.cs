@@ -802,6 +802,7 @@ namespace IMPLANPROD.Server.Controllers
         /// </summary>
         private Task<bool> ActualizarOrdenFabricacion(OrdeFabr orden, decimal cantidadAprobada, string? idText)
         {
+            //comentado por que se actualiza cuando se hace el cierre, si no termina duplicando la cantiad en canapro  y canti_fin_proceso
             decimal cantidadFinProceso = orden.Canti_Fin_Proceso ?? 0;
             decimal aprobadoTotal = (orden.CanApro ?? 0) + cantidadAprobada;
             bool ordenCerrada = false;
@@ -809,11 +810,11 @@ namespace IMPLANPROD.Server.Controllers
             // Actualizar campos según lógica VB6
             if (aprobadoTotal > cantidadFinProceso)
             {
-                orden.Canti_Fin_Proceso = aprobadoTotal;
+                //orden.Canti_Fin_Proceso = aprobadoTotal;
                 orden.Status_Proceso = 2;
             }
 
-            orden.CanApro = aprobadoTotal;
+            //orden.CanApro = aprobadoTotal;
             // orden.CanRech se mantiene igual en aprobación
 
             // Verificar si se debe cerrar la orden

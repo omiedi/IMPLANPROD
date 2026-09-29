@@ -479,8 +479,11 @@ else
                                             }
                                         </InputSelect>
                                     </div>
+                                    @* DEPÓSITO DE SALIDA/CONSUMO - DE DONDE SALEN LOS MATERIALES *@
+                                    @* Solo se solicita si la O.F. tiene estructura a consumir (filas 'CF' en ORFAPEN) *@
+                                    @if (!ordenSinConsumo)
+                                    {
                                     <div class="col-md-6">
-                                        @* DEPÓSITO DE SALIDA/CONSUMO - DE DONDE SALEN LOS MATERIALES *@
                                         @* Se preselecciona automáticamente con el valor configurado en DEPODEST *@
                                         @* Este depósito es donde se encuentran las materias primas consumidas *@
                                         @* El valor por defecto se obtiene de flexcrl con parámetros ("", "DEPODEST") *@
@@ -501,6 +504,7 @@ else
                                             }
                                         </InputSelect>
                                     </div>
+                                    }
                                 </div>
                                 @* FALTA PERSISTIR LOS DATOS DE SCRAP NO SE ESTAN CONSIDERANDO EN LOS CONTROLADORES AUN *@
                                 @* Fila de cantidades - al menos una debe ser mayor a 0 *@
@@ -769,7 +773,10 @@ else
                                             @* Depósitos utilizados en el cierre (Dep. Entrada / Dep. Salida) *@
                                             <div class="mb-1">
                                                 <div>Depósito de Ingreso: @TextoDepositoVale(depositoEntradaSeleccionado)</div>
-                                                <div>Depósito de Consumo: @TextoDepositoVale(depositoConsumoSeleccionado)</div>
+                                                @if (!ordenSinConsumo)
+                                                {
+                                                    <div>Depósito de Consumo: @TextoDepositoVale(depositoConsumoSeleccionado)</div>
+                                                }
                                             </div>
 
                                             <div style="border-top: 1px solid black; margin: 10px 0;"></div>
@@ -843,7 +850,10 @@ else
                 @* Depósitos utilizados en el cierre (Dep. Entrada / Dep. Salida) *@
                 <div style="margin-top: 10px; font-size: 14px;">
                     <div><strong>Depósito de Ingreso:</strong> @TextoDepositoVale(depositoEntradaSeleccionado)</div>
-                    <div><strong>Depósito de Consumo:</strong> @TextoDepositoVale(depositoConsumoSeleccionado)</div>
+                    @if (!ordenSinConsumo)
+                    {
+                        <div><strong>Depósito de Consumo:</strong> @TextoDepositoVale(depositoConsumoSeleccionado)</div>
+                    }
                 </div>
             </div>
 
@@ -1737,6 +1747,9 @@ else
     private DateTime fechaCierre = DateTime.Today;
     private int depositoEntradaSeleccionado = 0;
     private int depositoConsumoSeleccionado = 0;
+    // True cuando la O.F. a cerrar no tiene filas 'CF' en ORFAPEN: el producto no posee
+    // estructura a consumir, por lo que no se solicita depósito de salida ni se imprime en el vale.
+    private bool ordenSinConsumo = false;
     private decimal cantidadAprobada = 0;
     private decimal cantidadRechazada = 0;
     private int depositoScrapSeleccionado = 0;
@@ -2035,6 +2048,40 @@ else
     /// <summary>
     /// Configura los depósitos por defecto para entrada (DEPOCIE) y salida (DEPODEST)
     /// </summary>
+    /// <summary>
+    /// Detecta si la orden a cerrar posee estructura/componentes a consumir.
+    /// Usa la misma fuente que el modal de componentes (RESERVA ajustada en la O/F):
+    /// si no hay componentes, el cierre no genera filas 'CF' en ORFAPEN y por lo tanto
+    /// no se solicita depósito de salida ni se imprime en el vale interno.
+    /// Ante cualquier error se mantiene el comportamiento actual (exigir depósito de salida).
+    /// </summary>
+    private async Task DetectarOrdenSinConsumo()
+    {
+        ordenSinConsumo = false;
+        try
+        {
+            var idSubOr = ordenParaCierre?.IdSubOr;
+            if (string.IsNullOrEmpty(idSubOr))
+            {
+                return;
+            }
+
+            var response = await repository.Get<List<FormulaComponenteDTO>>(
+                $"api/reservas/componentes-cierre/{idSubOr}");
+
+            if (!response.Error && response.Response != null && response.Response.Count == 0)
+            {
+                ordenSinConsumo = true;
+                depositoConsumoSeleccionado = 0;
+            }
+        }
+        catch
+        {
+            // Ante error de consulta se conserva el comportamiento anterior
+            ordenSinConsumo = false;
+        }
+    }
+
     private async Task ConfigurarDepositosPorDefecto()
     {
         try
@@ -2050,6 +2097,13 @@ else
             }
 
             // Cargar configuración del depósito de salida (DEPODEST)
+            // Si la orden no tiene estructura a consumir no se solicita depósito de salida.
+            if (ordenSinConsumo)
+            {
+                depositoConsumoSeleccionado = 0;
+                return;
+            }
+
             var responseSalida = await repository.Get<FLEXCRL>($"api/flexcrl/empty/DEPODEST");
             if (!responseSalida.Error && responseSalida.Response != null)
             {
@@ -2082,6 +2136,10 @@ else
         await CargarDepositosDisponibles();
         await CargarDatosOrdenParaCierre();
         await CargarConfiguracionDepositoScrap();
+
+        // Detectar si la O.F. tiene componentes a consumir (filas 'CF' en ORFAPEN).
+        // Debe ejecutarse antes de ConfigurarDepositosPorDefecto para no exigir DEPODEST.
+        await DetectarOrdenSinConsumo();
 
         // Inicializar valores por defecto
         fechaCierre = DateTime.Today;
@@ -2640,10 +2698,16 @@ else
             return false;
         }
 
-        // Validación 3: Ambos depósitos deben estar seleccionados
-        if (depositoEntradaSeleccionado <= 0 || depositoConsumoSeleccionado <= 0)
+        // Validación 3: Depósitos obligatorios.
+        // El depósito de salida solo se exige cuando la O.F. tiene estructura a consumir
+        // (filas 'CF' en ORFAPEN). Si no las tiene, no se solicita ni se imprime en el vale.
+        if (depositoEntradaSeleccionado <= 0 || (!ordenSinConsumo && depositoConsumoSeleccionado <= 0))
         {
-            await sweetAlertService.FireAsync("Validación", "Debe seleccionar tanto el depósito de entrada como el de salida.", SweetAlertIcon.Warning);
+            await sweetAlertService.FireAsync("Validación",
+                ordenSinConsumo
+                    ? "Debe seleccionar el depósito de entrada."
+                    : "Debe seleccionar tanto el depósito de entrada como el de salida.",
+                SweetAlertIcon.Warning);
             return false;
         }
 

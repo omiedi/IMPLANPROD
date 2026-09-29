@@ -120,7 +120,7 @@ namespace IMPLANPROD.Server.Controllers
         /// Obtiene un cliente individual por Id
         /// </summary>
         [HttpGet("{id:int}")]
-        public async Task<IActionResult> GetAsync(int id)
+        public async Task<IActionResult> GetById(int id)
         {
             var cliente = await _context.Clientes.FirstOrDefaultAsync(x => x.Id == id);
             if (cliente == null)
@@ -167,9 +167,9 @@ namespace IMPLANPROD.Server.Controllers
                     await transaction.CommitAsync();
 
                     // Devuelve una respuesta HTTP 201 (Created) indicando que el recurso fue creado exitosamente.
-                    // Además, incluye en la cabecera 'Location' la URL para consultar el recurso recién creado (usando el método GetAsync y el id asignado).
+                    // Además, incluye en la cabecera 'Location' la URL para consultar el recurso recién creado (usando el método GetById y el id asignado).
                     // El cuerpo de la respuesta contiene el objeto creado (deudor) con todos sus datos, incluyendo el Id generado por la base de datos.
-                    return CreatedAtAction(nameof(GetAsync), new { id = deudor.Id }, deudor);
+                    return CreatedAtAction(nameof(GetById), new { id = deudor.Id }, deudor);
                 }
                 catch (Exception ex)
                 {

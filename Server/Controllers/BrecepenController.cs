@@ -416,7 +416,7 @@ namespace IMPLANPROD.Server.Controllers
                     if (bol != null)
                     {
                         // Sumamos lo recién aprobado a lo ya aprobado del bolrecep.
-                        bol.CanToApro = (bol.CanToApro ?? 0m) + consumir;
+                        //bol.CanToApro = (bol.CanToApro ?? 0m) + consumir;
                         bol.LastUpdate = DateTime.Now;
 
                         // Guardamos los datos para el cálculo de la OC.

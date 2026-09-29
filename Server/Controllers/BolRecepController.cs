@@ -401,7 +401,10 @@ namespace MantenimientoImp.Server.Controllers
 
                 var items = await (
                         from b in _context.Bolreceps
-                        join od in _context.Ocomdetas
+                        // OCOMDETA versiona las líneas: al modificar la O/C genera filas
+                        // nuevas con Stat_Ocom = 0 y pasa las anteriores a Stat_Ocom = 10.
+                        // Sin el filtro Stat_Ocom < 8 el join duplica/triplica cada ítem.
+                        join od in _context.Ocomdetas.Where(d => (d.StatOcom ?? 0) < 8)
                             on new { NumeOcom = b.NumOC, NuOrdItem = b.NroItemOC }
                             equals new { NumeOcom = od.NumeOcom, NuOrdItem = od.NuOrdItem }
                             into odJoin
@@ -461,7 +464,11 @@ namespace MantenimientoImp.Server.Controllers
 
                 var items = await (
                         from b in _context.Bolreceps
-                        join od in _context.Ocomdetas
+                        // OCOMDETA versiona las líneas: al modificar la O/C genera filas
+                        // nuevas con Stat_Ocom = 0 y pasa las anteriores a Stat_Ocom = 10.
+                        // Sin el filtro Stat_Ocom < 8 el join duplica/triplica cada ítem
+                        // en la Nota de Recepción impresa.
+                        join od in _context.Ocomdetas.Where(d => (d.StatOcom ?? 0) < 8)
                             on new { NumeOcom = b.NumOC, NuOrdItem = b.NroItemOC }
                             equals new { NumeOcom = od.NumeOcom, NuOrdItem = od.NuOrdItem }
                             into odJoin

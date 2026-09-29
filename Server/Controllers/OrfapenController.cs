@@ -278,8 +278,19 @@ namespace IMPLANPROD.Server.Controllers
 
                 if (!registro.HasValue)
                 {
+                    // Regla VB6: sin filas CF la O.F. no tiene componentes informados para consumir.
+                    // No es un error: se devuelve 200 con SinComponentesConsumo = true para que el
+                    // cliente ofrezca "Aprobar igual / Cancelar" (o no solicite depósito de consumo).
                     _logger.LogWarning($"No se encontró registro en ORFAPEN para O.F. {ordenFabricacion} con código CF");
-                    return NotFound($"No se encontró depósito de consumo para la orden {ordenFabricacion}");
+                    return Ok(new DepositoConsumoResponseDTO
+                    {
+                        CodigoDeposito = 0,
+                        EstaActivo = false,
+                        Descripcion = string.Empty,
+                        Mensaje = "Orden de fabricación sin componentes informados para consumir",
+                        RequiereSeleccion = false,
+                        SinComponentesConsumo = true
+                    });
                 }
 
                 var depositoConsumo = registro.Value;

@@ -47,7 +47,20 @@ namespace IMPLANPROD.Shared.DTOs
         public decimal? CantOcom { get; set; }
 
         /// <summary>
-        /// Precio unitario neto - COSTO (campo editable principal)
+        /// Precio unitario bruto - costo de lista editable por ítem
+        /// </summary>
+        public decimal? PreBruto { get; set; }
+
+        /// <summary>
+        /// Porcentaje de descuento global (0-100) aplicado sobre el bruto.
+        /// Se ingresa una sola vez en el modal y se persiste por fila.
+        /// </summary>
+        public decimal? PorcDesc { get; set; }
+
+        /// <summary>
+        /// Precio unitario neto - COSTO (persistido).
+        /// Valor final = PreBruto * (1 - PorcDesc/100). Si no hay bruto
+        /// cargado (registros legacy), se conserva el valor ya guardado.
         /// </summary>
         public decimal? PrUnNeto { get; set; }
 
@@ -78,9 +91,17 @@ namespace IMPLANPROD.Shared.DTOs
         public short? StatOcom { get; set; }
 
         /// <summary>
-        /// Importe calculado (Cantidad * Costo)
+        /// Precio unitario neto calculado = PreBruto * (1 - PorcDesc/100).
+        /// Si PreBruto no está cargado, devuelve el neto ya persistido.
+        /// Se redondea a 4 decimales (compatibilidad con decimal(18,4)).
+        /// </summary>
+        public decimal NetoCalculado =>
+            Math.Round((PreBruto ?? PrUnNeto ?? 0m) * (1m - (PorcDesc ?? 0m) / 100m), 4);
+
+        /// <summary>
+        /// Importe calculado (Cantidad * Neto con descuento aplicado)
         /// Se calcula en el cliente
         /// </summary>
-        public decimal? Importe => (CantOcom ?? 0) * (PrUnNeto ?? 0);
+        public decimal? Importe => (CantOcom ?? 0) * NetoCalculado;
     }
 }

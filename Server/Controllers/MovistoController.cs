@@ -222,6 +222,179 @@ namespace IMPLANPROD.Server.Controllers
                 return BadRequest("Error al obtener el stock por depósito");
             }
         }
+        /// <summary>
+        /// Reporte InfoStock: stock agrupado por producto de un depósito puntual.
+        /// Filtra MOVISTO por DepoMovi = depósito seleccionado.
+        /// Saldo = Σ(CantIngre − CantSalid) considerando nulos como 0.
+        /// </summary>
+        /// <param name="deposito">Código de depósito (TADEPOSI.CodigoDepo)</param>
+        [HttpGet("stock-deposito/{deposito:int}")]
+        public async Task<ActionResult<List<InfoStockDTO>>> GetStockDepositoReporte(int deposito, CancellationToken cancellationToken)
+        {
+            try
+            {
+                var datos = await ConsultarStockMovisto($"WHERE m.DepoMovi = {deposito}", cancellationToken);
+                return Ok(datos);
+            }
+            catch (OperationCanceledException)
+            {
+                // El usuario presionó "Detener consulta" en el cliente
+                return StatusCode(499, "Consulta cancelada por el usuario");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error al generar stock del depósito {Deposito}", deposito);
+                return BadRequest($"Error al obtener el stock del depósito: {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// Reporte InfoStock: inventario general (todos los depósitos).
+        /// Si incluirNoDisponibles = false, se excluyen los movimientos cuyo
+        /// DepoMovi pertenezca a un depósito con TADEPOSI.Disponible = 0 (NOT IN).
+        /// </summary>
+        /// <param name="incluirNoDisponibles">true = sin filtro de depósito</param>
+        [HttpGet("inventario-general")]
+        public async Task<ActionResult<List<InfoStockDTO>>> GetInventarioGeneral([FromQuery] bool incluirNoDisponibles, CancellationToken cancellationToken)
+        {
+            try
+            {
+                string where = string.Empty;
+
+                if (!incluirNoDisponibles)
+                {
+                    // Lista de depósitos NO disponibles para excluirlos con NOT IN.
+                    // La lista contiene solo enteros leídos de TADEPOSI (no input del usuario).
+                    var depositosNoDisponibles = await _context.Tadeposi.AsNoTracking()
+                        .Where(d => !d.disponible)
+                        .Select(d => d.CodigoDepo)
+                        .ToListAsync(cancellationToken);
+
+                    if (depositosNoDisponibles.Count > 0)
+                    {
+                        where = $"WHERE (m.DepoMovi IS NULL OR m.DepoMovi NOT IN ({string.Join(",", depositosNoDisponibles)}))";
+                    }
+                }
+
+                var datos = await ConsultarStockMovisto(where, cancellationToken);
+                return Ok(datos);
+            }
+            catch (OperationCanceledException)
+            {
+                return StatusCode(499, "Consulta cancelada por el usuario");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error al generar inventario general");
+                return BadRequest($"Error al obtener el inventario general: {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// Consulta común del reporte InfoStock.
+        /// SQL crudo por performance: el GROUP BY se hace SOLO por Cod_Inte
+        /// (columna int indexada) — agrupar por Cod_Exte/Descrip (texto) sobre
+        /// toda MOVISTO excedía el timeout de SQL. Codigo/Descrip se toman con
+        /// MAX() porque son funcionalmente dependientes de Cod_Inte; cuando
+        /// MOVISTO los tiene en NULL o cadena vacía (movimientos viejos), se usa
+        /// master.Codigo / master.Descripcion como respaldo (NULLIF + ISNULL).
+        /// El enriquecimiento (Umedida/TipoMaterial) se hace DESPUÉS de agrupar,
+        /// con LEFT JOINs sobre el resultado ya reducido:
+        ///   MASTER.Umedida → UnidadMedidas.DescripcionAbreviada (u.medida)
+        ///   MASTER.Timate  → Tatimat.Descripcion (t.material, vía CodigoTatimat)
+        /// Orden: por código descendente. Se usa ADO.NET directo porque
+        /// SqlQuery&lt;T&gt; de EF7 no admite DTOs.
+        /// </summary>
+        /// <param name="where">Cláusula WHERE sobre "m" (MOVISTO). Vacía = sin filtro.</param>
+        private async Task<List<InfoStockDTO>> ConsultarStockMovisto(string where, CancellationToken cancellationToken)
+        {
+            // NULLIF(x, '') devuelve NULL cuando x = '' (y x si no). Al combinarlo
+            // con ISNULL se trata la cadena vacía igual que NULL: si el valor de
+            // MOVISTO es NULL o '', se usa el dato de MASTER como respaldo.
+            // Necesario porque los movimientos viejos tienen Cod_Exte/Descrip
+            // vacíos ('') y ISNULL solo contempla NULL.
+            var sql = $@"
+SELECT g.CodigoInterno,
+       ISNULL(NULLIF(g.Codigo, ''), ma.Codigo) AS Codigo,            -- movisto.Cod_Exte, o master.Codigo si es NULL/vacío
+       ISNULL(NULLIF(g.Descripcion, ''), ma.Descripcion) AS Descripcion, -- movisto.Descrip, o master.Descripcion si es NULL/vacío
+       u.DescripcionAbreviada AS UMedida,
+       t.Descripcion AS TMaterial,
+       g.Saldo
+FROM (
+    SELECT m.Cod_Inte AS CodigoInterno,
+           MAX(m.Cod_Exte) AS Codigo,
+           MAX(m.Descrip) AS Descripcion,
+           SUM(ISNULL(m.CantIngre, 0) - ISNULL(m.CantSalid, 0)) AS Saldo
+    FROM MOVISTO m
+    {where}
+    GROUP BY m.Cod_Inte
+    -- Solo ítems con saldo distinto de 0 (positivo o negativo)
+    HAVING SUM(ISNULL(m.CantIngre, 0) - ISNULL(m.CantSalid, 0)) <> 0
+) g
+LEFT JOIN master ma ON ma.codint = g.CodigoInterno
+LEFT JOIN Tatimat t ON t.CodigoTatimat = ma.Timate
+LEFT JOIN UnidadMedidas u ON u.DescripcionAbreviada = ma.Umedida
+-- Orden por la descripción final (misma expresión con fallback a master)
+ORDER BY ISNULL(NULLIF(g.Descripcion, ''), ma.Descripcion) ASC";
+
+            var lista = new List<InfoStockDTO>();
+            var connection = _context.Database.GetDbConnection();
+            var close = connection.State != ConnectionState.Open;
+            if (close)
+            {
+                await connection.OpenAsync(cancellationToken);
+            }
+
+            try
+            {
+                using var command = connection.CreateCommand();
+                // El reporte recorre MOVISTO completo: timeout extendido para bases grandes
+                command.CommandTimeout = 300;
+                command.CommandText = sql;
+
+                try
+                {
+                    using var reader = await command.ExecuteReaderAsync(cancellationToken);
+                    var oCodigoInterno = reader.GetOrdinal("CodigoInterno");
+                    var oCodigo = reader.GetOrdinal("Codigo");
+                    var oDescripcion = reader.GetOrdinal("Descripcion");
+                    var oUMedida = reader.GetOrdinal("UMedida");
+                    var oTMaterial = reader.GetOrdinal("TMaterial");
+                    var oSaldo = reader.GetOrdinal("Saldo");
+
+                    while (await reader.ReadAsync(cancellationToken))
+                    {
+                        lista.Add(new InfoStockDTO
+                        {
+                            CodigoInterno = reader.IsDBNull(oCodigoInterno) ? null : reader.GetInt32(oCodigoInterno),
+                            Codigo = reader.IsDBNull(oCodigo) ? null : reader.GetString(oCodigo),
+                            Descripcion = reader.IsDBNull(oDescripcion) ? null : reader.GetString(oDescripcion),
+                            UMedida = reader.IsDBNull(oUMedida) ? null : reader.GetString(oUMedida),
+                            TMaterial = reader.IsDBNull(oTMaterial) ? null : reader.GetString(oTMaterial),
+                            Saldo = reader.IsDBNull(oSaldo) ? 0m : reader.GetDecimal(oSaldo)
+                        });
+                    }
+                }
+                finally
+                {
+                    // Si el usuario detuvo la consulta (CancellationToken), el comando
+                    // puede seguir corriendo en SQL Server reteniendo locks sobre MOVISTO.
+                    // Cancel() aborta la ejecución server-side; en finalización normal es no-op.
+                    command.Cancel();
+                }
+            }
+            finally
+            {
+                // Libera la conexión a la base (solo si este método la abrió)
+                if (close)
+                {
+                    await connection.CloseAsync();
+                }
+            }
+
+            return lista;
+        }
+
         [HttpGet("GetIdFlexoft")]
         [Authorize] // Asegurate de protegerlo
         public ActionResult<int?> GetIdFlexoft()

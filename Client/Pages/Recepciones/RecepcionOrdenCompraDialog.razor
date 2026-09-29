@@ -1,4 +1,5 @@
 @using IMPLANPROD.Shared.DTOs
+@using System.Globalization
 @inject IRepository repository
 @inject SweetAlertService sweetAlertService
 @inject IModalService modalService
@@ -108,8 +109,9 @@
                                             <td>@orden.CantidadRecibida.ToString("N2")</td>
                                             <td>@orden.CantidadPendiente.ToString("N2")</td>
                                             <td>
-                                                <input type="number" class="form-control form-control-sm" 
-                                                value="@orden.CantidadARecibir" 
+                                                @* Acepta punto o coma como separador decimal; se muestra con coma (es-AR) *@
+                                                <input type="text" inputmode="decimal" class="form-control form-control-sm text-end"
+                                                value="@orden.CantidadARecibir.ToString("0.####", CulturaComaDecimal)"
                                                 @onchange="@((ChangeEventArgs e) => ActualizarCantidadARecibir(orden, e))"
                                                 disabled="@(!orden.Seleccionado && !modoRecepcion)" />
                                             </td>
@@ -295,9 +297,22 @@
         }
     }
 
-    private void ActualizarCantidadARecibir(OrdenCompraPendienteDTO orden, ChangeEventArgs e)
+    // Cultura con coma como separador decimal para los inputs de cantidad a recibir
+    private static readonly CultureInfo CulturaComaDecimal = CultureInfo.GetCultureInfo("es-AR");
+
+    /// <summary>
+    /// Aplica la cantidad a recibir ingresada por el usuario en una línea de OC.
+    /// NO se reparte automáticamente entre líneas repetidas: si el mismo artículo
+    /// figura más de una vez en la misma OC y la cantidad ingresada supera lo
+    /// pedido en ESTA línea, se avisa de la situación y el usuario decide si
+    /// recibe ese excedente igual o cancela.
+    /// </summary>
+    private async Task ActualizarCantidadARecibir(OrdenCompraPendienteDTO orden, ChangeEventArgs e)
     {
-        if (!decimal.TryParse(e.Value?.ToString(), out decimal cantidad))
+        // El usuario puede tipear punto o coma como separador decimal;
+        // se normaliza a coma y se parsea con cultura es-AR.
+        var texto = e.Value?.ToString()?.Replace('.', ',') ?? string.Empty;
+        if (!decimal.TryParse(texto, NumberStyles.Number, CulturaComaDecimal, out decimal cantidad))
         {
             return;
         }
@@ -309,44 +324,40 @@
             return;
         }
 
-        // Regla VB6: si el mismo artículo (CodigoInterno) figura en varias líneas de
-        // la misma OC con distintas fechas de entrega, la cantidad ingresada se
-        // interpreta como el TOTAL a recibir de ese artículo en la OC y se distribuye
-        // de la fecha de entrega más antigua a la más nueva, cubriendo cada pendiente.
+        // ¿El mismo artículo está repetido en otras líneas de esta misma OC?
         var hermanas = ordenesPendientes?
-            .Where(o => o.NumeroOrdenCompra == orden.NumeroOrdenCompra
-                     && o.CodigoInterno == orden.CodigoInterno)
-            .OrderBy(o => o.FechaEntregaSolicitada ?? DateTime.MaxValue)
-            .ThenBy(o => o.NumeroOrdenItem)
-            .ToList() ?? new List<OrdenCompraPendienteDTO>();
+            .Count(o => o.NumeroOrdenCompra == orden.NumeroOrdenCompra
+                     && o.CodigoInterno == orden.CodigoInterno) ?? 0;
 
-        if (hermanas.Count <= 1)
+        // Solo se avisa cuando el ítem está repetido Y la cantidad ingresada
+        // supera lo pedido en esta línea (recibiría más de lo ordenado aquí).
+        if (hermanas > 1 && cantidad > orden.CantidadOrdenada)
         {
-            // Artículo en una sola línea: se permite recibir más de lo ordenado/pendiente.
-            orden.CantidadARecibir = cantidad;
-            return;
+            var confirmacion = await sweetAlertService.FireAsync(new SweetAlertOptions
+            {
+                Title = "Ítem repetido en la Orden de Compra",
+                Html = $"El artículo <strong>{orden.Cod_Exte}</strong> figura <strong>{hermanas} veces</strong> " +
+                       $"en la OC <strong>{orden.NumeroOrdenCompra}</strong>.<br/><br/>" +
+                       $"Está ingresando <strong>{cantidad.ToString("N2")}</strong> unidades en esta línea, " +
+                       $"cuya cantidad pedida es <strong>{orden.CantidadOrdenada.ToString("N2")}</strong> " +
+                       $"(pendiente {orden.CantidadPendiente.ToString("N2")}).<br/><br/>" +
+                       "¿Desea recibir esa cantidad en esta línea igualmente?",
+                Icon = SweetAlertIcon.Warning,
+                ShowCancelButton = true,
+                ConfirmButtonText = "Sí, recibir igual",
+                CancelButtonText = "Cancelar"
+            });
+
+            if (!confirmacion.IsConfirmed)
+            {
+                // El usuario cancela: el input vuelve a mostrar el último valor
+                // válido de la línea (CantidadARecibir no se modificó).
+                StateHasChanged();
+                return;
+            }
         }
 
-        var restante = cantidad;
-        foreach (var h in hermanas)
-        {
-            var asignar = Math.Min(Math.Max(restante, 0m), Math.Max(h.CantidadPendiente, 0m));
-            h.CantidadARecibir = asignar;
-            h.Seleccionado = asignar > 0;
-            restante -= asignar;
-        }
-
-        // Si el total supera el pendiente del artículo, el excedente se imputa a la
-        // línea de entrega más nueva (se permite recibir más de lo ordenado).
-        if (restante > 0)
-        {
-            var masNueva = hermanas.Last();
-            masNueva.CantidadARecibir += restante;
-            masNueva.Seleccionado = true;
-        }
-
-        ActualizarSeleccionTodos();
-        StateHasChanged();
+        orden.CantidadARecibir = cantidad;
     }
 
     private void Aceptar()

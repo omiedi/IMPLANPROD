@@ -132,8 +132,26 @@ namespace IMPLANPROD.Shared.Entities
         // ===================================================================
 
         /// <summary>
+        /// Precio unitario bruto (costo de lista sin descuento)
+        /// El usuario lo edita en el modal de costos; el neto se calcula
+        /// aplicando PorcDesc sobre este valor.
+        /// </summary>
+        [Column("Pre_Bruto", TypeName = "decimal(18,4)")]
+        public decimal? PreBruto { get; set; }
+
+        /// <summary>
+        /// Porcentaje de descuento aplicado al precio bruto (0-100)
+        /// Se ingresa de forma GLOBAL en el modal (un solo % para todos los
+        /// items) pero se persiste en cada fila para reconstruir el cálculo.
+        /// Relación: PrUn_Neto = Pre_Bruto * (1 - Porc_Desc/100)
+        /// </summary>
+        [Column("Porc_Desc", TypeName = "decimal(18,4)")]
+        public decimal? PorcDesc { get; set; }
+
+        /// <summary>
         /// Precio unitario neto (COSTO)
-        /// Este es el campo principal que se edita en el modal de costos
+        /// Resultado de Pre_Bruto * (1 - Porc_Desc/100); es el valor que se
+        /// usa en importes y en el registro de NOVEDADES.
         /// Relacionado con OCOMDETA.PreUnit pero almacenado de forma separada
         /// </summary>
         [Column("PrUn_Neto", TypeName = "decimal(18,4)")]
@@ -365,6 +383,16 @@ PRINT 'Tabla: OCOMDETACosto'
 PRINT 'Descripción: Costos de items de órdenes de compra'
 PRINT 'Índices: 2 (NumeOcom, Unique)'
 PRINT '============================================='
+GO
+
+-- ===================================================================
+-- CAMBIO 2026-09-27: Descuento global en modal de costos
+-- ===================================================================
+-- Pre_Bruto: precio de lista editable por ítem.
+-- Porc_Desc: % de descuento (se ingresa global en el modal y se persiste
+--            por fila). PrUn_Neto = Pre_Bruto * (1 - Porc_Desc/100).
+ALTER TABLE [dbo].[OCOMDETACosto] ADD [Pre_Bruto] DECIMAL(18,4) NULL;
+ALTER TABLE [dbo].[OCOMDETACosto] ADD [Porc_Desc] DECIMAL(18,4) NULL;
 GO
 
 NOTAS DE MAPEO:

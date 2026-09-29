@@ -434,9 +434,13 @@ namespace MantenimientoImp.Server.Controllers
             var numerosOrden = claves.Select(x => x.NumeroOrden).Distinct().ToList();
 
             // Paso 3: traer los ítems de OCOMDETA para obtener la cantidad base del padre (Cant_Ocom).
+            // OCOMDETA versiona las líneas al modificar la O/C (nuevas Stat_Ocom = 0,
+            // anteriores Stat_Ocom = 10): solo las vigentes (< 8), si no el mapa
+            // podría tomar Cant_Ocom de una versión vieja.
             var ocomItems = await _context.Ocomdetas
                 .Where(d => d.NumeOcom.HasValue && numerosOrden.Contains(d.NumeOcom.Value))
                 .Where(d => d.NuOrdItem.HasValue)
+                .Where(d => (d.StatOcom ?? 0) < 8)
                 .ToListAsync();
 
             var ocomMap = ocomItems

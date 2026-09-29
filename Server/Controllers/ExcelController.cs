@@ -1012,6 +1012,49 @@ namespace IMPLANPROD.Server.Controllers
         }
 
         /// <summary>
+        /// Exporta el reporte InfoStock (stock por depósito / inventario general) a Excel
+        /// </summary>
+        /// <param name="datos">Filas del reporte a exportar</param>
+        /// <returns>Archivo Excel con el reporte</returns>
+        [HttpPost("exportar-info-stock")]
+        public IActionResult ExportarInfoStock([FromBody] List<InfoStockDTO> datos)
+        {
+            try
+            {
+                if (datos == null || !datos.Any())
+                {
+                    return BadRequest("No hay datos para exportar");
+                }
+
+                var encabezados = new Dictionary<string, string>
+                {
+                    { "CodigoInterno", "Cód.Int." },
+                    { "Codigo", "Código" },
+                    { "Descripcion", "Descripción" },
+                    { "UMedida", "U.Med." },
+                    { "TMaterial", "T.Material" },
+                    { "Saldo", "Saldo" }
+                };
+
+                var orden = new List<string>
+                {
+                    "CodigoInterno", "Codigo", "Descripcion", "UMedida", "TMaterial", "Saldo"
+                };
+
+                var archivo = _excelService.GenerarExcel(datos, "InfoStock", encabezados, orden);
+
+                return File(archivo,
+                            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                            $"InfoStock_{DateTime.Now:yyyyMMdd_HHmmss}.xlsx");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "[ExportarInfoStock] Error al generar Excel de InfoStock");
+                return StatusCode(500, $"Error al generar el archivo excel: {ex.Message}");
+            }
+        }
+
+        /// <summary>
         /// Exporta proveedores (Proved12) a Excel
         /// </summary>
         /// <param name="datos">Lista de proveedores a exportar</param>

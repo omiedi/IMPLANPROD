@@ -2,6 +2,7 @@
 @using IMPLANPROD.Shared.Entities
 @using IMPLANPROD.Client.Repositories
 @using IMPLANPROD.Client.Pages.Reportes
+@using System.Globalization
 @inject IRepository repository
 @inject SweetAlertService sweetAlertService
 
@@ -38,19 +39,36 @@
                             <strong>Moneda:</strong> @(costos.FirstOrDefault()?.DescripcionMoneda ?? "N/D")
                         </div>
 
+                        @* Descuento global: un solo % para toda la orden; se aplica a cada
+                           ítem como Neto = Costo Bruto × (1 − %/100). El usuario puede
+                           tipear punto o coma; en pantalla siempre se muestra con coma. *@
+                        <div class="d-flex align-items-center mb-3">
+                            <div class="input-group input-group-sm" style="width: 9cm; min-width: 9cm;">
+                                <span class="input-group-text"><i class="fas fa-percent"></i>&nbsp;Descuento</span>
+                                <input type="text" inputmode="decimal"
+                                       class="form-control text-end fw-bold"
+                                       value="@porcDescGlobalTexto"
+                                       @oninput="OnPorcDescGlobalInput"
+                                       @onblur="NormalizarPorcDescGlobal" />
+                                <span class="input-group-text">%</span>
+                            </div>
+                            <small class="text-muted ms-2">Se aplica a todos los ítems. Neto = Costo × (1 − %/100)</small>
+                        </div>
+
                         <!-- Tabla de costos editable -->
                         <div class="table-responsive">
                             <table class="table table-sm table-striped table-hover">
                                 <thead class="table-success">
                                     <tr>
                                         <th style="width: 5%;">Item</th>
-                                        <th style="width: 15%;">Código</th>
-                                        <th style="width: 30%;">Descripción</th>
-                                        <th style="width: 8%;" class="text-center">UM</th>
-                                        <th style="width: 10%;" class="text-end">Cantidad</th>
-                                        <th style="width: 12%;" class="text-end">Costo</th>
-                                        <th style="width: 12%;" class="text-end">Importe</th>
-                                        <th style="width: 8%;" class="text-center">F. Entrega</th>
+                                        <th style="width: 13%;">Código</th>
+                                        <th style="width: 24%;">Descripción</th>
+                                        <th style="width: 7%;" class="text-center">UM</th>
+                                        <th style="width: 9%;" class="text-end">Cantidad</th>
+                                        <th style="width: 11%;" class="text-end">Costo Bruto</th>
+                                        <th style="width: 11%;" class="text-end">Neto</th>
+                                        <th style="width: 11%;" class="text-end">Importe</th>
+                                        <th style="width: 9%;" class="text-center">F. Entrega</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -63,16 +81,18 @@
                                             <td class="text-center">@item.UniCom</td>
                                             <td class="text-end">@item.CantOcom?.ToString("N2")</td>
                                             <td class="text-end">
-                                                <!-- Campo editable de costo -->
-                                                <input type="number" 
+                                                <!-- Campo editable de costo bruto (precio de lista).
+                                                     El neto = bruto × (1 − %desc/100) se recalcula solo. -->
+                                                <input type="number"
                                                        class="form-control form-control-sm text-end input-number-sin-flechas"
-                                                       step="0.0001" 
+                                                       step="0.0001"
                                                        min="0"
-                                                       @bind="item.PrUnNeto"
+                                                       @bind="item.PreBruto"
                                                        @bind:event="oninput"
                                                        placeholder="0.0000"
                                                        style="font-weight: bold; background-color: #ffffcc;" />
                                             </td>
+                                            <td class="text-end">@item.NetoCalculado.ToString("N4")</td>
                                             <td class="text-end">
                                                 <strong>@item.Importe?.ToString("C2")</strong>
                                             </td>
@@ -82,7 +102,21 @@
                                 </tbody>
                                 <tfoot class="table-light">
                                     <tr>
-                                        <td colspan="6" class="text-end"><strong>TOTAL:</strong></td>
+                                        <td colspan="7" class="text-end"><strong>SUBTOTAL:</strong></td>
+                                        <td class="text-end"><strong>@SubtotalGeneral.ToString("C2")</strong></td>
+                                        <td></td>
+                                    </tr>
+                                    <tr>
+                                        <td colspan="7" class="text-end">
+                                            <strong>DESCUENTO @porcDescGlobal.ToString("0.##")%:</strong>
+                                        </td>
+                                        <td class="text-end">
+                                            <strong style="color: #dc3545;">@ImporteDescuento.ToString("C2")</strong>
+                                        </td>
+                                        <td></td>
+                                    </tr>
+                                    <tr>
+                                        <td colspan="7" class="text-end"><strong>TOTAL:</strong></td>
                                         <td class="text-end">
                                             <strong style="font-size: 1.1em; color: #198754;">
                                                 @TotalGeneral.ToString("C2")
@@ -208,10 +242,30 @@
     private bool mostrarObservacion = false;
     private string configuracionACOSREP = "NUNCA";
 
+    // ===================================================================
+    // Descuento global (%): el usuario lo ingresa una sola vez y se aplica
+    // a todos los ítems. Se persiste por fila en OCOMDETACosto.Porc_Desc.
+    // Se tipea con punto o coma; en pantalla siempre se muestra con coma.
+    // ===================================================================
+    private decimal porcDescGlobal = 0m;
+    private string porcDescGlobalTexto = "0";
+    private static readonly CultureInfo CulturaComaDecimal = CultureInfo.GetCultureInfo("es-AR");
+
     /// <summary>
-    /// Total general calculado sumando todos los importes
+    /// Total general calculado sumando todos los importes (con descuento aplicado)
     /// </summary>
     private decimal TotalGeneral => costos?.Sum(c => c.Importe ?? 0) ?? 0;
+
+    /// <summary>
+    /// Subtotal sin descuento: suma de Cantidad × Costo Bruto
+    /// </summary>
+    private decimal SubtotalGeneral =>
+        costos?.Sum(c => (c.CantOcom ?? 0) * (c.PreBruto ?? c.PrUnNeto ?? 0)) ?? 0;
+
+    /// <summary>
+    /// Importe de descuento = Subtotal (bruto) − Total (neto)
+    /// </summary>
+    private decimal ImporteDescuento => SubtotalGeneral - TotalGeneral;
 
     protected override async Task OnParametersSetAsync()
     {
@@ -243,6 +297,14 @@
             if (!response.Error)
             {
                 costos = response.Response;
+
+                // El descuento es global: todas las filas guardadas llevan el mismo %,
+                // por lo que al reabrir se toma el % de la primera fila que lo tenga.
+                porcDescGlobal = costos?
+                    .Select(c => c.PorcDesc)
+                    .FirstOrDefault(p => p.HasValue && p.Value > 0m) ?? 0m;
+                porcDescGlobalTexto = porcDescGlobal.ToString("0.####", CulturaComaDecimal);
+
                 observacionesImpresion = costos?
                     .Select(c => c.Observaciones)
                     .FirstOrDefault(x => !string.IsNullOrWhiteSpace(x))
@@ -330,6 +392,11 @@
             foreach (var costo in costos)
             {
                 costo.Observaciones = observacionNormalizada;
+                // El % global se persiste en cada fila y el neto se guarda
+                // ya calculado (Pre_Bruto × (1 − %/100)) — NOVEDADES usa
+                // PrUn_Neto, por lo que registra siempre el precio neto.
+                costo.PorcDesc = porcDescGlobal;
+                costo.PrUnNeto = costo.NetoCalculado;
             }
 
             // Determinar qué endpoint usar según la configuración ACOSREP
@@ -392,6 +459,64 @@
     /// <summary>
     /// Cierra el modal y limpia los datos
     /// </summary>
+    /// <summary>
+    /// Al tipear el % global: reemplaza '.' por ',' y, si es un porcentaje
+    /// válido (0-100), lo aplica a todos los ítems en tiempo real.
+    /// </summary>
+    private void OnPorcDescGlobalInput(ChangeEventArgs e)
+    {
+        var texto = (e.Value?.ToString() ?? string.Empty).Replace('.', ',');
+        porcDescGlobalTexto = texto;
+        if (decimal.TryParse(texto, NumberStyles.Number, CulturaComaDecimal, out var pct)
+            && pct >= 0m && pct <= 100m)
+        {
+            AplicarPorcDescGlobal(pct);
+        }
+    }
+
+    /// <summary>
+    /// Al salir del campo: sanea el texto, fija el % final (vacío = 0,
+    /// fuera de rango se clampea a 0-100) y lo reaplica a los ítems.
+    /// </summary>
+    private void NormalizarPorcDescGlobal(FocusEventArgs e)
+    {
+        var limpio = new string(porcDescGlobalTexto.Where(c => char.IsDigit(c) || c == ',').ToArray());
+        var idx = limpio.IndexOf(',');
+        if (idx >= 0)
+        {
+            // Deja solo la primera coma como separador decimal
+            limpio = limpio[..(idx + 1)] + limpio[(idx + 1)..].Replace(",", "");
+        }
+
+        decimal pct;
+        if (string.IsNullOrWhiteSpace(limpio))
+        {
+            pct = 0m;
+        }
+        else if (!decimal.TryParse(limpio, NumberStyles.Number, CulturaComaDecimal, out pct))
+        {
+            pct = porcDescGlobal; // texto inválido: restaura el último % válido
+        }
+
+        pct = Math.Clamp(pct, 0m, 100m);
+        AplicarPorcDescGlobal(pct);
+        porcDescGlobalTexto = pct.ToString("0.####", CulturaComaDecimal);
+    }
+
+    /// <summary>
+    /// Asigna el % de descuento a todas las filas. El neto y el importe se
+    /// recalculan solos vía NetoCalculado/Importe del DTO.
+    /// </summary>
+    private void AplicarPorcDescGlobal(decimal pct)
+    {
+        porcDescGlobal = pct;
+        if (costos == null) return;
+        foreach (var item in costos)
+        {
+            item.PorcDesc = pct;
+        }
+    }
+
     private async Task CerrarModal()
     {
         costos = null;
@@ -399,6 +524,8 @@
         observacion = string.Empty;
         mostrarObservacion = false;
         configuracionACOSREP = "NUNCA";
+        porcDescGlobal = 0m;
+        porcDescGlobalTexto = "0";
         await OnCerrar.InvokeAsync();
     }
 
@@ -417,8 +544,8 @@
                 Icon = SweetAlertIcon.Question,
                 ShowCancelButton = true,
                 ShowDenyButton = true,
-                ConfirmButtonText = "Sí, Guardar e Imprimir",
-                DenyButtonText = "No, Solo Imprimir",
+                ConfirmButtonText = "Guardar",
+                DenyButtonText = "Imprimir",
                 CancelButtonText = "Cancelar"
             });
 
@@ -475,15 +602,18 @@
                         c.CodInte == item.CodInte && 
                         c.NuOrdItem == item.NuOrdItem);
                     
-                    if (costo != null && costo.PrUnNeto.HasValue)
+                    // El detalle impreso muestra el PRECIO BRUTO (Pre_Bruto) y el
+                    // importe = cantidad × bruto. El descuento se muestra aparte
+                    // en la fila DESC. de los totales (SUBTOTAL − DESC. = NETO).
+                    // Si el ítem no tiene bruto cargado, se muestra su neto.
+                    if (costo != null && (costo.PreBruto ?? costo.PrUnNeto).HasValue)
                     {
-                        // Actualizar el precio unitario neto con el valor de OCOMDETACosto
-                        item.PrUnNeto = costo.PrUnNeto.Value;
-                        
-                        // Recalcular el importe total del item
+                        item.PrUnNeto = costo.PreBruto ?? costo.NetoCalculado;
+
+                        // Importe del ítem = cantidad × precio bruto
                         if (item.CantOcom.HasValue)
                         {
-                            item.INetItem = item.CantOcom.Value * costo.PrUnNeto.Value;
+                            item.INetItem = item.CantOcom.Value * item.PrUnNeto.Value;
                         }
                     }
                 }
@@ -518,6 +648,8 @@
                      DetalleItems="@detalleParaImprimir"
                      ObservacionesCostos="@observacionesImpresion"
                      TotalPersonalizado="@TotalGeneral"
+                     PorcentajeDescuento="@porcDescGlobal"
+                     ImporteDescuento="@ImporteDescuento"
                      OnCerrar="@CerrarModalImpresion" />
 
 <style>

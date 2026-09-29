@@ -30,5 +30,12 @@ namespace IMPLANPROD.Shared.DTOs
         /// Indica si se requiere selección manual de depósito
         /// </summary>
         public bool RequiereSeleccion { get; set; }
+
+        /// <summary>
+        /// Indica que la O.F. no tiene filas con CODIMOVI = 'CF' en ORFAPEN,
+        /// es decir, el producto no posee estructura/componentes a consumir.
+        /// En ese caso no corresponde solicitar depósito de consumo.
+        /// </summary>
+        public bool SinComponentesConsumo { get; set; }
     }
 }

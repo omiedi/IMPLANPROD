@@ -82,6 +82,15 @@ namespace IMPLANPROD.Server.Services
                     
                     // Costo (viene de OCOMDETACosto si existe, sino NULL)
                     PrUnNeto = costoExistente?.PrUnNeto,
+                    // Bruto: si el registro ya tiene Pre_Bruto se respeta; si es un
+                    // registro legacy sin bruto se usa su propio neto (así el neto
+                    // calculado no cambia al abrir el modal); si no hay costo
+                    // guardado se parte del precio de la OC (Pre_Unit/PrUn_Neto).
+                    PreBruto = costoExistente?.PreBruto
+                               ?? costoExistente?.PrUnNeto
+                               ?? item.PreUnit
+                               ?? item.PrUnNeto,
+                    PorcDesc = costoExistente?.PorcDesc,
                     // Prioridad de observaciones para el modal:
                     // 1) OCOMDETACosto.Observaciones, 2) OCOMENCA.Obse_Ocom
                     Observaciones = !string.IsNullOrWhiteSpace(costoExistente?.Observaciones)
@@ -120,6 +129,8 @@ namespace IMPLANPROD.Server.Services
             {
                 // UPDATE: Actualizar costo existente
                 costoExistente.PrUnNeto = dto.PrUnNeto;
+                costoExistente.PreBruto = dto.PreBruto;
+                costoExistente.PorcDesc = dto.PorcDesc;
                 costoExistente.Observaciones = dto.Observaciones;
                 costoExistente.CodExte = dto.CodExte;
                 costoExistente.Descritem = dto.Descritem;
@@ -178,6 +189,8 @@ namespace IMPLANPROD.Server.Services
                     
                     // Costo (campo principal editable)
                     PrUnNeto = dto.PrUnNeto,
+                    PreBruto = dto.PreBruto,
+                    PorcDesc = dto.PorcDesc,
                     Observaciones = dto.Observaciones,
                     
                     // Auditoría

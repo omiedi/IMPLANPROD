@@ -104,7 +104,7 @@ namespace IMPLANPROD.Server.Controllers
         /// <param name="id">ID del modelo</param>
         /// <returns>Modelo encontrado</returns>
         [HttpGet("{id:int}")]
-        public async Task<ActionResult<Badamode>> GetByIdAsync(int id)
+        public async Task<ActionResult<Badamode>> GetById(int id)
         {
             try
             {
@@ -181,7 +181,7 @@ namespace IMPLANPROD.Server.Controllers
 
                 _logger.LogInformation("Modelo creado: {Codigo}", modelo.Cod_Mod);
 
-                return CreatedAtAction(nameof(GetByIdAsync), new { id = modelo.Id }, modelo);
+                return CreatedAtAction(nameof(GetById), new { id = modelo.Id }, modelo);
             }
             catch (Exception ex)
             {
@@ -448,7 +448,7 @@ namespace IMPLANPROD.Server.Controllers
         /// <param name="codMod">Código del modelo</param>
         /// <returns>Lista de notas del modelo</returns>
         [HttpGet("{codMod}/notas")]
-        public async Task<ActionResult<List<BadamodeNota>>> GetNotasAsync(string codMod)
+        public async Task<ActionResult<List<BadamodeNota>>> GetNotas(string codMod)
         {
             try
             {
@@ -484,7 +484,7 @@ namespace IMPLANPROD.Server.Controllers
 
                 _logger.LogInformation("Nota agregada al modelo {CodMod}", nota.Cod_Mod);
 
-                return CreatedAtAction(nameof(GetNotasAsync), new { codMod = nota.Cod_Mod }, nota);
+                return CreatedAtAction(nameof(GetNotas), new { codMod = nota.Cod_Mod }, nota);
             }
             catch (Exception ex)
             {

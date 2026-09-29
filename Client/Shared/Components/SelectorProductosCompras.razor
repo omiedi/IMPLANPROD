@@ -13,6 +13,7 @@
 @using IMPLANPROD.Client.Repositories
 @using IMPLANPROD.Shared.Entities
 @using Microsoft.AspNetCore.Components.Web
+@using System.Globalization
 @inject IRepository repository
 @inject SweetAlertService sweetAlertService
 @inject IJSRuntime JSRuntime
@@ -110,9 +111,13 @@
                 <div class="row mb-3">
                     <div class="col-md-12">
                         <div class="d-flex flex-wrap gap-2 align-items-end">
-                            <div class="input-group input-group-sm me-2" style="width: 3cm; min-width: 3cm;">
+                            @* Cantidad: el usuario puede tipear punto o coma como separador decimal;
+                               siempre se muestra con coma (convención es-AR) y en negrita *@
+                            <div class="input-group input-group-sm me-2" style="width: 9cm; min-width: 9cm;">
                                 <span class="input-group-text" style="min-width: 1.2cm; justify-content:center;">Cant.</span>
-                                <input type="number" class="form-control text-end" step="0.0001" @bind="cantidadSeleccion" tabindex="3" />
+                                <input type="text" inputmode="decimal" class="form-control text-end fw-bold"
+                                       value="@cantidadTexto"
+                                       @oninput="OnCantidadTextoInput" @onblur="NormalizarCantidadTexto" tabindex="3" />
                             </div>
                             <div class="input-group input-group-sm me-2" style="width: 5cm; min-width: 5cm;">
                                 <span class="input-group-text" style="min-width: 1.5cm; justify-content:center;">Precio</span>
@@ -228,8 +233,10 @@
                             <div class="row">
                                 <div class="col-6">
                                     <label class="form-label"><strong>Cantidad *</strong></label>
-                                    <input type="number" class="form-control" @bind="cantidadLibre" 
-                                           min="0.01" step="0.01" tabindex="2" />
+                                    @* Mismo criterio de decimales: acepta punto o coma y muestra con coma *@
+                                    <input type="text" inputmode="decimal" class="form-control"
+                                           value="@cantidadLibreTexto"
+                                           @oninput="OnCantidadLibreTextoInput" @onblur="NormalizarCantidadLibreTexto" tabindex="2" />
                                 </div>
                                 <div class="col-6">
                                     <label class="form-label"><strong>Precio Unitario *</strong></label>
@@ -357,6 +364,11 @@
 
     // Variables de selección
     private decimal cantidadSeleccion = 1m;
+    // Texto visible del input de cantidad: permite tipear '.' o ',' y siempre
+    // muestra la coma como separador decimal (cultura es-AR).
+    private string cantidadTexto = "1";
+    private string cantidadLibreTexto = "1";
+    private static readonly CultureInfo CulturaComaDecimal = CultureInfo.GetCultureInfo("es-AR");
     private decimal precioSeleccion = 0m;
     private string sectorSeleccion = string.Empty;
     private int? destinoSeleccion;
@@ -430,7 +442,10 @@
         
         // Inicializar en modo producto por defecto
         modoSeleccion = "producto";
-        
+
+        // Sincronizar el texto de cantidad con el valor actual
+        cantidadTexto = cantidadSeleccion.ToString("0.####", CulturaComaDecimal);
+
         // Limpiar campos de item libre
         LimpiarCamposItemLibre();
         
@@ -474,6 +489,66 @@
         {
             await BuscarProductos();
         }
+    }
+
+    // ===================================================================
+    // Inputs de cantidad con separador decimal coma (es-AR)
+    // El usuario puede tipear indistintamente punto o coma; en pantalla
+    // siempre se representa con coma.
+    // ===================================================================
+
+    /// <summary>
+    /// Aplica la entrada del usuario: reemplaza '.' por ',' y, si el texto
+    /// es parseable como decimal en cultura es-AR, actualiza el valor.
+    /// </summary>
+    private void ProcesarEntradaDecimalComa(ChangeEventArgs e, Action<string> setTexto, Action<decimal> setValor)
+    {
+        var texto = (e.Value?.ToString() ?? string.Empty).Replace('.', ',');
+        setTexto(texto);
+        if (decimal.TryParse(texto, NumberStyles.Number, CulturaComaDecimal, out var valor))
+        {
+            setValor(valor);
+        }
+    }
+
+    /// <summary>
+    /// Al salir del campo sanea el texto (solo dígitos y una sola coma) y
+    /// devuelve la representación normalizada con coma. Si no es válido,
+    /// restaura el último valor decimal conocido.
+    /// </summary>
+    private string NormalizarTextoDecimal(string texto, decimal valorActual)
+    {
+        var limpio = new string(texto.Where(c => char.IsDigit(c) || c == ',').ToArray());
+        var idx = limpio.IndexOf(',');
+        if (idx >= 0)
+        {
+            limpio = limpio[..(idx + 1)] + limpio[(idx + 1)..].Replace(",", "");
+        }
+
+        if (decimal.TryParse(limpio, NumberStyles.Number, CulturaComaDecimal, out var valor))
+        {
+            return valor.ToString("0.####", CulturaComaDecimal);
+        }
+
+        return valorActual.ToString("0.####", CulturaComaDecimal);
+    }
+
+    private void OnCantidadTextoInput(ChangeEventArgs e) =>
+        ProcesarEntradaDecimalComa(e, t => cantidadTexto = t, v => cantidadSeleccion = v);
+
+    private void NormalizarCantidadTexto(FocusEventArgs e)
+    {
+        cantidadTexto = NormalizarTextoDecimal(cantidadTexto, cantidadSeleccion);
+        cantidadSeleccion = decimal.Parse(cantidadTexto, CulturaComaDecimal);
+    }
+
+    private void OnCantidadLibreTextoInput(ChangeEventArgs e) =>
+        ProcesarEntradaDecimalComa(e, t => cantidadLibreTexto = t, v => cantidadLibre = v);
+
+    private void NormalizarCantidadLibreTexto(FocusEventArgs e)
+    {
+        cantidadLibreTexto = NormalizarTextoDecimal(cantidadLibreTexto, cantidadLibre);
+        cantidadLibre = decimal.Parse(cantidadLibreTexto, CulturaComaDecimal);
     }
 
     /// <summary>
@@ -606,6 +681,7 @@
     {
         descripcionLibre = string.Empty;
         cantidadLibre = 1m;
+        cantidadLibreTexto = "1";
         precioLibre = 0m;
         unidadMedidaLibre = string.Empty;
         // Mantener sector y destino por defecto

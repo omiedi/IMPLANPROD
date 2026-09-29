@@ -291,6 +291,8 @@ else
     private decimal saldoPendiente = 0;
     private int depositoEntrada = 0;
     private int depositoConsumo = 0;
+    // Indica que la O.F. en aprobación no tiene filas 'CF' en ORFAPEN (sin estructura a consumir)
+    private bool sinComponentesConsumo = false;
 
     // ------------------------------------------------------------------
     // VALE INTERNO (impreso al aprobar una Orden de Fabricación)
@@ -558,6 +560,7 @@ else
             ordenFabricacionSeleccionada = orden.DoPriCor ?? string.Empty;
             idTextCierre = orden.IDTEXT ?? string.Empty;
             saldoPendiente = orden.Ajuste;
+            sinComponentesConsumo = false;
             
             // Validar que tenemos los datos necesarios
             if (string.IsNullOrEmpty(ordenFabricacionSeleccionada))
@@ -575,9 +578,14 @@ else
             // Leer y validar el depósito de entrada desde ORFAPEN
             await ValidarDepositoEntrada();
             
-            // Leer y validar el depósito de consumo desde ORFAPEN
-            await ValidarDepositoConsumo();
-            
+            // Leer y validar el depósito de consumo desde ORFAPEN.
+            // Si retorna false el usuario canceló o debe completar la selección manual
+            // de depósito (el modal vuelve a llamar a MostrarConfirmacionAprobacion).
+            if (!await ValidarDepositoConsumo())
+            {
+                return;
+            }
+
             // Mostrar información capturada para confirmación con opción de cambiar depósitos
             await MostrarConfirmacionAprobacion();
         }
@@ -627,44 +635,74 @@ else
     }
     
     /// <summary>
-    /// Valida el depósito de consumo leyendo desde ORFAPEN
+    /// Valida el depósito de consumo leyendo desde ORFAPEN.
+    /// Retorna true si se puede continuar con la confirmación de aprobación.
+    /// Regla VB6: si la O.F. no tiene filas con CODIMOVI = 'CF' en ORFAPEN, el producto
+    /// no posee estructura a consumir; se consulta al usuario si aprueba igual
+    /// (en ese caso solo se da de alta el ingreso del registro 'OF' en su DepoMovi).
     /// </summary>
-    private async Task ValidarDepositoConsumo()
+    private async Task<bool> ValidarDepositoConsumo()
     {
         try
         {
             var response = await repository.Get<DepositoConsumoResponseDTO>($"api/orfapen/deposito-consumo?ordenFabricacion={ordenFabricacionSeleccionada}");
-            
-            if (response.Response != null)
+
+            if (response.Response == null)
             {
-                depositoConsumo = response.Response.CodigoDeposito;
-                
-                // Si el depósito está inactivo o requiere selección manual, mostrar modal
-                if (response.Response.RequiereSeleccion)
-                {
-                    await sweetAlertService.FireAsync("Atención", 
-                        response.Response.Mensaje, 
-                        SweetAlertIcon.Warning);
-                    
-                    // Abrir modal para seleccionar depósito de consumo
-                    tipoDepositoSeleccionando = "consumo";
-                    mostrarModalDepositoConsumo = true;
-                    StateHasChanged();
-                    return;
-                }
-            }
-            else
-            {
-                await sweetAlertService.FireAsync("Error", 
-                    "No se pudo obtener información del depósito de consumo", 
+                await sweetAlertService.FireAsync("Error",
+                    "No se pudo obtener información del depósito de consumo",
                     SweetAlertIcon.Error);
-                throw new Exception("No se pudo obtener depósito de consumo");
+                return false;
             }
+
+            // O.F. sin componentes informados para consumir (sin filas 'CF' en ORFAPEN):
+            // se permite aprobar igual; la aprobación dará de alta solo el ingreso 'OF'.
+            if (response.Response.SinComponentesConsumo)
+            {
+                var sinComponentes = await sweetAlertService.FireAsync(new SweetAlertOptions
+                {
+                    Title = "Atención",
+                    Text = "Orden de fabricación sin componentes informados para consumir",
+                    Icon = SweetAlertIcon.Warning,
+                    ShowCancelButton = true,
+                    ConfirmButtonText = "Aprobar igual",
+                    CancelButtonText = "Cancelar"
+                });
+
+                if (!sinComponentes.IsConfirmed)
+                {
+                    return false;
+                }
+
+                sinComponentesConsumo = true;
+                depositoConsumo = 0;
+                return true;
+            }
+
+            sinComponentesConsumo = false;
+            depositoConsumo = response.Response.CodigoDeposito;
+
+            // Si el depósito está inactivo o requiere selección manual, mostrar modal
+            if (response.Response.RequiereSeleccion)
+            {
+                await sweetAlertService.FireAsync("Atención",
+                    response.Response.Mensaje,
+                    SweetAlertIcon.Warning);
+
+                // Abrir modal para seleccionar depósito de consumo.
+                // El callback del modal vuelve a mostrar la confirmación.
+                tipoDepositoSeleccionando = "consumo";
+                mostrarModalDepositoConsumo = true;
+                StateHasChanged();
+                return false;
+            }
+
+            return true;
         }
         catch (Exception ex)
         {
-            await sweetAlertService.FireAsync("Error", 
-                $"Error al validar depósito de consumo: {ex.Message}", 
+            await sweetAlertService.FireAsync("Error",
+                $"Error al validar depósito de consumo: {ex.Message}",
                 SweetAlertIcon.Error);
             throw;
         }
@@ -729,13 +767,16 @@ else
         {
             // Obtener descripciones de los depósitos
             var descripcionDepositoEntrada = await ObtenerDescripcionDeposito(depositoEntrada);
-            var descripcionDepositoConsumo = await ObtenerDescripcionDeposito(depositoConsumo);
-            
+            // Cuando la O.F. no tiene componentes a consumir no hay depósito de consumo que mostrar
+            var lineaDepositoConsumo = sinComponentesConsumo
+                ? "Depósito de Consumo: sin componentes a consumir"
+                : $"Depósito de Consumo: {depositoConsumo} - {await ObtenerDescripcionDeposito(depositoConsumo)}";
+
             var mensaje = $"Orden de Fabricación: {ordenFabricacionSeleccionada}\n" +
                          $"ID Cierre: {idTextCierre}\n" +
                          $"Saldo Pendiente: {saldoPendiente:F4}\n" +
                          $"Depósito de Entrada: {depositoEntrada} - {descripcionDepositoEntrada}\n" +
-                         $"Depósito de Consumo: {depositoConsumo} - {descripcionDepositoConsumo}\n\n" +
+                         $"{lineaDepositoConsumo}\n\n" +
                          "Seleccione una opción:";
             
             var confirmacion = await sweetAlertService.FireAsync(new SweetAlertOptions

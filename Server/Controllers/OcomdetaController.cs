@@ -94,8 +94,11 @@ namespace IMPLANPROD.Server.Controllers
         [HttpGet("por-orden/{numeroOrden}")]
         public async Task<ActionResult<List<Ocomdeta>>> GetPorOrdenAsync(int numeroOrden)
         {
+            // Solo ítems vigentes (Stat_Ocom < 8): al modificarse la O/C se generan
+            // filas nuevas (Stat_Ocom = 0) y las viejas quedan con Stat_Ocom = 10.
+            // Sin el filtro, el detalle impreso/costos mostraría líneas duplicadas.
             var detalle = await _context.Ocomdetas
-                .Where(d => d.NumeOcom == numeroOrden)
+                .Where(d => d.NumeOcom == numeroOrden && d.StatOcom < 8)
                 .OrderBy(d => d.NuOrdItem)
                 .ToListAsync();
 
@@ -276,7 +279,7 @@ namespace IMPLANPROD.Server.Controllers
         /// Obtiene un detalle específico por ID
         /// </summary>
         [HttpGet("{id}")]
-        public async Task<ActionResult<Ocomdeta>> GetAsync(int id)
+        public async Task<ActionResult<Ocomdeta>> GetById(int id)
         {
             var detalle = await _context.Ocomdetas.FirstOrDefaultAsync(x => x.OCOMDETA_ID == id);
             if (detalle == null)
@@ -321,7 +324,7 @@ namespace IMPLANPROD.Server.Controllers
                 _context.Ocomdetas.Add(detalle);
                 await _context.SaveChangesAsync();
 
-                return CreatedAtAction(nameof(GetAsync), new { id = detalle.OCOMDETA_ID }, detalle);
+                return CreatedAtAction(nameof(GetById), new { id = detalle.OCOMDETA_ID }, detalle);
             }
             catch (Exception ex)
             {
