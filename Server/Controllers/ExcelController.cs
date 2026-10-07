@@ -364,6 +364,48 @@ namespace IMPLANPROD.Server.Controllers
         /// </summary>
         /// <param name="datos">Lista de remitos a exportar</param>
         /// <returns>Archivo Excel con los remitos</returns>
+        [HttpPost("exportar-cumplimiento-remitos")]
+        public IActionResult ExportarCumplimientoRemitos([FromBody] List<CumplimientoEntregaDTO> datos)
+            => ExportarCumplimientoEntregas(datos, "Cumplimiento por Remito", new Dictionary<string, string>
+            {
+                { "NumeClie", "Cta" }, { "RazonSocial", "Cliente" }, { "NroRemito", "Remito" },
+                { "FechaRemitoTexto", "Fecha" }, { "Codigo", "Código" }, { "Descripcion", "Descripción" },
+                { "Cantidad", "Cantidad" }, { "NroPedidoTexto", "N. Ped." }, { "FechaPedidoTexto", "F. Pedi." },
+                { "FechaSolicitadaTexto", "F. Solic." }, { "Atraso", "Atr" }, { "Puntaje", "Punt" }
+            });
+
+        [HttpPost("exportar-cumplimiento-pedidos")]
+        public IActionResult ExportarCumplimientoPedidos([FromBody] List<CumplimientoEntregaDTO> datos)
+            => ExportarCumplimientoEntregas(datos, "Cumplimiento por Pedido", new Dictionary<string, string>
+            {
+                { "NumeClie", "Cta" }, { "RazonSocial", "Cliente" }, { "NroPedidoTexto", "Pedido" },
+                { "FechaPedidoTexto", "Fecha" }, { "Codigo", "Código" }, { "Descripcion", "Descripción" },
+                { "Cantidad", "Cantidad" }, { "NroRemito", "Remito" }, { "FechaRemitoTexto", "F. Entreg" },
+                { "FechaSolicitadaTexto", "F. Solic." }, { "Atraso", "Atr" }, { "Puntaje", "Punt" }
+            });
+
+        private IActionResult ExportarCumplimientoEntregas(List<CumplimientoEntregaDTO> datos, string hoja, Dictionary<string, string> encabezados)
+        {
+            try
+            {
+                if (datos == null || !datos.Any())
+                {
+                    return BadRequest("No hay datos para exportar");
+                }
+
+                var archivo = _excelService.GenerarExcel(datos, hoja, encabezados, encabezados.Keys.ToList());
+
+                return File(archivo,
+                            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                            $"{hoja.Replace(" ", "_")}_{DateTime.Now:yyyyMMdd_HHmmss}.xlsx");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error al exportar {Hoja}", hoja);
+                return StatusCode(500, $"Error al exportar: {ex.Message}");
+            }
+        }
+
         [HttpPost("exportar-remitos")]
         public IActionResult ExportarRemitos([FromBody] List<IMPLANPROD.Shared.DTOs.RemitoAnularDTO> datos)
         {
