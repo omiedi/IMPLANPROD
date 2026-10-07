@@ -125,7 +125,7 @@ else
                                     var d = Detalle[i];
                                     var ant = i > 0 ? Detalle[i - 1] : null;
                                     var nuevoCliente = ant == null || ant.NumeClie != d.NumeClie;
-                                    var nuevoDoc = nuevoCliente || ClaveDocumento(ant!) != ClaveDocumento(d);
+                                    var nuevoDoc = nuevoCliente || !Equals(ClaveDocumento(ant!), ClaveDocumento(d));
                                     <tr class="@(nuevoDoc && i > 0 ? "border-top border-secondary" : "")">
                                         <td>@(nuevoCliente ? d.NumeClie.ToString() : "")</td>
                                         <td>@(nuevoCliente ? d.RazonSocial : "")</td>
