@@ -1,0 +1,419 @@
+@page "/remitos/cumplimiento-entregas/{Tipo}"
+@using IMPLANPROD.Client.Pages.Reportes
+@using IMPLANPROD.Client.Services
+@inject IRepository repository
+@inject HttpClient Http
+@inject SweetAlertService sweetAlertService
+@inject NavigationManager navigationManager
+@inject PageAccessService PageAccess
+@inject DerechosUsuarioClientService derechosService
+
+@* Migración de COCUENT09.FRM (COCUME09): Control de Cumplimiento de Entregas, IC-R / IC-P *@
+
+<PageTitle>@Titulo</PageTitle>
+
+@if (validando)
+{
+    <p>Validando acceso...</p>
+}
+else
+{
+<div class="container-fluid">
+    <div class="mb-3">
+        <h2 class="text-center fw-bold text-primary">
+            <i class="fas fa-chart-line me-2"></i>@Titulo.ToUpper()
+        </h2>
+        <hr class="border-primary border-2 opacity-50" />
+    </div>
+
+    <div class="card shadow mb-3">
+        <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
+            <h5 class="mb-0"><i class="fas fa-filter me-2"></i>Control de Cumplimiento de Entregas</h5>
+            <div class="btn-group">
+                <button class="btn btn-sm @(EsRemito ? "btn-light" : "btn-outline-light")" @onclick="@(() => CambiarTipo("remito"))">IC-R Por Remito</button>
+                <button class="btn btn-sm @(!EsRemito ? "btn-light" : "btn-outline-light")" @onclick="@(() => CambiarTipo("pedido"))">IC-P Por Pedido</button>
+            </div>
+        </div>
+        <div class="card-body">
+            <div class="row g-3 align-items-end">
+                <div class="col-md-2">
+                    <label class="form-label fw-bold">Fecha desde:</label>
+                    <input type="date" class="form-control" @bind="fechaDesde" />
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label fw-bold">Fecha hasta:</label>
+                    <input type="date" class="form-control" @bind="fechaHasta" />
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label fw-bold">Cliente desde:</label>
+                    <InputNumeroLimpio TValue="int?" @bind-Value="clienteDesde" Class="form-control" Placeholder="Primero" />
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label fw-bold">Cliente hasta:</label>
+                    <InputNumeroLimpio TValue="int?" @bind-Value="clienteHasta" Class="form-control" Placeholder="Último" />
+                </div>
+                <div class="col-md-4 d-flex gap-2">
+                    <button class="btn btn-primary flex-fill" @onclick="Consultar" disabled="@cargando">
+                        @if (cargando)
+                        {
+                            <span class="spinner-border spinner-border-sm me-1"></span>
+                        }
+                        else
+                        {
+                            <i class="fas fa-desktop me-1"></i>
+                        }
+                        Pantalla
+                    </button>
+                    <button class="btn btn-outline-success flex-fill" @onclick="Imprimir" disabled="@(cargando || !Detalle.Any())">
+                        <i class="fas fa-print me-1"></i>Impresión
+                    </button>
+                    <button class="btn btn-outline-secondary" @onclick="AbrirTolerancia" title="Tolerancia de entrega en cumplimiento de remito">
+                        <i class="fas fa-clock me-1"></i>T-Ent
+                    </button>
+                    <button class="btn btn-secondary" @onclick="@(() => navigationManager.NavigateTo("/remitos"))" title="Volver">
+                        <i class="fas fa-arrow-left"></i>
+                    </button>
+                </div>
+            </div>
+            <div class="mt-2 small text-muted">
+                Tolerancia de entrega: <strong>@tolerancia día(s)</strong>
+                @(EsRemito ? "(se aplica en el índice por remito)" : "(no se aplica en el índice por pedido)")
+            </div>
+        </div>
+    </div>
+
+    @if (resultado != null)
+    {
+        @if (!string.IsNullOrEmpty(resultado.Advertencia))
+        {
+            <div class="alert alert-warning">@resultado.Advertencia</div>
+        }
+
+        <div class="card shadow mb-3">
+            <div class="card-header bg-light d-flex justify-content-between">
+                <span class="fw-bold">@Titulo.ToUpper()</span>
+                <span>Período: @resultado.FechaDesde.ToString("dd/MM/yy") - @resultado.FechaHasta.ToString("dd/MM/yy")</span>
+            </div>
+            <div class="card-body p-0">
+                @if (!Detalle.Any())
+                {
+                    <div class="p-3 text-muted">No hay remitos en el período seleccionado.</div>
+                }
+                else
+                {
+                    <div class="table-responsive" style="max-height: 60vh;">
+                        <table class="table table-sm table-hover mb-0" style="font-size: 0.85rem;">
+                            <thead class="table-primary sticky-top">
+                                <tr>
+                                    <th>Cta</th>
+                                    <th>Cliente</th>
+                                    <th>@(EsRemito ? "Remito" : "Pedido")</th>
+                                    <th>Fecha</th>
+                                    <th>Código</th>
+                                    <th>Descripción</th>
+                                    <th class="text-end">Cantidad</th>
+                                    <th>@(EsRemito ? "N. Ped." : "Remito")</th>
+                                    <th>@(EsRemito ? "F. Pedi." : "F. Entreg")</th>
+                                    <th>F. Solic.</th>
+                                    <th class="text-end">Atr</th>
+                                    <th class="text-end">Punt</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @for (var i = 0; i < Detalle.Count; i++)
+                                {
+                                    var d = Detalle[i];
+                                    var ant = i > 0 ? Detalle[i - 1] : null;
+                                    var nuevoCliente = ant == null || ant.NumeClie != d.NumeClie;
+                                    var nuevoDoc = nuevoCliente || !Equals(ClaveDocumento(ant!), ClaveDocumento(d));
+                                    <tr class="@(nuevoDoc && i > 0 ? "border-top border-secondary" : "")">
+                                        <td>@(nuevoCliente ? d.NumeClie.ToString() : "")</td>
+                                        <td>@(nuevoCliente ? d.RazonSocial : "")</td>
+                                        @if (EsRemito)
+                                        {
+                                            <td title="@d.RemitoLargo">@(nuevoDoc ? d.NroRemito.ToString() : "")</td>
+                                            <td>@(nuevoDoc ? d.FechaRemitoTexto : "")</td>
+                                        }
+                                        else
+                                        {
+                                            <td>@(nuevoDoc ? d.NroPedidoTexto : "")</td>
+                                            <td>@(nuevoDoc ? d.FechaPedidoTexto : "")</td>
+                                        }
+                                        <td>@d.Codigo</td>
+                                        <td>@d.Descripcion</td>
+                                        <td class="text-end">@d.Cantidad.ToString("N2")</td>
+                                        @if (EsRemito)
+                                        {
+                                            <td>@d.NroPedidoTexto</td>
+                                            <td>@(d.NroPedido > 0 ? d.FechaPedidoTexto : "")</td>
+                                        }
+                                        else
+                                        {
+                                            <td title="@d.RemitoLargo">@d.NroRemito</td>
+                                            <td>@d.FechaRemitoTexto</td>
+                                        }
+                                        <td>@(d.NroPedido > 0 ? d.FechaSolicitadaTexto : "")</td>
+                                        <td class="text-end">@d.AtrasoTexto</td>
+                                        <td class="text-end @(d.Puntaje < 100 ? "text-danger" : "")">@d.Puntaje.ToString("N1")</td>
+                                    </tr>
+                                }
+                            </tbody>
+                            <tfoot class="table-light fw-bold">
+                                <tr>
+                                    <td colspan="6">Total General (@Detalle.Count renglones)</td>
+                                    <td class="text-end">@resultado.TotalCantidad.ToString("N2")</td>
+                                    <td colspan="3"></td>
+                                    <td class="text-end">@resultado.TotalAtraso</td>
+                                    <td class="text-end">@resultado.TotalPuntaje.ToString("N1")</td>
+                                </tr>
+                                <tr>
+                                    <td colspan="11">Índice de cumplimiento (promedio de puntaje)</td>
+                                    <td class="text-end">@resultado.IndiceCumplimiento.ToString("N1")</td>
+                                </tr>
+                            </tfoot>
+                        </table>
+                    </div>
+                }
+            </div>
+        </div>
+
+        @if (resultado.Clientes.Any())
+        {
+            <div class="card shadow mb-3">
+                <div class="card-header bg-light fw-bold">Índice de cumplimiento por cliente</div>
+                <div class="card-body p-0">
+                    <table class="table table-sm table-striped mb-0" style="font-size: 0.85rem;">
+                        <thead>
+                            <tr>
+                                <th>Cta</th>
+                                <th>Cliente</th>
+                                <th class="text-end">Renglones</th>
+                                <th class="text-end">Cantidad</th>
+                                <th class="text-end">Atraso total</th>
+                                <th class="text-end">Índice</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var c in resultado.Clientes)
+                            {
+                                <tr>
+                                    <td>@c.NumeClie</td>
+                                    <td>@c.RazonSocial</td>
+                                    <td class="text-end">@c.Renglones</td>
+                                    <td class="text-end">@c.Cantidad.ToString("N2")</td>
+                                    <td class="text-end">@c.TotalAtraso</td>
+                                    <td class="text-end">@c.IndiceCumplimiento.ToString("N1")</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        }
+    }
+</div>
+}
+
+@if (mostrarTolerancia)
+{
+    <div class="modal fade show" style="display: block; background: rgba(0,0,0,.5);" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header bg-primary text-white">
+                    <h5 class="modal-title"><i class="fas fa-clock me-2"></i>Tolerancia de Entrega</h5>
+                    <button type="button" class="btn-close btn-close-white" @onclick="CerrarTolerancia"></button>
+                </div>
+                <div class="modal-body">
+                    <label class="form-label fw-bold">Cantidad de días de tolerancia en cumplimiento de remito (0 a 30):</label>
+                    <InputNumeroLimpio TValue="int?" @bind-Value="toleranciaEdicion" Class="form-control" disabled="@(!puedeGrabarTolerancia)" />
+                    @if (!puedeGrabarTolerancia)
+                    {
+                        <div class="form-text text-danger">No tiene permiso de escritura para modificar la tolerancia.</div>
+                    }
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-secondary" @onclick="CerrarTolerancia">Cancelar</button>
+                    <button class="btn btn-primary" @onclick="GrabarTolerancia" disabled="@(grabandoTolerancia || !puedeGrabarTolerancia)">
+                        <i class="fas fa-save me-1"></i>Grabar
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@if (resultado != null && Detalle.Any())
+{
+    <ImpresionLista TItem="CumplimientoEntregaDTO"
+                    Datos="Detalle"
+                    Titulo="@TituloImpresion"
+                    UrlExportarExcel="@(EsRemito ? "api/excel/exportar-cumplimiento-remitos" : "api/excel/exportar-cumplimiento-pedidos")"
+                    Encabezados="@(EsRemito ? encabezadosRemito : encabezadosPedido)"
+                    ModoDirecto="false"
+                    MostrarModal="mostrarImpresion"
+                    OnCerrar="@(() => mostrarImpresion = false)" />
+}
+
+@code {
+    [Parameter] public string Tipo { get; set; } = "remito";
+
+    private const string COD_APLI = "COCUME09";
+    private const string DES_APLI = "Control de Cumplimiento de Entregas";
+
+    private bool validando = true;
+    private bool cargando;
+    private bool mostrarImpresion;
+    private bool mostrarTolerancia;
+    private bool grabandoTolerancia;
+    private bool puedeGrabarTolerancia;
+
+    // VB6 Form_Load: desde el primer día del mes hasta hoy.
+    private DateTime fechaDesde = new DateTime(DateTime.Today.Year, DateTime.Today.Month, 1);
+    private DateTime fechaHasta = DateTime.Today;
+    private int? clienteDesde;
+    private int? clienteHasta;
+
+    private int tolerancia;
+    private int? toleranciaEdicion;
+    private CumplimientoEntregaResultadoDTO? resultado;
+    private string? tipoConsultado;
+
+    private bool EsRemito => !string.Equals(Tipo, "pedido", StringComparison.OrdinalIgnoreCase);
+    private string Titulo => EsRemito ? "Cumplimiento de Entregas por Remito" : "Cumplimiento de Entregas por Pedido";
+    private string TituloImpresion => resultado == null ? Titulo
+        : $"{Titulo} - Período: {resultado.FechaDesde:dd/MM/yy} - {resultado.FechaHasta:dd/MM/yy} - Índice: {resultado.IndiceCumplimiento:N1}";
+    private List<CumplimientoEntregaDTO> Detalle => resultado?.Detalle ?? new();
+
+    private readonly Dictionary<string, string> encabezadosRemito = new()
+    {
+        { "NumeClie", "Cta" }, { "RazonSocial", "Cliente" }, { "NroRemito", "Remito" },
+        { "FechaRemitoTexto", "Fecha" }, { "Codigo", "Código" }, { "Descripcion", "Descripción" },
+        { "Cantidad", "Cantidad" }, { "NroPedidoTexto", "N. Ped." }, { "FechaPedidoTexto", "F. Pedi." },
+        { "FechaSolicitadaTexto", "F. Solic." }, { "AtrasoTexto", "Atr" }, { "Puntaje", "Punt" }
+    };
+
+    private readonly Dictionary<string, string> encabezadosPedido = new()
+    {
+        { "NumeClie", "Cta" }, { "RazonSocial", "Cliente" }, { "NroPedidoTexto", "Pedido" },
+        { "FechaPedidoTexto", "Fecha" }, { "Codigo", "Código" }, { "Descripcion", "Descripción" },
+        { "Cantidad", "Cantidad" }, { "NroRemito", "Remito" }, { "FechaRemitoTexto", "F. Entreg" },
+        { "FechaSolicitadaTexto", "F. Solic." }, { "AtrasoTexto", "Atr" }, { "Puntaje", "Punt" }
+    };
+
+    protected override async Task OnInitializedAsync()
+    {
+        await PageAccess.RequiereAccesoAsync("/remitos/cumplimiento-entregas");
+        await CargarTolerancia();
+        validando = false;
+    }
+
+    protected override void OnParametersSet()
+    {
+        // Al cambiar entre IC-R e IC-P se descarta el resultado del otro informe.
+        if (tipoConsultado != null && tipoConsultado != (EsRemito ? "REMITO" : "PEDIDO"))
+        {
+            resultado = null;
+            tipoConsultado = null;
+        }
+    }
+
+    private object ClaveDocumento(CumplimientoEntregaDTO d)
+        => EsRemito ? (d.NroRemito, d.RemitoLargo) : (object)d.NroPedido;
+
+    private void CambiarTipo(string tipo) => navigationManager.NavigateTo($"/remitos/cumplimiento-entregas/{tipo}");
+
+    private async Task CargarTolerancia()
+    {
+        var response = await repository.Get<ToleranciaEntregaDTO>("api/cumplimiento-entregas/tolerancia");
+        if (!response.Error && response.Response != null)
+            tolerancia = response.Response.Dias;
+    }
+
+    private async Task Consultar()
+    {
+        if (fechaHasta.Date < fechaDesde.Date)
+        {
+            await sweetAlertService.FireAsync("Atención", "La fecha hasta no puede ser anterior a la fecha desde.", SweetAlertIcon.Warning);
+            return;
+        }
+
+        try
+        {
+            cargando = true;
+            var tipo = EsRemito ? "REMITO" : "PEDIDO";
+            var url = $"api/cumplimiento-entregas?tipo={tipo}&fechaDesde={fechaDesde:yyyy-MM-dd}&fechaHasta={fechaHasta:yyyy-MM-dd}";
+            if (clienteDesde.HasValue) url += $"&clienteDesde={clienteDesde.Value}";
+            if (clienteHasta.HasValue) url += $"&clienteHasta={clienteHasta.Value}";
+
+            var response = await repository.Get<CumplimientoEntregaResultadoDTO>(url);
+            if (response.Error || response.Response == null)
+            {
+                await sweetAlertService.FireAsync("Error", "No se pudo obtener el informe de cumplimiento.", SweetAlertIcon.Error);
+                return;
+            }
+
+            resultado = response.Response;
+            tipoConsultado = tipo;
+            tolerancia = resultado.ToleranciaDias;
+        }
+        catch (Exception ex)
+        {
+            await sweetAlertService.FireAsync("Error", ex.Message, SweetAlertIcon.Error);
+        }
+        finally
+        {
+            cargando = false;
+        }
+    }
+
+    private async Task Imprimir()
+    {
+        if (resultado == null) await Consultar();
+        if (Detalle.Any()) mostrarImpresion = true;
+    }
+
+    private async Task AbrirTolerancia()
+    {
+        puedeGrabarTolerancia = await derechosService.TieneAccesoEscrituraAsync(COD_APLI, DES_APLI, mostrarMensaje: false);
+        await CargarTolerancia();
+        toleranciaEdicion = tolerancia;
+        mostrarTolerancia = true;
+    }
+
+    private void CerrarTolerancia() => mostrarTolerancia = false;
+
+    private async Task GrabarTolerancia()
+    {
+        // VB6 Command2: valores entre 0 y 30; vacío = no modifica.
+        if (!toleranciaEdicion.HasValue)
+        {
+            CerrarTolerancia();
+            return;
+        }
+        if (toleranciaEdicion < 0 || toleranciaEdicion > 30)
+        {
+            await sweetAlertService.FireAsync("Atención", "Valor Ingresado No Válido (Valores Entre 0 y 30)", SweetAlertIcon.Warning);
+            return;
+        }
+
+        try
+        {
+            grabandoTolerancia = true;
+            var response = await Http.PutAsJsonAsync("api/cumplimiento-entregas/tolerancia",
+                new ToleranciaEntregaDTO { Dias = toleranciaEdicion.Value });
+            if (!response.IsSuccessStatusCode)
+            {
+                await sweetAlertService.FireAsync("Error", await response.Content.ReadAsStringAsync(), SweetAlertIcon.Error);
+                return;
+            }
+
+            tolerancia = toleranciaEdicion.Value;
+            mostrarTolerancia = false;
+            if (resultado != null && EsRemito) await Consultar();
+        }
+        finally
+        {
+            grabandoTolerancia = false;
+        }
+    }
+}

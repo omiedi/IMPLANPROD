@@ -86,6 +86,7 @@ builder.Services.AddScoped<IMasterFuncionesService, MasterFuncionesService>();//
 builder.Services.AddScoped<ExcelService>();//generico para exportar a excel
 builder.Services.AddScoped<ReservasService>();//servicio para manejar las reservas de órdenes de fabricación
 builder.Services.AddScoped<FlexcrlService>();//servicio para manejar controles de procesos de negocio (tabla FLEXCRL)
+builder.Services.AddScoped<CumplimientoEntregasService>();//COCUENT09: índice de cumplimiento de entregas por remito/pedido
 builder.Services.AddScoped<IMoviStockService, MoviStockService>();//servicio para manejar movimientos de stock (equivalente a MOVISTOK VB6)
 builder.Services.AddScoped<IMoviBrecepenService, MoviBrecepenService>();//servicio para registrar movimientos en suspenso de calidad (tabla BRECEPEN)
 builder.Services.AddScoped<RecepcionMaterialesService>();//servicio para procesar recepción de materiales de central (equivalente a RecibirRemitoTraslado VB6)
