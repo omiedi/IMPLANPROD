@@ -60,7 +60,7 @@ Fecha: 30/04/2025
                 {
                     @foreach (var tipo in tiposMaterial)
                     {
-                        <option value="@tipo.Id">@tipo.Descripcion</option>
+                        <option value="@tipo.CodigoTatimat">@tipo.Descripcion</option>
                     }
                 }
             </InputSelect>
@@ -142,7 +142,7 @@ Fecha: 30/04/2025
                 {
                     @foreach (var familia in familias)
                     {
-                        <option value="@familia.Id">@familia.Descripcion</option>
+                        <option value="@familia.CodigoFamilia">@familia.Descripcion</option>
                     }
                 }
             </InputSelect>

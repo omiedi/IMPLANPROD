@@ -68,8 +68,8 @@ else
                     <th>Código Interno</th>
                     <th>Código Externo</th>
                     <th>Descripción</th>
+                    <th>Lote (IDTEXT)</th>
                     <th>Pend.Aprob.</th>
-                    <th>Id Cierre</th>
                     <th>Fecha Generación</th>
                     <th>Deposito</th>
                     <th>Ref.Depósito</th>
@@ -84,8 +84,8 @@ else
                         <td>@item.Cod_Inte</td>
                         <td>@item.Cod_Exte</td>
                         <td>@GetDescripcion(item.Cod_Inte ?? 0)</td>
-                        <td>@item.Ajuste</td>
                         <td>@item.IDTEXT</td>
+                        <td>@item.Ajuste</td>
                         <td>@(item.FechMov?.ToShortDateString() ?? "")</td>
                         <td>@item.DepoMovi</td>
                         <td>@GetDepositos(item.DepoMovi ?? 0)</td>
@@ -441,7 +441,19 @@ else
 
             registros = responseOrdenes.Response;
 
-            // Cargar descripciones
+            // La descripción del producto y del depósito ya viajan en la respuesta
+            // (el server las resuelve con joins a MASTER/TADEPOSI en la misma query).
+            // Se cargan los diccionarios localmente, sin un request por fila.
+            foreach (var item in registros)
+            {
+                if (item.Cod_Inte.HasValue && item.Cod_Inte.Value > 0 && !descripciones.ContainsKey(item.Cod_Inte.Value))
+                    descripciones[item.Cod_Inte.Value] = item.DescripcionProducto ?? string.Empty;
+                if (item.DepoMovi.HasValue && item.DepoMovi.Value > 0 && !descripDepos.ContainsKey(item.DepoMovi.Value))
+                    descripDepos[item.DepoMovi.Value] = item.DescripcionDeposito ?? string.Empty;
+            }
+
+            // Fallback: si algún registro llegó sin descripción, se consultan los
+            // endpoints individuales como antes (no rompe versiones viejas del server).
             await CargarDescripciones();
             await CargarDepositos();
         }
@@ -514,7 +526,7 @@ else
                 foreach (var item in registros)
                 {
                     int depo = item.DepoMovi ?? 0;
-                if (depo > 0 && !descripciones.ContainsKey(depo)) //ContainsKey(depo) devuelve true si ya cargaste antes la descripción para ese depósito
+                if (depo > 0 && !descripDepos.ContainsKey(depo)) //ContainsKey(depo) devuelve true si ya cargaste antes la descripción para ese depósito
                     {
                     var response = await Http.GetStringAsync($"api/tadeposi/descripcion/{depo}"); // con GetStringAsync por que con
                         var descriDepo = response?.Trim() ?? string.Empty;                                     //ar response = await repository.Get<string>($"api/masterfunciones/descripcion/{codInte}");
@@ -1081,7 +1093,7 @@ else
             };
 
             // Llamar al nuevo endpoint de aprobación
-            var response = await repository.Post("api/AprobacionOrdenFabricacion/procesarAprobacionConCierre", datosAprobacion);
+            var response = await repository.Post("api/AprobacionOrdenFabricacion/", datosAprobacion);
 
             if (response.Error)
             {

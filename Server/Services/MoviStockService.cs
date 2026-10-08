@@ -497,10 +497,15 @@ namespace IMPLANPROD.Server.Services
                 _logger.LogInformation("Buscando TODOS los remitos entre {FechaInicio} y {FechaFin} con código {CodigoMov}",
                     fechaInicio, fechaFin, codigoMov);
 
+                // Regla VB6: la grilla de /remitos solo muestra movimientos con
+                // cliente asignado (NUME_CLIE > 0). Filas con NUME_CLIE <= 0 son
+                // movimientos internos/anulaciones que no corresponden a un
+                // remito de cliente.
                 var query = _context.Set<Movisto>()
                     .Where(m => m.FechMov >= fechaInicio &&
                                m.FechMov < fechaFin &&
-                               (m.CodiMovi == codigoMov || m.CodiMovi == "DV"));
+                               (m.CodiMovi == codigoMov || m.CodiMovi == "DV") &&
+                               m.Nume_Clie > 0);
 
                 if (numeroCliente.HasValue)
                 {

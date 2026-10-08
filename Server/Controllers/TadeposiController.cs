@@ -29,6 +29,7 @@ namespace IMPLANPROD.Server.Controllers
             try
             {
                 var depositos = await _context.Tadeposi
+                    .AsNoTracking()
                     .Where(d => d.Status >= 0)
                     .ToDictionaryAsync(
                         d => d.CodigoDepo,

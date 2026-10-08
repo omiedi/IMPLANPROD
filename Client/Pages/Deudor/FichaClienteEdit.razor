@@ -4,6 +4,7 @@
 @inject IRepository repository
 @inject NavigationManager NavigationManager
 @inject PageAccessService PageAccess
+@inject IModalService modalService
 
 <PageTitle>Editar Cliente</PageTitle>
 
@@ -22,14 +23,23 @@
 }
 else
 {
-    <h3>Editar Cliente</h3>
+    <h3>
+        Editar Cliente
+        @* Acceso al ABM de países/provincias en modal (componente reutilizable
+           PaisesProvinciasModal): mismo circuito que /countries y
+           /countries/details, para dar de alta el país/provincia que falte
+           sin salir de la edición del cliente. *@
+        <button type="button" class="btn btn-sm btn-outline-primary float-end" @onclick="AbrirPaisesProvincias">
+            <i class="oi oi-globe"></i> Países / Provincias
+        </button>
+    </h3>
     @if (isLoading)
     {
         <p>Cargando datos del cliente...</p>
     }
     else if (cliente != null)
     {
-        <FichaClienteForm Id="@Id" />
+        <FichaClienteForm @ref="fichaClienteForm" Id="@Id" />
     }
     else
     {
@@ -53,5 +63,27 @@ else
         var response = await repository.Get<Deudor12>($"/api/deudor12/{Id}");
         cliente = response.Response;
         isLoading = false;
+    }
+
+    private FichaClienteForm? fichaClienteForm;
+
+    /// <summary>
+    /// Abre el ABM de países y provincias en modal. Al cerrar, se recargan los
+    /// combos del formulario por si se dieron de alta países o provincias.
+    /// </summary>
+    private async Task AbrirPaisesProvincias()
+    {
+        var modal = modalService.Show<PaisesProvinciasModal>("Países y Provincias", new ModalOptions
+        {
+            Size = ModalSize.ExtraLarge,
+            DisableBackgroundCancel = true
+        });
+
+        await modal.Result;
+
+        if (fichaClienteForm != null)
+        {
+            await fichaClienteForm.RecargarPaisesProvinciasAsync();
+        }
     }
 }

@@ -276,6 +276,374 @@ namespace IMPLANPROD.Server.Controllers
         }
 
         /// <summary>
+        /// Lista ítems de órdenes de compra vigentes para el modal "Ver Orden de Compra"
+        /// (usado desde /Stock-index y otras pantallas).
+        /// Regla VB6: OCOMDETA.Stat_Ocom &lt; 10 — el estado 10 identifica líneas viejas
+        /// reemplazadas al modificar la O/C; el 9 (anulada) se muestra en la grilla.
+        /// Todos los campos de la grilla salen de OCOMDETA (tabla plana que duplica
+        /// los datos del encabezado por línea): nume_ocom, femi_ocom, npro_ocom,
+        /// raso_prov, fentre_sol, cant_ocom, cant_rec y stat_ocom.
+        /// </summary>
+        [HttpGet("vigentes")]
+        public async Task<ActionResult<List<Ocomdeta>>> GetVigentesAsync([FromQuery] PaginationDTO pagination)
+        {
+            var queryable = ConstruirQueryVigentes(pagination.Filter);
+
+            return Ok(await queryable
+                .OrderByDescending(x => x.NumeOcom)
+                .ThenBy(x => x.NuOrdItem)
+                .Paginate(pagination)
+                .ToListAsync());
+        }
+
+        /// <summary>
+        /// Total de páginas de la consulta de O/C vigentes (mismos filtros que "vigentes").
+        /// </summary>
+        [HttpGet("vigentes-totalPages")]
+        public async Task<ActionResult> GetVigentesPagesAsync([FromQuery] PaginationDTO pagination)
+        {
+            double count = await ConstruirQueryVigentes(pagination.Filter).CountAsync();
+            double totalPages = Math.Ceiling(count / pagination.RecordsNumber);
+            return Ok(totalPages);
+        }
+
+        /// <summary>
+        /// Query base compartida por "vigentes" y "vigentes-totalPages":
+        /// ítems OCOMDETA con Stat_Ocom &lt; 10 + filtro de texto opcional
+        /// (número de orden, razón social o número de proveedor, código externo).
+        /// </summary>
+        private IQueryable<Ocomdeta> ConstruirQueryVigentes(string? filtro)
+        {
+            var queryable = _context.Ocomdetas
+                .AsNoTracking()
+                .Where(x => (x.StatOcom ?? 0) < 10);
+
+            if (!string.IsNullOrWhiteSpace(filtro))
+            {
+                queryable = queryable.Where(x =>
+                    x.NumeOcom.ToString().Contains(filtro) ||
+                    (x.RaSoProv != null && x.RaSoProv.Contains(filtro)) ||
+                    (x.CodExte != null && x.CodExte.Contains(filtro)) ||
+                    x.NproOcom.ToString().Contains(filtro));
+            }
+
+            return queryable;
+        }
+
+        // ================================================================
+        // Reporte "O/Compra Pendientes" — réplica del VB6:
+        //   SELECT * FROM OCOMDETA WITH(NOLOCK)
+        //   WHERE Stat_Ocom < 3 AND Stat_Ocom <> -1
+        //     AND Cant_Rec < Cant_Ocom - 0.001
+        //     [AND Npro_Ocom = proveedor]
+        //   ORDER BY Npro_Ocom, Nume_Ocom, Cod_Exte, FEntre_Sol
+        // ================================================================
+
+        /// <summary>
+        /// Ítems pendientes de O/C ordenados por proveedor.
+        /// nroProveedor &gt; 0 filtra por Npro_Ocom; vacío = todos agrupados por proveedor.
+        /// </summary>
+        [HttpGet("pendientes-proveedor")]
+        public async Task<ActionResult<List<OcomPendienteDTO>>> GetPendientesProveedor(
+            [FromQuery] int? nroProveedor, CancellationToken cancellationToken)
+        {
+            try
+            {
+                var query = ConstruirQueryPendientes();
+                if (nroProveedor > 0)
+                {
+                    query = query.Where(x => x.NproOcom == nroProveedor);
+                }
+
+                var items = await query
+                    .OrderBy(x => x.NproOcom)
+                    .ThenBy(x => x.NumeOcom)
+                    .ThenBy(x => x.CodExte)
+                    .ThenBy(x => x.FentreSol)
+                    .ToListAsync(cancellationToken);
+
+                return Ok(await MapearPendientesAsync(items));
+            }
+            catch (OperationCanceledException)
+            {
+                return StatusCode(499, "Consulta cancelada por el usuario");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error al generar O/C pendientes por proveedor");
+                return BadRequest($"Error al obtener pendientes por proveedor: {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// Ítems pendientes de O/C filtrados por códigos (Cod_Exte, CSV).
+        /// Sin códigos = todos los pendientes, ordenados/agrupados por código.
+        /// </summary>
+        [HttpGet("pendientes-codigo")]
+        public async Task<ActionResult<List<OcomPendienteDTO>>> GetPendientesCodigo(
+            [FromQuery] string? codigos, CancellationToken cancellationToken)
+        {
+            try
+            {
+                var query = ConstruirQueryPendientes();
+
+                var listaCodigos = (codigos ?? string.Empty)
+                    .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                    .ToList();
+                if (listaCodigos.Any())
+                {
+                    query = query.Where(x => listaCodigos.Contains(x.CodExte));
+                }
+
+                var items = await query
+                    .OrderBy(x => x.CodExte)
+                    .ThenBy(x => x.NproOcom)
+                    .ThenBy(x => x.NumeOcom)
+                    .ThenBy(x => x.FentreSol)
+                    .ToListAsync(cancellationToken);
+
+                return Ok(await MapearPendientesAsync(items));
+            }
+            catch (OperationCanceledException)
+            {
+                return StatusCode(499, "Consulta cancelada por el usuario");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error al generar O/C pendientes por código");
+                return BadRequest($"Error al obtener pendientes por código: {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// Ítems pendientes de O/C con fecha de entrega solicitada VENCIDA
+        /// (Fentre_Sol &lt; hoy). Misma condición de pendiente que el reporte VB6
+        /// (entrega total o parcial sin completar). Orden: más vencidos primero.
+        /// Incluye DiasVencido = días de atraso respecto de Fentre_Sol.
+        ///
+        /// Filtros opcionales (query string):
+        ///   numeOcom     → número exacto de orden de compra (Nume_Ocom)
+        ///   femiDesde / femiHasta   → rango de fecha de generación (Femi_Ocom)
+        ///   fentreDesde / fentreHasta → rango de fecha de entrega (Fentre_Sol)
+        ///   codigo       → contiene sobre Cod_Exte
+        ///   proveedor    → contiene sobre Npro_Ocom (número) o RaSo_Prov (razón social)
+        ///   soloVencidas → true (default) mantiene la regla Fentre_Sol &lt; hoy;
+        ///                  false lista todas las pendientes, vencidas o no.
+        /// </summary>
+        [HttpGet("pendientes-vencidas")]
+        public async Task<ActionResult<List<OcomPendienteDTO>>> GetPendientesVencidas(
+            [FromQuery] int? numeOcom,
+            [FromQuery] DateTime? femiDesde,
+            [FromQuery] DateTime? femiHasta,
+            [FromQuery] DateTime? fentreDesde,
+            [FromQuery] DateTime? fentreHasta,
+            [FromQuery] string? codigo,
+            [FromQuery] string? proveedor,
+            [FromQuery] bool soloVencidas = true,
+            CancellationToken cancellationToken = default)
+        {
+            try
+            {
+                var hoy = DateTime.Today;
+                var query = ConstruirQueryPendientes();
+
+                // Regla base del reporte "Pendientes/Vencidas": solo ítems con
+                // Fentre_Sol vencida. Se puede desactivar para ver también las
+                // pendientes con entrega futura (DiasVencido queda null).
+                if (soloVencidas)
+                {
+                    query = query.Where(x => x.FentreSol.HasValue && x.FentreSol.Value < hoy);
+                }
+
+                if (numeOcom > 0)
+                {
+                    query = query.Where(x => x.NumeOcom == numeOcom);
+                }
+
+                // Fechas "hasta" inclusivas: se compara contra el día siguiente
+                if (femiDesde.HasValue)
+                {
+                    query = query.Where(x => x.FemiOcom >= femiDesde.Value.Date);
+                }
+                if (femiHasta.HasValue)
+                {
+                    query = query.Where(x => x.FemiOcom < femiHasta.Value.Date.AddDays(1));
+                }
+                if (fentreDesde.HasValue)
+                {
+                    query = query.Where(x => x.FentreSol >= fentreDesde.Value.Date);
+                }
+                if (fentreHasta.HasValue)
+                {
+                    query = query.Where(x => x.FentreSol < fentreHasta.Value.Date.AddDays(1));
+                }
+
+                if (!string.IsNullOrWhiteSpace(codigo))
+                {
+                    var cod = codigo.Trim();
+                    query = query.Where(x => x.CodExte != null && x.CodExte.Contains(cod));
+                }
+
+                // Proveedor: el mismo texto busca por número (Npro_Ocom) o razón social
+                if (!string.IsNullOrWhiteSpace(proveedor))
+                {
+                    var prov = proveedor.Trim();
+                    query = query.Where(x =>
+                        x.NproOcom.ToString().Contains(prov) ||
+                        (x.RaSoProv != null && x.RaSoProv.Contains(prov)));
+                }
+
+                var items = await query
+                    .OrderBy(x => x.FentreSol)
+                    .ThenBy(x => x.NproOcom)
+                    .ThenBy(x => x.NumeOcom)
+                    .ToListAsync(cancellationToken);
+
+                return Ok(await MapearPendientesAsync(items));
+            }
+            catch (OperationCanceledException)
+            {
+                return StatusCode(499, "Consulta cancelada por el usuario");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error al generar O/C pendientes vencidas");
+                return BadRequest($"Error al obtener pendientes vencidas: {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// Códigos (Cod_Exte + descripción) que tienen O/C pendientes.
+        /// Alimenta el selector de códigos del reporte "Pendientes x Código":
+        /// solo se ofrecen códigos que realmente tienen pendiente.
+        /// </summary>
+        [HttpGet("pendientes-codigos")]
+        public async Task<ActionResult> GetCodigosPendientes([FromQuery] string? filter,
+            CancellationToken cancellationToken)
+        {
+            try
+            {
+                var query = ConstruirQueryPendientes();
+                if (!string.IsNullOrWhiteSpace(filter))
+                {
+                    query = query.Where(x =>
+                        (x.CodExte != null && x.CodExte.Contains(filter)) ||
+                        (x.Descritem != null && x.Descritem.Contains(filter)));
+                }
+
+                var codigos = await query
+                    .GroupBy(x => x.CodExte)
+                    .Select(g => new
+                    {
+                        Codigo = g.Key,
+                        Descripcion = g.Max(x => x.Descritem)
+                    })
+                    .OrderBy(x => x.Codigo)
+                    .ToListAsync(cancellationToken);
+
+                return Ok(codigos);
+            }
+            catch (OperationCanceledException)
+            {
+                return StatusCode(499, "Consulta cancelada por el usuario");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error al obtener códigos con O/C pendientes");
+                return BadRequest($"Error al obtener códigos pendientes: {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// Query base del reporte de pendientes: condición exacta del VB6
+        /// (Stat_Ocom &lt; 3, &lt;&gt; -1, Cant_Rec &lt; Cant_Ocom - 0.001; nulos como 0).
+        /// </summary>
+        private IQueryable<Ocomdeta> ConstruirQueryPendientes()
+        {
+            return _context.Ocomdetas
+                .AsNoTracking()
+                .Where(x => (x.StatOcom ?? 0) < 3
+                         && x.StatOcom != -1
+                         && (x.CantRec ?? 0m) < (x.CantOcom ?? 0m) - 0.001m);
+        }
+
+        /// <summary>
+        /// Mapea OCOMDETA a OcomPendienteDTO replicando los cálculos del VB6:
+        /// moneda abreviada (Mone_Emis → "", "U$S" o TAMONED de 3 chars),
+        /// tipo de cambio (TAMONED.Cotizacion; 1 para moneda local),
+        /// CAPEN (Cant_Ocom - Cant_Rec; &lt; 0.05 → 0), PreUnid en pesos y valor pendiente.
+        /// </summary>
+        private async Task<List<OcomPendienteDTO>> MapearPendientesAsync(List<Ocomdeta> items)
+        {
+            // Una sola lectura de TAMONED: diccionario CodigoMoneda → (Descripcion, Cotizacion)
+            var monedas = await _context.Tamoneds
+                .AsNoTracking()
+                .ToDictionaryAsync(m => m.CodigoMoneda);
+
+            return items.Select(item =>
+            {
+                // MONEX$ / TICAMBIO del VB6
+                var moneEmis = item.MoneEmis ?? 0;
+                var monex = string.Empty;
+                decimal ticambio = 1m;
+                if (moneEmis == 2)
+                {
+                    monex = "U$S";
+                }
+                else if (moneEmis > 2)
+                {
+                    monex = monedas.TryGetValue(moneEmis, out var m)
+                        ? (m.Descripcion ?? string.Empty).PadRight(3)[..3].Trim()
+                        : string.Empty;
+                }
+                if (moneEmis >= 2)
+                {
+                    ticambio = monedas.TryGetValue(moneEmis, out var m2) ? m2.Cotizacion : 1m;
+                }
+
+                // CAPEN = Cant_Ocom - Cant_Rec; si < 0.05 se considera 0 (VB6)
+                var capen = (item.CantOcom ?? 0m) - (item.CantRec ?? 0m);
+                if (capen < 0.05m)
+                {
+                    capen = 0m;
+                }
+
+                // Descripción: DESCRITEM, o DELIBRE para ítems libres (Cod_Inte <= 0); máx 36 chars
+                var descripcion = (item.CodInte ?? 0) <= 0 ? item.Delibre : item.Descritem;
+                if (!string.IsNullOrEmpty(descripcion) && descripcion.Length > 36)
+                {
+                    descripcion = descripcion[..36];
+                }
+
+                var preUnidPesos = (item.PrUnNeto ?? 0m) * ticambio;
+
+                return new OcomPendienteDTO
+                {
+                    NumeOcom = item.NumeOcom,
+                    FemiOcom = item.FemiOcom,
+                    NproOcom = item.NproOcom,
+                    RaSoProv = item.RaSoProv,
+                    CodExte = item.CodExte,
+                    Descripcion = descripcion,
+                    CantOcom = item.CantOcom,
+                    UniCom = item.UniCom,
+                    Moneda = monex,
+                    PrunNeto = item.PrUnNeto,
+                    Importe = (item.CantOcom ?? 0m) * (item.PrUnNeto ?? 0m),
+                    FentreSol = item.FentreSol,
+                    CantRec = item.CantRec,
+                    CantPend = capen,
+                    PreUnidPesos = preUnidPesos,
+                    ValorPend = preUnidPesos * capen,
+                    // Días de atraso (solo tiene sentido en el reporte de vencidas)
+                    DiasVencido = item.FentreSol.HasValue && item.FentreSol.Value.Date < DateTime.Today
+                        ? (DateTime.Today - item.FentreSol.Value.Date).Days
+                        : null
+                };
+            }).ToList();
+        }
+
+        /// <summary>
         /// Obtiene un detalle específico por ID
         /// </summary>
         [HttpGet("{id}")]

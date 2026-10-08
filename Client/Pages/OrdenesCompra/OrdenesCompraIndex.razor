@@ -73,6 +73,31 @@ else
                     <i class="fas fa-exchange-alt"></i> Códigos de Proveedor
                 </a>
             </div>
+            <div class="col-auto">
+                @* Informes de O/C pendientes (réplica del reporte VB6 sobre OCOMDETA) *@
+                <div class="dropdown">
+                    <button class="btn btn-outline-primary dropdown-toggle" type="button" data-bs-toggle="dropdown">
+                        <i class="oi oi-bar-chart"></i> Informes
+                    </button>
+                    <ul class="dropdown-menu dropdown-menu-end">
+                        <li>
+                            <button class="dropdown-item" type="button" @onclick="AbrirPendientesProveedor">
+                                <i class="fas fa-truck me-2"></i>O.Compra Pendientes x Proveedor
+                            </button>
+                        </li>
+                        <li>
+                            <button class="dropdown-item" type="button" @onclick="AbrirPendientesCodigo">
+                                <i class="fas fa-barcode me-2"></i>O.Compra Pendientes x Código
+                            </button>
+                        </li>
+                        <li>
+                            <button class="dropdown-item" type="button" @onclick="AbrirPendientesVencidas">
+                                <i class="fas fa-exclamation-triangle me-2"></i>O.C. Pendientes/Vencidas
+                            </button>
+                        </li>
+                    </ul>
+                </div>
+            </div>
         </div>
     }
 
@@ -213,7 +238,7 @@ else
                                             <span class="badge bg-secondary">@orden.StatOcom</span>
                                         }
                                     </td>
-                                    <td>@orden.TotalOcom?.ToString("C2")</td>
+                                    <td>@Formateador.FormatearMoneda(orden.TotalOcom, orden.MoneEmis)</td>
                                     <td>
                                         <div class="btn-group" role="group">
                                             <button class="btn btn-sm btn-outline-primary" @onclick="(() => EditarOrden(orden.OCOMENCA_ID))" title="Editar" disabled="@(!tieneAccesoEscritura)">
@@ -280,6 +305,11 @@ else
 
 <!-- Componente selector de proveedores -->
 <SelectorProveedores @ref="selectorProveedores" OnProveedorSeleccionado="OnProveedorSeleccionado" />
+
+@* Modal reutilizable: reporte "O/Compra Pendientes" por proveedor o por código *@
+<OcomPendientesModal MostrarModal="mostrarModalPendientes"
+                     Modo="@modoPendientes"
+                     OnCerrar="CerrarModalPendientes" />
 
 @* Modal de configuración de Órdenes de Compra *@
 <OrdenesCompraConfigModal IsVisible="@mostrarModalConfiguracion"
@@ -466,6 +496,10 @@ else
     private DateTime? fechaDesde;
     private DateTime? fechaHasta;
     private string proveedorSeleccionado = string.Empty;
+
+    // Modal reporte "O/Compra Pendientes" (OcomPendientesModal): "proveedor" o "codigo"
+    private bool mostrarModalPendientes = false;
+    private string modoPendientes = "proveedor";
     private int? numeroProveedorSeleccionado;
 
     // Componentes
@@ -1037,6 +1071,32 @@ else
             await sweetAlertService.FireAsync("Revertida", "La anulación ha sido revertida exitosamente. La orden está ahora activa.", SweetAlertIcon.Success);
             await LoadAsync(currentPage);
         }
+    }
+
+    /// <summary>Informes → O/Compra pendientes agrupadas por proveedor</summary>
+    private void AbrirPendientesProveedor()
+    {
+        modoPendientes = "proveedor";
+        mostrarModalPendientes = true;
+    }
+
+    /// <summary>Informes → O/Compra pendientes agrupadas por código</summary>
+    private void AbrirPendientesCodigo()
+    {
+        modoPendientes = "codigo";
+        mostrarModalPendientes = true;
+    }
+
+    /// <summary>Informes → pendientes con F.Entrega vencida (sin filtro)</summary>
+    private void AbrirPendientesVencidas()
+    {
+        modoPendientes = "vencidas";
+        mostrarModalPendientes = true;
+    }
+
+    private void CerrarModalPendientes()
+    {
+        mostrarModalPendientes = false;
     }
 
     private async Task AbrirSelectorProveedores()

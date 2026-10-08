@@ -46,6 +46,28 @@
             <i class="fas fa-globe me-1"></i> Inventario General
         </button>
 
+        @* Reporte "Stock < 0": códigos con saldo negativo en MOVISTO
+           (Σ CantIngre − CantSalid, nulos como 0). General = todos los
+           depósitos; Por Depósito = MOVISTO.DepoMovi = depósito elegido. *@
+        <div class="dropdown">
+            <button type="button" class="btn btn-danger dropdown-toggle" data-bs-toggle="dropdown"
+                    title="reportes con stock negativo" disabled="@consultando">
+                <i class="fas fa-exclamation-triangle me-1"></i> Stock &lt; 0
+            </button>
+            <ul class="dropdown-menu">
+                <li>
+                    <button type="button" class="dropdown-item" @onclick="ConsultarStockNegativoGeneral">
+                        <i class="fas fa-globe me-1"></i> General
+                    </button>
+                </li>
+                <li>
+                    <button type="button" class="dropdown-item" @onclick="AbrirSelectorDepositosNegativo">
+                        <i class="fas fa-warehouse me-1"></i> Por Depósito
+                    </button>
+                </li>
+            </ul>
+        </div>
+
         @if (consultando)
         {
             <button type="button" class="btn btn-danger" @onclick="DetenerConsulta">
@@ -198,6 +220,8 @@
     private string filtroDeposito = string.Empty;
     private int depositoSeleccionado = 0;
     private string descripcionDeposito = string.Empty;
+    // true = el selector se abrió desde "Stock < 0 / Por Depósito" (endpoint stock-negativo-deposito)
+    private bool selectorParaStockNegativo = false;
 
     // Anti doble-clic + cancelación de la consulta
     private bool consultando = false;
@@ -263,11 +287,31 @@
         }
     }
 
-    /// <summary>Abre el selector de depósitos</summary>
+    /// <summary>Abre el selector de depósitos (reporte de stock por depósito)</summary>
     private void AbrirSelectorDepositos()
     {
+        selectorParaStockNegativo = false;
         filtroDeposito = string.Empty;
         mostrarSelectorDepositos = true;
+    }
+
+    /// <summary>Abre el selector de depósitos para el reporte "Stock &lt; 0"</summary>
+    private void AbrirSelectorDepositosNegativo()
+    {
+        selectorParaStockNegativo = true;
+        filtroDeposito = string.Empty;
+        mostrarSelectorDepositos = true;
+    }
+
+    /// <summary>Stock &lt; 0 general: saldo negativo sumando todos los depósitos</summary>
+    private async Task ConsultarStockNegativoGeneral()
+    {
+        depositoSeleccionado = 0;
+        descripcionDeposito = string.Empty;
+
+        await EjecutarConsulta(
+            "api/movisto/stock-negativo-general",
+            "Stock Negativo - General (todos los depósitos)");
     }
 
     /// <summary>
@@ -281,7 +325,9 @@
         var conf = await sweetAlertService.FireAsync(new SweetAlertOptions
         {
             Title = $"Depósito {depo.CodigoDepo} - {depo.Descripcion}",
-            Text = "¿Generar el reporte de stock para este depósito?",
+            Text = selectorParaStockNegativo
+                ? "¿Generar el reporte de stock NEGATIVO para este depósito?"
+                : "¿Generar el reporte de stock para este depósito?",
             Icon = SweetAlertIcon.Question,
             ShowCancelButton = true,
             ConfirmButtonText = "Generar Reporte",
@@ -298,9 +344,18 @@
         depositoSeleccionado = depo.CodigoDepo;
         descripcionDeposito = depo.Descripcion;
 
-        await EjecutarConsulta(
-            $"api/movisto/stock-deposito/{depo.CodigoDepo}",
-            $"Stock del depósito {depo.CodigoDepo} - {depo.Descripcion}");
+        if (selectorParaStockNegativo)
+        {
+            await EjecutarConsulta(
+                $"api/movisto/stock-negativo-deposito/{depo.CodigoDepo}",
+                $"Stock Negativo del depósito {depo.CodigoDepo} - {depo.Descripcion}");
+        }
+        else
+        {
+            await EjecutarConsulta(
+                $"api/movisto/stock-deposito/{depo.CodigoDepo}",
+                $"Stock del depósito {depo.CodigoDepo} - {depo.Descripcion}");
+        }
     }
 
     /// <summary>

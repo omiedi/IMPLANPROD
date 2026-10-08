@@ -325,6 +325,34 @@
         StateHasChanged();
     }
 
+    /// <summary>
+    /// Recarga los combos de país y provincia preservando la selección actual
+    /// del cliente (Pais_Cli / Prov_Cli son texto). Se invoca luego de cerrar
+    /// el ABM de países y provincias en modal (PaisesProvinciasModal) para que
+    /// los datos dados de alta ahí queden disponibles en el formulario.
+    /// </summary>
+    public async Task RecargarPaisesProvinciasAsync()
+    {
+        Paises = (await repository.Get<List<Country>>("/api/countries/combo")).Response ?? new List<Country>();
+        if (!string.IsNullOrEmpty(Deudor.Pais_Cli))
+        {
+            var pais = Paises.FirstOrDefault(x => x.Name == Deudor.Pais_Cli);
+            if (pais != null)
+            {
+                await CargarProvincias(pais.Id);
+            }
+            else
+            {
+                Provincias.Clear();
+            }
+        }
+        else
+        {
+            Provincias.Clear();
+        }
+        StateHasChanged();
+    }
+
     private async Task GuardarAsync()
     {
         try

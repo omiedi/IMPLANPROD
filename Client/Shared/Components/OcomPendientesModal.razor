@@ -1,0 +1,668 @@
+@using IMPLANPROD.Shared.DTOs
+@using IMPLANPROD.Shared.Entities
+@using IMPLANPROD.Client.Pages.Reportes
+@inject IRepository repository
+@inject SweetAlertService sweetAlertService
+
+@*
+    Componente reutilizable: OcomPendientesModal.razor
+
+    Reporte "O/Compra Pendientes" — réplica del reporte VB6 sobre OCOMDETA
+    (Stat_Ocom < 3, <> -1, Cant_Rec < Cant_Ocom - 0.001).
+
+    Dos modos (parámetro Modo):
+      - "proveedor" → selector de proveedor (Proved12). Sin selección se
+                      emite para TODOS agrupados por proveedor (previo aviso
+                      con opción de cancelar).
+      - "codigo"    → selector múltiple de códigos (Cod_Exte con pendiente).
+                      Sin códigos se emite TODO agrupado por código (previo
+                      aviso con opción de cancelar).
+      - "vencidas"  → formulario de filtros (n° O/C, rango F.Generación,
+                      rango F.Entrega, código, proveedor y tilde "solo
+                      vencidas") y reporte con columna "Días Venc."
+
+    Endpoints:
+        GET api/ocomdeta/pendientes-proveedor?nroProveedor=
+        GET api/ocomdeta/pendientes-codigo?codigos=
+        GET api/ocomdeta/pendientes-codigos?filter=
+        GET api/ocomdeta/pendientes-vencidas?numeOcom=&femiDesde=&femiHasta=
+            &fentreDesde=&fentreHasta=&codigo=&proveedor=&soloVencidas=
+        GET api/proved12/combo
+
+    Uso desde cualquier página:
+        <OcomPendientesModal MostrarModal="mostrarPend"
+                             Modo="@modoPend"
+                             OnCerrar="() => mostrarPend = false" />
+*@
+
+@if (MostrarModal)
+{
+    <div class="modal fade show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5);">
+        <div class="modal-dialog modal-xl modal-dialog-scrollable">
+            <div class="modal-content">
+                <div class="modal-header bg-primary text-white">
+                    <h5 class="modal-title">
+                        <i class="fas fa-clipboard-list me-2"></i>
+                        @(Modo == "vencidas" ? "O/C Pendientes/Vencidas" : $"O/Compra Pendientes x {(Modo == "codigo" ? "Código" : "Proveedor")}")
+                    </h5>
+                    <button type="button" class="btn-close btn-close-white" @onclick="Cerrar"></button>
+                </div>
+                <div class="modal-body">
+
+                    @* ── Etapa 1: selección del filtro ─────────────────── *@
+                    @if (etapa == "seleccion")
+                    {
+                        @if (Modo == "proveedor")
+                        {
+                            <div class="mb-2">
+                                <label class="form-label">Proveedor (vacío = todos, agrupados por proveedor)</label>
+                                <input type="text" class="form-control" placeholder="Filtrar por código o razón social..."
+                                       @bind-value="filtroProveedor" @bind-value:event="oninput" />
+                            </div>
+                            <div class="table-responsive" style="max-height: 45vh; overflow-y: auto;">
+                                <table class="table table-hover table-sm">
+                                    <thead class="table-light sticky-top">
+                                        <tr>
+                                            <th style="width: 2cm;">Nro</th>
+                                            <th>Razón Social</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach (var prov in ProveedoresFiltrados)
+                                        {
+                                            <tr style="cursor: pointer;"
+                                                class="@(proveedorSel == prov.Nume_Cli ? "table-primary" : "")"
+                                                @onclick="() => proveedorSel = prov.Nume_Cli">
+                                                <td>@prov.Nume_Cli</td>
+                                                <td>@prov.Raso_Cli</td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+                            <div class="text-muted small mt-1">
+                                @(proveedorSel > 0 ? $"Seleccionado: {proveedorSel} - {NombreProveedorSel}" : "Ningún proveedor seleccionado")
+                            </div>
+                        }
+                        else if (Modo == "vencidas")
+                        {
+                            @* Filtros del reporte "O/C Pendientes/Vencidas".
+                               Todos opcionales: se combinan con AND en el endpoint
+                               pendientes-vencidas. Vacíos = sin restricción. *@
+                            <div class="row g-2">
+                                <div class="col-md-4">
+                                    <label class="form-label mb-1">N° Orden de Compra</label>
+                                    <InputNumeroLimpio TValue="int?" @bind-Value="filtroVencNroOrden"
+                                                       Class="form-control" Placeholder="Todas" />
+                                </div>
+                                <div class="col-md-4">
+                                    <label class="form-label mb-1">Código</label>
+                                    <input type="text" class="form-control" placeholder="Contiene..."
+                                           @bind-value="filtroVencCodigo" @bind-value:event="oninput" />
+                                </div>
+                                <div class="col-md-4">
+                                    <label class="form-label mb-1">Proveedor (nro o razón social)</label>
+                                    <input type="text" class="form-control" placeholder="Todos"
+                                           @bind-value="filtroVencProveedor" @bind-value:event="oninput" />
+                                </div>
+                                <div class="col-md-3">
+                                    <label class="form-label mb-1">F. Generación desde</label>
+                                    <input type="date" class="form-control" @bind="filtroVencFemiDesde" />
+                                </div>
+                                <div class="col-md-3">
+                                    <label class="form-label mb-1">F. Generación hasta</label>
+                                    <input type="date" class="form-control" @bind="filtroVencFemiHasta" />
+                                </div>
+                                <div class="col-md-3">
+                                    <label class="form-label mb-1">F. Entrega desde</label>
+                                    <input type="date" class="form-control" @bind="filtroVencFentreDesde" />
+                                </div>
+                                <div class="col-md-3">
+                                    <label class="form-label mb-1">F. Entrega hasta</label>
+                                    <input type="date" class="form-control" @bind="filtroVencFentreHasta" />
+                                </div>
+                                <div class="col-12">
+                                    <div class="form-check mt-1">
+                                        <input class="form-check-input" type="checkbox" id="chkSoloVencidas"
+                                               @bind="filtroVencSoloVencidas" />
+                                        <label class="form-check-label" for="chkSoloVencidas">
+                                            Solo con F. Entrega vencida (&lt; hoy). Destildar para incluir también pendientes aún no vencidas.
+                                        </label>
+                                    </div>
+                                </div>
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="mb-2">
+                                <label class="form-label">Códigos con pendiente (vacío = todos, agrupados por código)</label>
+                                <div class="input-group">
+                                    <input type="text" class="form-control" placeholder="Filtrar por código o descripción..."
+                                           @bind-value="filtroCodigo" @bind-value:event="oninput" @onkeyup="OnEnterCodigo" />
+                                    <button type="button" class="btn btn-outline-primary" @onclick="BuscarCodigos">
+                                        <i class="fas fa-search"></i> Buscar
+                                    </button>
+                                    @* × limpia el filtro escrito y todos los códigos seleccionados *@
+                                    <button type="button" class="btn btn-outline-danger" title="Limpiar filtro y selección"
+                                            @onclick="LimpiarCodigos">
+                                        <i class="fas fa-times"></i>
+                                    </button>
+                                </div>
+                            </div>
+                            @if (codigosSeleccionados.Any())
+                            {
+                                <div class="mb-2">
+                                    @foreach (var c in codigosSeleccionados)
+                                    {
+                                        <span class="badge bg-primary me-1">
+                                            @c
+                                            <button type="button" class="btn-close btn-close-white btn-sm ms-1"
+                                                    style="font-size: 0.6rem;" @onclick="() => codigosSeleccionados.Remove(c)"></button>
+                                        </span>
+                                    }
+                                </div>
+                            }
+                            <div class="table-responsive" style="max-height: 40vh; overflow-y: auto;">
+                                <table class="table table-hover table-sm">
+                                    <thead class="table-light sticky-top">
+                                        <tr>
+                                            <th style="width: 3.5cm;">Código</th>
+                                            <th>Descripción</th>
+                                            <th style="width: 2cm;"></th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach (var cod in codigosDisponibles)
+                                        {
+                                            <tr>
+                                                <td><strong>@cod.Codigo</strong></td>
+                                                <td>@cod.Descripcion</td>
+                                                <td class="text-end">
+                                                    @if (codigosSeleccionados.Contains(cod.Codigo))
+                                                    {
+                                                        <span class="badge bg-success">Agregado</span>
+                                                    }
+                                                    else
+                                                    {
+                                                        <button type="button" class="btn btn-sm btn-outline-primary"
+                                                                @onclick="() => codigosSeleccionados.Add(cod.Codigo)">
+                                                            <i class="fas fa-plus"></i>
+                                                        </button>
+                                                    }
+                                                </td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+                        }
+                    }
+                    else
+                    {
+                        @* ── Etapa 2: reporte emitido ─────────────────── *@
+                        @if (consultando)
+                        {
+                            <div class="d-flex align-items-center gap-2 my-3">
+                                <div class="spinner-border text-primary" role="status"></div>
+                                <span class="text-muted">Consultando OCOMDETA...</span>
+                            </div>
+                        }
+                        else if (items.Any())
+                        {
+                            <div class="alert alert-info py-2 mb-2">
+                                <strong>@tituloReporte</strong>
+                                <span class="ms-2 text-muted">(@items.Count ítems)</span>
+                            </div>
+
+                            <Pagination CurrentPage="paginaActual" TotalPages="TotalPaginas" SelectedPage="SeleccionarPagina" />
+
+                            <div class="table-responsive" style="max-height: 50vh; overflow-y: auto;">
+                                <table class="table table-striped table-bordered table-sm" style="font-size: 0.72rem;">
+                                    <thead class="table-dark sticky-top">
+                                        <tr>
+                                            <th>N.Orden</th>
+                                            <th>F.Emisión</th>
+                                            <th>Proveedor</th>
+                                            <th>Código</th>
+                                            <th>Descripción</th>
+                                            <th class="text-end">Cant.</th>
+                                            <th>UM</th>
+                                            <th>F.Solic.</th>
+                                            @if (Modo == "vencidas")
+                                            {
+                                                <th class="text-end">Días Venc.</th>
+                                            }
+                                            <th class="text-end">Recib.</th>
+                                            <th class="text-end">Pend.</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach (var grupo in GruposPaginados)
+                                        {
+                                            @* Encabezado de grupo: proveedor o código según el modo *@
+                                            <tr class="table-secondary">
+                                                <td colspan="@(Modo == "vencidas" ? 11 : 10)" class="fw-bold">
+                                                    @if (Modo == "codigo")
+                                                    {
+                                                        @($"Código: {grupo.Key}")
+                                                    }
+                                                    else
+                                                    {
+                                                        @($"Proveedor: {grupo.Key}")
+                                                    }
+                                                </td>
+                                            </tr>
+                                            @foreach (var item in grupo)
+                                            {
+                                                <tr>
+                                                    <td>@item.NumeOcom</td>
+                                                    <td>@item.FemiOcom?.ToString("dd/MM/yyyy")</td>
+                                                    <td>@($"{item.NproOcom} - {item.RaSoProv}")</td>
+                                                    <td>@item.CodExte</td>
+                                                    <td>@item.Descripcion</td>
+                                                    <td class="text-end">@item.CantOcom?.ToString("N2")</td>
+                                                    <td>@item.UniCom</td>
+                                                    <td>@item.FentreSol?.ToString("dd/MM/yyyy")</td>
+                                                    @if (Modo == "vencidas")
+                                                    {
+                                                        <td class="text-end text-danger fw-bold">@item.DiasVencido</td>
+                                                    }
+                                                    <td class="text-end">@item.CantRec?.ToString("N2")</td>
+                                                    <td class="text-end">@item.CantPend.ToString("N2")</td>
+                                                </tr>
+                                            }
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="alert alert-warning mt-3">
+                                <i class="fas fa-info-circle me-2"></i> No se han encontrado órdenes de compra pendientes.
+                            </div>
+                        }
+                    }
+                </div>
+                <div class="modal-footer">
+                    @if (etapa == "seleccion")
+                    {
+                        @* Limpiar filtros: solo en modo "vencidas" (los otros modos
+                           tienen su propio botón de limpieza dentro del selector) *@
+                        @if (Modo == "vencidas")
+                        {
+                            <button type="button" class="btn btn-outline-secondary" @onclick="LimpiarFiltrosVencidas">
+                                <i class="fas fa-eraser me-1"></i> Limpiar
+                            </button>
+                        }
+                        <button type="button" class="btn btn-primary" @onclick="EmitirReporte" disabled="@consultando">
+                            <i class="fas fa-file-alt me-1"></i> Emitir Reporte
+                        </button>
+                    }
+                    else
+                    {
+                        <button type="button" class="btn btn-outline-primary" @onclick="VolverASeleccion" disabled="@consultando">
+                            <i class="fas fa-arrow-left me-1"></i> Cambiar Filtro
+                        </button>
+                        <button type="button" class="btn btn-success" @onclick="() => mostrarImpresion = true"
+                                disabled="@(consultando || items.Count == 0)">
+                            <i class="oi oi-print"></i> Imprimir/Exp. Excel
+                        </button>
+                    }
+                    <button type="button" class="btn btn-secondary" @onclick="Cerrar">Cerrar</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    @* Impresión (componente genérico del proyecto) *@
+    @if (mostrarImpresion)
+    {
+        <ImpresionLista TItem="OcomPendienteDTO"
+                        Datos="items"
+                        Encabezados="encabezadosImpresion"
+                        Titulo="@tituloReporte"
+                        UrlExportarExcel="api/excel/exportar-ocom-pendientes"
+                        MostrarModal="true"
+                        OnCerrar="() => mostrarImpresion = false" />
+    }
+}
+
+@code {
+    [Parameter] public bool MostrarModal { get; set; }
+
+    /// <summary>"proveedor" o "codigo": define selector y agrupamiento</summary>
+    [Parameter] public string Modo { get; set; } = "proveedor";
+
+    [Parameter] public EventCallback OnCerrar { get; set; }
+
+    // ── Estado general ──────────────────────────────────────────────────
+    private string etapa = "seleccion";   // "seleccion" | "reporte"
+    private bool abierto;
+    private bool consultando;
+
+    // ── Selector de proveedor ───────────────────────────────────────────
+    private List<Proved12> proveedores = new();
+    private string filtroProveedor = string.Empty;
+    private int proveedorSel;
+
+    // ── Selector de códigos ─────────────────────────────────────────────
+    private List<CodigoItem> codigosDisponibles = new();
+    private List<string> codigosSeleccionados = new();
+    private string filtroCodigo = string.Empty;
+    private bool codigosCargados;
+
+    // ── Filtros del modo "vencidas" ─────────────────────────────────────
+    // Todos opcionales y combinables (AND en el servidor). Vacío = sin filtro.
+    private int? filtroVencNroOrden;
+    private DateTime? filtroVencFemiDesde;
+    private DateTime? filtroVencFemiHasta;
+    private DateTime? filtroVencFentreDesde;
+    private DateTime? filtroVencFentreHasta;
+    private string filtroVencCodigo = string.Empty;
+    private string filtroVencProveedor = string.Empty;
+    private bool filtroVencSoloVencidas = true;
+
+    // ── Reporte ─────────────────────────────────────────────────────────
+    private List<OcomPendienteDTO> items = new();
+    private string tituloReporte = string.Empty;
+    private int paginaActual = 1;
+    private const int RegistrosPorPagina = 200; // filas (los grupos ocupan encabezado+subtotal)
+    private bool mostrarImpresion;
+
+    private int TotalPaginas => Math.Max(1, (int)Math.Ceiling(items.Count / (double)RegistrosPorPagina));
+
+    /// <summary>
+    /// Grupos de la página actual. Como el SQL ya devuelve las filas ordenadas
+    /// por la clave de grupo, se paginan las filas y luego se agrupan para
+    /// dibujar encabezado + subtotal por grupo.
+    /// </summary>
+    private IEnumerable<IGrouping<string, OcomPendienteDTO>> GruposPaginados =>
+        items
+            .Skip((paginaActual - 1) * RegistrosPorPagina)
+            .Take(RegistrosPorPagina)
+            .GroupBy(x => Modo == "codigo"
+                ? (x.CodExte ?? string.Empty)
+                : $"{x.NproOcom} - {x.RaSoProv}");
+
+    private IEnumerable<Proved12> ProveedoresFiltrados =>
+        string.IsNullOrWhiteSpace(filtroProveedor)
+            ? proveedores
+            : proveedores.Where(p =>
+                p.Nume_Cli.ToString().Contains(filtroProveedor.Trim()) ||
+                (p.Raso_Cli ?? string.Empty).Contains(filtroProveedor.Trim(), StringComparison.OrdinalIgnoreCase));
+
+    private string NombreProveedorSel =>
+        proveedores.FirstOrDefault(p => p.Nume_Cli == proveedorSel)?.Raso_Cli ?? string.Empty;
+
+    private Dictionary<string, string> encabezadosImpresion
+    {
+        get
+        {
+            var enc = new Dictionary<string, string>
+            {
+                { "NumeOcom", "N.Orden" },
+                { "FemiOcom", "F.Emisión" },
+                { "NproOcom", "Prov." },
+                { "RaSoProv", "Razón Social" },
+                { "CodExte", "Código" },
+                { "Descripcion", "Descripción" },
+                { "CantOcom", "Cantidad" },
+                { "UniCom", "UM" },
+                { "FentreSol", "F.Solicitada" }
+            };
+            // La columna de atraso solo aplica al reporte de vencidas
+            if (Modo == "vencidas")
+            {
+                enc.Add("DiasVencido", "Días Venc.");
+            }
+            enc.Add("CantRec", "Recibida");
+            enc.Add("CantPend", "Pendiente");
+            return enc;
+        }
+    }
+
+    /// <summary>DTO liviano para el selector de códigos (endpoint pendientes-codigos)</summary>
+    private class CodigoItem
+    {
+        public string Codigo { get; set; } = string.Empty;
+        public string? Descripcion { get; set; }
+    }
+
+    /// <summary>Al abrir: etapa de selección + carga del catálogo según modo.
+    /// En "vencidas" la selección es el formulario de filtros (sin catálogo).</summary>
+    protected override async Task OnParametersSetAsync()
+    {
+        if (MostrarModal && !abierto)
+        {
+            abierto = true;
+            etapa = "seleccion";
+            if (Modo == "proveedor")
+            {
+                await CargarProveedores();
+            }
+            else if (Modo == "codigo")
+            {
+                await BuscarCodigos();
+            }
+        }
+    }
+
+    private async Task CargarProveedores()
+    {
+        try
+        {
+            var resp = await repository.Get<List<Proved12>>("api/proved12/combo");
+            if (!resp.Error && resp.Response != null)
+            {
+                proveedores = resp.Response;
+            }
+        }
+        catch
+        {
+            // Se reintenta en la próxima apertura
+        }
+    }
+
+    /// <summary>Carga los códigos con pendiente (filtro opcional por texto)</summary>
+    private async Task BuscarCodigos()
+    {
+        try
+        {
+            var url = string.IsNullOrWhiteSpace(filtroCodigo)
+                ? "api/ocomdeta/pendientes-codigos"
+                : $"api/ocomdeta/pendientes-codigos?filter={Uri.EscapeDataString(filtroCodigo.Trim())}";
+            var resp = await repository.Get<List<CodigoItem>>(url);
+            if (!resp.Error && resp.Response != null)
+            {
+                codigosDisponibles = resp.Response;
+            }
+        }
+        catch
+        {
+            // Se reintenta con el botón Buscar
+        }
+    }
+
+    private async Task OnEnterCodigo(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+            await BuscarCodigos();
+    }
+
+    /// <summary>Limpia el filtro de texto y todos los códigos seleccionados</summary>
+    private async Task LimpiarCodigos()
+    {
+        filtroCodigo = string.Empty;
+        codigosSeleccionados = new();
+        await BuscarCodigos();
+    }
+
+    /// <summary>
+    /// Emite el reporte. Sin proveedor/códigos seleccionados se informa que se
+    /// emitirá todo (agrupado) con posibilidad de cancelar — regla del pedido.
+    /// </summary>
+    private async Task EmitirReporte()
+    {
+        string url;
+        string titulo;
+
+        if (Modo == "proveedor")
+        {
+            if (proveedorSel <= 0)
+            {
+                var conf = await sweetAlertService.FireAsync(new SweetAlertOptions
+                {
+                    Title = "Sin proveedor seleccionado",
+                    Text = "Se emitirán todas las O/Compra pendientes agrupadas por proveedor. ¿Continuar?",
+                    Icon = SweetAlertIcon.Warning,
+                    ShowCancelButton = true,
+                    ConfirmButtonText = "Emitir Todos",
+                    CancelButtonText = "Cancelar"
+                });
+                if (!conf.IsConfirmed)
+                    return;
+                titulo = "O/Compra Pendientes - Todos los Proveedores";
+                url = "api/ocomdeta/pendientes-proveedor";
+            }
+            else
+            {
+                titulo = $"O/Compra Pendientes - Proveedor {proveedorSel} - {NombreProveedorSel}";
+                url = $"api/ocomdeta/pendientes-proveedor?nroProveedor={proveedorSel}";
+            }
+        }
+        else if (Modo == "codigo")
+        {
+            if (!codigosSeleccionados.Any())
+            {
+                var conf = await sweetAlertService.FireAsync(new SweetAlertOptions
+                {
+                    Title = "Sin códigos seleccionados",
+                    Text = "Se emitirán todas las O/Compra pendientes agrupadas por código. ¿Continuar?",
+                    Icon = SweetAlertIcon.Warning,
+                    ShowCancelButton = true,
+                    ConfirmButtonText = "Emitir Todos",
+                    CancelButtonText = "Cancelar"
+                });
+                if (!conf.IsConfirmed)
+                    return;
+                titulo = "O/Compra Pendientes - Todos los Códigos";
+                url = "api/ocomdeta/pendientes-codigo";
+            }
+            else
+            {
+                titulo = $"O/Compra Pendientes - {codigosSeleccionados.Count} código(s)";
+                url = $"api/ocomdeta/pendientes-codigo?codigos={Uri.EscapeDataString(string.Join(",", codigosSeleccionados))}";
+            }
+        }
+        else
+        {
+            // Modo "vencidas": arma la query string con los filtros cargados
+            // (todos opcionales; el servidor combina con AND).
+            var qs = new List<string> { $"soloVencidas={filtroVencSoloVencidas.ToString().ToLower()}" };
+            if (filtroVencNroOrden > 0)
+            {
+                qs.Add($"numeOcom={filtroVencNroOrden}");
+            }
+            if (filtroVencFemiDesde.HasValue)
+            {
+                qs.Add($"femiDesde={filtroVencFemiDesde.Value:yyyy-MM-dd}");
+            }
+            if (filtroVencFemiHasta.HasValue)
+            {
+                qs.Add($"femiHasta={filtroVencFemiHasta.Value:yyyy-MM-dd}");
+            }
+            if (filtroVencFentreDesde.HasValue)
+            {
+                qs.Add($"fentreDesde={filtroVencFentreDesde.Value:yyyy-MM-dd}");
+            }
+            if (filtroVencFentreHasta.HasValue)
+            {
+                qs.Add($"fentreHasta={filtroVencFentreHasta.Value:yyyy-MM-dd}");
+            }
+            if (!string.IsNullOrWhiteSpace(filtroVencCodigo))
+            {
+                qs.Add($"codigo={Uri.EscapeDataString(filtroVencCodigo.Trim())}");
+            }
+            if (!string.IsNullOrWhiteSpace(filtroVencProveedor))
+            {
+                qs.Add($"proveedor={Uri.EscapeDataString(filtroVencProveedor.Trim())}");
+            }
+
+            url = $"api/ocomdeta/pendientes-vencidas?{string.Join("&", qs)}";
+            titulo = filtroVencSoloVencidas
+                ? "O/Compra Pendientes con F.Entrega Vencida"
+                : "O/Compra Pendientes/Vencidas";
+        }
+
+        await EjecutarConsulta(url, titulo);
+    }
+
+    private async Task EjecutarConsulta(string url, string titulo)
+    {
+        consultando = true;
+        etapa = "reporte";
+        StateHasChanged();
+        await Task.Yield();
+
+        try
+        {
+            var resp = await repository.Get<List<OcomPendienteDTO>>(url);
+            if (resp.Error)
+            {
+                var msg = await resp.GetErrorMessageAsync();
+                throw new Exception(msg);
+            }
+            items = resp.Response ?? new List<OcomPendienteDTO>();
+            tituloReporte = titulo;
+            paginaActual = 1;
+        }
+        catch (Exception ex)
+        {
+            await sweetAlertService.FireAsync("Error", $"No se pudo generar el reporte: {ex.Message}", SweetAlertIcon.Error);
+        }
+        finally
+        {
+            consultando = false;
+        }
+    }
+
+    /// <summary>
+    /// Limpia los filtros del modo "vencidas". No toca la tilde
+    /// filtroVencSoloVencidas: el usuario pidió que se conserve.
+    /// </summary>
+    private void LimpiarFiltrosVencidas()
+    {
+        filtroVencNroOrden = null;
+        filtroVencFemiDesde = null;
+        filtroVencFemiHasta = null;
+        filtroVencFentreDesde = null;
+        filtroVencFentreHasta = null;
+        filtroVencCodigo = string.Empty;
+        filtroVencProveedor = string.Empty;
+    }
+
+    private void SeleccionarPagina(int pagina) => paginaActual = pagina;
+
+    private void VolverASeleccion()
+    {
+        etapa = "seleccion";
+        items = new();
+    }
+
+    private async Task Cerrar()
+    {
+        // Reset completo para la próxima apertura
+        abierto = false;
+        etapa = "seleccion";
+        items = new();
+        proveedorSel = 0;
+        filtroProveedor = string.Empty;
+        codigosSeleccionados = new();
+        filtroCodigo = string.Empty;
+        LimpiarFiltrosVencidas();
+        filtroVencSoloVencidas = true;
+        paginaActual = 1;
+        await OnCerrar.InvokeAsync();
+    }
+}

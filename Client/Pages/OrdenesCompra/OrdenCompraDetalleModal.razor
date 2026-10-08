@@ -120,7 +120,7 @@
                                                         </div>
                                                         <div class="col-6">
                                                             <strong>Total:</strong><br>
-                                                            @ordenCompra.TotalOcom?.ToString("C2")
+                                                            @Formateador.FormatearMoneda(ordenCompra.TotalOcom, ordenCompra.MoneEmis)
                                                         </div>
                                                     </div>
                                                 </div>
@@ -177,8 +177,8 @@
                                                                     <td class="text-end">@item.CantOcom?.ToString("N2")</td>
                                                                     <td class="text-end">@item.CantRec?.ToString("N2")</td>
                                                                     <td class="text-end">@((item.CantOcom - item.CantRec)?.ToString("N2"))</td>
-                                                                    <td class="text-end">@item.PreUnit?.ToString("C2")</td>
-                                                                    <td class="text-end">@item.INetItem?.ToString("C2")</td>
+                                                                    <td class="text-end">@Formateador.FormatearMoneda(item.PreUnit, ordenCompra.MoneEmis)</td>
+                                                                    <td class="text-end">@Formateador.FormatearMoneda(item.INetItem, ordenCompra.MoneEmis)</td>
                                                                 </tr>
                                                             }
                                                         </tbody>

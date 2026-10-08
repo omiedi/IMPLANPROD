@@ -290,7 +290,11 @@ else
             // Cargar tipos de material si no están cargados
             if (TiposMaterial.Count == 0)
             {
-                var responseTatimat = await repository.Get<List<Tatimat>>("api/tipomaterial");
+                // Se usa /combo (sin paginación): GET api/tipomaterial está paginado
+                // (RecordsNumber=10 por defecto) y solo devolvía los primeros 10 tipos,
+                // por lo que los productos cuyo Timate matcheaba un CodigoTatimat fuera
+                // de esa página mostraban "-" en la columna T.Material.
+                var responseTatimat = await repository.Get<List<Tatimat>>("api/tipomaterial/combo");
                 if (responseTatimat.Response != null)
                 {
                     TiposMaterial = responseTatimat.Response;

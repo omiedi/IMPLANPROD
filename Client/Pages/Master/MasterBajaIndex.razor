@@ -107,8 +107,9 @@ else
         await PageAccess.RequiereAccesoAsync("/master-baja");
         validando = false;
         
-        // Cargar tipos de material
-        var responseTatimat = await repository.Get<List<Tatimat>>("api/tipomaterial");
+        // Cargar tipos de material — se usa /combo (sin paginación): GET api/tipomaterial
+        // devuelve solo 10 registros por defecto y dejaba productos con T.Material en "-".
+        var responseTatimat = await repository.Get<List<Tatimat>>("api/tipomaterial/combo");
         if (responseTatimat.Response != null)
         {
             TiposMaterial = responseTatimat.Response;

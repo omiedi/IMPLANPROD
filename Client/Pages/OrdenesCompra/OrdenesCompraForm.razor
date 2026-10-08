@@ -294,7 +294,7 @@
                                                     <input type="number" class="form-control form-control-sm text-end input-number-sin-flechas" step="0.0001" 
                                                            @bind="item.PreUnit" @bind:after="RecalcularDescuentoDesdeTexto" />
                                                 </td>
-                                                <td>@((item.CantOcom * item.PreUnit)?.ToString("C2"))</td>
+                                                <td>@Fmt(item.CantOcom * item.PreUnit)</td>
                                                 <td>
                                                     <input class="form-control form-control-sm" @bind="item.UniMas" />
                                                 </td>
@@ -381,15 +381,15 @@
                                                 </tr>
                                                 <tr>
                                                     <td><strong>Total Neto:</strong></td>
-                                                    <td class="text-end"><strong>@TotalNeto.ToString("C2")</strong></td>
+                                                    <td class="text-end"><strong>@Fmt(TotalNeto)</strong></td>
                                                 </tr>
                                                 <tr>
                                                     <td><strong>Descuento:</strong></td>
-                                                    <td class="text-end text-danger"><strong>-@descuentoMonto.ToString("C2")</strong></td>
+                                                    <td class="text-end text-danger"><strong>-@Fmt(descuentoMonto)</strong></td>
                                                 </tr>
                                                 <tr class="table-success">
                                                     <td><strong>Total con Descuento:</strong></td>
-                                                    <td class="text-end"><strong>@TotalConDescuento.ToString("C2")</strong></td>
+                                                    <td class="text-end"><strong>@Fmt(TotalConDescuento)</strong></td>
                                                 </tr>
                                                 <tr>
                                                     <td>
@@ -402,7 +402,7 @@
                                                             </small>
                                                         </label>
                                                     </td>
-                                                    <td class="text-end"><strong>@TotalIva.ToString("C2")</strong></td>
+                                                    <td class="text-end"><strong>@Fmt(TotalIva)</strong></td>
                                                 </tr>
                                                 <tr>
                                                     <td>
@@ -418,7 +418,7 @@
                                                 </tr>
                                                 <tr class="table-info">
                                                     <td><strong>Total Final:</strong></td>
-                                                    <td class="text-end"><strong>@TotalConIva.ToString("C2")</strong></td>
+                                                    <td class="text-end"><strong>@Fmt(TotalConIva)</strong></td>
                                                 </tr>
                                             </table>
                                         </div>
@@ -655,7 +655,7 @@
                                     </h5>
                                 </div>
                                 <div class="card-body text-center bg-light">
-                                    <h2 class="text-primary mb-1">@TotalConDescuento.ToString("C2")</h2>
+                                    <h2 class="text-primary mb-1">@Fmt(TotalConDescuento)</h2>
                                     <small class="text-muted">Subtotal con descuentos aplicados</small>
                                 </div>
                             </div>
@@ -720,7 +720,7 @@
                                     </div>
                                     <div class="mt-2 text-center">
                                         <small class="text-success">
-                                            <i class="fas fa-calculator me-1"></i>IVA: <strong>@importeIva105.ToString("C2")</strong>
+                                            <i class="fas fa-calculator me-1"></i>IVA: <strong>@Fmt(importeIva105)</strong>
                                         </small>
                                         <br />
                                         <small class="text-warning">
@@ -754,7 +754,7 @@
                                     </div>
                                     <div class="mt-2 text-center">
                                         <small class="text-success">
-                                            <i class="fas fa-calculator me-1"></i>IVA: <strong>@importeIva21.ToString("C2")</strong>
+                                            <i class="fas fa-calculator me-1"></i>IVA: <strong>@Fmt(importeIva21)</strong>
                                         </small>
                                         <br />
                                         <small class="text-danger">
@@ -788,7 +788,7 @@
                                     </div>
                                     <div class="mt-2 text-center">
                                         <small class="text-success">
-                                            <i class="fas fa-calculator me-1"></i>IVA: <strong>@importeIva27.ToString("C2")</strong>
+                                            <i class="fas fa-calculator me-1"></i>IVA: <strong>@Fmt(importeIva27)</strong>
                                         </small>
                                         <br />
                                         <small class="text-dark">
@@ -820,20 +820,20 @@
                                     <p class="mb-2"><strong>¡ADVERTENCIA!</strong> Los campos editables suman más que el total disponible</p>
                                     <div class="row small">
                                         <div class="col-6"><strong>Suma editables:</strong></div>
-                                        <div class="col-6 text-end">@totalGravado.ToString("C2")</div>
+                                        <div class="col-6 text-end">@Fmt(totalGravado)</div>
                                         <div class="col-6"><strong>Disponible:</strong></div>
-                                        <div class="col-6 text-end">@TotalConDescuento.ToString("C2")</div>
+                                        <div class="col-6 text-end">@Fmt(TotalConDescuento)</div>
                                         <div class="col-6"><strong>Exceso:</strong></div>
-                                        <div class="col-6 text-end text-danger"><strong>@((totalGravado - TotalConDescuento).ToString("C2"))</strong></div>
+                                        <div class="col-6 text-end text-danger"><strong>@Fmt(totalGravado - TotalConDescuento)</strong></div>
                                     </div>
                                 }
                                 else
                                 {
                                     <div class="row small">
                                         <div class="col-6"><strong>Total Base:</strong></div>
-                                        <div class="col-6 text-end">@TotalBaseImponible.ToString("C2")</div>
+                                        <div class="col-6 text-end">@Fmt(TotalBaseImponible)</div>
                                         <div class="col-6"><strong>Diferencia:</strong></div>
-                                        <div class="col-6 text-end">@diferencia.ToString("C2")</div>
+                                        <div class="col-6 text-end">@Fmt(diferencia)</div>
                                     </div>
                                     @if (diferencia != 0)
                                     {
@@ -851,9 +851,9 @@
                                 </h6>
                                 <div class="row">
                                     <div class="col-6"><strong>Total IVA:</strong></div>
-                                    <div class="col-6 text-end"><strong>@TotalIva.ToString("C2")</strong></div>
+                                    <div class="col-6 text-end"><strong>@Fmt(TotalIva)</strong></div>
                                     <div class="col-6"><strong>Total Final:</strong></div>
-                                    <div class="col-6 text-end"><h5 class="text-primary mb-0">@TotalConIva.ToString("C2")</h5></div>
+                                    <div class="col-6 text-end"><h5 class="text-primary mb-0">@Fmt(TotalConIva)</h5></div>
                                 </div>
                             </div>
                         </div>
@@ -918,6 +918,15 @@
     private string proveedorSeleccionado = string.Empty;
     private List<Ocomdeta>? detalleItems;
     private List<Tamoned>? monedas;
+
+    /// <summary>
+    /// Formatea importes con el símbolo de la moneda de la orden:
+    /// MoneEmis 1 (pesos) → "$", 2 (dólares) → "U$S", otra → descripción TAMONED.
+    /// Reemplaza a ToString("C2") que tomaba el símbolo de la cultura del navegador (€).
+    /// </summary>
+    private string Fmt(decimal? valor) =>
+        Formateador.FormatearMoneda(valor, ordenCompra.MoneEmis,
+            monedas?.FirstOrDefault(m => m.CodigoMoneda == ordenCompra.MoneEmis)?.Descripcion);
     private List<CondPag>? condicionesPago;
     private List<Plancuen>? cuentasDestino;
     private List<UnidadMedidas>? unidadesMedida;
@@ -2156,9 +2165,9 @@
             var result = await sweetAlertService.FireAsync(new SweetAlertOptions
             {
                 Title = "¡Advertencia de Exceso!",
-                Text = $"Los campos editables suman {totalGravado:C2}, pero solo hay {TotalConDescuento:C2} disponible.\n" +
-                       $"Exceso: {exceso:C2}\n\n" +
-                       $"El campo Exento/N/Grav quedará en {baseImponible0:C2} (negativo).\n\n" +
+                Text = $"Los campos editables suman {Fmt(totalGravado)}, pero solo hay {Fmt(TotalConDescuento)} disponible.\n" +
+                       $"Exceso: {Fmt(exceso)}\n\n" +
+                       $"El campo Exento/N/Grav quedará en {Fmt(baseImponible0)} (negativo).\n\n" +
                        $"¿Desea continuar de todas formas?",
                 Icon = SweetAlertIcon.Warning,
                 ShowCancelButton = true,

@@ -2,6 +2,7 @@
 @using IMPLANPROD.Client.Services
 @using IMPLANPROD.Shared.Entities
 @inject PageAccessService PageAccess
+@inject IModalService modalService
 
 <!--
     Componente: FichaProveedorCreate.razor
@@ -19,10 +20,19 @@
 else
 {
     <div class="bg-primary bg-opacity-10 p-3 rounded-3 mb-3">
-        <h3 class="m-0 text-primary">Nuevo Proveedor</h3>
+        <h3 class="m-0 text-primary">
+            Nuevo Proveedor
+            @* Acceso al ABM de países/provincias en modal (componente reutilizable
+               PaisesProvinciasModal): mismo circuito que /countries y
+               /countries/details, para dar de alta el país/provincia que falte
+               sin salir del alta del proveedor. *@
+            <button type="button" class="btn btn-sm btn-outline-primary float-end" @onclick="AbrirPaisesProvincias">
+                <i class="oi oi-globe"></i> Países / Provincias
+            </button>
+        </h3>
     </div>
 
-    <FichaProveedorForm />
+    <FichaProveedorForm @ref="fichaProveedorForm" />
 }
 @code{
     private bool validando = true;
@@ -31,5 +41,27 @@ else
     {
         await PageAccess.RequiereAccesoAsync("/ficha-proveedor-create");   // ? validación
         validando = false;
+    }
+
+    private FichaProveedorForm? fichaProveedorForm;
+
+    /// <summary>
+    /// Abre el ABM de países y provincias en modal. Al cerrar, se recargan los
+    /// combos del formulario por si se dieron de alta países o provincias.
+    /// </summary>
+    private async Task AbrirPaisesProvincias()
+    {
+        var modal = modalService.Show<PaisesProvinciasModal>("Países y Provincias", new ModalOptions
+        {
+            Size = ModalSize.ExtraLarge,
+            DisableBackgroundCancel = true
+        });
+
+        await modal.Result;
+
+        if (fichaProveedorForm != null)
+        {
+            await fichaProveedorForm.RecargarPaisesProvinciasAsync();
+        }
     }
 }

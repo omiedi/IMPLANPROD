@@ -41,6 +41,14 @@ namespace IMPLANPROD.Shared.Entities
         [NotMapped] // Esta propiedad no se mapeará a la base de datos
         public decimal Ajuste { get; set; }
 
+        // Campos de solo lectura que viajan en listados: el server los completa con
+        // joins a MASTER/TADEPOSI en la misma consulta (patrón "Aprueba Almacén"),
+        // evitando el N+1 de un request por fila. No son columnas de ORFAPEN.
+        [NotMapped]
+        public string? DescripcionProducto { get; set; }
+        [NotMapped]
+        public string? DescripcionDeposito { get; set; }
+
         // ===================================================================
         // CAMPOS DE TIMESTAMP AUTOMÁTICOS - Implementación de ITimestampEntity
         // ===================================================================

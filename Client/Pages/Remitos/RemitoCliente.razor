@@ -995,6 +995,12 @@ else
                 }
             }
 
+            // Regla VB6: la OC del casillero "Orden de Compra" (encabezado e
+            // "Información Adicional", ambos bindean 'ordenCompra') sale de
+            // PEDENCA.NroOcom del pedido seleccionado. Si el remito queda con
+            // ítems de más de un pedido (mix), el casillero se limpia.
+            await ActualizarOrdenCompraDesdePedidoAsync();
+
             StateHasChanged();
             await sweetAlertService.FireAsync("Éxito", $"Se agregaron {items.Count} productos desde pedidos pendientes", SweetAlertIcon.Success);
         }
@@ -1002,6 +1008,44 @@ else
         {
             Console.WriteLine($"[RemitoCliente] Error al agregar items desde pedidos: {ex.Message}");
             await sweetAlertService.FireAsync("Error", $"Error al agregar productos: {ex.Message}", SweetAlertIcon.Error);
+        }
+    }
+
+    /// <summary>
+    /// Actualiza el casillero "Orden de Compra" según los pedidos presentes en
+    /// la grilla del remito:
+    /// - Un solo pedido: busca PEDENCA.NroOcom por NroPed y lo muestra.
+    /// - Más de un pedido (mix): limpia el casillero.
+    /// - Sin ítems de pedido (remito libre): respeta lo tipeado por el usuario.
+    /// </summary>
+    private async Task ActualizarOrdenCompraDesdePedidoAsync()
+    {
+        try
+        {
+            var pedidosDistintos = productosRemito
+                .Where(p => p.NroPedido.HasValue && p.NroPedido.Value > 0)
+                .Select(p => p.NroPedido!.Value)
+                .Distinct()
+                .ToList();
+
+            if (pedidosDistintos.Count == 1)
+            {
+                var resp = await repository.Get<string>($"api/pedenca/nro-ocom/{pedidosDistintos[0]}");
+                if (!resp.Error)
+                {
+                    ordenCompra = resp.Response ?? string.Empty;
+                    Console.WriteLine($"[RemitoCliente] OC cargada desde pedido {pedidosDistintos[0]}: '{ordenCompra}'");
+                }
+            }
+            else if (pedidosDistintos.Count > 1)
+            {
+                ordenCompra = string.Empty; // mix de pedidos
+                Console.WriteLine("[RemitoCliente] Mix de pedidos: casillero OC limpiado");
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[RemitoCliente] Error al actualizar OC desde pedido: {ex.Message}");
         }
     }
 
@@ -1171,9 +1215,12 @@ else
     /// <summary>
     /// Quita un producto del detalle del remito
     /// </summary>
-    private void QuitarProducto(ProductoRemito det)
+    private async Task QuitarProducto(ProductoRemito det)
     {
         productosRemito.Remove(det);
+        // Si al quitar el ítem queda un solo pedido (o un mix), la OC del
+        // casillero tiene que volver a evaluarse.
+        await ActualizarOrdenCompraDesdePedidoAsync();
         StateHasChanged();
     }
 
@@ -1678,9 +1725,13 @@ else
                 bultos = bultosParsed;
             }
 
+            // El usuario puede tipear el separador decimal con punto o coma.
+            // Se normaliza a coma y se parsea con cultura es-AR, como hace
+            // SelectorProductosCompras para las cantidades.
             decimal? valorDecimal = null;
-            if (!string.IsNullOrWhiteSpace(valorDeclarado) &&
-                decimal.TryParse(valorDeclarado, System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out var valorParsed))
+            var textoValor = (valorDeclarado ?? string.Empty).Trim().Replace('.', ',');
+            if (!string.IsNullOrWhiteSpace(textoValor) &&
+                decimal.TryParse(textoValor, System.Globalization.NumberStyles.Number, System.Globalization.CultureInfo.GetCultureInfo("es-AR"), out var valorParsed))
             {
                 valorDecimal = valorParsed;
             }
@@ -1724,28 +1775,45 @@ else
     {
         try
         {
-            // Construir el DTO para el movimiento de stock
-            // Si el producto viene de un pedido, usar el número de pedido en DocumentoSecundario
-            // Si no, usar la orden de compra del cliente
-            string docSecundario = producto.NroPedido.HasValue && producto.NroPedido.Value > 0 
-                ? $"PC.{producto.NroPedido.Value}" 
-                : $"PC.{ordenCompra}";
-            
-            string docSecundarioLargo = producto.NroPedido.HasValue && producto.NroPedido.Value > 0
-                ? $"P/F - Pedido {producto.NroPedido.Value}"
-                : $"P/F - PC.{ordenCompra}";
+            // Regla VB6: MOVISTO.DoSecCor/DoSecLar se forman con la ORDEN DE
+            // COMPRA del casillero inferior (la OC que cargó el cliente), tanto
+            // en remitos libres como en los generados desde una orden de venta
+            // (PEDENCA). Ej.: OC = 2525 -> DoSecCor = "PC.2525",
+            // DoSecLar = "P/F - PC.2525".
+            // Si el casillero quedó vacío y el producto viene de un pedido, se
+            // mantiene el número de pedido como respaldo para no grabar "PC."
+            // sin contenido.
+            // Truncar a los tamaños de columna (igual que hace el server y VB6):
+            // si la OC del cliente es larga, "PC."+OC superaba 12 chars y el
+            // [StringLength] del DTO rechazaba el request con 400 antes de llegar al server.
+            // Criterio anterior (referencia): usaba el número de pedido
+            //   PC.{NroPedido} / "P/F - Pedido {NroPedido}" para ítems con pedido.
+            bool ocIngresada = !string.IsNullOrWhiteSpace(ordenCompra);
+            bool vieneDePedido = producto.NroPedido.HasValue && producto.NroPedido.Value > 0;
+
+            string docSecundario = ocIngresada
+                ? $"PC.{ordenCompra}"
+                : (vieneDePedido ? $"PC.{producto.NroPedido.Value}" : "PC.");
+            docSecundario = docSecundario.Length > 12 ? docSecundario.Substring(0, 12) : docSecundario;
+
+            string docSecundarioLargo = ocIngresada
+                ? $"P/F - PC.{ordenCompra}"
+                : (vieneDePedido ? $"P/F - Pedido {producto.NroPedido.Value}" : "P/F - PC.");
+            docSecundarioLargo = docSecundarioLargo.Length > 24 ? docSecundarioLargo.Substring(0, 24) : docSecundarioLargo;
 
             var movimiento = new MoviStockDTO
             {
                 Fecha = fechaRemito,
                 CodigoInterno = producto.CodInt,
-                Lote = lote,
+                Lote = lote?.Length > 16 ? lote.Substring(0, 16) : lote,
                 CodigoMovimiento = "RT", // Remito de cliente
                 DocumentoPrimarioCorto = remitoCorto, // RT.6449
                 DocumentoPrimarioLargo = remitoLargo, // RT-X-0001-00006449
                 DocumentoSecundarioLargo = docSecundarioLargo, // "P/F - Pedido 256" o "P/F - PC.123"
                 DocumentoSecundarioCorto = docSecundario, // "PC.256" (nro pedido) o "PC.123" (orden compra)
-                Referencia = razonSocial, // REFEMO$ = Razón social del cliente
+                // Referencia y OC se truncan al tamaño de columna que el server aplica
+                // (Substring), para que el [StringLength] del DTO no rechace el request.
+                Referencia = razonSocial?.Length > 64 ? razonSocial.Substring(0, 64) : razonSocial, // REFEMO$ = Razón social del cliente
                 NumeroOrdenItem = nuorItem,
                 NumeroPedidoCliente = producto.NroPedido ?? 0, // Número de pedido si proviene de uno
                 NumeroOrdenPedido = producto.NuOrItemPedido ?? 0, // Número de orden del item en el pedido (PEDDETA.NuOrItem)
@@ -1754,7 +1822,7 @@ else
                 Deposito = depositoSeleccionado,
                 Cantidad = -1 * cantidad, // Negativo porque es una salida de stock
                 ValorUnitario = 0, // No se maneja precio en remitos
-                OrdenCompraRetornoAbierto = ordenCompra,
+                OrdenCompraRetornoAbierto = ordenCompra?.Length > 64 ? ordenCompra.Substring(0, 64) : ordenCompra,
                 NumeroRemito = numeroRemito, // Campo numérico para MOVISTO.DOPRINUM (últimos 8 dígitos)
                 PrefijoRemito = (short)prefijoRemito, // Campo numérico para MOVISTO.NUMPVTA (primeros 4 dígitos)
                 TipoTransferencia = transportistaId > 0 ? (short?)transportistaId : null // Código del transportista (TRANSPORTES.Codi_Tra) -> MOVISTO.TipoTran
@@ -2045,20 +2113,42 @@ else
     }
 
     /// <summary>
-    /// Limpia el formulario después de guardar
+    /// Limpia el formulario después de guardar.
+    /// Regla de negocio: se limpian TODOS los casilleros EXCEPTO la Fecha del
+    /// remito y el Depósito, que se conservan para facilitar la carga de
+    /// remitos consecutivos (mismo día y mismo depósito de expedición).
     /// </summary>
     private void LimpiarFormulario()
     {
-        // Limpiar cliente
+        // Limpiar cliente (razón social, domicilio, localidad, CP, CUIT)
         LimpiarCliente();
 
         // Limpiar productos
         productosRemito.Clear();
 
-        // Limpiar datos del remito
-        fechaRemito = DateTime.Now;
+        // Limpiar datos del remito.
+        // Se conservan: fechaRemito y depositoSeleccionado.
         ordenCompra = string.Empty;
         numeroRemito = 0;
+
+        // Limpiar información adicional del remito
+        numeroBultos = string.Empty;
+        conductor = string.Empty;
+        dniConductor = string.Empty;
+        transportistaId = 0;
+        cuitTransportista = string.Empty;
+        domicilioTransportista = string.Empty;
+        codPostalTransportista = string.Empty;
+        ordenSuministro = string.Empty;
+        transportistas.Clear();
+        patente = string.Empty;
+        valorDeclarado = string.Empty;
+        importeNeto = string.Empty;
+        observaciones = string.Empty;
+
+        // Limpiar estado del modal de lotes
+        productoTrazableSeleccionado = null;
+        cantidadSolicitadaTrazable = 0;
 
         // Recargar prefijo por defecto
         _ = CargarPrefijoDefecto();

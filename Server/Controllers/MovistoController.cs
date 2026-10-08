@@ -249,6 +249,54 @@ namespace IMPLANPROD.Server.Controllers
         }
 
         /// <summary>
+        /// Reporte "Stock &lt; 0" — opción General: códigos con saldo negativo
+        /// considerando TODOS los depósitos (MOVISTO sin filtro de DepoMovi).
+        /// Saldo = Σ(CantIngre − CantSalid), nulos como 0.
+        /// </summary>
+        [HttpGet("stock-negativo-general")]
+        public async Task<ActionResult<List<InfoStockDTO>>> GetStockNegativoGeneral(CancellationToken cancellationToken)
+        {
+            try
+            {
+                var datos = await ConsultarStockMovisto(string.Empty, cancellationToken, soloNegativos: true);
+                return Ok(datos);
+            }
+            catch (OperationCanceledException)
+            {
+                return StatusCode(499, "Consulta cancelada por el usuario");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error al generar el reporte de stock negativo general");
+                return BadRequest($"Error al obtener el stock negativo: {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// Reporte "Stock &lt; 0" — opción Por Depósito: códigos con saldo
+        /// negativo solo dentro del depósito indicado (MOVISTO.DepoMovi = depósito).
+        /// </summary>
+        /// <param name="deposito">Código de depósito (TADEPOSI.CodigoDepo)</param>
+        [HttpGet("stock-negativo-deposito/{deposito:int}")]
+        public async Task<ActionResult<List<InfoStockDTO>>> GetStockNegativoDeposito(int deposito, CancellationToken cancellationToken)
+        {
+            try
+            {
+                var datos = await ConsultarStockMovisto($"WHERE m.DepoMovi = {deposito}", cancellationToken, soloNegativos: true);
+                return Ok(datos);
+            }
+            catch (OperationCanceledException)
+            {
+                return StatusCode(499, "Consulta cancelada por el usuario");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error al generar el reporte de stock negativo del depósito {Deposito}", deposito);
+                return BadRequest($"Error al obtener el stock negativo del depósito: {ex.Message}");
+            }
+        }
+
+        /// <summary>
         /// Reporte InfoStock: inventario general (todos los depósitos).
         /// Si incluirNoDisponibles = false, se excluyen los movimientos cuyo
         /// DepoMovi pertenezca a un depósito con TADEPOSI.Disponible = 0 (NOT IN).
@@ -306,13 +354,22 @@ namespace IMPLANPROD.Server.Controllers
         /// SqlQuery&lt;T&gt; de EF7 no admite DTOs.
         /// </summary>
         /// <param name="where">Cláusula WHERE sobre "m" (MOVISTO). Vacía = sin filtro.</param>
-        private async Task<List<InfoStockDTO>> ConsultarStockMovisto(string where, CancellationToken cancellationToken)
+        /// <param name="soloNegativos">true = solo saldos &lt; 0 (reporte "Stock &lt; 0"); false = saldos distintos de 0.</param>
+        private async Task<List<InfoStockDTO>> ConsultarStockMovisto(string where, CancellationToken cancellationToken, bool soloNegativos = false)
         {
             // NULLIF(x, '') devuelve NULL cuando x = '' (y x si no). Al combinarlo
             // con ISNULL se trata la cadena vacía igual que NULL: si el valor de
             // MOVISTO es NULL o '', se usa el dato de MASTER como respaldo.
             // Necesario porque los movimientos viejos tienen Cod_Exte/Descrip
             // vacíos ('') y ISNULL solo contempla NULL.
+            // WITH (NOLOCK) en todas las tablas: es un reporte de solo lectura
+            // que recorre MOVISTO completo; evita que el scan bloquee los
+            // INSERT/UPDATE del circuito de movimientos de stock en producción.
+            // Operador del HAVING: InfoStock lista saldos <> 0; el reporte
+            // "Stock < 0" solo los negativos. Variable previa porque las
+            // comillas dentro del interpolado rompen el verbatim $@"...".
+            var operadorSaldo = soloNegativos ? "< 0" : "<> 0";
+
             var sql = $@"
 SELECT g.CodigoInterno,
        ISNULL(NULLIF(g.Codigo, ''), ma.Codigo) AS Codigo,            -- movisto.Cod_Exte, o master.Codigo si es NULL/vacío
@@ -325,15 +382,15 @@ FROM (
            MAX(m.Cod_Exte) AS Codigo,
            MAX(m.Descrip) AS Descripcion,
            SUM(ISNULL(m.CantIngre, 0) - ISNULL(m.CantSalid, 0)) AS Saldo
-    FROM MOVISTO m
+    FROM MOVISTO m WITH (NOLOCK)
     {where}
     GROUP BY m.Cod_Inte
-    -- Solo ítems con saldo distinto de 0 (positivo o negativo)
-    HAVING SUM(ISNULL(m.CantIngre, 0) - ISNULL(m.CantSalid, 0)) <> 0
+    -- InfoStock: saldo distinto de 0; reporte Stock Negativo: solo saldos < 0
+    HAVING SUM(ISNULL(m.CantIngre, 0) - ISNULL(m.CantSalid, 0)) {operadorSaldo}
 ) g
-LEFT JOIN master ma ON ma.codint = g.CodigoInterno
-LEFT JOIN Tatimat t ON t.CodigoTatimat = ma.Timate
-LEFT JOIN UnidadMedidas u ON u.DescripcionAbreviada = ma.Umedida
+LEFT JOIN master ma WITH (NOLOCK) ON ma.codint = g.CodigoInterno
+LEFT JOIN Tatimat t WITH (NOLOCK) ON t.CodigoTatimat = ma.Timate
+LEFT JOIN UnidadMedidas u WITH (NOLOCK) ON u.DescripcionAbreviada = ma.Umedida
 -- Orden por la descripción final (misma expresión con fallback a master)
 ORDER BY ISNULL(NULLIF(g.Descripcion, ''), ma.Descripcion) ASC";
 

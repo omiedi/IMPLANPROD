@@ -1,0 +1,282 @@
+@using IMPLANPROD.Shared.Entities
+@using IMPLANPROD.Shared.DTOs
+@using IMPLANPROD.Client.Pages.OrdenesCompra
+@inject IRepository repository
+@inject SweetAlertService sweetAlertService
+
+@*
+    Componente reutilizable: VerOrdenesCompraModal.razor
+
+    Modal que lista los ítems de órdenes de compra vigentes
+    (OCOMDETA.Stat_Ocom < 10; 9 = anulada, se muestra en la grilla).
+
+    Columnas: N.Orden, Fecha Emisión, Proveedor, F. Solicitada,
+    Cant. Comprada, Cant. Recibida, Estado y un botón de impresora que
+    abre el formulario impreso de la O/C (mismo componente
+    ImpresionOrdenCompra que usa el botón "ojo"/imprimir de /ordenes-compra).
+
+    Uso desde cualquier página:
+        <VerOrdenesCompraModal MostrarModal="mostrarModalVerOC"
+                               OnCerrar="CerrarVerOrdenesCompra" />
+    con:
+        private bool mostrarModalVerOC;
+        private void AbrirVerOrdenesCompra() => mostrarModalVerOC = true;
+        private void CerrarVerOrdenesCompra() => mostrarModalVerOC = false;
+*@
+
+@if (MostrarModal)
+{
+    <div class="modal fade show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5);">
+        <div class="modal-dialog modal-xl modal-dialog-scrollable">
+            <div class="modal-content">
+                <div class="modal-header bg-primary text-white">
+                    <h5 class="modal-title">
+                        <i class="fas fa-shopping-cart me-2"></i>Órdenes de Compra
+                    </h5>
+                    <button type="button" class="btn-close btn-close-white" @onclick="Cerrar"></button>
+                </div>
+                <div class="modal-body">
+                    @* Filtro de texto: número de orden, proveedor o código *@
+                    <div class="row g-2 align-items-end mb-3">
+                        <div class="col-md-9">
+                            <label class="form-label">Buscar (N° Orden, proveedor, código...)</label>
+                            <input type="text" class="form-control" placeholder="Ingrese texto a buscar..."
+                                   @bind-value="filtro" @bind-value:event="oninput" @onkeyup="OnEnterBuscar" />
+                        </div>
+                        <div class="col-md-3 text-end">
+                            <button type="button" class="btn btn-primary" @onclick="() => CargarAsync(1)">
+                                <i class="fas fa-search"></i> Buscar
+                            </button>
+                            <button type="button" class="btn btn-outline-secondary ms-1" @onclick="LimpiarFiltro">
+                                <i class="fas fa-eraser"></i>
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="table-responsive" style="max-height: 55vh; overflow-y: auto;">
+                        <table class="table table-striped table-hover table-sm">
+                            <thead class="table-primary sticky-top">
+                                <tr>
+                                    <th>N. Orden</th>
+                                    <th>F. Emisión</th>
+                                    <th>Proveedor</th>
+                                    <th>F. Solicitada</th>
+                                    <th class="text-end">Cant. Comprada</th>
+                                    <th class="text-end">Cant. Recibida</th>
+                                    <th class="text-center">Estado</th>
+                                    <th class="text-center">Imprimir</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @if (cargando)
+                                {
+                                    <tr>
+                                        <td colspan="8" class="text-center">
+                                            <div class="spinner-border spinner-border-sm text-primary" role="status"></div>
+                                            <span class="ms-2">Cargando órdenes de compra...</span>
+                                        </td>
+                                    </tr>
+                                }
+                                else if (items.Any())
+                                {
+                                    @foreach (var item in items)
+                                    {
+                                        <tr>
+                                            <td>@item.NumeOcom</td>
+                                            <td>@(item.FemiOcom?.ToString("dd/MM/yyyy") ?? "-")</td>
+                                            <td>@item.NproOcom - @item.RaSoProv</td>
+                                            <td>@(item.FentreSol?.ToString("dd/MM/yyyy") ?? "-")</td>
+                                            <td class="text-end">@(item.CantOcom?.ToString("N2") ?? "-")</td>
+                                            <td class="text-end">@(item.CantRec?.ToString("N2") ?? "-")</td>
+                                            <td class="text-center">
+                                                @* Mismo criterio de badges que /ordenes-compra *@
+                                                @if (item.StatOcom == 0)
+                                                {
+                                                    <span class="badge bg-success">Activa</span>
+                                                }
+                                                else if (item.StatOcom == -1)
+                                                {
+                                                    <span class="badge bg-warning">Pendiente</span>
+                                                }
+                                                else if (item.StatOcom == 9)
+                                                {
+                                                    @* Stat_Ocom = 9 → orden anulada (regla VB6) *@
+                                                    <span class="badge bg-danger">Anulada</span>
+                                                }
+                                                else
+                                                {
+                                                    <span class="badge bg-secondary">@item.StatOcom</span>
+                                                }
+                                            </td>
+                                            <td class="text-center">
+                                                <button type="button" class="btn btn-sm btn-outline-success"
+                                                        title="Ver impresión de la orden"
+                                                        disabled="@cargandoImpresion"
+                                                        @onclick="() => ImprimirOrdenAsync(item.NumeOcom ?? 0)">
+                                                    <i class="fas fa-print"></i>
+                                                </button>
+                                            </td>
+                                        </tr>
+                                    }
+                                }
+                                else
+                                {
+                                    <tr>
+                                        <td colspan="8" class="text-center text-muted">
+                                            No se encontraron órdenes de compra.
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <Pagination CurrentPage="paginaActual"
+                                TotalPages="totalPaginas"
+                                SelectedPage="CargarAsync" />
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" @onclick="Cerrar">Cerrar</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    @* Vista de impresión de la O/C: mismo componente que usa /ordenes-compra.
+       Se renderiza después del modal de la grilla para quedar por encima
+       (mismo z-index de .modal, gana el último del DOM). *@
+    <ImpresionOrdenCompra MostrarModal="mostrarImpresion"
+                          OrdenCompra="ordenParaImprimir"
+                          DetalleItems="detalleParaImprimir"
+                          OnCerrar="CerrarImpresion" />
+}
+
+@code {
+    [Parameter] public bool MostrarModal { get; set; }
+    [Parameter] public EventCallback OnCerrar { get; set; }
+
+    private List<Ocomdeta> items = new();
+    private bool cargando;
+    private bool cargado;
+    private int paginaActual = 1;
+    private int totalPaginas;
+    private string filtro = string.Empty;
+
+    // Impresión de la O/C seleccionada
+    private bool mostrarImpresion;
+    private bool cargandoImpresion;
+    private Ocomenca? ordenParaImprimir;
+    private List<Ocomdeta>? detalleParaImprimir;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        // Carga inicial al abrir el modal
+        if (MostrarModal && !cargado)
+        {
+            cargado = true;
+            await CargarAsync(1);
+        }
+    }
+
+    /// <summary>
+    /// Carga una página de ítems vigentes (Stat_Ocom &lt; 10) desde
+    /// api/ocomdeta/vigentes con el filtro de texto aplicado.
+    /// </summary>
+    private async Task CargarAsync(int page)
+    {
+        cargando = true;
+        paginaActual = page;
+        try
+        {
+            var filtroQ = string.IsNullOrWhiteSpace(filtro) ? "" : $"&filter={Uri.EscapeDataString(filtro)}";
+            var url = $"api/ocomdeta/vigentes?page={page}&recordsNumber=10{filtroQ}";
+            var urlTotal = $"api/ocomdeta/vigentes-totalPages?page={page}&recordsNumber=10{filtroQ}";
+
+            var respItems = await repository.Get<List<Ocomdeta>>(url);
+            var respTotal = await repository.Get<int>(urlTotal);
+
+            items = respItems.Response ?? new List<Ocomdeta>();
+            totalPaginas = respTotal.Response;
+        }
+        catch (Exception ex)
+        {
+            await sweetAlertService.FireAsync("Error", $"Error al cargar órdenes de compra: {ex.Message}", SweetAlertIcon.Error);
+        }
+        finally
+        {
+            cargando = false;
+        }
+    }
+
+    private async Task OnEnterBuscar(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+            await CargarAsync(1);
+    }
+
+    private async Task LimpiarFiltro()
+    {
+        filtro = string.Empty;
+        await CargarAsync(1);
+    }
+
+    /// <summary>
+    /// Carga encabezado (api/ocomenca/por-numero) y detalle
+    /// (api/ocomdeta/por-orden, ya filtra ítems vigentes Stat_Ocom &lt; 8)
+    /// y abre ImpresionOrdenCompra, igual que el botón "ojo"/imprimir
+    /// de /ordenes-compra.
+    /// </summary>
+    private async Task ImprimirOrdenAsync(int numeroOrden)
+    {
+        if (numeroOrden <= 0 || cargandoImpresion)
+            return;
+
+        cargandoImpresion = true;
+        try
+        {
+            var respEnca = await repository.Get<Ocomenca>($"api/ocomenca/por-numero/{numeroOrden}");
+            if (respEnca.Error || respEnca.Response == null)
+            {
+                await sweetAlertService.FireAsync("Error", "No se encontró la orden de compra.", SweetAlertIcon.Error);
+                return;
+            }
+
+            var respDetalle = await repository.Get<List<Ocomdeta>>($"api/ocomdeta/por-orden/{numeroOrden}");
+            if (respDetalle.Error)
+            {
+                var message = await respDetalle.GetErrorMessageAsync();
+                await sweetAlertService.FireAsync("Error", $"Error al cargar detalle de la orden: {message}", SweetAlertIcon.Error);
+                return;
+            }
+
+            ordenParaImprimir = respEnca.Response;
+            detalleParaImprimir = respDetalle.Response ?? new List<Ocomdeta>();
+            mostrarImpresion = true;
+        }
+        catch (Exception)
+        {
+            await sweetAlertService.FireAsync("Error", "Error al preparar la impresión.", SweetAlertIcon.Error);
+        }
+        finally
+        {
+            cargandoImpresion = false;
+        }
+    }
+
+    private void CerrarImpresion()
+    {
+        mostrarImpresion = false;
+        ordenParaImprimir = null;
+        detalleParaImprimir = null;
+    }
+
+    private async Task Cerrar()
+    {
+        // Reset del estado para que la próxima apertura recargue desde la página 1
+        cargado = false;
+        items = new();
+        paginaActual = 1;
+        filtro = string.Empty;
+        await OnCerrar.InvokeAsync();
+    }
+}

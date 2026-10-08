@@ -75,6 +75,33 @@ namespace IMPLANPROD.Server.Controllers
         }
 
         /// <summary>
+        /// Devuelve la orden de compra (PEDENCA.NroOcom) de un pedido por NroPed.
+        /// Regla VB6: en /remitos/cliente el casillero "Orden de Compra" se
+        /// completa con este dato cuando los ítems provienen de UN solo pedido;
+        /// si se mezclan pedidos distintos, el casillero se limpia.
+        /// </summary>
+        /// <param name="nroPed">Número de pedido (dato de negocio)</param>
+        /// <returns>NroOcom del pedido o cadena vacía si no existe/no tiene</returns>
+        [HttpGet("nro-ocom/{nroPed:int}")]
+        public async Task<ActionResult<string>> GetNroOcomAsync(int nroPed)
+        {
+            try
+            {
+                var nroOcom = await _context.Pedencas
+                    .AsNoTracking()
+                    .Where(p => p.NroPed == nroPed && p.Status >= 0)
+                    .Select(p => p.NroOcom)
+                    .FirstOrDefaultAsync();
+
+                return Ok(nroOcom ?? string.Empty);
+            }
+            catch (Exception ex)
+            {
+                return BadRequest($"Error al obtener la orden de compra del pedido {nroPed}: {ex.Message}");
+            }
+        }
+
+        /// <summary>
         /// Convierte la moneda de un pedido y actualiza todos los precios
         /// </summary>
         /// <param name="nroPed">Número de pedido</param>
@@ -533,7 +560,8 @@ namespace IMPLANPROD.Server.Controllers
         {
             try
             {
-                var queryable = _context.Pedencas.AsQueryable();
+                // Consulta de solo lectura: AsNoTracking evita tracking y bloqueos
+                var queryable = _context.Pedencas.AsNoTracking();
 
                 // Filtrar por estado activo si es necesario
                 queryable = queryable.Where(x => x.Status >= 0);
@@ -619,7 +647,8 @@ namespace IMPLANPROD.Server.Controllers
         {
             try
             {
-                var queryable = _context.Pedencas.AsQueryable();
+                // Solo cuenta registros (read-only): AsNoTracking por convención
+                var queryable = _context.Pedencas.AsNoTracking();
                 queryable = queryable.Where(x => x.Status >= 0);
 
                 // Aplicar filtro por número de pedido (exacto)
@@ -1075,6 +1104,7 @@ namespace IMPLANPROD.Server.Controllers
         public async Task<ActionResult> GetComboAsync()
         {
             return Ok(await _context.Pedencas
+                .AsNoTracking()
                 .Where(x => x.Status >= 0)
                 .OrderByDescending(x => x.FechEmis)
                 .Select(x => new { x.NroPed, Descripcion = $"Pedido {x.NroPed} - {x.RasoClie}" })
@@ -1090,7 +1120,8 @@ namespace IMPLANPROD.Server.Controllers
         [HttpGet("buscar")]
         public async Task<ActionResult> BuscarAsync([FromQuery] string filtro, [FromQuery] PaginationDTO pagination)
         {
-            var queryable = _context.Pedencas.AsQueryable();
+            // Consulta de solo lectura: AsNoTracking evita tracking y bloqueos
+            var queryable = _context.Pedencas.AsNoTracking();
 
             if (!string.IsNullOrWhiteSpace(filtro))
             {

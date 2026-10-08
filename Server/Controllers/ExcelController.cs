@@ -1055,6 +1055,57 @@ namespace IMPLANPROD.Server.Controllers
         }
 
         /// <summary>
+        /// Exporta el reporte "O/Compra Pendientes" (x proveedor / x código) a Excel.
+        /// Solo columnas visibles en pantalla (sin importes ni precios unitarios).
+        /// </summary>
+        /// <param name="datos">Filas del reporte a exportar</param>
+        /// <returns>Archivo Excel con el reporte</returns>
+        [HttpPost("exportar-ocom-pendientes")]
+        public IActionResult ExportarOcomPendientes([FromBody] List<OcomPendienteDTO> datos)
+        {
+            try
+            {
+                if (datos == null || !datos.Any())
+                {
+                    return BadRequest("No hay datos para exportar");
+                }
+
+                var encabezados = new Dictionary<string, string>
+                {
+                    { "NumeOcom", "N.Orden" },
+                    { "FemiOcom", "F.Emisión" },
+                    { "NproOcom", "Prov." },
+                    { "RaSoProv", "Razón Social" },
+                    { "CodExte", "Código" },
+                    { "Descripcion", "Descripción" },
+                    { "CantOcom", "Cantidad" },
+                    { "UniCom", "UM" },
+                    { "FentreSol", "F.Solicitada" },
+                    { "DiasVencido", "Días Venc." },
+                    { "CantRec", "Recibida" },
+                    { "CantPend", "Pendiente" }
+                };
+
+                var orden = new List<string>
+                {
+                    "NumeOcom", "FemiOcom", "NproOcom", "RaSoProv", "CodExte",
+                    "Descripcion", "CantOcom", "UniCom", "FentreSol", "DiasVencido", "CantRec", "CantPend"
+                };
+
+                var archivo = _excelService.GenerarExcel(datos, "OCompraPendientes", encabezados, orden);
+
+                return File(archivo,
+                            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                            $"OCompraPendientes_{DateTime.Now:yyyyMMdd_HHmmss}.xlsx");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "[ExportarOcomPendientes] Error al generar Excel de O/C pendientes");
+                return StatusCode(500, $"Error al generar el archivo excel: {ex.Message}");
+            }
+        }
+
+        /// <summary>
         /// Exporta proveedores (Proved12) a Excel
         /// </summary>
         /// <param name="datos">Lista de proveedores a exportar</param>

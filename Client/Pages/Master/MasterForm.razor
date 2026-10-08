@@ -114,7 +114,10 @@
                                     {
                                         @foreach (var tipo in tiposMaterial)
                                         {
-                                            <option value="@tipo.Id">@tipo.Descripcion</option>
+                                            @* Se guarda CodigoTatimat (código de negocio de TATIMAT),
+                                               no el Id identity — el listado /master-index lo resuelve
+                                               con t.CodigoTatimat == producto.Timate *@
+                                            <option value="@tipo.CodigoTatimat">@tipo.Descripcion</option>
                                         }
                                     }
                                 </InputSelect>
@@ -129,7 +132,9 @@
                                     {
                                         @foreach (var familia in familias)
                                         {
-                                            <option value="@familia.Id">@familia.Descripcion</option>
+                                            @* Se guarda CodigoFamilia (código de negocio de FAMILIA,
+                                               campo string en MASTER.Familia), no el Id identity *@
+                                            <option value="@familia.CodigoFamilia">@familia.Descripcion</option>
                                         }
                                     }
                                 </InputSelect>
@@ -435,7 +440,8 @@
                                 {
                                     @foreach (var tipo in tiposMaterial)
                                     {
-                                        <option value="@tipo.Id">@tipo.Descripcion</option>
+                                        @* Mismo criterio que el combo principal: CodigoTatimat, no Id *@
+                                        <option value="@tipo.CodigoTatimat">@tipo.Descripcion</option>
                                     }
                                 }
                             </InputSelect>

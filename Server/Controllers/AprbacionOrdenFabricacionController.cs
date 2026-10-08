@@ -42,87 +42,149 @@ namespace IMPLANPROD.Server.Controllers
             _userContextService = userContextService;
             _moviStockService = moviStockService;
         }
+        // ===================================================================
+        // PENDIENTES DE APROBACIÓN DE O.F. — criterio vigente (por IDTEXT)
+        // -------------------------------------------------------------------
+        // En VB6 cada "GenCierre" genera un lote propio identificado por IDTEXT:
+        // el ingreso 'OF' se graba con ese IDTEXT y las aprobaciones le insertan
+        // filas de CantSalid con el MISMO IDTEXT. Por eso la unidad de pendiente
+        // real es (DoPriCor + Cod_Exte + IDTEXT), no la suma total de la O.F.
+        //
+        //   SELECT DoPriCor, Cod_Exte, IDTEXT, SUM(CantIngre - CantSalid)
+        //   FROM ORFAPEN
+        //   WHERE CodiMovi = 'OF'
+        //   GROUP BY DoPriCor, Cod_Exte, IDTEXT
+        //   HAVING SUM(CantIngre - CantSalid) > 0
+        //   ORDER BY DoPriCor, Cod_Exte, IDTEXT
+        //
+        // Criterio anterior (superado): agrupaba sin IDTEXT y mandaba
+        // MAX(IDTEXT) al cierre, así que una O.F. con varios lotes pendientes
+        // mostraba el total pero solo permitía aprobar el saldo de UN lote
+        // (el del MAX(IDTEXT), que podía ser un lote ya cerrado).
+        //
+        // Recién sobre ese resultado agrupado se aplican:
+        //   1) Los depósitos que el usuario tiene configurados para visualizar
+        //      (se compara contra MAX(DepoMovi) del grupo, NO contra cada movimiento),
+        //      así el saldo pendiente siempre se calcula con TODOS los movimientos
+        //      del lote aunque alguno sea de otro depósito.
+        //   2) El filtro de texto de la pantalla.
+        // Ambos endpoints (grilla y totalPages) usan ConstruirConsultaPendientes
+        // para que la cantidad de páginas coincida con las filas que se muestran.
+        // ===================================================================
+
+        /// <summary>
+        /// Fila agrupada de ORFAPEN (una por DoPriCor + Cod_Exte + IDTEXT) con saldo
+        /// pendiente de aprobar de ese lote de cierre.
+        /// Clase con nombre (no anónima) para poder devolver el IQueryable desde un método.
+        /// </summary>
+        private sealed class OfPendienteRow
+        {
+            public string? DoPriCor { get; set; }
+            public string? Cod_Exte { get; set; }
+            public int? Cod_Inte { get; set; }
+            public string? IDTEXT { get; set; }
+            public DateTime? FechMov { get; set; }
+            public int? Depo { get; set; }
+            public string? DescripMovimiento { get; set; }
+            public decimal Pendiente { get; set; }
+        }
+
+        /// <summary>
+        /// Arma la consulta de pendientes de aprobación según el criterio vigente
+        /// (ver bloque de comentarios arriba). Devuelve null y un mensaje si los
+        /// parámetros del request no son válidos.
+        /// </summary>
+        private IQueryable<OfPendienteRow>? ConstruirConsultaPendientes(OFabricacionRequestDTO request, out string? error)
+        {
+            error = null;
+
+            // SUPERADMIN (sin usuario ni depósitos) o el usuario 14 ven todos los depósitos.
+            bool esSuperAdmin = (request.IdFlexoftUsuario == null && (request.Depositos == null || !request.Depositos.Any()))
+                                || request.IdFlexoftUsuario == 14;
+
+            if (!esSuperAdmin)
+            {
+                if (request.IdFlexoftUsuario <= 0)
+                {
+                    error = "El ID del usuario es requerido";
+                    return null;
+                }
+                if (request.Depositos == null || !request.Depositos.Any())
+                {
+                    error = "Al menos un depósito es requerido";
+                    return null;
+                }
+            }
+
+            // Consulta base: agrupa TODOS los movimientos 'OF' por DoPriCor + Cod_Exte + IDTEXT.
+            // IDTEXT sale de la clave del grupo (es el lote real), no MAX() como antes.
+            // NULL en CantIngre/CantSalid se toma como 0 para no descartar el movimiento.
+            var query = _context.Orfapens
+                .AsNoTracking()
+                .Where(o => o.CodiMovi == "OF")
+                .GroupBy(o => new { o.DoPriCor, o.Cod_Exte, o.IDTEXT })
+                .Select(g => new OfPendienteRow
+                {
+                    DoPriCor = g.Key.DoPriCor,
+                    Cod_Exte = g.Key.Cod_Exte,
+                    Cod_Inte = g.Max(x => x.Cod_Inte),
+                    // IDTEXT real del lote: es el que se usa para aprobar (cierre).
+                    IDTEXT = g.Key.IDTEXT,
+                    FechMov = g.Max(x => x.FechMov),
+                    Depo = g.Max(x => x.DepoMovi),
+                    DescripMovimiento = g.Max(x => x.Descrip),
+                    Pendiente = g.Sum(x => (x.CantIngre ?? 0m) - (x.CantSalid ?? 0m))
+                })
+                // HAVING SUM(CantIngre - CantSalid) > 0
+                .Where(r => r.Pendiente > 0m);
+
+            // Depósitos del usuario: se aplican DESPUÉS de agrupar, sobre MAX(DepoMovi).
+            if (!esSuperAdmin)
+            {
+                var depositos = request.Depositos!;
+                query = query.Where(r => r.Depo.HasValue && depositos.Contains(r.Depo.Value));
+            }
+
+            // Filtro de texto (términos separados por '+', todos deben coincidir),
+            // también sobre el resultado agrupado. IDTEXT no se considera.
+            if (!string.IsNullOrWhiteSpace(request.Filter))
+            {
+                var terms = request.Filter
+                    .Split('+', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries)
+                    .Select(t => t.Trim().ToLower())
+                    .Where(t => !string.IsNullOrWhiteSpace(t))
+                    .ToList();
+
+                foreach (var term in terms)
+                {
+                    query = query.Where(r =>
+                        (r.DoPriCor ?? "").ToLower().Contains(term) ||
+                        (r.Cod_Exte ?? "").ToLower().Contains(term) ||
+                        (r.Cod_Inte.HasValue && r.Cod_Inte.Value.ToString().Contains(term)) ||
+                        (r.Depo.HasValue && r.Depo.Value.ToString().Contains(term)));
+                }
+            }
+
+            return query;
+        }
+
         [HttpPost("pendientesAprobacion")]
         public async Task<ActionResult<List<Orfapen>>> GetOFabricacionPendientes([FromBody] OFabricacionRequestDTO request)
         {
             try
             {
-                _logger.LogInformation($"Obteniendo órdenes pendientes de aprobación para usuario {request.IdFlexoftUsuario} con depósitos: {(request.Depositos != null ? string.Join(", ", request.Depositos.Select(d => d.ToString())) : "TODOS (SUPERADMIN)")}");
-
-                // Validar parámetros de entrada
                 if (request == null)
                 {
                     return BadRequest("Los parámetros de solicitud son requeridos");
                 }
 
-                // Si es SUPERADMIN (IdFlexoftUsuario null y Depositos vacíos) O el usuario 14,
-                // no aplicar filtros por depósito
-                bool esSuperAdmin = (request.IdFlexoftUsuario == null && (request.Depositos == null || !request.Depositos.Any()))
-                                    || request.IdFlexoftUsuario == 14;
+                _logger.LogInformation($"Obteniendo órdenes pendientes de aprobación para usuario {request.IdFlexoftUsuario} con depósitos: {(request.Depositos != null ? string.Join(", ", request.Depositos) : "TODOS (SUPERADMIN)")}");
 
-                if (!esSuperAdmin)
+                var query = ConstruirConsultaPendientes(request, out var error);
+                if (query == null)
                 {
-                    if (request.IdFlexoftUsuario <= 0)
-                    {
-                        return BadRequest("El ID del usuario es requerido");
-                    }
-
-                    if (request.Depositos == null || !request.Depositos.Any())
-                    {
-                        return BadRequest("Al menos un depósito es requerido");
-                    }
+                    return BadRequest(error);
                 }
-
-                // Consultar órdenes de fabricación pendientes de aprobación
-                // Buscar órdenes que tengan movimientos en ORFAPEN con cantidades pendientes de aprobar
-
-
-                if (!esSuperAdmin && (request == null || request.IdFlexoftUsuario <= 0 || request.Depositos == null || !request.Depositos.Any()))
-                    return BadRequest("Parámetros inválidos");
-
-                // Construir filtro de depósitos (solo si no es SUPERADMIN)
-                var queryBase = esSuperAdmin
-                    ? _context.Orfapens
-                    : _context.Orfapens.Where(o => request.Depositos.Contains(o.DepoMovi!.Value));
-
-                // Aplicar filtro de texto ANTES del GroupBy para mejorar rendimiento
-                if (!string.IsNullOrWhiteSpace(request.Filter))
-                {
-                    var terms = request.Filter
-                        .Split('+', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries)
-                        .Select(t => t.Trim().ToLower())
-                        .Where(t => !string.IsNullOrWhiteSpace(t))
-                        .ToList();
-
-                    foreach (var term in terms)
-                    {
-                        queryBase = queryBase.Where(x =>
-                            (x.DoPriCor ?? "").ToLower().Contains(term) ||
-                            (x.Cod_Exte ?? "").ToLower().Contains(term) ||
-                            (x.IDTEXT ?? "").ToLower().Contains(term) ||
-                            (x.Cod_Inte.HasValue && x.Cod_Inte.Value.ToString().Contains(term)) ||
-                            (x.DepoMovi.HasValue && x.DepoMovi.Value.ToString().Contains(term)) ||
-                            (x.FechMov.HasValue && x.FechMov.Value.ToString().ToLower().Contains(term))
-                        );
-                    }
-                }
-
-                var query = queryBase
-                    .Where(o => o.CodiMovi == "OF")
-                    .GroupBy(o => new { o.DoPriCor, o.IDTEXT })
-                    .Where(g => g.Sum(x => x.CantIngre) > g.Sum(x => x.CantSalid))
-                    .Select(g => new Orfapen
-                    {
-                        Cod_Inte = g.FirstOrDefault().Cod_Inte,
-                        Cod_Exte = g.FirstOrDefault().Cod_Exte,
-                        CantIngre = g.Sum(x => x.CantIngre),
-                        CantSalid = g.Sum(x => x.CantSalid),
-                        DoPriCor = g.Key.DoPriCor,
-                        FechMov = g.FirstOrDefault().FechMov,
-                        IDTEXT = g.Key.IDTEXT,
-                        DepoMovi = g.FirstOrDefault().DepoMovi,
-                        Ajuste = g.Sum(x => x.CantIngre ?? 0) - g.Sum(x => x.CantSalid ?? 0)
-                    });
 
                 var pagination = new PaginationDTO
                 {
@@ -131,11 +193,46 @@ namespace IMPLANPROD.Server.Controllers
                     Filter = request.Filter
                 };
 
-                var ordenesPendientes = await query
-                    .OrderByDescending(o => o.DoPriCor)
-                    .ThenByDescending(o => o.FechMov)
+                // ORDER BY DoPriCor, Cod_Exte, IDTEXT (DESC) + paginado (OFFSET/FETCH):
+                // las O.F. más recientes/numeradas más alto primero.
+                var filas = await query
+                    .OrderByDescending(r => r.DoPriCor)
+                    .ThenByDescending(r => r.Cod_Exte)
+                    .ThenByDescending(r => r.IDTEXT)
                     .Paginate(pagination)
                     .ToListAsync();
+
+                // Descripciones de producto (MASTER) y depósito (TADEPOSI) resueltas
+                // con UNA consulta cada una para la página actual (sin N+1 desde el cliente).
+                var codints = filas.Where(f => f.Cod_Inte.HasValue).Select(f => f.Cod_Inte!.Value).Distinct().ToList();
+                var descripcionesProducto = await _context.masters
+                    .AsNoTracking()
+                    .Where(m => codints.Contains(m.Codint))
+                    .ToDictionaryAsync(m => m.Codint, m => m.Descripcion ?? "");
+
+                var codigosDeposito = filas.Where(f => f.Depo.HasValue && f.Depo.Value > 0).Select(f => f.Depo!.Value).Distinct().ToList();
+                var nombresDeposito = await _context.Tadeposi
+                    .AsNoTracking()
+                    .Where(d => codigosDeposito.Contains(d.CodigoDepo))
+                    .ToDictionaryAsync(d => d.CodigoDepo, d => d.Descripcion ?? "");
+
+                var ordenesPendientes = filas.Select(f => new Orfapen
+                {
+                    DoPriCor = f.DoPriCor,
+                    Cod_Exte = f.Cod_Exte,
+                    Cod_Inte = f.Cod_Inte,
+                    IDTEXT = f.IDTEXT,
+                    FechMov = f.FechMov,
+                    DepoMovi = f.Depo,
+                    Ajuste = f.Pendiente,
+                    // Si el producto no está en MASTER se usa la descripción del movimiento.
+                    DescripcionProducto = f.Cod_Inte.HasValue && descripcionesProducto.TryGetValue(f.Cod_Inte.Value, out var desc)
+                        ? desc
+                        : f.DescripMovimiento,
+                    DescripcionDeposito = f.Depo.HasValue && nombresDeposito.TryGetValue(f.Depo.Value, out var nombreDepo)
+                        ? nombreDepo
+                        : null
+                }).ToList();
 
                 _logger.LogInformation($"Se encontraron {ordenesPendientes.Count} órdenes pendientes (página {pagination.Page}, records {pagination.RecordsNumber})");
 
@@ -148,63 +245,52 @@ namespace IMPLANPROD.Server.Controllers
             }
         }
 
+        // ===================================================================
+        // Versiones anteriores de la consulta (conservadas como referencia — no borrar)
+        // ===================================================================
+        // CONSULTA ORIGINAL: el depósito y el filtro de texto se aplicaban sobre cada
+        // movimiento ANTES de agrupar; agrupaba por DoPriCor + IDTEXT y usaba
+        // g.FirstOrDefault() (subqueries TOP(1) correlacionadas por columna).
+        //
+        //var query = queryBase
+        //    .Where(o => o.CodiMovi == "OF")
+        //    .GroupBy(o => new { o.DoPriCor, o.IDTEXT })
+        //    .Where(g => g.Sum(x => x.CantIngre) > g.Sum(x => x.CantSalid))
+        //    .Select(g => new Orfapen
+        //    {
+        //        Cod_Inte = g.FirstOrDefault().Cod_Inte,
+        //        Cod_Exte = g.FirstOrDefault().Cod_Exte,
+        //        CantIngre = g.Sum(x => x.CantIngre),
+        //        CantSalid = g.Sum(x => x.CantSalid),
+        //        DoPriCor = g.Key.DoPriCor,
+        //        FechMov = g.FirstOrDefault().FechMov,
+        //        IDTEXT = g.Key.IDTEXT,
+        //        DepoMovi = g.FirstOrDefault().DepoMovi,
+        //        Ajuste = g.Sum(x => x.CantIngre ?? 0) - g.Sum(x => x.CantSalid ?? 0)
+        //    })
+        //    .OrderByDescending(o => o.DoPriCor)
+        //    .ThenByDescending(o => o.FechMov);
+        //
+        // En totalPages, el usuario 14 veía sus depósitos o DepoMovi >= 30, distinto
+        // a la grilla (donde veía todo). Ahora ambos usan ConstruirConsultaPendientes.
+        // ===================================================================
+
         [HttpPost("totalPages")]
         public async Task<ActionResult<int>> GetPagesPendientes([FromBody] OFabricacionRequestDTO request)
         {
             try
             {
-                // Si es SUPERADMIN (IdFlexoftUsuario null y Depositos null), no aplicar filtros
-                bool esSuperAdmin = request.IdFlexoftUsuario == null && (request.Depositos == null || !request.Depositos.Any());
-
-                if (!esSuperAdmin && (request == null || request.IdFlexoftUsuario <= 0 || request.Depositos == null || !request.Depositos.Any()))
+                if (request == null)
                 {
-                    return BadRequest("Parámetros inválidos");
+                    return BadRequest("Los parámetros de solicitud son requeridos");
                 }
 
-                var queryBase = esSuperAdmin
-                    ? _context.Orfapens
-                    : (request.IdFlexoftUsuario == 14
-                        ? _context.Orfapens.Where(o => request.Depositos.Contains(o.DepoMovi!.Value) || o.DepoMovi.Value >= 30)
-                        : _context.Orfapens.Where(o => request.Depositos.Contains(o.DepoMovi!.Value)));
-
-                // Aplicar filtro de texto ANTES del GroupBy para mejorar rendimiento
-                if (!string.IsNullOrWhiteSpace(request.Filter))
+                // Misma consulta que la grilla: el total de páginas coincide con las filas mostradas.
+                var query = ConstruirConsultaPendientes(request, out var error);
+                if (query == null)
                 {
-                    var terms = request.Filter
-                        .Split('+', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries)
-                        .Select(t => t.Trim().ToLower())
-                        .Where(t => !string.IsNullOrWhiteSpace(t))
-                        .ToList();
-
-                    foreach (var term in terms)
-                    {
-                        queryBase = queryBase.Where(x =>
-                            (x.DoPriCor ?? "").ToLower().Contains(term) ||
-                            (x.Cod_Exte ?? "").ToLower().Contains(term) ||
-                            (x.IDTEXT ?? "").ToLower().Contains(term) ||
-                            (x.Cod_Inte.HasValue && x.Cod_Inte.Value.ToString().Contains(term)) ||
-                            (x.DepoMovi.HasValue && x.DepoMovi.Value.ToString().Contains(term)) ||
-                            (x.FechMov.HasValue && x.FechMov.Value.ToString().ToLower().Contains(term))
-                        );
-                    }
+                    return BadRequest(error);
                 }
-
-                var query = queryBase
-                    .Where(o => o.CodiMovi == "OF")
-                    .GroupBy(o => new { o.DoPriCor, o.IDTEXT })
-                    .Where(g => g.Sum(x => x.CantIngre) > g.Sum(x => x.CantSalid))
-                    .Select(g => new Orfapen
-                    {
-                        Cod_Inte = g.FirstOrDefault().Cod_Inte,
-                        Cod_Exte = g.FirstOrDefault().Cod_Exte,
-                        CantIngre = g.Sum(x => x.CantIngre),
-                        CantSalid = g.Sum(x => x.CantSalid),
-                        DoPriCor = g.Key.DoPriCor,
-                        FechMov = g.FirstOrDefault().FechMov,
-                        IDTEXT = g.Key.IDTEXT,
-                        DepoMovi = g.FirstOrDefault().DepoMovi,
-                        Ajuste = g.Sum(x => x.CantIngre ?? 0) - g.Sum(x => x.CantSalid ?? 0)
-                    });
 
                 var recordsNumber = request.RecordsNumber <= 0 ? 10 : request.RecordsNumber;
                 var count = await query.CountAsync();
@@ -221,11 +307,18 @@ namespace IMPLANPROD.Server.Controllers
         }
 
         /// <summary>
-        /// Procesa la aprobación de una orden de fabricación con cierre existente
-        /// Replica la lógica VB6 original para aprobación de órdenes
+        /// Procesa la aprobación de una orden de fabricación con cierre existente.
+        /// Replica la lógica VB6 original para aprobación de órdenes.
+        /// El saldo pendiente se calcula como SUM(CantIngre - CantSalid) de TODAS
+        /// las filas del lote (DoPriCor + Cod_Exte + IDTEXT), no como el saldo de
+        /// una sola fila (TOP 1). Así una O.F. con varios lotes pendientes permite
+        /// aprobar el saldo real del lote elegido.
+        /// Responde tanto a POST raíz como a procesarAprobacionConCierre
+        /// (la página usa POST a la raíz del controller).
         /// </summary>
         /// <param name="request">Datos de la aprobación</param>
         /// <returns>Resultado de la operación</returns>
+        [HttpPost]
         [HttpPost("procesarAprobacionConCierre")]
         public async Task<IActionResult> ProcesarAprobacionConCierre([FromBody] AprobacionCierreDTO request)
         {
@@ -237,15 +330,25 @@ namespace IMPLANPROD.Server.Controllers
                     return BadRequest("Sesión caducada - Debe cerrar sesión y loguearse nuevamente.");
                 }
 
-                // Obtener datos del registro ORFAPEN seleccionado
+                // Obtener datos del registro ORFAPEN seleccionado (datos del lote para
+                // armar los registros nuevos: Cod_Inte, lote, fechas, cliente, etc.)
                 var datosOrfapen = await ObtenerDatosOrfapen(request.IdText, request.IdSubOr);
                 if (datosOrfapen == null)
                 {
                     return NotFound("No se encontró el registro ORFAPEN especificado.");
                 }
 
-                // Calcular saldo pendiente: ORFAPEN.CANTINGRE - ORFAPEN.CANTSALID
-                decimal saldo = (datosOrfapen.CantIngre ?? 0) - (datosOrfapen.CantSalid ?? 0);
+                // Saldo pendiente del LOTE: suma de todas las filas ORFAPEN del grupo
+                // (DoPriCor + Cod_Exte + IDTEXT), igual que la grilla de pendientes.
+                // La versión anterior hacía TOP 1 (CantIngre-CantSalid de una sola
+                // fila), lo que limitaba la aprobación al saldo de un solo ingreso.
+                decimal saldo = await _context.Orfapens
+                    .AsNoTracking()
+                    .Where(o => o.DoPriCor == request.IdSubOr &&
+                                o.CodiMovi == "OF" &&
+                                o.IDTEXT == request.IdText &&
+                                o.Cod_Exte == datosOrfapen.Cod_Exte)
+                    .SumAsync(o => (o.CantIngre ?? 0m) - (o.CantSalid ?? 0m));
                 if (saldo <= 0)
                 {
                     return BadRequest("No hay saldo pendiente para aprobar.");

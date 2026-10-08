@@ -210,7 +210,7 @@ else
                                             </div>
                                             <div class="col-md-3">
                                                 <div class="border rounded p-3">
-                                                    <h5 class="text-success">@montoTotal.ToString("C2")</h5>
+                                                    <h5 class="text-success">@Formateador.FormatearMoneda(montoTotal, 1)</h5>
                                                     <small class="text-muted">Monto Total</small>
                                                 </div>
                                             </div>
@@ -222,7 +222,7 @@ else
                                             </div>
                                             <div class="col-md-3">
                                                 <div class="border rounded p-3">
-                                                    <h5 class="text-warning">@promedioMensual.ToString("C2")</h5>
+                                                    <h5 class="text-warning">@Formateador.FormatearMoneda(promedioMensual, 1)</h5>
                                                     <small class="text-muted">Promedio Mensual</small>
                                                 </div>
                                             </div>

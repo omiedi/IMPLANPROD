@@ -26,10 +26,11 @@ namespace IMPLANPROD.Server.Controllers
 
         /// <summary>
         /// Obtiene la configuración actual de sincronización
+        /// Solo requiere autenticación: cualquier rol debe poder leer la ruta
+        /// de intercambio (la usa /oc-sucursal para procesar archivos de sync).
         /// </summary>
         [HttpGet("config")]
-        // [Authorize(Roles = "Admin")]
-        [Authorize(Roles = "Administrador,SUPERADMIN")]
+        [Authorize]
         public ActionResult<SyncConfigDTO> GetConfig()
         {
             try
@@ -49,7 +50,7 @@ namespace IMPLANPROD.Server.Controllers
         /// </summary>
         [HttpPost("config")]
         //[Authorize(Roles = "Admin")]
-        [Authorize(Roles = "Administrador,SUPERADMIN")]
+        [Authorize(Roles = "Administrador,SUPERADMIN,USUARIO")]
         public async Task<IActionResult> SaveConfig([FromBody] SyncConfigDTO config)
         {
             try
@@ -106,11 +107,14 @@ namespace IMPLANPROD.Server.Controllers
         }
 
         /// <summary>
-        /// Valida que una ruta de intercambio sea accesible
+        /// Valida que una ruta de intercambio sea accesible.
+        /// El claim Role del JWT contiene el nombre del perfil; se incluye
+        /// USUARIO (perfil por defecto) para que usuarios comunes también
+        /// puedan validar la ruta desde /oc-sucursal/configuracion.
         /// </summary>
         [HttpPost("validar-ruta")]
         // [Authorize(Roles = "Admin")]
-        [Authorize(Roles = "Administrador,SUPERADMIN")]
+        [Authorize(Roles = "Administrador,SUPERADMIN,USUARIO")]
         public ActionResult<ValidarRutaResponseDTO> ValidarRuta([FromBody] ValidarRutaDTO request)
         {
             try
