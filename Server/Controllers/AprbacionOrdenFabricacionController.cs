@@ -146,7 +146,7 @@ namespace IMPLANPROD.Server.Controllers
             }
 
             // Filtro de texto (términos separados por '+', todos deben coincidir),
-            // también sobre el resultado agrupado. IDTEXT no se considera.
+            // también sobre el resultado agrupado. IDTEXT no se considera.//
             if (!string.IsNullOrWhiteSpace(request.Filter))
             {
                 var terms = request.Filter
