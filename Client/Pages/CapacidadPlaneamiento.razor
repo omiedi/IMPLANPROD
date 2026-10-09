@@ -39,6 +39,9 @@
                     <button class="btn btn-sm btn-info" @onclick="GenerarDesdeRemitos" disabled="@isCalculando">
                         <i class="fas fa-file-invoice"></i> Desde Remitos
                     </button>
+                    <button class="btn btn-sm btn-dark" @onclick="GenerarDesdeOfCerradas" disabled="@isCalculando">
+                        <i class="fas fa-industry"></i> Desde O/F Cerradas
+                    </button>
                     <button class="btn btn-sm btn-danger" @onclick="EliminarPrograma" disabled="@(programaSeleccionado == null || isCalculando)">
                         <i class="fas fa-trash"></i> Eliminar
                     </button>
@@ -351,6 +354,46 @@
     </div>
 }
 
+<!-- Modal: Generar desde O/F Cerradas -->
+@if (mostrarModalOfCerradas)
+{
+    <div class="modal show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5)">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Generar desde O/F Cerradas</h5>
+                    <button type="button" class="btn-close" @onclick="CerrarModalOfCerradas"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label">Descripción del Programa</label>
+                        <input type="text" class="form-control" @bind="filtroOfCerradas.DescripcionPrograma" maxlength="48" placeholder="Por O/F's Cerradas del ... al ..." />
+                        <small class="text-muted">Si se deja vacía se usa "Por O/F's Cerradas del (desde) al (hasta)"</small>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Fecha Desde <span class="text-danger">*</span></label>
+                        <input type="date" class="form-control" @bind="filtroOfCerradas.FechaDesde" required />
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Fecha Hasta <span class="text-danger">*</span></label>
+                        <input type="date" class="form-control" @bind="filtroOfCerradas.FechaHasta" required />
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" @onclick="CerrarModalOfCerradas">Cancelar</button>
+                    <button type="button" class="btn btn-primary" @onclick="CrearDesdeOfCerradasAsync" disabled="@isGenerating">
+                        @if (isGenerating)
+                        {
+                            <span class="spinner-border spinner-border-sm me-2"></span>
+                        }
+                        Generar
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
 @* Modal: Agregar Observaciones al Producto *@
 @if (mostrarModalObservaciones)
 {
@@ -421,6 +464,8 @@
     private bool mostrarModalRemitos = false;
     private FiltroGeneracionDTO filtroPedidos = new() { FechaDesde = DateTime.Today, FechaHasta = DateTime.Today.AddDays(30) };
     private FiltroGeneracionDTO filtroRemitos = new() { FechaDesde = DateTime.Today.AddDays(-30), FechaHasta = DateTime.Today };
+    private bool mostrarModalOfCerradas = false;
+    private FiltroGeneracionDTO filtroOfCerradas = new() { FechaDesde = DateTime.Today.AddDays(-30), FechaHasta = DateTime.Today };
 
     // SelectorProductos y modal de observaciones
     private SelectorProductos? selectorProductosRef;
@@ -671,6 +716,42 @@
     }
 
     private void CerrarModalRemitos() => mostrarModalRemitos = false;
+
+    private void GenerarDesdeOfCerradas()
+    {
+        filtroOfCerradas = new FiltroGeneracionDTO
+            {
+                FechaDesde = DateTime.Today.AddDays(-30),
+                FechaHasta = DateTime.Today,
+                TipoGeneracion = "OFCERRADAS"
+            };
+        mostrarModalOfCerradas = true;
+    }
+
+    private async Task CrearDesdeOfCerradasAsync()
+    {
+        isGenerating = true;
+        try
+        {
+            var response = await repository.Post<FiltroGeneracionDTO, ProfabriDTO>("api/profabri/generar-desde-of-cerradas", filtroOfCerradas);
+            if (!response.Error)
+            {
+                await sweetAlertService.FireAsync("Éxito", "Programa generado desde O/F cerradas correctamente", SweetAlertIcon.Success);
+                await CargarProgramasAsync();
+                CerrarModalOfCerradas();
+            }
+            else
+            {
+                await sweetAlertService.FireAsync("Error", await response.GetErrorMessageAsync(), SweetAlertIcon.Error);
+            }
+        }
+        finally
+        {
+            isGenerating = false;
+        }
+    }
+
+    private void CerrarModalOfCerradas() => mostrarModalOfCerradas = false;
 
     private async Task EliminarPrograma()
     {
