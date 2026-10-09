@@ -86,7 +86,7 @@ namespace IMPLANPROD.Shared.DTOs
         public DateTime FechaDesde { get; set; }
         public DateTime FechaHasta { get; set; }
         public int? ClienteId { get; set; }  // Opcional, para filtrar por cliente específico
-        public string TipoGeneracion { get; set; } = "PEDIDOS"; // "PEDIDOS" o "REMITOS"
+        public string TipoGeneracion { get; set; } = "PEDIDOS"; // "PEDIDOS", "REMITOS" u "OFCERRADAS"
         public string? DescripcionPrograma { get; set; }
     }
 

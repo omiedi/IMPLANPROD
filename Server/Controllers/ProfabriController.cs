@@ -895,6 +895,115 @@ namespace IMPLANPROD.Server.Controllers
             }
         }
 
+        /// <summary>
+        /// Genera un programa de fabricación desde las O/F cerradas (ingresos MOVISTO con CodiMovi = 'OF')
+        /// Implementa la lógica de CALCAPOF del VB6 (CALCAPA07, opción "Por O/F's Cerradas")
+        /// </summary>
+        [HttpPost("generar-desde-of-cerradas")]
+        public async Task<ActionResult<ProfabriDTO>> GenerarDesdeOfCerradasAsync([FromBody] FiltroGeneracionDTO filtro)
+        {
+            using var transaction = await _context.Database.BeginTransactionAsync();
+            try
+            {
+                // Validar fechas
+                if (filtro.FechaDesde > filtro.FechaHasta)
+                {
+                    return BadRequest("La fecha 'Desde' debe ser menor o igual a 'Hasta'");
+                }
+
+                var fechaDesde = filtro.FechaDesde.Date;
+                var fechaHastaExclusiva = filtro.FechaHasta.Date.AddDays(1);
+
+                // Igual que VB6: se suma CantIngre de cada ingreso por cierre de O/F mayor a 0.005, agrupado por código interno
+                var ofCerradas = await _context.Movistos
+                    .AsNoTracking()
+                    .Where(m => m.FechMov >= fechaDesde &&
+                                m.FechMov < fechaHastaExclusiva &&
+                                m.CodiMovi == "OF" &&
+                                m.CantIngre > 0.005m &&
+                                m.Cod_Inte > 0)
+                    .GroupBy(m => m.Cod_Inte)
+                    .Select(g => new
+                    {
+                        CodigoProducto = g.Key ?? 0,
+                        CantidadTotal = g.Sum(m => m.CantIngre ?? 0)
+                    })
+                    .Where(x => x.CantidadTotal > 0.005m)
+                    .ToListAsync();
+
+                if (!ofCerradas.Any())
+                {
+                    return BadRequest("No existen entradas por orden de fabricación dentro del rango seleccionado");
+                }
+
+                var codigos = ofCerradas.Select(x => x.CodigoProducto).ToList();
+                var productos = await _context.masters
+                    .AsNoTracking()
+                    .Where(m => codigos.Contains(m.Codint))
+                    .Select(m => new { m.Codint, m.Descripcion })
+                    .ToDictionaryAsync(m => m.Codint, m => m.Descripcion);
+
+                // Crear el programa
+                int maxNumero = await _context.Profabris.MaxAsync(p => (int?)p.NumeroPrograma) ?? 0;
+                int nuevoNumero = maxNumero + 1;
+
+                string descripcion = string.IsNullOrWhiteSpace(filtro.DescripcionPrograma)
+                    ? $"Por O/F's Cerradas del {filtro.FechaDesde:dd/MM/yyyy} al {filtro.FechaHasta:dd/MM/yyyy}"
+                    : filtro.DescripcionPrograma.Trim();
+                if (descripcion.Length > 48)
+                {
+                    descripcion = descripcion[..48];
+                }
+
+                var programa = new Profabri
+                {
+                    NumeroPrograma = nuevoNumero,
+                    Descripcion = descripcion,
+                    FechaCreacion = DateTime.Now,
+                    CodiEmpr = 1,
+                    Status = 1
+                };
+
+                _context.Profabris.Add(programa);
+                await _context.SaveChangesAsync();
+
+                // Agregar detalles
+                foreach (var of in ofCerradas)
+                {
+                    if (productos.TryGetValue(of.CodigoProducto, out var descripcionProducto))
+                    {
+                        _context.Deprofabs.Add(new Deprofab
+                        {
+                            NumeroPrograma = programa.NumeroPrograma,
+                            CodigoProducto = of.CodigoProducto,
+                            Descripcion = descripcionProducto,
+                            Cantidad = of.CantidadTotal,
+                            Observaciones = "Generado desde O/F cerradas"
+                        });
+                    }
+                }
+
+                await _context.SaveChangesAsync();
+                await transaction.CommitAsync();
+
+                return Ok(new ProfabriDTO
+                {
+                    Id = programa.Id,
+                    NumeroPrograma = programa.NumeroPrograma,
+                    Descripcion = programa.Descripcion,
+                    FechaCreacion = programa.FechaCreacion,
+                    CodiEmpr = programa.CodiEmpr,
+                    Status = programa.Status
+                });
+            }
+            catch (Exception ex)
+            {
+                await transaction.RollbackAsync();
+                _logger.LogError(ex, "Error al generar programa desde O/F cerradas");
+                return StatusCode(500, $"Error al generar programa: {ex.Message}");
+            }
+        }
+
         #endregion
     }
 }
